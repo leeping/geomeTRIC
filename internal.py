@@ -3,8 +3,11 @@
 from __future__ import division
 import numpy as np
 import networkx as nx
+import itertools
+from copy import deepcopy
 from forcebalance.nifty import click
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
+from scipy import optimize
 
 class CartesianX(object):
     def __init__(self, a):
@@ -28,7 +31,7 @@ class CartesianX(object):
     def derivative(self, xyz):
         xyz = xyz.reshape(-1,3)
         derivatives = np.zeros_like(xyz)
-        derivatives[a][0] = 1.0
+        derivatives[self.a][0] = 1.0
         return derivatives
 
 class CartesianY(object):
@@ -53,7 +56,7 @@ class CartesianY(object):
     def derivative(self, xyz):
         xyz = xyz.reshape(-1,3)
         derivatives = np.zeros_like(xyz)
-        derivatives[a][1] = 1.0
+        derivatives[self.a][1] = 1.0
         return derivatives
 
 class CartesianZ(object):
@@ -78,7 +81,7 @@ class CartesianZ(object):
     def derivative(self, xyz):
         xyz = xyz.reshape(-1,3)
         derivatives = np.zeros_like(xyz)
-        derivatives[a][2] = 1.0
+        derivatives[self.a][2] = 1.0
         return derivatives
 
 class Distance(object):
@@ -159,6 +162,22 @@ class Angle(object):
         norm2 = np.sqrt(np.sum(vector2**2))
         dot = np.dot(vector1, vector2)
         return np.arccos(dot / (norm1 * norm2))
+
+    def normal_vector(self, xyz):
+        xyz = xyz.reshape(-1,3)
+        a = self.a
+        b = self.b
+        c = self.c
+        # vector from first atom to central atom
+        vector1 = xyz[a] - xyz[b]
+        # vector from last atom to central atom
+        vector2 = xyz[c] - xyz[b]
+        # norm of the two vectors
+        norm1 = np.sqrt(np.sum(vector1**2))
+        norm2 = np.sqrt(np.sum(vector2**2))
+        crs = np.cross(vector1, vector2)
+        crs /= np.linalg.norm(crs)
+        return crs
         
     def derivative(self, xyz):
         xyz = xyz.reshape(-1,3)
@@ -255,22 +274,22 @@ class Dihedral(object):
         u = u_prime / u_norm
         w = w_prime / w_norm
         v = v_prime / v_norm
-        # if (1 - np.dot(u, w)**2) < 1e-6:
-        #     term1 = np.cross(u, w) * 0
-        #     term3 = np.cross(u, w) * 0
-        # else:
-        #     term1 = np.cross(u, w) / (u_norm * (1 - np.dot(u, w)**2))
-        #     term3 = np.cross(u, w) * np.dot(u, w) / (w_norm * (1 - np.dot(u, w)**2))
-        # if (1 - np.dot(v, w)**2) < 1e-6:
-        #     term2 = np.cross(v, w) * 0
-        #     term4 = np.cross(v, w) * 0
-        # else:
-        #     term2 = np.cross(v, w) / (v_norm * (1 - np.dot(v, w)**2))
-        #     term4 = np.cross(v, w) * np.dot(v, w) / (w_norm * (1 - np.dot(v, w)**2))
-        term1 = np.cross(u, w) / (u_norm * (1 - np.dot(u, w)**2))
-        term2 = np.cross(v, w) / (v_norm * (1 - np.dot(v, w)**2))
-        term3 = np.cross(u, w) * np.dot(u, w) / (w_norm * (1 - np.dot(u, w)**2))
-        term4 = np.cross(v, w) * np.dot(v, w) / (w_norm * (1 - np.dot(v, w)**2))
+        if (1 - np.dot(u, w)**2) < 1e-6:
+            term1 = np.cross(u, w) * 0
+            term3 = np.cross(u, w) * 0
+        else:
+            term1 = np.cross(u, w) / (u_norm * (1 - np.dot(u, w)**2))
+            term3 = np.cross(u, w) * np.dot(u, w) / (w_norm * (1 - np.dot(u, w)**2))
+        if (1 - np.dot(v, w)**2) < 1e-6:
+            term2 = np.cross(v, w) * 0
+            term4 = np.cross(v, w) * 0
+        else:
+            term2 = np.cross(v, w) / (v_norm * (1 - np.dot(v, w)**2))
+            term4 = np.cross(v, w) * np.dot(v, w) / (w_norm * (1 - np.dot(v, w)**2))
+        # term1 = np.cross(u, w) / (u_norm * (1 - np.dot(u, w)**2))
+        # term2 = np.cross(v, w) / (v_norm * (1 - np.dot(v, w)**2))
+        # term3 = np.cross(u, w) * np.dot(u, w) / (w_norm * (1 - np.dot(u, w)**2))
+        # term4 = np.cross(v, w) * np.dot(v, w) / (w_norm * (1 - np.dot(v, w)**2))
         derivatives[m, :] = term1
         derivatives[n, :] = -term2
         derivatives[o, :] = -term1 + term3 - term4
@@ -341,39 +360,87 @@ class OutOfPlane(object):
         u = u_prime / u_norm
         w = w_prime / w_norm
         v = v_prime / v_norm
-        # if (1 - np.dot(u, w)**2) < 1e-6:
-        #     term1 = np.cross(u, w) * 0
-        #     term3 = np.cross(u, w) * 0
-        # else:
-        #     term1 = np.cross(u, w) / (u_norm * (1 - np.dot(u, w)**2))
-        #     term3 = np.cross(u, w) * np.dot(u, w) / (w_norm * (1 - np.dot(u, w)**2))
-        # if (1 - np.dot(v, w)**2) < 1e-6:
-        #     term2 = np.cross(v, w) * 0
-        #     term4 = np.cross(v, w) * 0
-        # else:
-        #     term2 = np.cross(v, w) / (v_norm * (1 - np.dot(v, w)**2))
-        #     term4 = np.cross(v, w) * np.dot(v, w) / (w_norm * (1 - np.dot(v, w)**2))
-        term1 = np.cross(u, w) / (u_norm * (1 - np.dot(u, w)**2))
-        term2 = np.cross(v, w) / (v_norm * (1 - np.dot(v, w)**2))
-        term3 = np.cross(u, w) * np.dot(u, w) / (w_norm * (1 - np.dot(u, w)**2))
-        term4 = np.cross(v, w) * np.dot(v, w) / (w_norm * (1 - np.dot(v, w)**2))
+        if (1 - np.dot(u, w)**2) < 1e-6:
+            term1 = np.cross(u, w) * 0
+            term3 = np.cross(u, w) * 0
+        else:
+            term1 = np.cross(u, w) / (u_norm * (1 - np.dot(u, w)**2))
+            term3 = np.cross(u, w) * np.dot(u, w) / (w_norm * (1 - np.dot(u, w)**2))
+        if (1 - np.dot(v, w)**2) < 1e-6:
+            term2 = np.cross(v, w) * 0
+            term4 = np.cross(v, w) * 0
+        else:
+            term2 = np.cross(v, w) / (v_norm * (1 - np.dot(v, w)**2))
+            term4 = np.cross(v, w) * np.dot(v, w) / (w_norm * (1 - np.dot(v, w)**2))
+        # term1 = np.cross(u, w) / (u_norm * (1 - np.dot(u, w)**2))
+        # term2 = np.cross(v, w) / (v_norm * (1 - np.dot(v, w)**2))
+        # term3 = np.cross(u, w) * np.dot(u, w) / (w_norm * (1 - np.dot(u, w)**2))
+        # term4 = np.cross(v, w) * np.dot(v, w) / (w_norm * (1 - np.dot(v, w)**2))
         derivatives[m, :] = term1
         derivatives[n, :] = -term2
         derivatives[o, :] = -term1 + term3 - term4
         derivatives[p, :] = term2 - term3 + term4
         return derivatives
-    
-class InternalCoordinates(object):
-    def __init__(self):
-        self.Internals = []
 
+class DelocalizedCoordinate(object):
+    def __init__(self, coordinate_list, weights):
+        if len(coordinate_list) != len(weights):
+            raise RuntimeError('Coordinate list and weights must be the same length')
+        self.coordinate_list = coordinate_list
+        self.weights = weights
+        if len(set(self.coordinate_list)) != len(self.coordinate_list):
+            raise RuntimeError('Coordinate list must be unique')
+
+    def lookup_weight(self, coordinate):
+        for c, w in zip(self.coordinate_list, self.weights):
+            if c == coordinate:
+                return w
+        
+    def __eq__(self, other):
+        for c, w in zip(self.coordinate_list, self.weights):
+            if c not in other.coordinate_list: return False
+            if other.lookup_weight(c) != w: return False
+        for c, w in zip(other.coordinate_list, other.weights):
+            if c not in self.coordinate_list: return False
+            if self.lookup_weight(c) != w: return False
+        return True
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    def value(self, xyz):
+        values = np.array([c.value(xyz) for c in self.coordinate_list])
+        return np.sum(self.weights * values)
+
+    def derivatives(self, xyz):
+        wders = np.array([self.weights[i] * c.derivative(xyz) for i, c in enumerate(self.coordinate_list)])
+        return np.sum(wders, axis=0)
+
+def check_linear3(molecule, a, b, c, d):
+    ab = molecule.xyzs[0][b] - molecule.xyzs[0][a]
+    bc = molecule.xyzs[0][c] - molecule.xyzs[0][b]
+    cd = molecule.xyzs[0][d] - molecule.xyzs[0][c]
+    ab /= np.linalg.norm(ab)
+    bc /= np.linalg.norm(bc)
+    cd /= np.linalg.norm(cd)
+    LinThre = 0.95
+    if np.abs(np.dot(ab, bc)) > LinThre:
+        return True
+    if np.abs(np.dot(bc, cd)) > LinThre:
+        return True
+    if np.abs(np.dot(ab, bc)) > LinThre:
+        return True
+    else:
+        return False
+    
+class RedundantInternalCoordinates(object):
     def __repr__(self):
         lines = ["Internal coordinate system (atoms numbered from 1):"]
         typedict = OrderedDict()
         for Internal in self.Internals:
             lines.append(Internal.__repr__())
             if str(type(Internal)) not in typedict:
-                typedict[str(type(Internal))] = 0
+                typedict[str(type(Internal))] = 1
             else:
                 typedict[str(type(Internal))] += 1
         if len(lines) > 100:
@@ -397,6 +464,22 @@ class InternalCoordinates(object):
 
     def __ne__(self, other):
         return not self.__eq__(other)
+
+    def repr_diff(self, other):
+        alines = ["-- Added: --"]
+        for i in other.Internals:
+            if i not in self.Internals:
+                alines.append(i.__repr__())
+        dlines = ["-- Deleted: --"]
+        for i in self.Internals:
+            if i not in other.Internals:
+                dlines.append(i.__repr__())
+        output = []
+        if len(alines) > 1:
+            output += alines
+        if len(dlines) > 1:
+            output += dlines
+        return '\n'.join(output)
 
     def calculate(self, xyz):
         answer = []
@@ -454,7 +537,7 @@ class InternalCoordinates(object):
         time_G = click()
         U, S, VT = np.linalg.svd(G)
         time_svd = click()
-        print "Build G: %.3f SVD: %.3f" % (time_G, time_svd),
+        # print "Build G: %.3f SVD: %.3f" % (time_G, time_svd),
         V = np.matrix(VT).T
         UT = np.matrix(U).T
         Sinv = np.zeros_like(S)
@@ -518,41 +601,48 @@ class InternalCoordinates(object):
         Gq = np.matrix(Ginv)*np.matrix(Bmat)*np.matrix(gradx).T
         return np.array(Gq).flatten()
 
-    def newCartesian(self, xyz, dQ, u=None):
+    def newCartesian(self, xyz, dQ, u=None, verbose=False):
         xyz1 = xyz.copy()
         dQ1 = dQ.copy()
         # Iterate until convergence:
         microiter = 0
         rmsds = []
         self.bork = False
+        # Damping factor
+        TB = 1.0
         while True:
             microiter += 1
             if microiter == 10:
+                target = self.calculate(xyz) + dQ
                 self.bork = True
-                print "Approximate coordinates obtained after %i microiterations (rmsd = %.3f)" % (microiter, rmsds[0])
+                if verbose: print "Approximate coordinates obtained after %i microiterations (rmsd = %.3f)" % (microiter, rmsds[0])
                 return xyzsave.flatten()
-            # if microiter > 3 and rmsds[-1] > rmsds[-2]:
-            #     print "Approximate coordinates obtained after %i microiterations (rmsd = %.3f)" % (microiter, rmsds[0])
-            #     self.bork = True
-            #     return xyzsave.flatten()
-            # Calculate Bt, Ginv
             Bmat = np.matrix(self.wilsonB(xyz1))
             Ginv = self.GInverse(xyz1, u)
             # Get new Cartesian coordinates
             if u is not None:
-                dxyz = u*Bmat.T*Ginv*(np.matrix(dQ1).T)
+                dxyz = TB*u*Bmat.T*Ginv*(np.matrix(dQ1).T)
             else:
-                dxyz = Bmat.T*Ginv*(np.matrix(dQ1).T)
+                dxyz = TB*Bmat.T*Ginv*(np.matrix(dQ1).T)
             xyz2 = xyz1 + np.array(dxyz).flatten()
             if microiter == 1:
                 xyzsave = xyz2.copy()
-            # Are we coverged?
             rmsd = np.sqrt(np.mean((np.array(xyz2-xyz1).flatten())**2))
+            if len(rmsds) > 0:
+                if rmsd > rmsdt:
+                    if verbose: print "Iter: %i RMSD: %.3e Thre: % .3e Damp: %.3f (Bad)" % (microiter, rmsd, rmsdt, TB)
+                    TB /= 2
+                else:
+                    if verbose: print "Iter: %i RMSD: %.3e Thre: % .3e Damp: %.3f (Good)" % (microiter, rmsd, rmsdt, TB)
+                    TB = min(TB*1.25, 1.0)
+                    rmsdt = rmsd
+            else:
+                if verbose: print "Iter: %i RMSD: %.3e" % (microiter, rmsd)
+                rmsdt = rmsd
             rmsds.append(rmsd)
-            print "Iter: %i RMSD: %.3e" % (microiter, rmsd)
-            # print microiter, rmsd
+            # Are we converged?
             if rmsd < 1e-6:
-                print "Cartesian coordinates obtained after %i microiterations" % microiter
+                if verbose: print "Cartesian coordinates obtained after %i microiterations" % microiter
                 break
             # Calculate the actual change in internal coordinates
             Q1 = self.calculate(xyz1)
@@ -604,6 +694,21 @@ class InternalCoordinates(object):
                     if np.abs(error) > 1e-5:
                         print "% .5e % .5e %s% .5e\x1b[0m" % (Analytical[i,j,k], FiniteDifference[i,j,k], color, Analytical[i,j,k] - FiniteDifference[i,j,k])
         print "Finite-difference Finished"
+
+    def addCartesianX(self, i):
+        Cart = CartesianX(i)
+        if Cart not in self.Internals:
+            self.Internals.append(Cart)
+
+    def addCartesianY(self, i):
+        Cart = CartesianY(i)
+        if Cart not in self.Internals:
+            self.Internals.append(Cart)
+
+    def addCartesianZ(self, i):
+        Cart = CartesianZ(i)
+        if Cart not in self.Internals:
+            self.Internals.append(Cart)
     
     def addDistance(self, i, j):
         # Ideally these three functions could somehow be generalized into one,
@@ -627,6 +732,24 @@ class InternalCoordinates(object):
         Oop = OutOfPlane(i,j,k,l)
         if Oop not in self.Internals:
             self.Internals.append(Oop)
+
+    def delCartesianX(self, i):
+        Cart = CartesianX(i)
+        for ii in range(len(self.Internals))[::-1]:
+            if Cart == self.Internals[ii]:
+                del self.Internals[ii]
+
+    def delCartesianY(self, i):
+        Cart = CartesianY(i)
+        for ii in range(len(self.Internals))[::-1]:
+            if Cart == self.Internals[ii]:
+                del self.Internals[ii]
+
+    def delCartesianZ(self, i):
+        Cart = CartesianZ(i)
+        for ii in range(len(self.Internals))[::-1]:
+            if Cart == self.Internals[ii]:
+                del self.Internals[ii]
             
     def delDistance(self, i, j):
         Dist = Distance(i, j)
@@ -652,13 +775,14 @@ class InternalCoordinates(object):
             if Oop == self.Internals[ii]:
                 del self.Internals[ii]
                 
-    @classmethod
-    def buildFromMolecule(cls, molecule):
-        obj = cls()
+    def __init__(self, molecule):
+        self.Internals = []
         if len(molecule) != 1:
             raise RuntimeError('Only one frame allowed in molecule object')
         # Determine the atomic connectivity
-        molecule.build_topology(Fac=1.25)
+        molecule.build_topology(Fac=1.2)
+        # Coordinates in Angstrom
+        coords = molecule.xyzs[0].flatten()
         # Make a distance matrix mapping atom pairs to interatomic distances
         AtomIterator, dxij = molecule.distance_matrix()
         D = {}
@@ -669,8 +793,11 @@ class InternalCoordinates(object):
         noncov = []
         # Connect all non-bonded fragments together
         while True:
+            # List of disconnected fragments
             subg = list(nx.connected_component_subgraphs(molecule.topology))
+            # Break out of loop if all fragments are connected
             if len(subg) == 1: break
+            # Find the smallest interatomic distance between any pair of fragments
             minD = 1e10
             for i in range(len(subg)):
                 for j in range(i):
@@ -678,6 +805,8 @@ class InternalCoordinates(object):
                         for b in subg[j].nodes():
                             if D[(min(a,b), max(a,b))] < minD:
                                 minD = D[(min(a,b), max(a,b))]
+            # Next, create one connection between pairs of fragments that have a
+            # close-contact distance of at most 1.2 times the minimum found above
             for i in range(len(subg)):
                 for j in range(i):
                     tminD = 1e10
@@ -690,78 +819,114 @@ class InternalCoordinates(object):
                                 tminD = D[(min(a,b), max(a,b))]
                                 conn_a = min(a,b)
                                 conn_b = max(a,b)
-                            if D[(min(a,b), max(a,b))] <= 1.25*minD:
+                            if D[(min(a,b), max(a,b))] <= 1.2*minD:
                                 connect = True
                     if connect:
                         molecule.topology.add_edge(conn_a, conn_b)
                         noncov.append((conn_a, conn_b))
-                                # print "Connecting atoms %i-%i with distance %.3f" % (min(a,b),max(a,b),D[(min(a,b),max(a,b))])
 
+        # Add an internal coordinate for all interatomic distances
         for (a, b) in molecule.topology.edges():
-            obj.addDistance(a, b)
+            self.addDistance(a, b)
+
+        # Add an internal coordinate for all angles
+        LinThre = 0.99619469809174555
+        AngDict = defaultdict(list)
         for b in molecule.topology.nodes():
             for a in molecule.topology.neighbors(b):
                 for c in molecule.topology.neighbors(b):
                     if a < c:
-                        # nnoncov = (min(a,b),max(a,b)) in noncov
-                        # nnoncov += (min(b,c),max(b,c)) in noncov
-                        # if nnoncov > 1: continue
-                        obj.addAngle(a, b, c)
-        OopAngs = []
+                        Ang = Angle(a, b, c)
+                        nnc = (min(a, b), max(a, b)) in noncov
+                        nnc += (min(b, c), max(b, c)) in noncov
+                        # if nnc >= 2: continue
+                        if np.abs(np.cos(Ang.value(coords))) < LinThre:
+                            self.addAngle(a, b, c)
+                            AngDict[b].append(Ang)
+                        else:
+                            print Ang, "is linear: replacing with Cartesians"
+                            # Almost linear bends (greater than 175 or less than 5) are dropped. 
+                            # The dropped angle is replaced by the two Cartesians of the central 
+                            # atom that are most perpendicular to the line between the other two 
+                            # atoms forming the bend (as measured by the corresponding scalar 
+                            # products with the Cartesian axes).
+                            # if len(molecule.topology.neighbors(b)) == 2:
+                            # Unit vector connecting atoms a and c
+                            nac = molecule.xyzs[0][c] - molecule.xyzs[0][a]
+                            nac /= np.linalg.norm(nac)
+                            # Dot products of this vector with the Cartesian axes
+                            dots = [np.dot(ei, nac) for ei in np.eye(3)]
+                            # Functions for adding Cartesian coordinate
+                            carts = [self.addCartesianX, self.addCartesianY, self.addCartesianZ]
+                            # Add two of the most perpendicular Cartesian coordinates
+                            for i in np.argsort(dots)[:2]:
+                                carts[i](b)
+
         for b in molecule.topology.nodes():
             for a in molecule.topology.neighbors(b):
                 for c in molecule.topology.neighbors(b):
                     for d in molecule.topology.neighbors(b):
                         if a < c < d:
-                            # Do not make out-of-plane for noncovalent interactions
-                            if (min(a,b),max(a,b)) in noncov: continue 
-                            if (min(a,c),max(a,c)) in noncov: continue
-                            if (min(a,d),max(a,d)) in noncov: continue
-                            Ang1 = Angle(b,a,c)
-                            Ang2 = Angle(a,c,d)
-                            LinearAngle = False
-                            OopAngs.append((a, b, c))
-                            OopAngs.append((a, b, d))
-                            OopAngs.append((c, b, d))
-                            # if np.abs(np.sin(Ang1.value(coords))) < 0.05:
-                            #     LinearAngle = True
-                            # if np.abs(np.sin(Ang2.value(coords))) < 0.05:
-                            #     LinearAngle = True
-                            if LinearAngle:
-                                print "Out-of-plane %i-%i-%i-%i contains a linear angle" % (b, a, c, d)
-                            else:
-                                obj.addOutOfPlane(b, a, c, d)
+                            nnc = (min(a, b), max(a, b)) in noncov
+                            nnc += (min(b, c), max(b, c)) in noncov
+                            nnc += (min(b, d), max(b, d)) in noncov
+                            # if nnc >= 1: continue
+                            for i, j, k in list(itertools.permutations([a, c, d], 3)):
+                                Ang1 = Angle(b,i,j)
+                                Ang2 = Angle(i,j,k)
+                                if np.abs(np.cos(Ang1.value(coords))) > LinThre: continue
+                                if np.abs(np.cos(Ang2.value(coords))) > LinThre: continue
+                                if np.abs(np.dot(Ang1.normal_vector(coords), Ang2.normal_vector(coords))) > 0.95:
+                                    self.delAngle(i, b, j)
+                                    self.addOutOfPlane(b, i, j, k)
+                                    break
+                                
+        # # Lines-of-atoms code, commented out for now
+        # atom_lines = [list(i) for i in molecule.topology.edges()]
+        # while True:
+        #     atom_lines0 = deepcopy(atom_lines)
+        #     for aline in atom_lines:
+        #         # Imagine a line of atoms going like ab-ac-ax-ay.
+        #         # Our job is to extend the line until there are no more
+        #         ab = aline[0]
+        #         ac = aline[1]
+        #         ax = aline[-2]
+        #         ay = aline[-1]
+        #         for aa in molecule.topology.neighbors(ab):
+        #             if aa not in aline:
+        #                 ang = Angle(aa, ab, ac)
+        #                 if np.abs(np.cos(ang.value(coords))) > LinThre:
+        #                     # print "Prepending", aa, "to", aline
+        #                     aline.insert(0, aa)
+        #         for az in molecule.topology.neighbors(ay):
+        #             if az not in aline:
+        #                 ang = Angle(ax, ay, az)
+        #                 if np.abs(np.cos(ang.value(coords))) > LinThre:
+        #                     # print "Appending", az, "to", aline
+        #                     aline.append(az)
+        #     if atom_lines == atom_lines0: break
+        # atom_lines_uniq = []
+        # for i in atom_lines:
+        #     if tuple(i) not in set(atom_lines_uniq):
+        #         atom_lines_uniq.append(tuple(i))
+        # print "Lines of atoms:", atom_lines_uniq
+
         for (b, c) in molecule.topology.edges():
             for a in molecule.topology.neighbors(b):
                 for d in molecule.topology.neighbors(c):
                     if a != c and b != d and a != d:
-                        nnoncov = (min(a,b),max(a,b)) in noncov
-                        nnoncov += (min(b,c),max(b,c)) in noncov
-                        nnoncov += (min(c,d),max(c,d)) in noncov
-                        if nnoncov > 1: continue
+                        nnc = (min(a, b), max(a, b)) in noncov
+                        nnc += (min(b, c), max(b, c)) in noncov
+                        nnc += (min(c, d), max(c, d)) in noncov
+                        # if nnc >= 2: continue
                         Ang1 = Angle(a,b,c)
                         Ang2 = Angle(b,c,d)
-                        LinearAngle = False
-                        if a < c:
-                            Ang1 = (a, b, c)
-                        else:
-                            Ang1 = (c, b, a)
-                        if b < d:
-                            Ang2 = (b, c, d)
-                        else:
-                            Ang2 = (d, c, b)
-                        # # print OopAngs, Ang1, Ang2
-                        # # raw_input()
-                        # print molecule.elem[a], molecule.elem[b], molecule.elem[c], molecule.elem[d], Ang1, Ang2, Ang1 in OopAngs, Ang2 in OopAngs
-                        if Ang1 in OopAngs and Ang2 in OopAngs:
-                            continue
-                        # if np.abs(np.sin(Ang1.value(coords))) < 0.05:
-                        #     LinearAngle = True
-                        # if np.abs(np.sin(Ang2.value(coords))) < 0.05:
-                        #     LinearAngle = True
-                        if LinearAngle:
-                            print "Dihedral %i-%i-%i-%i contains a linear angle" % (a, b, c, d)
-                        else:
-                            obj.addDihedral(a, b, c, d)
-        return obj
-    
+                        if np.abs(np.cos(Ang1.value(coords))) > LinThre: continue
+                        if np.abs(np.cos(Ang2.value(coords))) > LinThre: continue
+                        self.addDihedral(a, b, c, d)
+
+
+# class DelocalizedInternalCoordinates(object):
+#     def __init__(self, molecule):
+#         self.Prims = RedundantInternalCoordinates(
+

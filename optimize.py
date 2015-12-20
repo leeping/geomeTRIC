@@ -4,14 +4,23 @@ from __future__ import division
 import numpy as np
 from copy import deepcopy
 from collections import OrderedDict
-from internal import Distance, Angle, Dihedral, OutOfPlane, InternalCoordinates
+from internal import Distance, Angle, Dihedral, OutOfPlane, RedundantInternalCoordinates, CartesianX, CartesianY, CartesianZ
 from forcebalance.molecule import Molecule, Elements, Radii
 from forcebalance.nifty import row, col, flat, invert_svd
 from scipy import optimize
+import argparse
 import subprocess
 import os, sys
 
-TeraChem = True
+parser = argparse.ArgumentParser()
+parser.add_argument('--cart', action='store_true', help='Use Cartesian coordinate system.')
+parser.add_argument('--terachem', action='store_true', help='Run optimization in TeraChem.')
+
+print ' '.join(sys.argv)
+
+args, sys.argv = parser.parse_known_args(sys.argv)
+
+TeraChem = args.terachem
 
 # TeraChem options
 TeraTemp = """
@@ -22,11 +31,13 @@ run         gradient
 method      rb3lyp
 basis       6-31g*
 gpus        8
-#convthre    1e-8
-#threall     1e-16
+convthre    1e-8
+threall     1e-16
 """
 
 TCHome = "/home/leeping/src/terachem/production/build"
+
+xyzout = os.path.splitext(sys.argv[1])[0]+"_optim.xyz"
 
 os.environ['TeraChem'] = TCHome
 os.environ['PATH'] = os.path.join(TCHome,'bin')+":"+os.environ['PATH']
@@ -38,12 +49,13 @@ M = Molecule(sys.argv[1])
 def calc_terachem(coords):
     coord_hash = tuple(list(coords))
     if coord_hash in calc_terachem.stored_calcs:
-        print "Reading stored values"
+        # print "Reading stored values"
         energy = calc_terachem.stored_calcs[coord_hash]['energy']
         gradient = calc_terachem.stored_calcs[coord_hash]['gradient']
         return energy, gradient
-    print "Calling TeraChem for energy and gradient"
-    dirname = "calc_%04i" % calc_terachem.calcnum
+    # print "Calling TeraChem for energy and gradient"
+    # dirname = "calc_%04i" % calc_terachem.calcnum
+    dirname = os.path.splitext(sys.argv[1])[0]+".tmp"
     if not os.path.exists(dirname): os.makedirs(dirname)
     # Write input files to directory
     with open(os.path.join(dirname, 'run.in'), 'w') as f: print >> f, TeraTemp
@@ -73,15 +85,17 @@ calc_terachem.stored_calcs = OrderedDict()
 def calc_qchem(coords):
     coord_hash = tuple(list(coords))
     if coord_hash in calc_qchem.stored_calcs:
-        print "Reading stored values"
+        # print "Reading stored values"
         energy = calc_qchem.stored_calcs[coord_hash]['energy']
         gradient = calc_qchem.stored_calcs[coord_hash]['gradient']
         return energy, gradient
     # print "Calling Qchem for energy and gradient"
-    dirname = "calc_%04i" % calc_qchem.calcnum
+    dirname = os.path.splitext(sys.argv[1])[0]+".tmp"
+    # dirname = "calc_%04i" % calc_qchem.calcnum
     if not os.path.exists(dirname): os.makedirs(dirname)
     # Convert coordinates back to the xyz file
     M.xyzs[0] = coords.reshape(-1, 3) * 0.529
+    M.edit_qcrems({'jobtype':'force'})
     M[0].write(os.path.join(dirname, 'run.in'))
     # Run Qchem
     subprocess.call('%s/runqc run.in run.out &> run.log' % os.getcwd(), cwd=dirname, shell=True)
@@ -103,9 +117,10 @@ calc_qchem.stored_calcs = OrderedDict()
 
 def calc(coords):
     if TeraChem:
-        return calc_terachem(coords)
+        e, g = calc_terachem(coords)
     else:
-        return calc_qchem(coords)
+        e, g = calc_qchem(coords)
+    return e, g
 
 def calc_energy(coords):
     print "Getting energy:",
@@ -172,7 +187,7 @@ def guess_hessian(mol, coords, IC):
             if covalent(ic.a, ic.b):
                 Hdiag.append(A/(r-B)**3)
             else:
-                Hdiag.append(0.023)
+                Hdiag.append(0.1)
         elif type(ic) is Angle:
             if min(Elements.index(mol.elem[ic.a]),
                    Elements.index(mol.elem[ic.b]),
@@ -183,11 +198,11 @@ def guess_hessian(mol, coords, IC):
             if covalent(ic.a, ic.b) and covalent(ic.b, ic.c):
                 Hdiag.append(A)
             else:
-                Hdiag.append(0.023)
+                Hdiag.append(0.1)
         elif type(ic) is Dihedral:
             r = np.linalg.norm(mol.xyzs[0][ic.b]-mol.xyzs[0][ic.c])
             rcov = Radii[Elements.index(mol.elem[ic.b])-1] + Radii[Elements.index(mol.elem[ic.c])-1]
-            Hdiag.append(0.023)
+            Hdiag.append(0.1)
             # print r, rcov
             # Hdiag.append(0.0023 - 0.07*(r-rcov))
         elif type(ic) is OutOfPlane:
@@ -195,11 +210,14 @@ def guess_hessian(mol, coords, IC):
             r2 = mol.xyzs[0][ic.c]-mol.xyzs[0][ic.a]
             r3 = mol.xyzs[0][ic.d]-mol.xyzs[0][ic.a]
             d = 1 - np.abs(np.dot(r1,np.cross(r2,r3))/np.linalg.norm(r1)/np.linalg.norm(r2)/np.linalg.norm(r3))
+            Hdiag.append(0.1)
             # These formulas appear to be useless
-            if covalent(ic.a, ic.b) and covalent(ic.a, ic.c) and covalent(ic.a, ic.d):
-                Hdiag.append(0.045)
-            else:
-                Hdiag.append(0.023)
+            # if covalent(ic.a, ic.b) and covalent(ic.a, ic.c) and covalent(ic.a, ic.d):
+            #     Hdiag.append(0.045)
+            # else:
+            #     Hdiag.append(0.023)
+        elif type(ic) in [CartesianX, CartesianY, CartesianZ]:
+            Hdiag.append(0.05)
         else:
             raise RuntimeError('Spoo!')
     return np.matrix(np.diag(Hdiag))
@@ -228,12 +246,17 @@ def Rebuild(IC, H0, coord_seq, grad_seq, history=10):
 
 def getNorm(X, dy, IC=None, CartesianTrust=False):
     if IC is not None and CartesianTrust:
-        Xnew = IC.newCartesian(X, dy)
-        N = np.linalg.norm(Xnew-X)
+        # Displacement of each atom in Angstrom
+        try:
+            Xnew = IC.newCartesian(X, dy)
+            disp = 0.529*(Xnew-X)
+        except np.linalg.LinAlgError:
+            return np.sum(dy**2)*1e10
     else:
-        # Use the same 
-        N = np.linalg.norm(dy)
-    return N
+        disp = 0.529*dy
+    # Number of atoms
+    Na = len(X)/3
+    return np.sqrt(np.sum(disp**2)/Na)
         
 def Optimize(coords, molecule, IC=None):
     progress = deepcopy(molecule)
@@ -255,10 +278,7 @@ def Optimize(coords, molecule, IC=None):
     if internal:
         # Initial internal coordinates
         q0 = IC.calculate(coords)
-        Ginv = IC.GInverse(coords)
-        Bmat = IC.wilsonB(coords)
-        # Internal coordinate gradient
-        Gq = np.matrix(Ginv)*np.matrix(Bmat)*np.matrix(gradx).T
+        Gq = IC.calcGrad(X, gradx)
         # The optimization variables are the internal coordinates.
         Y = q0.copy()
         G = np.array(Gq).flatten()
@@ -268,7 +288,7 @@ def Optimize(coords, molecule, IC=None):
         G = gradx.copy()
     # Loop of optimization
     Iteration = 0
-    trust = 1.0
+    trust = 0.1
     # Adaptive trust radius
     trust0 = 1.0
     adapt_fac = 1.0
@@ -315,7 +335,7 @@ def Optimize(coords, molecule, IC=None):
                 # H = H0.copy()
                 # dy = solver(L)[0]
             N = getNorm(X, dy, IC, CartesianTrust)
-            print "Finding trust radius: H%+.4f*I, length %.4e (target %.4e)" % ((L-1)**2,N,trust)
+            # print "Finding trust radius: H%+.4f*I, length %.4e (target %.4e)" % ((L-1)**2,N,trust)
             return (N - trust)**2
         # This is the normal step from inverting the Hessian
         dy, expect = solver(1)
@@ -341,7 +361,7 @@ def Optimize(coords, molecule, IC=None):
         # Add new Cartesian coordinates and gradients to history
         progress.xyzs.append(X.reshape(-1,3) * 0.529)
         progress.comms.append('Iteration %i Energy % .8f' % (Iteration, E))
-        progress.write('optim.xyz')
+        progress.write(xyzout)
         # Calculate quantities for convergence
         displacement = np.sqrt(np.sum((((X-Xprev)*0.529).reshape(-1,3))**2, axis=1))
         atomgrad = np.sqrt(np.sum((gradx.reshape(-1,3))**2, axis=1))
@@ -365,6 +385,11 @@ def Optimize(coords, molecule, IC=None):
             print "(Bork)" if IC.bork else "(Good)"
         else:
             print
+        if IC is not None:
+            idx = np.argmax(np.abs(dy))
+            iunit = np.zeros_like(dy)
+            iunit[idx] = 1.0
+            print "Along %s %.3f" % (IC.Internals[idx], np.dot(dy/np.linalg.norm(dy), iunit))
         if Converged_energy and Converged_grms and Converged_drms and Converged_gmax and Converged_dmax:
             print "Converged! =D"
             break
@@ -375,10 +400,10 @@ def Optimize(coords, molecule, IC=None):
             trustprint = "Decreasing trust radius to % .4e" % trust
             print_trust = True
         elif Quality >= ThreHQ and bump:
-            trust *= 2
-            # trust *= (1+adapt_fac*np.exp(-1*adapt_damp*(trust/trust0 - 1)))
-            trustprint = "Increasing trust radius to % .4e" % trust
-            print_trust = True
+            if trust < 0.3:
+                trust = min(2*trust, 0.3)
+                trustprint = "Increasing trust radius to % .4e" % trust
+                print_trust = True
         else:
             print_trust = False
         if Quality < -1:
@@ -401,9 +426,10 @@ def Optimize(coords, molecule, IC=None):
                 newmol = deepcopy(molecule)
                 newmol.xyzs[0] = X.reshape(-1,3)*0.529
                 newmol.build_topology()
-                IC1 = InternalCoordinates.buildFromMolecule(newmol)
+                IC1 = RedundantInternalCoordinates(newmol)
                 if IC1 != IC:
-                    print "\x1b[1;94mInternal coordinate system may have changed (%i -> %i)\x1b[0m" % (len(IC.Internals), len(IC1.Internals))
+                    print "\x1b[1;94mInternal coordinate system may have changed\x1b[0m"
+                    print IC.repr_diff(IC1)
                     IC = IC1
                     # H0 = np.eye(len(IC.Internals))
                     H0 = guess_hessian(newmol, X, IC)
@@ -411,10 +437,7 @@ def Optimize(coords, molecule, IC=None):
                     # H = H0.copy()
                     Y = IC.calculate(X)
                     skipBFGS = True
-                Ginv = IC.GInverse(X)
-                Bmat = IC.wilsonB(X)
-                # Internal coordinate gradient
-                Gq = np.matrix(Ginv)*np.matrix(Bmat)*np.matrix(gradx).T
+                Gq = IC.calcGrad(X, gradx)
                 G = np.array(Gq).flatten()
             else:
                 G = gradx.copy()
@@ -427,16 +450,14 @@ def Optimize(coords, molecule, IC=None):
                 H += Mat1-Mat2
         # Then it's on to the next loop iteration!
         Iteration += 1
+    return X
 
 def CheckInternalGrad(coords, molecule, IC):
     # Initial energy and gradient
     E, gradx = calc(coords)
     # Initial internal coordinates
     q0 = IC.calculate(coords)
-    Ginv = IC.GInverse(coords)
-    Bmat = IC.wilsonB(coords)
-    # Internal coordinate gradient
-    Gq = np.matrix(Ginv)*np.matrix(Bmat)*np.matrix(gradx).T
+    Gq = IC.calcGrad(coords, gradx)
     for i in range(len(q0)):
         dq = np.zeros_like(q0)
         dq[i] += 1e-3
@@ -446,50 +467,39 @@ def CheckInternalGrad(coords, molecule, IC):
         x1 = IC.newCartesian(coords, dq)
         EMinus, _ = calc(x1)
         fdiff = (EPlus-EMinus)/2e-3
-        print "%s : % .6f % .6f % .6f" % (IC.Internals[i], Gq[i], fdiff, Gq[i]-fdiff)
+        print "%s : % .6e % .6e % .6e" % (IC.Internals[i], Gq[i], fdiff, Gq[i]-fdiff)
+
+def CalcInternalHess(coords, molecule, IC):
+    # Initial energy and gradient
+    E, gradx = calc(coords)
+    # Initial internal coordinates
+    q0 = IC.calculate(coords)
+    for i in range(len(q0)):
+        dq = np.zeros_like(q0)
+        dq[i] += 1e-3
+        x1 = IC.newCartesian(coords, dq)
+        EPlus, _ = calc(x1)
+        dq[i] -= 2e-3
+        x1 = IC.newCartesian(coords, dq)
+        EMinus, _ = calc(x1)
+        fdiff = (EPlus+EMinus-2*E)/1e-6
+        print "%s : % .6e" % (IC.Internals[i], fdiff)
             
 def main():
     # Get initial coordinates in bohr
     coords = M.xyzs[0].flatten() / 0.529
-
-    IC = InternalCoordinates.buildFromMolecule(M)
+    IC = RedundantInternalCoordinates(M)
     FDCheck = False
     if FDCheck:
         IC.checkFiniteDifference(coords)
-
-    # CheckInternalGrad(coords, M, IC)
-
-    Optimize(coords, M, None)
-        
-    # energy_internal.IC = IC
-    # energy_internal.x0 = coords
-    # gradient_internal.IC = IC
-    # gradient_internal.x0 = coords
-
-    # q0 = IC.calculate(coords)
-    # optimize.fmin_bfgs(energy_internal, q0, gradient_internal, disp=True)
-    
-    # optimize.fmin_bfgs(calc_energy, coords, calc_grad, disp=True)
-    
-    
-    # dq = np.zeros_like(IC.calculate(coords))
-    # dQ[0] = 0.1
-    # newxyz = IC.newCartesian(coords, dQ)
-    # M.xyzs.append(newxyz)
-    # M.write('new.xyz')
-    
-    # IC.calculate(coords)
-        
-    # Gx = np.matrix(calc_grad(coords)).T
-    # Ginv = IC.GInverse(coords)
-    # Bmat = IC.wilsonB(coords)
-    # # print Ginv.shape
-    # # print Bmat.shape
-    # # print Gx.shape
-    # Gq = np.matrix(Ginv)*np.matrix(Bmat)*Gx
-    # print Gx.reshape(-1,3)
-    # print Gq.shape
-    # print Gq
+        CheckInternalGrad(coords, M, IC)
+    opt_coords = Optimize(coords, M, None if args.cart else IC)
+    M.xyzs[0] = opt_coords.reshape(-1,3) * 0.529
+    IC = RedundantInternalCoordinates(M)
+    CalcInternalHess(opt_coords, M, IC)
+    if FDCheck:
+        IC.checkFiniteDifference(opt_coords)
+        CheckInternalGrad(opt_coords, M, IC)
     
 
 if __name__ == "__main__":
