@@ -6,6 +6,7 @@ import networkx as nx
 import itertools
 from copy import deepcopy
 from forcebalance.nifty import click
+from forcebalance.molecule import Molecule, Elements, Radii
 from collections import OrderedDict, defaultdict
 from scipy import optimize
 
@@ -572,26 +573,6 @@ class RedundantInternalCoordinates(object):
             time_inv = click()
             print "G-time: %.3f Pinv-time: %.3f" % (time_G, time_inv)
             return Gi
-            print L
-            raw_input()
-            Q = np.matrix(Q)
-            Linv = np.zeros_like(L)
-            # Tikhonov regularization
-            # Sigma = 1e-6
-            LargeVals = 0
-            for ival, value in enumerate(L):
-                # print "% .5e" % value
-                if np.abs(value) > 1e-6:
-                    LargeVals += 1
-                    Linv[ival] = 1/value
-                # Sinv[ival] = value / (value**2 + Sigma**2)
-            # print "%i atoms; %i/%i singular values are > 1e-6" % (xyz.shape[0], LargeVals, len(S))
-            Linv = np.matrix(np.diag(L))
-            Inv = Q*Linv*Q.T
-            # print np.max(np.abs(Q*Q.T-np.eye(Q.shape[0])))
-            # print np.max(np.abs(G*Inv-np.eye(G.shape[0])))
-            # raw_input()
-            return Inv
 
     def calcGrad(self, xyz, gradx):
         q0 = self.calculate(xyz)
@@ -777,10 +758,11 @@ class RedundantInternalCoordinates(object):
                 
     def __init__(self, molecule):
         self.Internals = []
+        self.elem = molecule.elem
         if len(molecule) != 1:
             raise RuntimeError('Only one frame allowed in molecule object')
         # Determine the atomic connectivity
-        molecule.build_topology(Fac=1.2)
+        molecule.build_topology(Fac=1.3)
         # Coordinates in Angstrom
         coords = molecule.xyzs[0].flatten()
         # Make a distance matrix mapping atom pairs to interatomic distances
@@ -819,7 +801,7 @@ class RedundantInternalCoordinates(object):
                                 tminD = D[(min(a,b), max(a,b))]
                                 conn_a = min(a,b)
                                 conn_b = max(a,b)
-                            if D[(min(a,b), max(a,b))] <= 1.2*minD:
+                            if D[(min(a,b), max(a,b))] <= 1.3*minD:
                                 connect = True
                     if connect:
                         molecule.topology.add_edge(conn_a, conn_b)
@@ -831,6 +813,7 @@ class RedundantInternalCoordinates(object):
 
         # Add an internal coordinate for all angles
         LinThre = 0.99619469809174555
+        # LinThre = 0.999
         AngDict = defaultdict(list)
         for b in molecule.topology.nodes():
             for a in molecule.topology.neighbors(b):
@@ -844,7 +827,7 @@ class RedundantInternalCoordinates(object):
                             self.addAngle(a, b, c)
                             AngDict[b].append(Ang)
                         else:
-                            print Ang, "is linear: replacing with Cartesians"
+                            # print Ang, "is linear: replacing with Cartesians"
                             # Almost linear bends (greater than 175 or less than 5) are dropped. 
                             # The dropped angle is replaced by the two Cartesians of the central 
                             # atom that are most perpendicular to the line between the other two 
@@ -881,7 +864,7 @@ class RedundantInternalCoordinates(object):
                                     self.addOutOfPlane(b, i, j, k)
                                     break
                                 
-        # # Lines-of-atoms code, commented out for now
+        # Lines-of-atoms code, commented out for now
         # atom_lines = [list(i) for i in molecule.topology.edges()]
         # while True:
         #     atom_lines0 = deepcopy(atom_lines)
@@ -912,8 +895,12 @@ class RedundantInternalCoordinates(object):
         # print "Lines of atoms:", atom_lines_uniq
 
         for (b, c) in molecule.topology.edges():
+        # for aline in atom_lines_uniq:
+        #     b = aline[0]
+        #     c = aline[-1]
             for a in molecule.topology.neighbors(b):
                 for d in molecule.topology.neighbors(c):
+                    # if a not in aline and d not in aline and a != d:
                     if a != c and b != d and a != d:
                         nnc = (min(a, b), max(a, b)) in noncov
                         nnc += (min(b, c), max(b, c)) in noncov
@@ -925,8 +912,298 @@ class RedundantInternalCoordinates(object):
                         if np.abs(np.cos(Ang2.value(coords))) > LinThre: continue
                         self.addDihedral(a, b, c, d)
 
+    def guess_hessian(self, coords):
+        xyzs = coords.reshape(-1,3)*0.520
+        Hdiag = []
+        def covalent(a, b):
+            r = np.linalg.norm(xyzs[a]-xyzs[b])
+            rcov = Radii[Elements.index(self.elem[a])-1] + Radii[Elements.index(self.elem[b])-1]
+            return r/rcov < 1.2
+        
+        for ic in self.Internals:
+            if type(ic) is Distance:
+                r = np.linalg.norm(xyzs[ic.a]-xyzs[ic.b]) / 0.529
+                elem1 = min(Elements.index(self.elem[ic.a]), Elements.index(self.elem[ic.b]))
+                elem2 = max(Elements.index(self.elem[ic.a]), Elements.index(self.elem[ic.b]))
+                A = 1.734
+                if elem1 < 3:
+                    if elem2 < 3:
+                        B = -0.244
+                    elif elem2 < 11:
+                        B = 0.352
+                    else:
+                        B = 0.660
+                elif elem1 < 11:
+                    if elem2 < 11:
+                        B = 1.085
+                    else:
+                        B = 1.522
+                else:
+                    B = 2.068
+                if covalent(ic.a, ic.b):
+                    Hdiag.append(A/(r-B)**3)
+                else:
+                    Hdiag.append(0.1)
+            elif type(ic) is Angle:
+                if min(Elements.index(self.elem[ic.a]),
+                       Elements.index(self.elem[ic.b]),
+                       Elements.index(self.elem[ic.c])) < 3:
+                    A = 0.160
+                else:
+                    A = 0.250
+                if covalent(ic.a, ic.b) and covalent(ic.b, ic.c):
+                    Hdiag.append(A)
+                else:
+                    Hdiag.append(0.1)
+            elif type(ic) is Dihedral:
+                r = np.linalg.norm(xyzs[ic.b]-xyzs[ic.c])
+                rcov = Radii[Elements.index(self.elem[ic.b])-1] + Radii[Elements.index(self.elem[ic.c])-1]
+                Hdiag.append(0.1)
+                # print r, rcov
+                # Hdiag.append(0.0023 - 0.07*(r-rcov))
+            elif type(ic) is OutOfPlane:
+                r1 = xyzs[ic.b]-xyzs[ic.a]
+                r2 = xyzs[ic.c]-xyzs[ic.a]
+                r3 = xyzs[ic.d]-xyzs[ic.a]
+                d = 1 - np.abs(np.dot(r1,np.cross(r2,r3))/np.linalg.norm(r1)/np.linalg.norm(r2)/np.linalg.norm(r3))
+                Hdiag.append(0.1)
+                # These formulas appear to be useless
+                # if covalent(ic.a, ic.b) and covalent(ic.a, ic.c) and covalent(ic.a, ic.d):
+                #     Hdiag.append(0.045)
+                # else:
+                #     Hdiag.append(0.023)
+            elif type(ic) in [CartesianX, CartesianY, CartesianZ]:
+                Hdiag.append(0.05)
+            else:
+                raise RuntimeError('Spoo!')
+        return np.matrix(np.diag(Hdiag))
 
-# class DelocalizedInternalCoordinates(object):
-#     def __init__(self, molecule):
-#         self.Prims = RedundantInternalCoordinates(
+class DelocalizedInternalCoordinates(object):
+    def __init__(self, molecule, build=True):
+        self.Prims = RedundantInternalCoordinates(molecule)
+        xyz = molecule.xyzs[0].flatten() / 0.529
+        self.na = molecule.na
+        if build:
+            self.build_dlc(xyz)
 
+    def build_dlc(self, xyz):
+        # Perform singular value decomposition
+        click()
+        G = self.Prims.GMatrix(xyz)
+        time_G = click()
+        L, Q = np.linalg.eigh(G)
+        time_eig = click()
+        # print "Build G: %.3f Eig: %.3f" % (time_G, time_eig)
+        LargeVals = 0
+        LargeIdx = []
+        for ival, value in enumerate(L):
+            # print value
+            if np.abs(value) > 1e-6:
+                LargeVals += 1
+                LargeIdx.append(ival)
+        Expect = 3*self.na - 6
+        if self.na == 2:
+            Expect = 1
+        if self.na == 1:
+            Expect = 0
+        print "%i atoms (expect %i coordinates); %i/%i singular values are > 1e-6" % (self.na, Expect, LargeVals, len(L))
+        self.Vecs = Q[:, LargeIdx]
+        self.Internals = ["DLC %i" % (i+1) for i in range(len(LargeIdx))]
+
+    def __eq__(self, other):
+        return self.Prims == other.Prims
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    def calcDiff(self, coord1, coord2):
+        """ Calculate difference in internal coordinates, accounting for changes in 2*pi of angles. """
+        Q1 = self.Prims.calculate(coord1)
+        Q2 = self.Prims.calculate(coord2)
+        PMDiff = (Q1-Q2)
+        for k in range(len(PMDiff)):
+            if type(self.Prims.Internals[k]) in [Angle, Dihedral, OutOfPlane]:
+                Plus2Pi = PMDiff[k] + 2*np.pi
+                Minus2Pi = PMDiff[k] - 2*np.pi
+                if np.abs(PMDiff[k]) > np.abs(Plus2Pi):
+                    PMDiff[k] = Plus2Pi
+                if np.abs(PMDiff[k]) > np.abs(Minus2Pi):
+                    PMDiff[k] = Minus2Pi
+        Answer = np.matrix(PMDiff)*self.Vecs
+        return np.array(Answer).flatten()
+
+    def calculate(self, coords):
+        PrimVals = self.Prims.calculate(coords)
+        Answer = np.matrix(PrimVals)*self.Vecs
+        return np.array(Answer).flatten()
+
+    def derivatives(self, coords):
+        PrimDers = self.Prims.derivatives(coords)
+        # The following code does the same as "tensordot"
+        # print PrimDers.shape
+        # print self.Vecs.shape
+        # Answer = np.zeros((self.Vecs.shape[1], PrimDers.shape[1], PrimDers.shape[2]), dtype=float)
+        # for i in range(self.Vecs.shape[1]):
+        #     for j in range(self.Vecs.shape[0]):
+        #         Answer[i, :, :] += self.Vecs[j, i] * PrimDers[j, :, :]
+        # print Answer.shape
+        Answer1 = np.tensordot(self.Vecs, PrimDers, axes=(0, 0))
+        return np.array(Answer1)
+
+    def checkFiniteDifference(self, xyz):
+        xyz = xyz.reshape(-1,3)
+        Analytical = self.derivatives(xyz)
+        FiniteDifference = np.zeros_like(Analytical)
+        h = 0.001
+        for i in range(xyz.shape[0]):
+            for j in range(3):
+                x1 = xyz.copy()
+                x2 = xyz.copy()
+                x1[i,j] += h
+                x2[i,j] -= h
+                PMDiff = self.calcDiff(x1,x2)
+                FiniteDifference[:,i,j] = PMDiff/(2*h)
+        for i in range(Analytical.shape[0]):
+            print "IC %i/%i :" % (i, Analytical.shape[0])
+            for j in range(Analytical.shape[1]):
+                print "Atom %i" % (j+1)
+                for k in range(Analytical.shape[2]):
+                    print "xyz"[k],
+                    error = Analytical[i,j,k] - FiniteDifference[i,j,k]
+                    if np.abs(error) > 1e-5:
+                        color = "\x1b[91m"
+                    else:
+                        color = "\x1b[92m"
+                    # if np.abs(error) > 1e-5:
+                    print "% .5e % .5e %s% .5e\x1b[0m" % (Analytical[i,j,k], FiniteDifference[i,j,k], color, Analytical[i,j,k] - FiniteDifference[i,j,k])
+        print "Finite-difference Finished"
+
+    def wilsonB(self, xyz):
+        """
+        Given Cartesian coordinates xyz, return the Wilson B-matrix
+        given by dq_i/dx_j where x is flattened (i.e. x1, y1, z1, x2, y2, z2)
+        """
+        WilsonB = []
+        Der = self.derivatives(xyz)
+        for i in range(Der.shape[0]):
+            WilsonB.append(Der[i].flatten())
+        return np.array(WilsonB)
+
+    def GMatrix(self, xyz, u=None):
+        """
+        Given Cartesian coordinates xyz, return the G-matrix
+        given by G = BuBt where u is an arbitrary matrix (default to identity)
+        """
+        Bmat = np.matrix(self.wilsonB(xyz))
+        if u is None:
+            BuBt = Bmat*Bmat.T
+        else:
+            BuBt = Bmat * u * Bmat.T
+        return BuBt
+
+    def GInverse_SVD(self, xyz, u=None):
+        xyz = xyz.reshape(-1,3)
+        # Perform singular value decomposition
+        click()
+        G = self.GMatrix(xyz, u)
+        time_G = click()
+        U, S, VT = np.linalg.svd(G)
+        time_svd = click()
+        # print "Build G: %.3f SVD: %.3f" % (time_G, time_svd)
+        V = np.matrix(VT).T
+        UT = np.matrix(U).T
+        Sinv = np.zeros_like(S)
+        LargeVals = 0
+        for ival, value in enumerate(S):
+            # print "% .5e" % value
+            if np.abs(value) > 1e-6:
+                LargeVals += 1
+                Sinv[ival] = 1/value
+            # Sinv[ival] = value / (value**2 + Sigma**2)
+        # print "%i atoms; %i/%i singular values are > 1e-6" % (xyz.shape[0], LargeVals, len(S))
+        Sinv = np.matrix(np.diag(Sinv))
+        Inv = np.matrix(V)*Sinv*np.matrix(UT)
+        # print np.max(np.abs(G*Inv-np.eye(G.shape[0])))
+        # raw_input()
+        return np.matrix(V)*Sinv*np.matrix(UT)
+
+    def GInverse(self, xyz, u=None):
+        SVD = False
+        if SVD:
+            return self.GInverse_SVD(xyz, u)
+        else:
+            xyz = xyz.reshape(-1,3)
+            click()
+            G = self.GMatrix(xyz, u)
+            time_G = click()
+            Gi = np.linalg.inv(G)
+            time_inv = click()
+            # print "G-time: %.3f Inv-time: %.3f" % (time_G, time_inv)
+            return Gi
+
+    def calcGrad(self, xyz, gradx):
+        q0 = self.calculate(xyz)
+        Ginv = self.GInverse(xyz)
+        Bmat = self.wilsonB(xyz)
+        # Internal coordinate gradient
+        Gq = np.matrix(Ginv)*np.matrix(Bmat)*np.matrix(gradx).T
+        return np.array(Gq).flatten()
+
+    def newCartesian(self, xyz, dQ, u=None, verbose=False):
+        xyz1 = xyz.copy()
+        dQ1 = dQ.copy()
+        # Iterate until convergence:
+        microiter = 0
+        rmsds = []
+        self.bork = False
+        # Damping factor
+        TB = 1.0
+        while True:
+            microiter += 1
+            if microiter == 10:
+                self.bork = True
+                if verbose: print "Approximate coordinates obtained after %i microiterations (rmsd = %.3f)" % (microiter, rmsds[0])
+                return xyzsave.flatten()
+            Bmat = np.matrix(self.wilsonB(xyz1))
+            Ginv = self.GInverse(xyz1, u)
+            # Get new Cartesian coordinates
+            if u is not None:
+                dxyz = TB*u*Bmat.T*Ginv*(np.matrix(dQ1).T)
+            else:
+                dxyz = TB*Bmat.T*Ginv*(np.matrix(dQ1).T)
+            xyz2 = xyz1 + np.array(dxyz).flatten()
+            if microiter == 1:
+                xyzsave = xyz2.copy()
+            rmsd = np.sqrt(np.mean((np.array(xyz2-xyz1).flatten())**2))
+            if len(rmsds) > 0:
+                if rmsd > rmsdt:
+                    if verbose: print "Iter: %i RMSD: %.3e Thre: % .3e Damp: %.3f (Bad)" % (microiter, rmsd, rmsdt, TB)
+                    TB /= 2
+                else:
+                    if verbose: print "Iter: %i RMSD: %.3e Thre: % .3e Damp: %.3f (Good)" % (microiter, rmsd, rmsdt, TB)
+                    TB = min(TB*1.25, 1.0)
+                    rmsdt = rmsd
+            else:
+                if verbose: print "Iter: %i RMSD: %.3e" % (microiter, rmsd)
+                rmsdt = rmsd
+            rmsds.append(rmsd)
+            # Are we converged?
+            if rmsd < 1e-6:
+                if verbose: print "Cartesian coordinates obtained after %i microiterations" % microiter
+                break
+            # Calculate the actual change in internal coordinates
+            dQ_actual = self.calcDiff(xyz2, xyz1)
+            # Figure out the further change needed
+            dQ1 -= dQ_actual
+            xyz1 = xyz2
+        return xyz2.flatten()
+
+    def repr_diff(self, other):
+        return self.Prims.repr_diff(other.Prims)
+
+    def guess_hessian(self, coords):
+        Hprim = np.matrix(self.Prims.guess_hessian(coords))
+        return np.array(self.Vecs.T*Hprim*self.Vecs)
+        # print Hprim.shape
+        # print self.Vecs.shape
+        # raise RuntimeError

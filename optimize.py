@@ -4,8 +4,8 @@ from __future__ import division
 import numpy as np
 from copy import deepcopy
 from collections import OrderedDict
-from internal import Distance, Angle, Dihedral, OutOfPlane, RedundantInternalCoordinates, CartesianX, CartesianY, CartesianZ
-from forcebalance.molecule import Molecule, Elements, Radii
+from internal import Distance, Angle, Dihedral, OutOfPlane, DelocalizedInternalCoordinates, RedundantInternalCoordinates, CartesianX, CartesianY, CartesianZ
+from forcebalance.molecule import Molecule
 from forcebalance.nifty import row, col, flat, invert_svd
 from scipy import optimize
 import argparse
@@ -156,77 +156,18 @@ def gradient_internal(q):
 gradient_internal.IC = None
 gradient_internal.x0 = None
 
-def guess_hessian(mol, coords, IC):
-    mol.xyzs[0] = coords.reshape(-1,3)*0.529
-    Hdiag = []
-    def covalent(a, b):
-        r = np.linalg.norm(mol.xyzs[0][a]-mol.xyzs[0][b])
-        rcov = Radii[Elements.index(mol.elem[a])-1] + Radii[Elements.index(mol.elem[b])-1]
-        return r/rcov < 1.2
-    
-    for ic in IC.Internals:
-        if type(ic) is Distance:
-            r = np.linalg.norm(mol.xyzs[0][ic.a]-mol.xyzs[0][ic.b]) / 0.529
-            elem1 = min(Elements.index(mol.elem[ic.a]), Elements.index(mol.elem[ic.b]))
-            elem2 = max(Elements.index(mol.elem[ic.a]), Elements.index(mol.elem[ic.b]))
-            A = 1.734
-            if elem1 < 3:
-                if elem2 < 3:
-                    B = -0.244
-                elif elem2 < 11:
-                    B = 0.352
-                else:
-                    B = 0.660
-            elif elem1 < 11:
-                if elem2 < 11:
-                    B = 1.085
-                else:
-                    B = 1.522
-            else:
-                B = 2.068
-            if covalent(ic.a, ic.b):
-                Hdiag.append(A/(r-B)**3)
-            else:
-                Hdiag.append(0.1)
-        elif type(ic) is Angle:
-            if min(Elements.index(mol.elem[ic.a]),
-                   Elements.index(mol.elem[ic.b]),
-                   Elements.index(mol.elem[ic.c])) < 3:
-                A = 0.160
-            else:
-                A = 0.250
-            if covalent(ic.a, ic.b) and covalent(ic.b, ic.c):
-                Hdiag.append(A)
-            else:
-                Hdiag.append(0.1)
-        elif type(ic) is Dihedral:
-            r = np.linalg.norm(mol.xyzs[0][ic.b]-mol.xyzs[0][ic.c])
-            rcov = Radii[Elements.index(mol.elem[ic.b])-1] + Radii[Elements.index(mol.elem[ic.c])-1]
-            Hdiag.append(0.1)
-            # print r, rcov
-            # Hdiag.append(0.0023 - 0.07*(r-rcov))
-        elif type(ic) is OutOfPlane:
-            r1 = mol.xyzs[0][ic.b]-mol.xyzs[0][ic.a]
-            r2 = mol.xyzs[0][ic.c]-mol.xyzs[0][ic.a]
-            r3 = mol.xyzs[0][ic.d]-mol.xyzs[0][ic.a]
-            d = 1 - np.abs(np.dot(r1,np.cross(r2,r3))/np.linalg.norm(r1)/np.linalg.norm(r2)/np.linalg.norm(r3))
-            Hdiag.append(0.1)
-            # These formulas appear to be useless
-            # if covalent(ic.a, ic.b) and covalent(ic.a, ic.c) and covalent(ic.a, ic.d):
-            #     Hdiag.append(0.045)
-            # else:
-            #     Hdiag.append(0.023)
-        elif type(ic) in [CartesianX, CartesianY, CartesianZ]:
-            Hdiag.append(0.05)
-        else:
-            raise RuntimeError('Spoo!')
-    return np.matrix(np.diag(Hdiag))
-
-def Rebuild(IC, H0, coord_seq, grad_seq, history=10):
+def Rebuild(IC, H0, coord_seq, grad_seq, trust=0.3):
+    Na = len(coord_seq[0])/3
+    history = 0
+    for i in range(2, len(coord_seq)+1):
+        disp = 0.529*(coord_seq[-i]-coord_seq[-1])
+        rmsd = np.sqrt(np.sum(disp**2)/Na)
+        print -i, rmsd
+        if rmsd > trust: break
+        history += 1
     if history < 1:
-        raise RuntimeError('Spoo!')
-    if history > len(coord_seq)-1:
-        history = len(coord_seq)-1
+        return H0.copy()
+    print "Rebuilding Hessian using %i gradients" % history
     y_seq = [IC.calculate(i) for i in coord_seq[-history-1:]]
     g_seq = [IC.calcGrad(i, j) for i, j in zip(coord_seq[-history-1:],grad_seq[-history-1:])]
     Yprev = y_seq[0]
@@ -235,13 +176,17 @@ def Rebuild(IC, H0, coord_seq, grad_seq, history=10):
     for i in range(1, len(y_seq)):
         Y = y_seq[i]
         G = g_seq[i]
+        Yprev = y_seq[i-1]
+        Gprev = g_seq[i-1]
         Dy   = col(Y - Yprev)
         Dg   = col(G - Gprev)
-        Yprev = Y.copy()
-        Gprev = G.copy()
         Mat1 = (Dg*Dg.T)/(Dg.T*Dy)[0,0]
         Mat2 = ((H*Dy)*(H*Dy).T)/(Dy.T*H*Dy)[0,0]
+        Hstor = H.copy()
         H += Mat1-Mat2
+        if np.min(np.linalg.eig(H)[0]) < 0:
+            print "Negative eigenvalues at iteration %i - returning previous" % i
+            return Hstor
     return H
 
 def getNorm(X, dy, IC=None, CartesianTrust=False):
@@ -265,8 +210,7 @@ def Optimize(coords, molecule, IC=None):
         print "%i internal coordinates being used (rather than %i Cartesians)" % (len(IC.Internals), 3*molecule.na)
         print IC
         internal = True
-        H0 = guess_hessian(molecule, coords, IC)
-        # H0 = np.eye(len(IC.Internals))
+        H0 = IC.guess_hessian(coords)
     else:
         internal = False
         H0 = np.eye(len(coords))
@@ -332,8 +276,6 @@ def Optimize(coords, molecule, IC=None):
             except np.linalg.LinAlgError:
                 print "\x1b[1;91mError inverting Hessian - L = %.3f\x1b[0m" % L
                 return 1e10*(L-1)**2
-                # H = H0.copy()
-                # dy = solver(L)[0]
             N = getNorm(X, dy, IC, CartesianTrust)
             # print "Finding trust radius: H%+.4f*I, length %.4e (target %.4e)" % ((L-1)**2,N,trust)
             return (N - trust)**2
@@ -389,7 +331,8 @@ def Optimize(coords, molecule, IC=None):
             idx = np.argmax(np.abs(dy))
             iunit = np.zeros_like(dy)
             iunit[idx] = 1.0
-            print "Along %s %.3f" % (IC.Internals[idx], np.dot(dy/np.linalg.norm(dy), iunit))
+            if type(IC) is RedundantInternalCoordinates:
+                print "Along %s %.3f" % (IC.Internals[idx], np.dot(dy/np.linalg.norm(dy), iunit))
         if Converged_energy and Converged_grms and Converged_drms and Converged_gmax and Converged_dmax:
             print "Converged! =D"
             break
@@ -412,10 +355,6 @@ def Optimize(coords, molecule, IC=None):
             X = Xprev.copy()
             G = Gprev.copy()
             E = Eprev
-            # if IC is not None:
-            #     H0 = guess_hessian(molecule, X, IC)
-            #     H = H0.copy()
-            #print np.diag(H)
         else:
             X_hist.append(X)
             Gx_hist.append(gradx)
@@ -426,14 +365,21 @@ def Optimize(coords, molecule, IC=None):
                 newmol = deepcopy(molecule)
                 newmol.xyzs[0] = X.reshape(-1,3)*0.529
                 newmol.build_topology()
-                IC1 = RedundantInternalCoordinates(newmol)
+                if type(IC) is RedundantInternalCoordinates:
+                    IC1 = RedundantInternalCoordinates(newmol)
+                elif type(IC) is DelocalizedInternalCoordinates:
+                    IC1 = DelocalizedInternalCoordinates(newmol, build=False)
+                else:
+                    raise RuntimeError('Spoo!')
                 if IC1 != IC:
                     print "\x1b[1;94mInternal coordinate system may have changed\x1b[0m"
                     print IC.repr_diff(IC1)
                     IC = IC1
+                    if type(IC1) is DelocalizedInternalCoordinates:
+                        IC.build_dlc(X)
+                    H0 = IC.guess_hessian(coords)
                     # H0 = np.eye(len(IC.Internals))
-                    H0 = guess_hessian(newmol, X, IC)
-                    H = Rebuild(IC, H0, X_hist, Gx_hist)
+                    H = Rebuild(IC, H0, X_hist, Gx_hist, 0.3)
                     # H = H0.copy()
                     Y = IC.calculate(X)
                     skipBFGS = True
@@ -460,13 +406,13 @@ def CheckInternalGrad(coords, molecule, IC):
     Gq = IC.calcGrad(coords, gradx)
     for i in range(len(q0)):
         dq = np.zeros_like(q0)
-        dq[i] += 1e-3
+        dq[i] += 1e-4
         x1 = IC.newCartesian(coords, dq)
         EPlus, _ = calc(x1)
-        dq[i] -= 2e-3
+        dq[i] -= 2e-4
         x1 = IC.newCartesian(coords, dq)
         EMinus, _ = calc(x1)
-        fdiff = (EPlus-EMinus)/2e-3
+        fdiff = (EPlus-EMinus)/2e-4
         print "%s : % .6e % .6e % .6e" % (IC.Internals[i], Gq[i], fdiff, Gq[i]-fdiff)
 
 def CalcInternalHess(coords, molecule, IC):
@@ -476,10 +422,10 @@ def CalcInternalHess(coords, molecule, IC):
     q0 = IC.calculate(coords)
     for i in range(len(q0)):
         dq = np.zeros_like(q0)
-        dq[i] += 1e-3
+        dq[i] += 1e-4
         x1 = IC.newCartesian(coords, dq)
         EPlus, _ = calc(x1)
-        dq[i] -= 2e-3
+        dq[i] -= 2e-4
         x1 = IC.newCartesian(coords, dq)
         EMinus, _ = calc(x1)
         fdiff = (EPlus+EMinus-2*E)/1e-6
@@ -488,20 +434,20 @@ def CalcInternalHess(coords, molecule, IC):
 def main():
     # Get initial coordinates in bohr
     coords = M.xyzs[0].flatten() / 0.529
-    IC = RedundantInternalCoordinates(M)
+    IC = DelocalizedInternalCoordinates(M)
+    # IC = RedundantInternalCoordinates(M)
     FDCheck = False
     if FDCheck:
         IC.checkFiniteDifference(coords)
         CheckInternalGrad(coords, M, IC)
     opt_coords = Optimize(coords, M, None if args.cart else IC)
     M.xyzs[0] = opt_coords.reshape(-1,3) * 0.529
-    IC = RedundantInternalCoordinates(M)
-    CalcInternalHess(opt_coords, M, IC)
-    if FDCheck:
-        IC.checkFiniteDifference(opt_coords)
-        CheckInternalGrad(opt_coords, M, IC)
+    # IC = RedundantInternalCoordinates(M)
+    # CalcInternalHess(opt_coords, M, IC)
+    # if FDCheck:
+    #     IC.checkFiniteDifference(opt_coords)
+    #     CheckInternalGrad(opt_coords, M, IC)
     
-
 if __name__ == "__main__":
     main()
 
