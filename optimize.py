@@ -14,6 +14,7 @@ import os, sys
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--cart', action='store_true', help='Use Cartesian coordinate system.')
+parser.add_argument('--redund', action='store_true', help='Use redundant coordinate system.')
 parser.add_argument('--terachem', action='store_true', help='Run optimization in TeraChem.')
 
 print ' '.join(sys.argv)
@@ -162,7 +163,7 @@ def Rebuild(IC, H0, coord_seq, grad_seq, trust=0.3):
     for i in range(2, len(coord_seq)+1):
         disp = 0.529*(coord_seq[-i]-coord_seq[-1])
         rmsd = np.sqrt(np.sum(disp**2)/Na)
-        print -i, rmsd
+        # print -i, rmsd
         if rmsd > trust: break
         history += 1
     if history < 1:
@@ -232,6 +233,7 @@ def Optimize(coords, molecule, IC=None):
         G = gradx.copy()
     # Loop of optimization
     Iteration = 0
+    CoordCounter = 0
     trust = 0.1
     # Adaptive trust radius
     trust0 = 1.0
@@ -273,7 +275,7 @@ def Optimize(coords, molecule, IC=None):
         def trust_fun(L):
             try:
                 dy = solver(L)[0]
-            except np.linalg.LinAlgError:
+            except:
                 print "\x1b[1;91mError inverting Hessian - L = %.3f\x1b[0m" % L
                 return 1e10*(L-1)**2
             N = getNorm(X, dy, IC, CartesianTrust)
@@ -349,7 +351,7 @@ def Optimize(coords, molecule, IC=None):
                 print_trust = True
         else:
             print_trust = False
-        if Quality < -1:
+        if Quality < 0:
             print "%s and rejecting step" % trustprint
             Y = Yprev.copy()
             X = Xprev.copy()
@@ -362,27 +364,32 @@ def Optimize(coords, molecule, IC=None):
             if print_trust:
                 print trustprint
             if internal:
-                newmol = deepcopy(molecule)
-                newmol.xyzs[0] = X.reshape(-1,3)*0.529
-                newmol.build_topology()
-                if type(IC) is RedundantInternalCoordinates:
-                    IC1 = RedundantInternalCoordinates(newmol)
-                elif type(IC) is DelocalizedInternalCoordinates:
-                    IC1 = DelocalizedInternalCoordinates(newmol, build=False)
+                if (IC.bork or CoordCounter == 1):
+                    newmol = deepcopy(molecule)
+                    newmol.xyzs[0] = X.reshape(-1,3)*0.529
+                    newmol.build_topology()
+                    if type(IC) is RedundantInternalCoordinates:
+                        IC1 = RedundantInternalCoordinates(newmol)
+                    elif type(IC) is DelocalizedInternalCoordinates:
+                        IC1 = DelocalizedInternalCoordinates(newmol, build=False)
+                    else:
+                        raise RuntimeError('Spoo!')
+                    if IC.update(IC1):
+                        # if IC1 != IC:
+                        print "\x1b[1;94mInternal coordinate system may have changed\x1b[0m"
+                        # print IC.repr_diff(IC1)
+                        # IC = IC1
+                        if type(IC) is DelocalizedInternalCoordinates:
+                            IC.build_dlc(X)
+                        H0 = IC.guess_hessian(coords)
+                        # H0 = np.eye(len(IC.Internals))
+                        H = Rebuild(IC, H0, X_hist, Gx_hist, 0.3)
+                        # H = H0.copy()
+                        Y = IC.calculate(X)
+                        skipBFGS = True
+                        CoordCounter = 0 
                 else:
-                    raise RuntimeError('Spoo!')
-                if IC1 != IC:
-                    print "\x1b[1;94mInternal coordinate system may have changed\x1b[0m"
-                    print IC.repr_diff(IC1)
-                    IC = IC1
-                    if type(IC1) is DelocalizedInternalCoordinates:
-                        IC.build_dlc(X)
-                    H0 = IC.guess_hessian(coords)
-                    # H0 = np.eye(len(IC.Internals))
-                    H = Rebuild(IC, H0, X_hist, Gx_hist, 0.3)
-                    # H = H0.copy()
-                    Y = IC.calculate(X)
-                    skipBFGS = True
+                    CoordCounter += 1
                 Gq = IC.calcGrad(X, gradx)
                 G = np.array(Gq).flatten()
             else:
@@ -434,13 +441,17 @@ def CalcInternalHess(coords, molecule, IC):
 def main():
     # Get initial coordinates in bohr
     coords = M.xyzs[0].flatten() / 0.529
-    IC = DelocalizedInternalCoordinates(M)
-    # IC = RedundantInternalCoordinates(M)
+    if args.cart:
+        IC = None
+    elif args.redund:
+        IC = RedundantInternalCoordinates(M)
+    else:
+        IC = DelocalizedInternalCoordinates(M)
     FDCheck = False
     if FDCheck:
         IC.checkFiniteDifference(coords)
         CheckInternalGrad(coords, M, IC)
-    opt_coords = Optimize(coords, M, None if args.cart else IC)
+    opt_coords = Optimize(coords, M, IC)
     M.xyzs[0] = opt_coords.reshape(-1,3) * 0.529
     # IC = RedundantInternalCoordinates(M)
     # CalcInternalHess(opt_coords, M, IC)

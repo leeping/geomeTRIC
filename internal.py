@@ -383,58 +383,149 @@ class OutOfPlane(object):
         derivatives[p, :] = term2 - term3 + term4
         return derivatives
 
-class DelocalizedCoordinate(object):
-    def __init__(self, coordinate_list, weights):
-        if len(coordinate_list) != len(weights):
-            raise RuntimeError('Coordinate list and weights must be the same length')
-        self.coordinate_list = coordinate_list
-        self.weights = weights
-        if len(set(self.coordinate_list)) != len(self.coordinate_list):
-            raise RuntimeError('Coordinate list must be unique')
+class InternalCoordinates(object):
+    def wilsonB(self, xyz):
+        """
+        Given Cartesian coordinates xyz, return the Wilson B-matrix
+        given by dq_i/dx_j where x is flattened (i.e. x1, y1, z1, x2, y2, z2)
+        """
+        WilsonB = []
+        Der = self.derivatives(xyz)
+        for i in range(Der.shape[0]):
+            WilsonB.append(Der[i].flatten())
+        return np.array(WilsonB)
 
-    def lookup_weight(self, coordinate):
-        for c, w in zip(self.coordinate_list, self.weights):
-            if c == coordinate:
-                return w
-        
-    def __eq__(self, other):
-        for c, w in zip(self.coordinate_list, self.weights):
-            if c not in other.coordinate_list: return False
-            if other.lookup_weight(c) != w: return False
-        for c, w in zip(other.coordinate_list, other.weights):
-            if c not in self.coordinate_list: return False
-            if self.lookup_weight(c) != w: return False
-        return True
+    def GMatrix(self, xyz, u=None):
+        """
+        Given Cartesian coordinates xyz, return the G-matrix
+        given by G = BuBt where u is an arbitrary matrix (default to identity)
+        """
+        Bmat = np.matrix(self.wilsonB(xyz))
+        if u is None:
+            BuBt = Bmat*Bmat.T
+        else:
+            BuBt = Bmat * u * Bmat.T
+        return BuBt
 
-    def __ne__(self, other):
-        return not self.__eq__(other)
+    def GInverse_SVD(self, xyz, u=None):
+        xyz = xyz.reshape(-1,3)
+        # Perform singular value decomposition
+        click()
+        G = self.GMatrix(xyz, u)
+        time_G = click()
+        U, S, VT = np.linalg.svd(G)
+        time_svd = click()
+        # print "Build G: %.3f SVD: %.3f" % (time_G, time_svd),
+        V = np.matrix(VT).T
+        UT = np.matrix(U).T
+        Sinv = np.zeros_like(S)
+        LargeVals = 0
+        for ival, value in enumerate(S):
+            # print "% .5e" % value
+            if np.abs(value) > 1e-6:
+                LargeVals += 1
+                Sinv[ival] = 1/value
+        # print "%i atoms; %i/%i singular values are > 1e-6" % (xyz.shape[0], LargeVals, len(S))
+        Sinv = np.matrix(np.diag(Sinv))
+        Inv = np.matrix(V)*Sinv*np.matrix(UT)
+        return np.matrix(V)*Sinv*np.matrix(UT)
 
-    def value(self, xyz):
-        values = np.array([c.value(xyz) for c in self.coordinate_list])
-        return np.sum(self.weights * values)
+    def GInverse_EIG(self, xyz, u=None):
+        xyz = xyz.reshape(-1,3)
+        click()
+        G = self.GMatrix(xyz, u)
+        time_G = click()
+        Gi = np.linalg.inv(G)
+        time_inv = click()
+        # print "G-time: %.3f Inv-time: %.3f" % (time_G, time_inv)
+        return Gi
 
-    def derivatives(self, xyz):
-        wders = np.array([self.weights[i] * c.derivative(xyz) for i, c in enumerate(self.coordinate_list)])
-        return np.sum(wders, axis=0)
+    def checkFiniteDifference(self, xyz):
+        xyz = xyz.reshape(-1,3)
+        Analytical = self.derivatives(xyz)
+        FiniteDifference = np.zeros_like(Analytical)
+        h = 0.001
+        for i in range(xyz.shape[0]):
+            for j in range(3):
+                x1 = xyz.copy()
+                x2 = xyz.copy()
+                x1[i,j] += h
+                x2[i,j] -= h
+                PMDiff = self.calcDiff(x1,x2)
+                FiniteDifference[:,i,j] = PMDiff/(2*h)
+        for i in range(Analytical.shape[0]):
+            print "IC %i/%i :" % (i, Analytical.shape[0])
+            for j in range(Analytical.shape[1]):
+                print "Atom %i" % (j+1)
+                for k in range(Analytical.shape[2]):
+                    print "xyz"[k],
+                    error = Analytical[i,j,k] - FiniteDifference[i,j,k]
+                    if np.abs(error) > 1e-5:
+                        color = "\x1b[91m"
+                    else:
+                        color = "\x1b[92m"
+                    # if np.abs(error) > 1e-5:
+                    print "% .5e % .5e %s% .5e\x1b[0m" % (Analytical[i,j,k], FiniteDifference[i,j,k], color, Analytical[i,j,k] - FiniteDifference[i,j,k])
+        print "Finite-difference Finished"
 
-def check_linear3(molecule, a, b, c, d):
-    ab = molecule.xyzs[0][b] - molecule.xyzs[0][a]
-    bc = molecule.xyzs[0][c] - molecule.xyzs[0][b]
-    cd = molecule.xyzs[0][d] - molecule.xyzs[0][c]
-    ab /= np.linalg.norm(ab)
-    bc /= np.linalg.norm(bc)
-    cd /= np.linalg.norm(cd)
-    LinThre = 0.95
-    if np.abs(np.dot(ab, bc)) > LinThre:
-        return True
-    if np.abs(np.dot(bc, cd)) > LinThre:
-        return True
-    if np.abs(np.dot(ab, bc)) > LinThre:
-        return True
-    else:
-        return False
+    def calcGrad(self, xyz, gradx):
+        q0 = self.calculate(xyz)
+        Ginv = self.GInverse(xyz)
+        Bmat = self.wilsonB(xyz)
+        # Internal coordinate gradient
+        Gq = np.matrix(Ginv)*np.matrix(Bmat)*np.matrix(gradx).T
+        return np.array(Gq).flatten()
+
+    def newCartesian(self, xyz, dQ, u=None, verbose=False):
+        xyz1 = xyz.copy()
+        dQ1 = dQ.copy()
+        # Iterate until convergence:
+        microiter = 0
+        rmsds = []
+        self.bork = False
+        # Damping factor
+        TB = 1.0
+        while True:
+            microiter += 1
+            if microiter == 10:
+                self.bork = True
+                if verbose: print "Approximate coordinates obtained after %i microiterations (rmsd = %.3f)" % (microiter, rmsds[0])
+                return xyzsave.flatten()
+            Bmat = np.matrix(self.wilsonB(xyz1))
+            Ginv = self.GInverse(xyz1, u)
+            # Get new Cartesian coordinates
+            if u is not None:
+                dxyz = TB*u*Bmat.T*Ginv*(np.matrix(dQ1).T)
+            else:
+                dxyz = TB*Bmat.T*Ginv*(np.matrix(dQ1).T)
+            xyz2 = xyz1 + np.array(dxyz).flatten()
+            if microiter == 1:
+                xyzsave = xyz2.copy()
+            rmsd = np.sqrt(np.mean((np.array(xyz2-xyz1).flatten())**2))
+            if len(rmsds) > 0:
+                if rmsd > rmsdt:
+                    if verbose: print "Iter: %i RMSD: %.3e Thre: % .3e Damp: %.3f (Bad)" % (microiter, rmsd, rmsdt, TB)
+                    TB /= 2
+                else:
+                    if verbose: print "Iter: %i RMSD: %.3e Thre: % .3e Damp: %.3f (Good)" % (microiter, rmsd, rmsdt, TB)
+                    TB = min(TB*1.25, 1.0)
+                    rmsdt = rmsd
+            else:
+                if verbose: print "Iter: %i RMSD: %.3e" % (microiter, rmsd)
+                rmsdt = rmsd
+            rmsds.append(rmsd)
+            # Are we converged?
+            if rmsd < 1e-6:
+                if verbose: print "Cartesian coordinates obtained after %i microiterations" % microiter
+                break
+            # Calculate the actual change in internal coordinates
+            dQ_actual = self.calcDiff(xyz2, xyz1)
+            # Figure out the further change needed
+            dQ1 -= dQ_actual
+            xyz1 = xyz2
+        return xyz2.flatten()
     
-class RedundantInternalCoordinates(object):
+class RedundantInternalCoordinates(InternalCoordinates):
     def __repr__(self):
         lines = ["Internal coordinate system (atoms numbered from 1):"]
         typedict = OrderedDict()
@@ -455,13 +546,32 @@ class RedundantInternalCoordinates(object):
         answer = True
         for i in self.Internals:
             if i not in other.Internals:
-                # print i, "not in the other"
                 answer = False
         for i in other.Internals:
             if i not in self.Internals:
-                # print i, "not in self"
                 answer = False
         return answer
+
+    def update(self, other):
+        Changed = False
+        for i in self.Internals:
+            if i not in other.Internals:
+                if hasattr(i, 'inactive'):
+                    i.inactive += 1
+                else:
+                    i.inactive = 0
+                if i.inactive == 1:
+                    print "Deleting:", i
+                    self.Internals.remove(i)
+                    Changed = True
+            else:
+                i.inactive = 0
+        for i in other.Internals:
+            if i not in self.Internals:
+                print "Adding:  ", i
+                self.Internals.append(i)
+                Changed = True
+        return Changed
 
     def __ne__(self, other):
         return not self.__eq__(other)
@@ -507,134 +617,10 @@ class RedundantInternalCoordinates(object):
         # 3) 3
         return np.array(answer)
 
-    def wilsonB(self, xyz):
-        """
-        Given Cartesian coordinates xyz, return the Wilson B-matrix
-        given by dq_i/dx_j where x is flattened (i.e. x1, y1, z1, x2, y2, z2)
-        """
-        WilsonB = []
-        Der = self.derivatives(xyz)
-        for i in range(Der.shape[0]):
-            WilsonB.append(Der[i].flatten())
-        return np.array(WilsonB)
-
-    def GMatrix(self, xyz, u=None):
-        """
-        Given Cartesian coordinates xyz, return the G-matrix
-        given by G = BuBt where u is an arbitrary matrix (default to identity)
-        """
-        Bmat = np.matrix(self.wilsonB(xyz))
-        if u is None:
-            BuBt = Bmat*Bmat.T
-        else:
-            BuBt = Bmat * u * Bmat.T
-        return BuBt
-
-    def GInverse_SVD(self, xyz, u=None):
-        xyz = xyz.reshape(-1,3)
-        # Perform singular value decomposition
-        click()
-        G = self.GMatrix(xyz, u)
-        time_G = click()
-        U, S, VT = np.linalg.svd(G)
-        time_svd = click()
-        # print "Build G: %.3f SVD: %.3f" % (time_G, time_svd),
-        V = np.matrix(VT).T
-        UT = np.matrix(U).T
-        Sinv = np.zeros_like(S)
-        # Tikhonov regularization
-        # Sigma = 1e-6
-        LargeVals = 0
-        for ival, value in enumerate(S):
-            # print "% .5e" % value
-            if np.abs(value) > 1e-6:
-                LargeVals += 1
-                Sinv[ival] = 1/value
-            # Sinv[ival] = value / (value**2 + Sigma**2)
-        # print "%i atoms; %i/%i singular values are > 1e-6" % (xyz.shape[0], LargeVals, len(S))
-        Sinv = np.matrix(np.diag(Sinv))
-        Inv = np.matrix(V)*Sinv*np.matrix(UT)
-        # print np.max(np.abs(G*Inv-np.eye(G.shape[0])))
-        # raw_input()
-        return np.matrix(V)*Sinv*np.matrix(UT)
-
-    def GInverse(self, xyz, u=None):
-        SVD = True
-        if SVD:
-            return self.GInverse_SVD(xyz, u)
-        else:
-            # Warning - this code won't work because the matrix is ill-conditioned
-            xyz = xyz.reshape(-1,3)
-            # Perform singular value decomposition
-            click()
-            G = self.GMatrix(xyz, u)
-            time_G = click()
-            Gi = np.linalg.pinv(G,rcond=1e-10)
-            time_inv = click()
-            print "G-time: %.3f Pinv-time: %.3f" % (time_G, time_inv)
-            return Gi
-
-    def calcGrad(self, xyz, gradx):
-        q0 = self.calculate(xyz)
-        Ginv = self.GInverse(xyz)
-        Bmat = self.wilsonB(xyz)
-        # Internal coordinate gradient
-        Gq = np.matrix(Ginv)*np.matrix(Bmat)*np.matrix(gradx).T
-        return np.array(Gq).flatten()
-
-    def newCartesian(self, xyz, dQ, u=None, verbose=False):
-        xyz1 = xyz.copy()
-        dQ1 = dQ.copy()
-        # Iterate until convergence:
-        microiter = 0
-        rmsds = []
-        self.bork = False
-        # Damping factor
-        TB = 1.0
-        while True:
-            microiter += 1
-            if microiter == 10:
-                target = self.calculate(xyz) + dQ
-                self.bork = True
-                if verbose: print "Approximate coordinates obtained after %i microiterations (rmsd = %.3f)" % (microiter, rmsds[0])
-                return xyzsave.flatten()
-            Bmat = np.matrix(self.wilsonB(xyz1))
-            Ginv = self.GInverse(xyz1, u)
-            # Get new Cartesian coordinates
-            if u is not None:
-                dxyz = TB*u*Bmat.T*Ginv*(np.matrix(dQ1).T)
-            else:
-                dxyz = TB*Bmat.T*Ginv*(np.matrix(dQ1).T)
-            xyz2 = xyz1 + np.array(dxyz).flatten()
-            if microiter == 1:
-                xyzsave = xyz2.copy()
-            rmsd = np.sqrt(np.mean((np.array(xyz2-xyz1).flatten())**2))
-            if len(rmsds) > 0:
-                if rmsd > rmsdt:
-                    if verbose: print "Iter: %i RMSD: %.3e Thre: % .3e Damp: %.3f (Bad)" % (microiter, rmsd, rmsdt, TB)
-                    TB /= 2
-                else:
-                    if verbose: print "Iter: %i RMSD: %.3e Thre: % .3e Damp: %.3f (Good)" % (microiter, rmsd, rmsdt, TB)
-                    TB = min(TB*1.25, 1.0)
-                    rmsdt = rmsd
-            else:
-                if verbose: print "Iter: %i RMSD: %.3e" % (microiter, rmsd)
-                rmsdt = rmsd
-            rmsds.append(rmsd)
-            # Are we converged?
-            if rmsd < 1e-6:
-                if verbose: print "Cartesian coordinates obtained after %i microiterations" % microiter
-                break
-            # Calculate the actual change in internal coordinates
-            Q1 = self.calculate(xyz1)
-            Q2 = self.calculate(xyz2)
-            dQ_actual = self.subtractInternal(Q2,Q1)
-            # Figure out the further change needed
-            dQ1 -= dQ_actual
-            xyz1 = xyz2
-        return xyz2.flatten()
-
-    def subtractInternal(self, Q1, Q2):
+    def calcDiff(self, coord1, coord2):
+        """ Calculate difference in internal coordinates, accounting for changes in 2*pi of angles. """
+        Q1 = self.calculate(coord1)
+        Q2 = self.calculate(coord2)
         PMDiff = (Q1-Q2)
         for k in range(len(PMDiff)):
             if type(self.Internals[k]) in [Angle, Dihedral, OutOfPlane]:
@@ -646,35 +632,8 @@ class RedundantInternalCoordinates(object):
                     PMDiff[k] = Minus2Pi
         return PMDiff
 
-    def checkFiniteDifference(self, xyz):
-        xyz = xyz.reshape(-1,3)
-        Analytical = self.derivatives(xyz)
-        FiniteDifference = np.zeros_like(Analytical)
-        ZeroPoint = self.calculate(xyz)
-        h = 0.001
-        for i in range(xyz.shape[0]):
-            for j in range(3):
-                xyz[i,j] += h
-                PlusPoint = self.calculate(xyz)
-                xyz[i,j] -= 2*h
-                MinusPoint = self.calculate(xyz)
-                xyz[i,j] += h
-                PMDiff = self.subtractInternal(PlusPoint, MinusPoint)
-                FiniteDifference[:,i,j] = PMDiff/(2*h)
-        for i in range(Analytical.shape[0]):
-            print "IC %i/%i :" % (i, Analytical.shape[0]), self.Internals[i]
-            for j in range(Analytical.shape[1]):
-                print "Atom %i" % (j+1)
-                for k in range(Analytical.shape[2]):
-                    print "xyz"[k],
-                    error = Analytical[i,j,k] - FiniteDifference[i,j,k]
-                    if np.abs(error) > 1e-5:
-                        color = "\x1b[91m"
-                    else:
-                        color = "\x1b[92m"
-                    if np.abs(error) > 1e-5:
-                        print "% .5e % .5e %s% .5e\x1b[0m" % (Analytical[i,j,k], FiniteDifference[i,j,k], color, Analytical[i,j,k] - FiniteDifference[i,j,k])
-        print "Finite-difference Finished"
+    def GInverse(self, xyz, u=None):
+        return self.GInverse_SVD(xyz, u)
 
     def addCartesianX(self, i):
         Cart = CartesianX(i)
@@ -978,13 +937,16 @@ class RedundantInternalCoordinates(object):
                 raise RuntimeError('Spoo!')
         return np.matrix(np.diag(Hdiag))
 
-class DelocalizedInternalCoordinates(object):
+class DelocalizedInternalCoordinates(InternalCoordinates):
     def __init__(self, molecule, build=True):
         self.Prims = RedundantInternalCoordinates(molecule)
         xyz = molecule.xyzs[0].flatten() / 0.529
         self.na = molecule.na
         if build:
             self.build_dlc(xyz)
+
+    def update(self, other):
+        return self.Prims.update(other.Prims)
 
     def build_dlc(self, xyz):
         # Perform singular value decomposition
@@ -1007,8 +969,13 @@ class DelocalizedInternalCoordinates(object):
         if self.na == 1:
             Expect = 0
         print "%i atoms (expect %i coordinates); %i/%i singular values are > 1e-6" % (self.na, Expect, LargeVals, len(L))
-        self.Vecs = Q[:, LargeIdx]
-        self.Internals = ["DLC %i" % (i+1) for i in range(len(LargeIdx))]
+        if LargeVals <= Expect:
+            self.Vecs = Q[:, LargeIdx]
+            self.Internals = ["DLC %i" % (i+1) for i in range(len(LargeIdx))]
+        else:
+            Idxs = np.argsort(L)[-Expect:]
+            self.Vecs = Q[:, Idxs]
+            self.Internals = ["DLC %i" % (i+1) for i in range(Expect)]
 
     def __eq__(self, other):
         return self.Prims == other.Prims
@@ -1018,17 +985,7 @@ class DelocalizedInternalCoordinates(object):
 
     def calcDiff(self, coord1, coord2):
         """ Calculate difference in internal coordinates, accounting for changes in 2*pi of angles. """
-        Q1 = self.Prims.calculate(coord1)
-        Q2 = self.Prims.calculate(coord2)
-        PMDiff = (Q1-Q2)
-        for k in range(len(PMDiff)):
-            if type(self.Prims.Internals[k]) in [Angle, Dihedral, OutOfPlane]:
-                Plus2Pi = PMDiff[k] + 2*np.pi
-                Minus2Pi = PMDiff[k] - 2*np.pi
-                if np.abs(PMDiff[k]) > np.abs(Plus2Pi):
-                    PMDiff[k] = Plus2Pi
-                if np.abs(PMDiff[k]) > np.abs(Minus2Pi):
-                    PMDiff[k] = Minus2Pi
+        PMDiff = self.Prims.calcDiff(coord1, coord2)
         Answer = np.matrix(PMDiff)*self.Vecs
         return np.array(Answer).flatten()
 
@@ -1050,153 +1007,8 @@ class DelocalizedInternalCoordinates(object):
         Answer1 = np.tensordot(self.Vecs, PrimDers, axes=(0, 0))
         return np.array(Answer1)
 
-    def checkFiniteDifference(self, xyz):
-        xyz = xyz.reshape(-1,3)
-        Analytical = self.derivatives(xyz)
-        FiniteDifference = np.zeros_like(Analytical)
-        h = 0.001
-        for i in range(xyz.shape[0]):
-            for j in range(3):
-                x1 = xyz.copy()
-                x2 = xyz.copy()
-                x1[i,j] += h
-                x2[i,j] -= h
-                PMDiff = self.calcDiff(x1,x2)
-                FiniteDifference[:,i,j] = PMDiff/(2*h)
-        for i in range(Analytical.shape[0]):
-            print "IC %i/%i :" % (i, Analytical.shape[0])
-            for j in range(Analytical.shape[1]):
-                print "Atom %i" % (j+1)
-                for k in range(Analytical.shape[2]):
-                    print "xyz"[k],
-                    error = Analytical[i,j,k] - FiniteDifference[i,j,k]
-                    if np.abs(error) > 1e-5:
-                        color = "\x1b[91m"
-                    else:
-                        color = "\x1b[92m"
-                    # if np.abs(error) > 1e-5:
-                    print "% .5e % .5e %s% .5e\x1b[0m" % (Analytical[i,j,k], FiniteDifference[i,j,k], color, Analytical[i,j,k] - FiniteDifference[i,j,k])
-        print "Finite-difference Finished"
-
-    def wilsonB(self, xyz):
-        """
-        Given Cartesian coordinates xyz, return the Wilson B-matrix
-        given by dq_i/dx_j where x is flattened (i.e. x1, y1, z1, x2, y2, z2)
-        """
-        WilsonB = []
-        Der = self.derivatives(xyz)
-        for i in range(Der.shape[0]):
-            WilsonB.append(Der[i].flatten())
-        return np.array(WilsonB)
-
-    def GMatrix(self, xyz, u=None):
-        """
-        Given Cartesian coordinates xyz, return the G-matrix
-        given by G = BuBt where u is an arbitrary matrix (default to identity)
-        """
-        Bmat = np.matrix(self.wilsonB(xyz))
-        if u is None:
-            BuBt = Bmat*Bmat.T
-        else:
-            BuBt = Bmat * u * Bmat.T
-        return BuBt
-
-    def GInverse_SVD(self, xyz, u=None):
-        xyz = xyz.reshape(-1,3)
-        # Perform singular value decomposition
-        click()
-        G = self.GMatrix(xyz, u)
-        time_G = click()
-        U, S, VT = np.linalg.svd(G)
-        time_svd = click()
-        # print "Build G: %.3f SVD: %.3f" % (time_G, time_svd)
-        V = np.matrix(VT).T
-        UT = np.matrix(U).T
-        Sinv = np.zeros_like(S)
-        LargeVals = 0
-        for ival, value in enumerate(S):
-            # print "% .5e" % value
-            if np.abs(value) > 1e-6:
-                LargeVals += 1
-                Sinv[ival] = 1/value
-            # Sinv[ival] = value / (value**2 + Sigma**2)
-        # print "%i atoms; %i/%i singular values are > 1e-6" % (xyz.shape[0], LargeVals, len(S))
-        Sinv = np.matrix(np.diag(Sinv))
-        Inv = np.matrix(V)*Sinv*np.matrix(UT)
-        # print np.max(np.abs(G*Inv-np.eye(G.shape[0])))
-        # raw_input()
-        return np.matrix(V)*Sinv*np.matrix(UT)
-
     def GInverse(self, xyz, u=None):
-        SVD = False
-        if SVD:
-            return self.GInverse_SVD(xyz, u)
-        else:
-            xyz = xyz.reshape(-1,3)
-            click()
-            G = self.GMatrix(xyz, u)
-            time_G = click()
-            Gi = np.linalg.inv(G)
-            time_inv = click()
-            # print "G-time: %.3f Inv-time: %.3f" % (time_G, time_inv)
-            return Gi
-
-    def calcGrad(self, xyz, gradx):
-        q0 = self.calculate(xyz)
-        Ginv = self.GInverse(xyz)
-        Bmat = self.wilsonB(xyz)
-        # Internal coordinate gradient
-        Gq = np.matrix(Ginv)*np.matrix(Bmat)*np.matrix(gradx).T
-        return np.array(Gq).flatten()
-
-    def newCartesian(self, xyz, dQ, u=None, verbose=False):
-        xyz1 = xyz.copy()
-        dQ1 = dQ.copy()
-        # Iterate until convergence:
-        microiter = 0
-        rmsds = []
-        self.bork = False
-        # Damping factor
-        TB = 1.0
-        while True:
-            microiter += 1
-            if microiter == 10:
-                self.bork = True
-                if verbose: print "Approximate coordinates obtained after %i microiterations (rmsd = %.3f)" % (microiter, rmsds[0])
-                return xyzsave.flatten()
-            Bmat = np.matrix(self.wilsonB(xyz1))
-            Ginv = self.GInverse(xyz1, u)
-            # Get new Cartesian coordinates
-            if u is not None:
-                dxyz = TB*u*Bmat.T*Ginv*(np.matrix(dQ1).T)
-            else:
-                dxyz = TB*Bmat.T*Ginv*(np.matrix(dQ1).T)
-            xyz2 = xyz1 + np.array(dxyz).flatten()
-            if microiter == 1:
-                xyzsave = xyz2.copy()
-            rmsd = np.sqrt(np.mean((np.array(xyz2-xyz1).flatten())**2))
-            if len(rmsds) > 0:
-                if rmsd > rmsdt:
-                    if verbose: print "Iter: %i RMSD: %.3e Thre: % .3e Damp: %.3f (Bad)" % (microiter, rmsd, rmsdt, TB)
-                    TB /= 2
-                else:
-                    if verbose: print "Iter: %i RMSD: %.3e Thre: % .3e Damp: %.3f (Good)" % (microiter, rmsd, rmsdt, TB)
-                    TB = min(TB*1.25, 1.0)
-                    rmsdt = rmsd
-            else:
-                if verbose: print "Iter: %i RMSD: %.3e" % (microiter, rmsd)
-                rmsdt = rmsd
-            rmsds.append(rmsd)
-            # Are we converged?
-            if rmsd < 1e-6:
-                if verbose: print "Cartesian coordinates obtained after %i microiterations" % microiter
-                break
-            # Calculate the actual change in internal coordinates
-            dQ_actual = self.calcDiff(xyz2, xyz1)
-            # Figure out the further change needed
-            dQ1 -= dQ_actual
-            xyz1 = xyz2
-        return xyz2.flatten()
+        return self.GInverse_EIG(xyz, u)
 
     def repr_diff(self, other):
         return self.Prims.repr_diff(other.Prims)
@@ -1204,6 +1016,3 @@ class DelocalizedInternalCoordinates(object):
     def guess_hessian(self, coords):
         Hprim = np.matrix(self.Prims.guess_hessian(coords))
         return np.array(self.Vecs.T*Hprim*self.Vecs)
-        # print Hprim.shape
-        # print self.Vecs.shape
-        # raise RuntimeError
