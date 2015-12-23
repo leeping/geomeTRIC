@@ -14,6 +14,7 @@ import os, sys
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--cart', action='store_true', help='Use Cartesian coordinate system.')
+parser.add_argument('--disconnect', action='store_true', help='Do not connect noncovalent molecules.')
 parser.add_argument('--redund', action='store_true', help='Use redundant coordinate system.')
 parser.add_argument('--terachem', action='store_true', help='Run optimization in TeraChem.')
 
@@ -259,6 +260,8 @@ def Optimize(coords, molecule, IC=None):
         eps = 1e-5
         if Emin < eps:
             Adj = eps-Emin
+            Adj = -2*Emin
+            # Adj = eps-Emin
         else:
             Adj = 0
         H += Adj * np.eye(H.shape[0])
@@ -351,7 +354,7 @@ def Optimize(coords, molecule, IC=None):
                 print_trust = True
         else:
             print_trust = False
-        if Quality < 0:
+        if Quality < -1:
             print "%s and rejecting step" % trustprint
             Y = Yprev.copy()
             X = Xprev.copy()
@@ -364,30 +367,31 @@ def Optimize(coords, molecule, IC=None):
             if print_trust:
                 print trustprint
             if internal:
-                if (IC.bork or CoordCounter == 1):
+                if (IC.bork):
+                # if True:
                     newmol = deepcopy(molecule)
                     newmol.xyzs[0] = X.reshape(-1,3)*0.529
                     newmol.build_topology()
                     if type(IC) is RedundantInternalCoordinates:
-                        IC1 = RedundantInternalCoordinates(newmol)
+                        IC1 = RedundantInternalCoordinates(newmol, interconnect=not args.disconnect)
                     elif type(IC) is DelocalizedInternalCoordinates:
-                        IC1 = DelocalizedInternalCoordinates(newmol, build=False)
+                        IC1 = DelocalizedInternalCoordinates(newmol, build=False, interconnect=not args.disconnect)
                     else:
                         raise RuntimeError('Spoo!')
-                    if IC.update(IC1):
-                        # if IC1 != IC:
-                        print "\x1b[1;94mInternal coordinate system may have changed\x1b[0m"
-                        # print IC.repr_diff(IC1)
-                        # IC = IC1
-                        if type(IC) is DelocalizedInternalCoordinates:
-                            IC.build_dlc(X)
-                        H0 = IC.guess_hessian(coords)
-                        # H0 = np.eye(len(IC.Internals))
-                        H = Rebuild(IC, H0, X_hist, Gx_hist, 0.3)
-                        # H = H0.copy()
-                        Y = IC.calculate(X)
-                        skipBFGS = True
-                        CoordCounter = 0 
+                    # if IC.update(IC1):
+                    # if IC1 != IC:
+                    print "\x1b[1;94mInternal coordinate system may have changed\x1b[0m"
+                    # print IC.repr_diff(IC1)
+                    # IC = IC1
+                    if type(IC) is DelocalizedInternalCoordinates:
+                        IC.build_dlc(X)
+                    H0 = IC.guess_hessian(coords)
+                    # H0 = np.eye(len(IC.Internals))
+                    H = Rebuild(IC, H0, X_hist, Gx_hist, 0.3)
+                    # H = H0.copy()
+                    Y = IC.calculate(X)
+                    skipBFGS = True
+                    CoordCounter = 0 
                 else:
                     CoordCounter += 1
                 Gq = IC.calcGrad(X, gradx)
@@ -444,9 +448,9 @@ def main():
     if args.cart:
         IC = None
     elif args.redund:
-        IC = RedundantInternalCoordinates(M)
+        IC = RedundantInternalCoordinates(M, interconnect=not args.disconnect)
     else:
-        IC = DelocalizedInternalCoordinates(M)
+        IC = DelocalizedInternalCoordinates(M, interconnect=not args.disconnect)
     FDCheck = False
     if FDCheck:
         IC.checkFiniteDifference(coords)

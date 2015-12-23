@@ -11,11 +11,12 @@ from collections import OrderedDict, defaultdict
 from scipy import optimize
 
 class CartesianX(object):
-    def __init__(self, a):
+    def __init__(self, a, w=1.0):
         self.a = a
+        self.w = w
 
     def __repr__(self):
-        return "Cartesian-X %i" % (self.a+1)
+        return "Cartesian-X %i : Weight %.3f" % (self.a+1, self.w)
         
     def __eq__(self, other):
         if type(self) is not type(other): return False
@@ -27,20 +28,21 @@ class CartesianX(object):
     def value(self, xyz):
         xyz = xyz.reshape(-1,3)
         a = self.a
-        return xyz[a][0]
+        return xyz[a][0]*self.w
         
     def derivative(self, xyz):
         xyz = xyz.reshape(-1,3)
         derivatives = np.zeros_like(xyz)
-        derivatives[self.a][0] = 1.0
+        derivatives[self.a][0] = self.w
         return derivatives
 
 class CartesianY(object):
-    def __init__(self, a):
+    def __init__(self, a, w=1.0):
         self.a = a
+        self.w = w
 
     def __repr__(self):
-        return "Cartesian-Y %i" % (self.a+1)
+        return "Cartesian-Y %i : Weight %.3f" % (self.a+1, self.w)
         
     def __eq__(self, other):
         if type(self) is not type(other): return False
@@ -52,20 +54,21 @@ class CartesianY(object):
     def value(self, xyz):
         xyz = xyz.reshape(-1,3)
         a = self.a
-        return xyz[a][1]
+        return xyz[a][1]*self.w
         
     def derivative(self, xyz):
         xyz = xyz.reshape(-1,3)
         derivatives = np.zeros_like(xyz)
-        derivatives[self.a][1] = 1.0
+        derivatives[self.a][1] = self.w
         return derivatives
 
 class CartesianZ(object):
-    def __init__(self, a):
+    def __init__(self, a, w=1.0):
         self.a = a
+        self.w = w
 
     def __repr__(self):
-        return "Cartesian-Z %i" % (self.a+1)
+        return "Cartesian-Z %i : Weight %.3f" % (self.a+1, self.w)
         
     def __eq__(self, other):
         if type(self) is not type(other): return False
@@ -77,12 +80,12 @@ class CartesianZ(object):
     def value(self, xyz):
         xyz = xyz.reshape(-1,3)
         a = self.a
-        return xyz[a][2]
+        return xyz[a][2]*self.w
         
     def derivative(self, xyz):
         xyz = xyz.reshape(-1,3)
         derivatives = np.zeros_like(xyz)
-        derivatives[self.a][2] = 1.0
+        derivatives[self.a][2] = self.w
         return derivatives
 
 class Distance(object):
@@ -635,18 +638,18 @@ class RedundantInternalCoordinates(InternalCoordinates):
     def GInverse(self, xyz, u=None):
         return self.GInverse_SVD(xyz, u)
 
-    def addCartesianX(self, i):
-        Cart = CartesianX(i)
+    def addCartesianX(self, i, w=1.0):
+        Cart = CartesianX(i, w)
         if Cart not in self.Internals:
             self.Internals.append(Cart)
 
-    def addCartesianY(self, i):
-        Cart = CartesianY(i)
+    def addCartesianY(self, i, w=1.0):
+        Cart = CartesianY(i, w)
         if Cart not in self.Internals:
             self.Internals.append(Cart)
 
-    def addCartesianZ(self, i):
-        Cart = CartesianZ(i)
+    def addCartesianZ(self, i, w=1.0):
+        Cart = CartesianZ(i, w)
         if Cart not in self.Internals:
             self.Internals.append(Cart)
     
@@ -715,7 +718,8 @@ class RedundantInternalCoordinates(InternalCoordinates):
             if Oop == self.Internals[ii]:
                 del self.Internals[ii]
                 
-    def __init__(self, molecule):
+    def __init__(self, molecule, interconnect=True):
+        self.interconnect = interconnect
         self.Internals = []
         self.elem = molecule.elem
         if len(molecule) != 1:
@@ -724,47 +728,70 @@ class RedundantInternalCoordinates(InternalCoordinates):
         molecule.build_topology(Fac=1.3)
         # Coordinates in Angstrom
         coords = molecule.xyzs[0].flatten()
+
         # Make a distance matrix mapping atom pairs to interatomic distances
         AtomIterator, dxij = molecule.distance_matrix()
         D = {}
         for i, j in zip(AtomIterator, dxij[0]):
             assert i[0] < i[1]
             D[tuple(i)] = j
+        dgraph = nx.Graph()
+        for i in range(molecule.na):
+            dgraph.add_node(i)
+        for k, v in D.items():
+            dgraph.add_edge(k[0], k[1], weight=v)
+        mst = sorted(list(nx.minimum_spanning_edges(dgraph, data=False)))
+
         # Build a list of noncovalent distances
         noncov = []
         # Connect all non-bonded fragments together
-        while True:
-            # List of disconnected fragments
-            subg = list(nx.connected_component_subgraphs(molecule.topology))
-            # Break out of loop if all fragments are connected
-            if len(subg) == 1: break
-            # Find the smallest interatomic distance between any pair of fragments
-            minD = 1e10
-            for i in range(len(subg)):
-                for j in range(i):
-                    for a in subg[i].nodes():
-                        for b in subg[j].nodes():
-                            if D[(min(a,b), max(a,b))] < minD:
-                                minD = D[(min(a,b), max(a,b))]
-            # Next, create one connection between pairs of fragments that have a
-            # close-contact distance of at most 1.2 times the minimum found above
-            for i in range(len(subg)):
-                for j in range(i):
-                    tminD = 1e10
-                    connect = False
-                    conn_a = None
-                    conn_b = None
-                    for a in subg[i].nodes():
-                        for b in subg[j].nodes():
-                            if D[(min(a,b), max(a,b))] < tminD:
-                                tminD = D[(min(a,b), max(a,b))]
-                                conn_a = min(a,b)
-                                conn_b = max(a,b)
-                            if D[(min(a,b), max(a,b))] <= 1.3*minD:
-                                connect = True
-                    if connect:
-                        molecule.topology.add_edge(conn_a, conn_b)
-                        noncov.append((conn_a, conn_b))
+        for edge in mst:
+            if edge not in list(molecule.topology.edges()):
+                # print "Adding %s from minimum spanning tree" % str(edge)
+                if interconnect:
+                    molecule.topology.add_edge(edge[0], edge[1])
+                    noncov.append(edge)
+        if not interconnect:
+            for i in range(molecule.na):
+                self.addCartesianX(i, w=0.5)
+                self.addCartesianY(i, w=0.5)
+                self.addCartesianZ(i, w=0.5)
+
+        # # Build a list of noncovalent distances
+        # noncov = []
+        # # Connect all non-bonded fragments together
+        # while True:
+        #     # List of disconnected fragments
+        #     subg = list(nx.connected_component_subgraphs(molecule.topology))
+        #     # Break out of loop if all fragments are connected
+        #     if len(subg) == 1: break
+        #     # Find the smallest interatomic distance between any pair of fragments
+        #     minD = 1e10
+        #     for i in range(len(subg)):
+        #         for j in range(i):
+        #             for a in subg[i].nodes():
+        #                 for b in subg[j].nodes():
+        #                     if D[(min(a,b), max(a,b))] < minD:
+        #                         minD = D[(min(a,b), max(a,b))]
+        #     # Next, create one connection between pairs of fragments that have a
+        #     # close-contact distance of at most 1.2 times the minimum found above
+        #     for i in range(len(subg)):
+        #         for j in range(i):
+        #             tminD = 1e10
+        #             connect = False
+        #             conn_a = None
+        #             conn_b = None
+        #             for a in subg[i].nodes():
+        #                 for b in subg[j].nodes():
+        #                     if D[(min(a,b), max(a,b))] < tminD:
+        #                         tminD = D[(min(a,b), max(a,b))]
+        #                         conn_a = min(a,b)
+        #                         conn_b = max(a,b)
+        #                     if D[(min(a,b), max(a,b))] <= 1.3*minD:
+        #                         connect = True
+        #             if connect:
+        #                 molecule.topology.add_edge(conn_a, conn_b)
+        #                 noncov.append((conn_a, conn_b))
 
         # Add an internal coordinate for all interatomic distances
         for (a, b) in molecule.topology.edges():
@@ -785,7 +812,7 @@ class RedundantInternalCoordinates(InternalCoordinates):
                         if np.abs(np.cos(Ang.value(coords))) < LinThre:
                             self.addAngle(a, b, c)
                             AngDict[b].append(Ang)
-                        else:
+                        elif self.interconnect:
                             # print Ang, "is linear: replacing with Cartesians"
                             # Almost linear bends (greater than 175 or less than 5) are dropped. 
                             # The dropped angle is replaced by the two Cartesians of the central 
@@ -932,19 +959,23 @@ class RedundantInternalCoordinates(InternalCoordinates):
                 # else:
                 #     Hdiag.append(0.023)
             elif type(ic) in [CartesianX, CartesianY, CartesianZ]:
-                Hdiag.append(0.05)
+                Hdiag.append(0.1)
             else:
                 raise RuntimeError('Spoo!')
         return np.matrix(np.diag(Hdiag))
 
 class DelocalizedInternalCoordinates(InternalCoordinates):
-    def __init__(self, molecule, build=True):
-        self.Prims = RedundantInternalCoordinates(molecule)
+    def __init__(self, molecule, build=True, interconnect=True):
+        self.Prims = RedundantInternalCoordinates(molecule, interconnect)
+        self.interconnect = interconnect
         xyz = molecule.xyzs[0].flatten() / 0.529
         self.na = molecule.na
         if build:
             self.build_dlc(xyz)
 
+    def __repr__(self):
+        return self.Prims.__repr__()
+            
     def update(self, other):
         return self.Prims.update(other.Prims)
 
@@ -969,13 +1000,13 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         if self.na == 1:
             Expect = 0
         print "%i atoms (expect %i coordinates); %i/%i singular values are > 1e-6" % (self.na, Expect, LargeVals, len(L))
-        if LargeVals <= Expect:
-            self.Vecs = Q[:, LargeIdx]
-            self.Internals = ["DLC %i" % (i+1) for i in range(len(LargeIdx))]
-        else:
-            Idxs = np.argsort(L)[-Expect:]
-            self.Vecs = Q[:, Idxs]
-            self.Internals = ["DLC %i" % (i+1) for i in range(Expect)]
+        # if LargeVals <= Expect:
+        self.Vecs = Q[:, LargeIdx]
+        self.Internals = ["DLC %i" % (i+1) for i in range(len(LargeIdx))]
+        # else:
+        #     Idxs = np.argsort(L)[-Expect:]
+        #     self.Vecs = Q[:, Idxs]
+        #     self.Internals = ["DLC %i" % (i+1) for i in range(Expect)]
 
     def __eq__(self, other):
         return self.Prims == other.Prims
