@@ -753,9 +753,9 @@ class RedundantInternalCoordinates(InternalCoordinates):
                     noncov.append(edge)
         if not connect:
             for i in range(molecule.na):
-                self.addCartesianX(i, w=0.5)
-                self.addCartesianY(i, w=0.5)
-                self.addCartesianZ(i, w=0.5)
+                self.addCartesianX(i, w=0.66)
+                self.addCartesianY(i, w=0.66)
+                self.addCartesianZ(i, w=0.66)
 
         # # Build a list of noncovalent distances
         # noncov = []
