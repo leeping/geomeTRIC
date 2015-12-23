@@ -14,7 +14,7 @@ import os, sys
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--cart', action='store_true', help='Use Cartesian coordinate system.')
-parser.add_argument('--disconnect', action='store_true', help='Do not connect noncovalent molecules.')
+parser.add_argument('--connect', action='store_true', help='Connect noncovalent molecules into a network.')
 parser.add_argument('--redund', action='store_true', help='Use redundant coordinate system.')
 parser.add_argument('--terachem', action='store_true', help='Run optimization in TeraChem.')
 
@@ -373,9 +373,9 @@ def Optimize(coords, molecule, IC=None):
                     newmol.xyzs[0] = X.reshape(-1,3)*0.529
                     newmol.build_topology()
                     if type(IC) is RedundantInternalCoordinates:
-                        IC1 = RedundantInternalCoordinates(newmol, interconnect=not args.disconnect)
+                        IC1 = RedundantInternalCoordinates(newmol, connect=args.connect)
                     elif type(IC) is DelocalizedInternalCoordinates:
-                        IC1 = DelocalizedInternalCoordinates(newmol, build=False, interconnect=not args.disconnect)
+                        IC1 = DelocalizedInternalCoordinates(newmol, build=False, connect=args.connect)
                     else:
                         raise RuntimeError('Spoo!')
                     # if IC.update(IC1):
@@ -448,9 +448,9 @@ def main():
     if args.cart:
         IC = None
     elif args.redund:
-        IC = RedundantInternalCoordinates(M, interconnect=not args.disconnect)
+        IC = RedundantInternalCoordinates(M, connect=args.connect)
     else:
-        IC = DelocalizedInternalCoordinates(M, interconnect=not args.disconnect)
+        IC = DelocalizedInternalCoordinates(M, connect=args.connect)
     FDCheck = False
     if FDCheck:
         IC.checkFiniteDifference(coords)

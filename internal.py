@@ -718,8 +718,8 @@ class RedundantInternalCoordinates(InternalCoordinates):
             if Oop == self.Internals[ii]:
                 del self.Internals[ii]
                 
-    def __init__(self, molecule, interconnect=True):
-        self.interconnect = interconnect
+    def __init__(self, molecule, connect=False):
+        self.connect = connect
         self.Internals = []
         self.elem = molecule.elem
         if len(molecule) != 1:
@@ -748,10 +748,10 @@ class RedundantInternalCoordinates(InternalCoordinates):
         for edge in mst:
             if edge not in list(molecule.topology.edges()):
                 # print "Adding %s from minimum spanning tree" % str(edge)
-                if interconnect:
+                if connect:
                     molecule.topology.add_edge(edge[0], edge[1])
                     noncov.append(edge)
-        if not interconnect:
+        if not connect:
             for i in range(molecule.na):
                 self.addCartesianX(i, w=0.5)
                 self.addCartesianY(i, w=0.5)
@@ -778,7 +778,7 @@ class RedundantInternalCoordinates(InternalCoordinates):
         #     for i in range(len(subg)):
         #         for j in range(i):
         #             tminD = 1e10
-        #             connect = False
+        #             conn = False
         #             conn_a = None
         #             conn_b = None
         #             for a in subg[i].nodes():
@@ -788,8 +788,8 @@ class RedundantInternalCoordinates(InternalCoordinates):
         #                         conn_a = min(a,b)
         #                         conn_b = max(a,b)
         #                     if D[(min(a,b), max(a,b))] <= 1.3*minD:
-        #                         connect = True
-        #             if connect:
+        #                         conn = True
+        #             if conn:
         #                 molecule.topology.add_edge(conn_a, conn_b)
         #                 noncov.append((conn_a, conn_b))
 
@@ -812,7 +812,7 @@ class RedundantInternalCoordinates(InternalCoordinates):
                         if np.abs(np.cos(Ang.value(coords))) < LinThre:
                             self.addAngle(a, b, c)
                             AngDict[b].append(Ang)
-                        elif self.interconnect:
+                        elif self.connect:
                             # print Ang, "is linear: replacing with Cartesians"
                             # Almost linear bends (greater than 175 or less than 5) are dropped. 
                             # The dropped angle is replaced by the two Cartesians of the central 
@@ -965,9 +965,9 @@ class RedundantInternalCoordinates(InternalCoordinates):
         return np.matrix(np.diag(Hdiag))
 
 class DelocalizedInternalCoordinates(InternalCoordinates):
-    def __init__(self, molecule, build=True, interconnect=True):
-        self.Prims = RedundantInternalCoordinates(molecule, interconnect)
-        self.interconnect = interconnect
+    def __init__(self, molecule, build=True, connect=False):
+        self.Prims = RedundantInternalCoordinates(molecule, connect)
+        self.connect = connect
         xyz = molecule.xyzs[0].flatten() / 0.529
         self.na = molecule.na
         if build:
