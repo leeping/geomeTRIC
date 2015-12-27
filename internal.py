@@ -88,6 +88,87 @@ class CartesianZ(object):
         derivatives[self.a][2] = self.w
         return derivatives
 
+class MultiCartesianX(object):
+    def __init__(self, a, w=1.0):
+        self.a = a
+        self.w = w
+
+    def __repr__(self):
+        return "MultiCartesian-X %s : Weight %.3f" % (' '.join([str(i+1) for i in self.a]), self.w)
+        
+    def __eq__(self, other):
+        if type(self) is not type(other): return False
+        return set(self.a) == set(other.a)
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+        
+    def value(self, xyz):
+        xyz = xyz.reshape(-1,3)
+        a = np.array(self.a)
+        return np.sum(xyz[a,0])*self.w
+        
+    def derivative(self, xyz):
+        xyz = xyz.reshape(-1,3)
+        derivatives = np.zeros_like(xyz)
+        for i in self.a:
+            derivatives[i][0] = self.w
+        return derivatives
+
+class MultiCartesianY(object):
+    def __init__(self, a, w=1.0):
+        self.a = a
+        self.w = w
+
+    def __repr__(self):
+        return "MultiCartesian-Y %s : Weight %.3f" % (' '.join([str(i+1) for i in self.a]), self.w)
+        
+    def __eq__(self, other):
+        if type(self) is not type(other): return False
+        return set(self.a) == set(other.a)
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+        
+    def value(self, xyz):
+        xyz = xyz.reshape(-1,3)
+        a = np.array(self.a)
+        return np.sum(xyz[a,1])*self.w
+        
+    def derivative(self, xyz):
+        xyz = xyz.reshape(-1,3)
+        derivatives = np.zeros_like(xyz)
+        for i in self.a:
+            derivatives[i][1] = self.w
+        return derivatives
+
+class MultiCartesianZ(object):
+    def __init__(self, a, w=1.0):
+        self.a = a
+        self.w = w
+
+    def __repr__(self):
+        return "MultiCartesian-Z %s : Weight %.3f" % (' '.join([str(i+1) for i in self.a]), self.w)
+        
+    def __eq__(self, other):
+        if type(self) is not type(other): return False
+        return set(self.a) == set(other.a)
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+        
+    def value(self, xyz):
+        xyz = xyz.reshape(-1,3)
+        a = np.array(self.a)
+        return np.sum(xyz[a,2])*self.w
+        
+    def derivative(self, xyz):
+        xyz = xyz.reshape(-1,3)
+        derivatives = np.zeros_like(xyz)
+        for i in self.a:
+            derivatives[i][2] = self.w
+        return derivatives
+
 class Distance(object):
     def __init__(self, a, b):
         self.a = a
@@ -638,6 +719,21 @@ class RedundantInternalCoordinates(InternalCoordinates):
     def GInverse(self, xyz, u=None):
         return self.GInverse_SVD(xyz, u)
 
+    def addMultiCartesianX(self, i, w=1.0):
+        Cart = MultiCartesianX(i, w)
+        if Cart not in self.Internals:
+            self.Internals.append(Cart)
+
+    def addMultiCartesianY(self, i, w=1.0):
+        Cart = MultiCartesianY(i, w)
+        if Cart not in self.Internals:
+            self.Internals.append(Cart)
+
+    def addMultiCartesianZ(self, i, w=1.0):
+        Cart = MultiCartesianZ(i, w)
+        if Cart not in self.Internals:
+            self.Internals.append(Cart)
+
     def addCartesianX(self, i, w=1.0):
         Cart = CartesianX(i, w)
         if Cart not in self.Internals:
@@ -675,6 +771,24 @@ class RedundantInternalCoordinates(InternalCoordinates):
         Oop = OutOfPlane(i,j,k,l)
         if Oop not in self.Internals:
             self.Internals.append(Oop)
+
+    def delMultiCartesianX(self, i):
+        Cart = MultiCartesianX(i)
+        for ii in range(len(self.Internals))[::-1]:
+            if Cart == self.Internals[ii]:
+                del self.Internals[ii]
+
+    def delMultiCartesianY(self, i):
+        Cart = MultiCartesianY(i)
+        for ii in range(len(self.Internals))[::-1]:
+            if Cart == self.Internals[ii]:
+                del self.Internals[ii]
+
+    def delMultiCartesianZ(self, i):
+        Cart = MultiCartesianZ(i)
+        for ii in range(len(self.Internals))[::-1]:
+            if Cart == self.Internals[ii]:
+                del self.Internals[ii]
 
     def delCartesianX(self, i):
         Cart = CartesianX(i)
@@ -726,6 +840,7 @@ class RedundantInternalCoordinates(InternalCoordinates):
             raise RuntimeError('Only one frame allowed in molecule object')
         # Determine the atomic connectivity
         molecule.build_topology(Fac=1.3)
+        frags = [m.nodes() for m in molecule.molecules]
         # Coordinates in Angstrom
         coords = molecule.xyzs[0].flatten()
 
@@ -741,7 +856,6 @@ class RedundantInternalCoordinates(InternalCoordinates):
         for k, v in D.items():
             dgraph.add_edge(k[0], k[1], weight=v)
         mst = sorted(list(nx.minimum_spanning_edges(dgraph, data=False)))
-
         # Build a list of noncovalent distances
         noncov = []
         # Connect all non-bonded fragments together
@@ -752,10 +866,14 @@ class RedundantInternalCoordinates(InternalCoordinates):
                     molecule.topology.add_edge(edge[0], edge[1])
                     noncov.append(edge)
         if not connect:
+            for i in frags:
+                self.addMultiCartesianX(i, w=1e-3/len(i))
+                self.addMultiCartesianY(i, w=1e-3/len(i))
+                self.addMultiCartesianZ(i, w=1e-3/len(i))
             for i in range(molecule.na):
-                self.addCartesianX(i, w=0.66)
-                self.addCartesianY(i, w=0.66)
-                self.addCartesianZ(i, w=0.66)
+                self.addCartesianX(i, w=1)
+                self.addCartesianY(i, w=1)
+                self.addCartesianZ(i, w=1)
 
         # # Build a list of noncovalent distances
         # noncov = []
@@ -959,7 +1077,9 @@ class RedundantInternalCoordinates(InternalCoordinates):
                 # else:
                 #     Hdiag.append(0.023)
             elif type(ic) in [CartesianX, CartesianY, CartesianZ]:
-                Hdiag.append(0.1)
+                Hdiag.append(0.01)
+            elif type(ic) in [MultiCartesianX, MultiCartesianY, MultiCartesianZ]:
+                Hdiag.append(0.01)
             else:
                 raise RuntimeError('Spoo!')
         return np.matrix(np.diag(Hdiag))

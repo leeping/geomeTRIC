@@ -16,7 +16,10 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--cart', action='store_true', help='Use Cartesian coordinate system.')
 parser.add_argument('--connect', action='store_true', help='Connect noncovalent molecules into a network.')
 parser.add_argument('--redund', action='store_true', help='Use redundant coordinate system.')
-parser.add_argument('--terachem', action='store_true', help='Run optimization in TeraChem.')
+parser.add_argument('--terachem', action='store_true', help='Run optimization in TeraChem (pass xyz as first argument).')
+parser.add_argument('--double', action='store_true', help='Run TeraChem in double precision mode.')
+parser.add_argument('--prefix', type=str, default=None, help='Specify a prefix for output file and temporary directory.')
+parser.add_argument('--displace', action='store_true', help='Write out the displacements.')
 
 print ' '.join(sys.argv)
 
@@ -24,29 +27,48 @@ args, sys.argv = parser.parse_known_args(sys.argv)
 
 TeraChem = args.terachem
 
-# TeraChem options
-TeraTemp = """
-# General options
-coordinates start.xyz
-charge      0
-run         gradient
-method      rb3lyp
-basis       6-31g*
-gpus        8
-convthre    1e-8
-threall     1e-16
-"""
-
 TCHome = "/home/leeping/src/terachem/production/build"
 
-xyzout = os.path.splitext(sys.argv[1])[0]+"_optim.xyz"
+if args.prefix is None:
+    xyzout = os.path.splitext(sys.argv[1])[0]+"_optim.xyz"
+    prefix = os.path.splitext(sys.argv[1])[0]+"_optim"
+else:
+    xyzout = args.prefix + ".xyz"
+    prefix = args.prefix
+
+dirname = prefix+".tmp"
+if os.path.exists(dirname):
+    raise RuntimeError("Please delete temporary folder %s before proceeding" % dirname)
+os.makedirs(dirname)
+#     user_xyzout = raw_input("Enter an output file name (default %s) --> " % xyzout).strip()
+# if len(user_xyzout) != 0:
+#     if not user_xyzout.endswith('.xyz'):
+#         raise RuntimeError("Output must end with .xyz")
+#     print "Writing output to %s" % user_xyzout
+#     xyzout = user_xyzout
 
 os.environ['TeraChem'] = TCHome
 os.environ['PATH'] = os.path.join(TCHome,'bin')+":"+os.environ['PATH']
 os.environ['LD_LIBRARY_PATH'] = os.path.join(TCHome,'lib')+":"+os.environ['LD_LIBRARY_PATH']
 
+# For compactness, this script always reads in a Q-Chem input file and translates it
+# to the corresponding TeraChem input file.
+TeraTemp = """
+coordinates start.xyz
+run gradient
+basis {basis}
+method {ur}{method}
+charge {charge}
+spinmult {mult}
+precision {precision}
+"""
+
 # Read in the molecule
 M = Molecule(sys.argv[1])
+if 'method' in M.qcrems[0]:
+    method = method
+else:
+    method = M.qcrems[0]['exchange']
 
 def calc_terachem(coords):
     coord_hash = tuple(list(coords))
@@ -57,10 +79,18 @@ def calc_terachem(coords):
         return energy, gradient
     # print "Calling TeraChem for energy and gradient"
     # dirname = "calc_%04i" % calc_terachem.calcnum
-    dirname = os.path.splitext(sys.argv[1])[0]+".tmp"
-    if not os.path.exists(dirname): os.makedirs(dirname)
+    # dirname = os.path.splitext(sys.argv[1])[0]+".tmp"
+    # if not os.path.exists(dirname): os.makedirs(dirname)
     # Write input files to directory
-    with open(os.path.join(dirname, 'run.in'), 'w') as f: print >> f, TeraTemp
+    # if not os.path.exists(args.terachem): raise RuntimeError('TC input file does not exist')
+    with open("%s/run.in" % dirname, "w") as f:
+        print >> f, TeraTemp.format(basis = M.qcrems[0]['basis'],
+                                    ur = "u" if M.mult != 1 else "r",
+                                    method = method,
+                                    charge = str(M.charge), mult=str(M.mult),
+                                    precision = "double" if args.double else "dynamic")
+    # os.system('cp %s %s/run.in' % (args.terachem, dirname))
+    # with open(os.path.join(dirname, 'run.in'), 'w') as f: print >> f, TeraTemp
     # Convert coordinates back to the xyz file
     M.xyzs[0] = coords.reshape(-1, 3) * 0.529
     M[0].write(os.path.join(dirname, 'start.xyz'))
@@ -100,7 +130,7 @@ def calc_qchem(coords):
     M.edit_qcrems({'jobtype':'force'})
     M[0].write(os.path.join(dirname, 'run.in'))
     # Run Qchem
-    subprocess.call('%s/runqc run.in run.out &> run.log' % os.getcwd(), cwd=dirname, shell=True)
+    subprocess.call('%s/runqc run.in run.out &> run.log' % os.path.dirname(os.path.abspath(__file__)), cwd=dirname, shell=True)
     M1 = Molecule('%s/run.out' % dirname)
     energy = M1.qm_energies[0]
     gradient = M1.qm_grads[0].flatten()
@@ -118,7 +148,7 @@ calc_qchem.calcnum = 0
 calc_qchem.stored_calcs = OrderedDict()
 
 def calc(coords):
-    if TeraChem:
+    if args.terachem:
         e, g = calc_terachem(coords)
     else:
         e, g = calc_qchem(coords)
@@ -232,10 +262,17 @@ def Optimize(coords, molecule, IC=None):
         # The optimization variables are the Cartesian coordinates.
         Y = coords.copy()
         G = gradx.copy()
+
     # Loop of optimization
     Iteration = 0
     CoordCounter = 0
     trust = 0.1
+    # Print initial iteration
+    atomgrad = np.sqrt(np.sum((gradx.reshape(-1,3))**2, axis=1))
+    rms_gradient = np.sqrt(np.mean(atomgrad**2))
+    max_gradient = np.max(atomgrad)
+    print "Iteration %4i :" % Iteration,
+    print "Gradient = %.3e/%.3e (rms/max) Energy = % .10f" % (rms_gradient, max_gradient, E)
     # Adaptive trust radius
     trust0 = 1.0
     adapt_fac = 1.0
@@ -254,12 +291,14 @@ def Optimize(coords, molecule, IC=None):
     Gx_hist = [gradx]
     CartesianTrust = True
     while 1:
+        Iteration += 1
         # Force Hessian to have positive eigenvalues.
         Eig = np.linalg.eigh(H)[0]
         Emin = min(Eig).real
-        eps = 1e-5
-        if Emin < eps:
-            Adj = eps-Emin
+        # eps = 1e-4
+        # H1 = H.copy()
+        if Emin < 0:
+            # Adj = eps-Emin
             Adj = -2*Emin
             # Adj = eps-Emin
         else:
@@ -267,7 +306,7 @@ def Optimize(coords, molecule, IC=None):
         H += Adj * np.eye(H.shape[0])
         Eig = np.linalg.eigh(H)[0]
         Eig = sorted(Eig)
-        print "Hessian Eigenvalues: %.5f %.5f %.5f ... %.5f %.5f %.5f" % (Eig[0],Eig[1],Eig[2],Eig[-3],Eig[-2],Eig[-1])
+        print "Hessian Eigenvalues: %.5e %.5e %.5e ... %.5e %.5e %.5e" % (Eig[0],Eig[1],Eig[2],Eig[-3],Eig[-2],Eig[-1])
         # Define two functions that help us to find the trust radius step.
         def solver(L):
             HT = H + (L-1)**2*np.eye(len(H))
@@ -341,7 +380,6 @@ def Optimize(coords, molecule, IC=None):
         if Converged_energy and Converged_grms and Converged_drms and Converged_gmax and Converged_dmax:
             print "Converged! =D"
             break
-        # Update the trust radius
         if Quality <= ThreLQ:
             trust = dynorm/4
             # trust = dynorm/(1+adapt_fac)
@@ -352,6 +390,10 @@ def Optimize(coords, molecule, IC=None):
                 trust = min(2*trust, 0.3)
                 trustprint = "Increasing trust radius to % .4e" % trust
                 print_trust = True
+        # elif Quality > 1.2:
+        #     print "-- Dividing Hessian by 2 --"
+        #     print_trust = False
+        #     H /= 2
         else:
             print_trust = False
         if Quality < -1:
@@ -361,6 +403,7 @@ def Optimize(coords, molecule, IC=None):
             G = Gprev.copy()
             E = Eprev
         else:
+            # H = H1.copy()
             X_hist.append(X)
             Gx_hist.append(gradx)
             skipBFGS=False
@@ -381,8 +424,9 @@ def Optimize(coords, molecule, IC=None):
                     # if IC.update(IC1):
                     # if IC1 != IC:
                     print "\x1b[1;94mInternal coordinate system may have changed\x1b[0m"
-                    # print IC.repr_diff(IC1)
-                    # IC = IC1
+                    if IC.repr_diff(IC1) != "":
+                        print IC.repr_diff(IC1)
+                    IC = IC1
                     if type(IC) is DelocalizedInternalCoordinates:
                         IC.build_dlc(X)
                     H0 = IC.guess_hessian(coords)
@@ -406,7 +450,6 @@ def Optimize(coords, molecule, IC=None):
                 Mat2 = ((H*Dy)*(H*Dy).T)/(Dy.T*H*Dy)[0,0]
                 H += Mat1-Mat2
         # Then it's on to the next loop iteration!
-        Iteration += 1
     return X
 
 def CheckInternalGrad(coords, molecule, IC):
@@ -451,6 +494,25 @@ def main():
         IC = RedundantInternalCoordinates(M, connect=args.connect)
     else:
         IC = DelocalizedInternalCoordinates(M, connect=args.connect)
+    if args.displace:
+        for i in range(len(IC.Internals)):
+            x = []
+            for j in np.linspace(-2, 2, 5):
+                if j != 0:
+                    dq = np.zeros(len(IC.Internals))
+                    dq[i] = j
+                    x1 = IC.newCartesian(coords, dq)
+                else:
+                    x1 = coords.copy()
+                displacement = np.sqrt(np.sum((((x1-coords)*0.529).reshape(-1,3))**2, axis=1))
+                rms_displacement = np.sqrt(np.mean(displacement**2))
+                max_displacement = np.max(displacement)
+                x.append(x1.reshape(-1,3) * 0.529)
+                print i, j, "Displacement (rms/max) = %.5f / %.5f" % (rms_displacement, max_displacement), "(Bork)" if IC.bork else "(Good)"
+            M.xyzs = x
+            M.write("%s/ic_%03i.xyz" % (dirname, i))
+        sys.exit()
+                
     FDCheck = False
     if FDCheck:
         IC.checkFiniteDifference(coords)

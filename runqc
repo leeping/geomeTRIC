@@ -1,0 +1,5 @@
+#!/bin/bash
+
+module load qchem
+qchem -nt 8 $@
+
