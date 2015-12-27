@@ -4,7 +4,8 @@ from __future__ import division
 import numpy as np
 from copy import deepcopy
 from collections import OrderedDict
-from internal import Distance, Angle, Dihedral, OutOfPlane, DelocalizedInternalCoordinates, RedundantInternalCoordinates, CartesianX, CartesianY, CartesianZ
+from internal import RedundantInternalCoordinates, DelocalizedInternalCoordinates
+from rotate import get_rot
 from forcebalance.molecule import Molecule
 from forcebalance.nifty import row, col, flat, invert_svd
 from scipy import optimize
@@ -188,7 +189,7 @@ def gradient_internal(q):
 gradient_internal.IC = None
 gradient_internal.x0 = None
 
-def Rebuild(IC, H0, coord_seq, grad_seq, trust=0.3):
+def RebuildHessian(IC, H0, coord_seq, grad_seq, trust=0.3):
     Na = len(coord_seq[0])/3
     history = 0
     for i in range(2, len(coord_seq)+1):
@@ -349,7 +350,10 @@ def Optimize(coords, molecule, IC=None):
         progress.comms.append('Iteration %i Energy % .8f' % (Iteration, E))
         progress.write(xyzout)
         # Calculate quantities for convergence
-        displacement = np.sqrt(np.sum((((X-Xprev)*0.529).reshape(-1,3))**2, axis=1))
+        Xmat = X.reshape(-1,3)
+        U = get_rot(Xmat, Xprev.reshape(-1,3))
+        Xrot = np.array((U*Xmat.T).T).flatten()
+        displacement = np.sqrt(np.sum((((Xrot-Xprev)*0.529).reshape(-1,3))**2, axis=1))
         atomgrad = np.sqrt(np.sum((gradx.reshape(-1,3))**2, axis=1))
         rms_displacement = np.sqrt(np.mean(displacement**2))
         rms_gradient = np.sqrt(np.mean(atomgrad**2))
@@ -368,6 +372,8 @@ def Optimize(coords, molecule, IC=None):
         print "Gradient = %s%.3e\x1b[0m/%s%.3e\x1b[0m (rms/max)" % ("\x1b[92m" if Converged_grms else "\x1b[0m", rms_gradient, "\x1b[92m" if Converged_gmax else "\x1b[0m", max_gradient),
         print "Energy (change) = % .10f (%s%+.3e\x1b[0m) Quality = %s%.3f\x1b[0m" % (E, "\x1b[91m" if BadStep else ("\x1b[92m" if Converged_energy else "\x1b[0m"), E-Eprev, "\x1b[91m" if BadStep else "\x1b[0m", Quality),
         if IC is not None:
+            # if IC.largeRots():
+            #     print "(Large Rotations)"
             print "(Bork)" if IC.bork else "(Good)"
         else:
             print
@@ -410,8 +416,18 @@ def Optimize(coords, molecule, IC=None):
             if print_trust:
                 print trustprint
             if internal:
-                if (IC.bork):
-                # if True:
+                check = False
+                rebuild = False
+                if (IC.bork or IC.largeRots()):
+                    if IC.largeRots():
+                        print "Large rotations triggering rebuild of coordinates"
+                    if IC.bork:
+                        print "Failed inverse iteration triggering rebuild of coordinates"
+                    check = True
+                    rebuild = True
+                if CoordCounter == 9:
+                    check = True
+                if check:
                     newmol = deepcopy(molecule)
                     newmol.xyzs[0] = X.reshape(-1,3)*0.529
                     newmol.build_topology()
@@ -422,24 +438,32 @@ def Optimize(coords, molecule, IC=None):
                     else:
                         raise RuntimeError('Spoo!')
                     # if IC.update(IC1):
-                    # if IC1 != IC:
-                    print "\x1b[1;94mInternal coordinate system may have changed\x1b[0m"
-                    if IC.repr_diff(IC1) != "":
-                        print IC.repr_diff(IC1)
-                    IC = IC1
-                    if type(IC) is DelocalizedInternalCoordinates:
-                        IC.build_dlc(X)
-                    H0 = IC.guess_hessian(coords)
-                    # H0 = np.eye(len(IC.Internals))
-                    H = Rebuild(IC, H0, X_hist, Gx_hist, 0.3)
-                    # H = H0.copy()
-                    Y = IC.calculate(X)
-                    skipBFGS = True
-                    CoordCounter = 0 
+                    if IC1 != IC:
+                        print "\x1b[1;94mInternal coordinate system may have changed\x1b[0m"
+                        if IC.repr_diff(IC1) != "":
+                            print IC.repr_diff(IC1)
+                        rebuild = True
+                    if rebuild:
+                        IC = IC1
+                        if type(IC) is DelocalizedInternalCoordinates:
+                            IC.build_dlc(X)
+                        H0 = IC.guess_hessian(coords)
+                        # H0 = np.eye(len(IC.Internals))
+                        H = RebuildHessian(IC, H0, X_hist, Gx_hist, 0.3)
+                        # H = H0.copy()
+                        Y = IC.calculate(X)
+                        skipBFGS = True
+                        CoordCounter = 0 
                 else:
                     CoordCounter += 1
                 Gq = IC.calcGrad(X, gradx)
                 G = np.array(Gq).flatten()
+                rms_gq = np.sqrt(np.mean(G**2))
+                max_gq = np.max(np.abs(G))
+                if max_gq > 1:
+                    print "Gq = %.3e/%.3e (rms/max)" % (rms_gq, max_gq),
+                    import IPython
+                    IPython.embed()
             else:
                 G = gradx.copy()
             if not skipBFGS:
@@ -497,7 +521,7 @@ def main():
     if args.displace:
         for i in range(len(IC.Internals)):
             x = []
-            for j in np.linspace(-2, 2, 5):
+            for j in np.linspace(-1.0, 1.0, 21):
                 if j != 0:
                     dq = np.zeros(len(IC.Internals))
                     dq[i] = j
@@ -517,6 +541,7 @@ def main():
     if FDCheck:
         IC.checkFiniteDifference(coords)
         CheckInternalGrad(coords, M, IC)
+        sys.exit()
     opt_coords = Optimize(coords, M, IC)
     M.xyzs[0] = opt_coords.reshape(-1,3) * 0.529
     # IC = RedundantInternalCoordinates(M)

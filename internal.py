@@ -9,6 +9,7 @@ from forcebalance.nifty import click
 from forcebalance.molecule import Molecule, Elements, Radii
 from collections import OrderedDict, defaultdict
 from scipy import optimize
+from rotate import get_expmap, get_expmap_der
 
 class CartesianX(object):
     def __init__(self, a, w=1.0):
@@ -167,6 +168,139 @@ class MultiCartesianZ(object):
         derivatives = np.zeros_like(xyz)
         for i in self.a:
             derivatives[i][2] = self.w
+        return derivatives
+
+class Rotator(object):
+
+    def __init__(self, a, x0):
+        self.a = list(tuple(sorted(a)))
+        x0 = x0.reshape(-1, 3)
+        self.x0 = x0
+        self.stored_valxyz = np.zeros_like(x0)
+        self.stored_value = None
+        self.stored_derxyz = np.zeros_like(x0)
+        self.stored_deriv = None
+        self.stored_norm = 0.0
+
+    def __eq__(self, other):
+        if type(self) is not type(other): return False
+        return set(self.a) == set(other.a)
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+        
+    def value(self, xyz):
+        xyz = xyz.reshape(-1, 3)
+        if np.max(np.abs(xyz-self.stored_valxyz)) < 1e-12:
+            return self.stored_value
+        else:
+            xsel = xyz[self.a, :]
+            ysel = self.x0[self.a, :]
+            answer = get_expmap(xsel, ysel)
+            self.stored_norm = np.linalg.norm(answer)
+            # if np.linalg.norm(answer) > 2.5:
+            #     print "%s rotation norm is %.3f" % (' '.join([str(i) for i in self.a]), np.linalg.norm(answer))
+            self.stored_valxyz = xyz.copy()
+            self.stored_value = answer
+            return answer
+
+    def derivative(self, xyz):
+        xyz = xyz.reshape(-1, 3)
+        if np.max(np.abs(xyz-self.stored_derxyz)) < 1e-12:
+            return self.stored_deriv
+        else:
+            xsel = xyz[self.a, :]
+            ysel = self.x0[self.a, :]
+            deriv_raw = get_expmap_der(xsel, ysel)
+            derivatives = np.zeros((xyz.shape[0], 3, 3), dtype=float)
+            # print deriv_raw.shape
+            # print derivatives.shape
+            for i, a in enumerate(self.a):
+                # print i, a
+                derivatives[a, :, :] = deriv_raw[i, :, :]
+            self.stored_derxyz = xyz.copy()
+            self.stored_deriv = derivatives
+            return derivatives
+
+class RotationA(object):
+    def __init__(self, a, x0, Rotators, w=1.0):
+        self.a = tuple(sorted(a))
+        self.x0 = x0
+        self.w = w
+        if self.a not in Rotators:
+            Rotators[self.a] = Rotator(self.a, x0)
+        self.Rotator = Rotators[self.a]
+
+    def __repr__(self):
+        return "Rotation-A %s : Weight %.3f" % (' '.join([str(i+1) for i in self.a]), self.w)
+
+    def __eq__(self, other):
+        if type(self) is not type(other): return False
+        return set(self.a) == set(other.a)
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+        
+    def value(self, xyz):
+        return self.Rotator.value(xyz)[0]
+        
+    def derivative(self, xyz):
+        der_all = self.Rotator.derivative(xyz)
+        derivatives = der_all[:, :, 0]
+        return derivatives
+
+class RotationB(object):
+    def __init__(self, a, x0, Rotators, w=1.0):
+        self.a = tuple(sorted(a))
+        self.x0 = x0
+        self.w = w
+        if self.a not in Rotators:
+            Rotators[self.a] = Rotator(self.a, x0)
+        self.Rotator = Rotators[self.a]
+
+    def __repr__(self):
+        return "Rotation-B %s : Weight %.3f" % (' '.join([str(i+1) for i in self.a]), self.w)
+
+    def __eq__(self, other):
+        if type(self) is not type(other): return False
+        return set(self.a) == set(other.a)
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+        
+    def value(self, xyz):
+        return self.Rotator.value(xyz)[1]
+        
+    def derivative(self, xyz):
+        der_all = self.Rotator.derivative(xyz)
+        derivatives = der_all[:, :, 1]
+        return derivatives
+
+class RotationC(object):
+    def __init__(self, a, x0, Rotators, w=1.0):
+        self.a = tuple(sorted(a))
+        self.x0 = x0
+        self.w = w
+        if self.a not in Rotators:
+            Rotators[self.a] = Rotator(self.a, x0)
+        self.Rotator = Rotators[self.a]
+
+    def __repr__(self):
+        return "Rotation-C %s : Weight %.3f" % (' '.join([str(i+1) for i in self.a]), self.w)
+
+    def __eq__(self, other):
+        if type(self) is not type(other): return False
+        return set(self.a) == set(other.a)
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+        
+    def value(self, xyz):
+        return self.Rotator.value(xyz)[2]
+        
+    def derivative(self, xyz):
+        der_all = self.Rotator.derivative(xyz)
+        derivatives = der_all[:, :, 2]
         return derivatives
 
 class Distance(object):
@@ -538,7 +672,7 @@ class InternalCoordinates(object):
                 PMDiff = self.calcDiff(x1,x2)
                 FiniteDifference[:,i,j] = PMDiff/(2*h)
         for i in range(Analytical.shape[0]):
-            print "IC %i/%i :" % (i, Analytical.shape[0])
+            print "IC %i/%i : %s" % (i, Analytical.shape[0], self.Internals[i])
             for j in range(Analytical.shape[1]):
                 print "Atom %i" % (j+1)
                 for k in range(Analytical.shape[2]):
@@ -676,6 +810,13 @@ class RedundantInternalCoordinates(InternalCoordinates):
             output += dlines
         return '\n'.join(output)
 
+    def largeRots(self):
+        for Internal in self.Internals:
+            if type(Internal) in [RotationA, RotationB, RotationC]:
+                if Internal.Rotator.stored_norm > np.pi*2/3:
+                    return True
+        return False
+
     def calculate(self, xyz):
         answer = []
         for Internal in self.Internals:
@@ -733,6 +874,21 @@ class RedundantInternalCoordinates(InternalCoordinates):
         Cart = MultiCartesianZ(i, w)
         if Cart not in self.Internals:
             self.Internals.append(Cart)
+
+    def addRotationA(self, i, x0, w=1.0):
+        Rot = RotationA(i, x0, w)
+        if Rot not in self.Internals:
+            self.Internals.append(Rot)
+
+    def addRotationB(self, i, x0, w=1.0):
+        Rot = RotationB(i, x0, w)
+        if Rot not in self.Internals:
+            self.Internals.append(Rot)
+
+    def addRotationC(self, i, x0, w=1.0):
+        Rot = RotationC(i, x0, w)
+        if Rot not in self.Internals:
+            self.Internals.append(Rot)
 
     def addCartesianX(self, i, w=1.0):
         Cart = CartesianX(i, w)
@@ -835,13 +991,14 @@ class RedundantInternalCoordinates(InternalCoordinates):
     def __init__(self, molecule, connect=False):
         self.connect = connect
         self.Internals = []
+        self.Rotators = OrderedDict()
         self.elem = molecule.elem
         if len(molecule) != 1:
             raise RuntimeError('Only one frame allowed in molecule object')
         # Determine the atomic connectivity
-        molecule.build_topology(Fac=1.3)
+        molecule.build_topology()
         frags = [m.nodes() for m in molecule.molecules]
-        # Coordinates in Angstrom
+        # coordinates in Angstrom
         coords = molecule.xyzs[0].flatten()
 
         # Make a distance matrix mapping atom pairs to interatomic distances
@@ -867,13 +1024,17 @@ class RedundantInternalCoordinates(InternalCoordinates):
                     noncov.append(edge)
         if not connect:
             for i in frags:
-                self.addMultiCartesianX(i, w=1e-3/len(i))
-                self.addMultiCartesianY(i, w=1e-3/len(i))
-                self.addMultiCartesianZ(i, w=1e-3/len(i))
-            for i in range(molecule.na):
-                self.addCartesianX(i, w=1)
-                self.addCartesianY(i, w=1)
-                self.addCartesianZ(i, w=1)
+                self.addMultiCartesianX(i, w=1e0/len(i))
+                self.addMultiCartesianY(i, w=1e0/len(i))
+                self.addMultiCartesianZ(i, w=1e0/len(i))
+                # Reference coordinates are given in Bohr.
+                self.addRotationA(i, coords / 0.529, self.Rotators)
+                self.addRotationB(i, coords / 0.529, self.Rotators)
+                self.addRotationC(i, coords / 0.529, self.Rotators)
+            # for i in range(molecule.na):
+            #     self.addCartesianX(i, w=1)
+            #     self.addCartesianY(i, w=1)
+            #     self.addCartesianZ(i, w=1)
 
         # # Build a list of noncovalent distances
         # noncov = []
@@ -1017,7 +1178,7 @@ class RedundantInternalCoordinates(InternalCoordinates):
                         self.addDihedral(a, b, c, d)
 
     def guess_hessian(self, coords):
-        xyzs = coords.reshape(-1,3)*0.520
+        xyzs = coords.reshape(-1,3)*0.529
         Hdiag = []
         def covalent(a, b):
             r = np.linalg.norm(xyzs[a]-xyzs[b])
@@ -1077,9 +1238,11 @@ class RedundantInternalCoordinates(InternalCoordinates):
                 # else:
                 #     Hdiag.append(0.023)
             elif type(ic) in [CartesianX, CartesianY, CartesianZ]:
-                Hdiag.append(0.01)
+                Hdiag.append(0.05)
             elif type(ic) in [MultiCartesianX, MultiCartesianY, MultiCartesianZ]:
-                Hdiag.append(0.01)
+                Hdiag.append(0.05)
+            elif type(ic) in [RotationA, RotationB, RotationC]:
+                Hdiag.append(0.05)
             else:
                 raise RuntimeError('Spoo!')
         return np.matrix(np.diag(Hdiag))
@@ -1110,7 +1273,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         LargeVals = 0
         LargeIdx = []
         for ival, value in enumerate(L):
-            # print value
+            # print ival, value
             if np.abs(value) > 1e-6:
                 LargeVals += 1
                 LargeIdx.append(ival)
@@ -1133,6 +1296,9 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
 
     def __ne__(self, other):
         return not self.__eq__(other)
+
+    def largeRots(self):
+        return self.Prims.largeRots()
 
     def calcDiff(self, coord1, coord2):
         """ Calculate difference in internal coordinates, accounting for changes in 2*pi of angles. """

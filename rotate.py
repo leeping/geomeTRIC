@@ -2,6 +2,7 @@
 
 from __future__ import division
 from forcebalance.molecule import *
+from forcebalance.nifty import invert_svd
 import numpy as np
 
 """
@@ -252,7 +253,7 @@ def get_rot(x, y):
     x = x - np.mean(x,axis=0)
     y = y - np.mean(y,axis=0)
     N = x.shape[0]
-    get_quat(x, y)
+    q = get_quat(x, y)
     U = form_rot(q)
     x = np.matrix(x)
     xr = np.array((U*x.T).T)
@@ -395,8 +396,10 @@ def get_q_der(x, y):
     F = build_F(x, y)
     dF = get_F_der(x, y)
     mat = np.eye(4)*l - F
-    pinv = np.matrix(np.linalg.pinv(np.eye(4)*l - F))
-    # pinv = invert_svd(np.eye(4)*l - F)
+    # pinv = np.matrix(np.linalg.pinv(np.eye(4)*l - F))
+    pinv = invert_svd(np.eye(4)*l - F)
+    # print l
+    # print pinv
     dq = np.zeros((x.shape[0], 3, 4), dtype=float)
     for u in range(x.shape[0]):
         for w in range(3):
@@ -521,6 +524,7 @@ def get_expmap_der(x,y):
                 x[u, w] += h
                 FDiffV = (VPlus-VMinus)/(2*h)
                 print u, w, np.max(np.abs(dvdx[u, w]-FDiffV))
+    return dvdx
 
 def main():
     M = Molecule("test.xyz")
