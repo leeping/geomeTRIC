@@ -182,6 +182,15 @@ class Rotator(object):
         self.stored_deriv = None
         self.stored_norm = 0.0
 
+    def reset(self, x0):
+        x0 = x0.reshape(-1, 3)
+        self.x0 = x0
+        self.stored_valxyz = np.zeros_like(x0)
+        self.stored_value = None
+        self.stored_derxyz = np.zeros_like(x0)
+        self.stored_deriv = None
+        self.stored_norm = 0.0
+
     def __eq__(self, other):
         if type(self) is not type(other): return False
         return set(self.a) == set(other.a)
@@ -694,7 +703,29 @@ class InternalCoordinates(object):
         Gq = np.matrix(Ginv)*np.matrix(Bmat)*np.matrix(gradx).T
         return np.array(Gq).flatten()
 
+    def readCache(self, xyz, dQ):
+        if not hasattr(self, 'stored_xyz'):
+            return None
+        xyz = xyz.flatten()
+        dQ = dQ.flatten()
+        if np.linalg.norm(self.stored_xyz - xyz) < 1e-10:
+            if np.linalg.norm(self.stored_dQ - dQ) < 1e-10:
+                return self.stored_newxyz
+        return None
+
+    def writeCache(self, xyz, dQ, newxyz):
+        xyz = xyz.flatten()
+        dQ = dQ.flatten()
+        newxyz = newxyz.flatten()
+        self.stored_xyz = xyz.copy()
+        self.stored_dQ = dQ.copy()
+        self.stored_newxyz = newxyz.copy()
+
     def newCartesian(self, xyz, dQ, u=None, verbose=False):
+        cached = self.readCache(xyz, dQ)
+        if cached is not None:
+            # print "Returning cached result"
+            return cached
         xyz1 = xyz.copy()
         dQ1 = dQ.copy()
         # Iterate until convergence:
@@ -702,34 +733,54 @@ class InternalCoordinates(object):
         rmsds = []
         self.bork = False
         # Damping factor
-        TB = 1.0
+        damp = 1.0
+        # trust = None
+        # trust0 = None
         while True:
             microiter += 1
-            if microiter == 10:
+            if microiter > 1 and rmsd > 1000:
                 self.bork = True
-                if verbose: print "Approximate coordinates obtained after %i microiterations (rmsd = %.3f)" % (microiter, rmsds[0])
+                if verbose: print "Approximate coordinates obtained after %i microiterations (rmsd = %.3f)" % (microiter, rmsdt)
+                self.writeCache(xyz, dQ, xyzsave)
+                return xyzsave.flatten()
+            if microiter == 50:
+                self.bork = True
+                if verbose: print "Approximate coordinates obtained after %i microiterations (rmsd = %.3f)" % (microiter, rmsdt)
+                self.writeCache(xyz, dQ, xyzsave)
                 return xyzsave.flatten()
             Bmat = np.matrix(self.wilsonB(xyz1))
             Ginv = self.GInverse(xyz1, u)
             # Get new Cartesian coordinates
             if u is not None:
-                dxyz = TB*u*Bmat.T*Ginv*(np.matrix(dQ1).T)
+                dxyz = damp*u*Bmat.T*Ginv*(np.matrix(dQ1).T)
             else:
-                dxyz = TB*Bmat.T*Ginv*(np.matrix(dQ1).T)
+                dxyz = damp*Bmat.T*Ginv*(np.matrix(dQ1).T)
+            ndxyz = np.linalg.norm(dxyz)
+            # if trust is not None:
+            #     if ndxyz > trust:
+            #         dxyz *= trust/ndxyz
+            #         ndxyz = np.linalg.norm(dxyz)
+            # else:
+            #     trust = ndxyz
+            #     trust0 = trust
             xyz2 = xyz1 + np.array(dxyz).flatten()
             if microiter == 1:
                 xyzsave = xyz2.copy()
             rmsd = np.sqrt(np.mean((np.array(xyz2-xyz1).flatten())**2))
             if len(rmsds) > 0:
                 if rmsd > rmsdt:
-                    if verbose: print "Iter: %i RMSD: %.3e Thre: % .3e Damp: %.3f (Bad)" % (microiter, rmsd, rmsdt, TB)
-                    TB /= 2
+                    if verbose: print "Iter: %i RMSD: %.3e Thre: % .3e Norm: %.3e Damp: %.3e (Bad)" % (microiter, rmsd, rmsdt, ndxyz, damp)
+                    # trust = ndxyz / 4
+                    damp /= 4
+                    xyz2 = xyz1.copy()
                 else:
-                    if verbose: print "Iter: %i RMSD: %.3e Thre: % .3e Damp: %.3f (Good)" % (microiter, rmsd, rmsdt, TB)
-                    TB = min(TB*1.25, 1.0)
+                    if verbose: print "Iter: %i RMSD: %.3e Thre: % .3e Norm: %.3e Damp: %.3e (Good)" % (microiter, rmsd, rmsdt, ndxyz, damp)
+                    # trust = min(trust0, 1.2*trust)
+                    # damp = min(damp*1.2, 1.0)
                     rmsdt = rmsd
+                    xyzsave = xyz2.copy()
             else:
-                if verbose: print "Iter: %i RMSD: %.3e" % (microiter, rmsd)
+                if verbose: print "Iter: %i RMSD: %.3e Thre:    (none)  Norm: %.3e Damp: %.3e" % (microiter, rmsd, ndxyz, damp)
                 rmsdt = rmsd
             rmsds.append(rmsd)
             # Are we converged?
@@ -740,7 +791,8 @@ class InternalCoordinates(object):
             dQ_actual = self.calcDiff(xyz2, xyz1)
             # Figure out the further change needed
             dQ1 -= dQ_actual
-            xyz1 = xyz2
+            xyz1 = xyz2.copy()
+        self.writeCache(xyz, dQ, xyz2)
         return xyz2.flatten()
     
 class RedundantInternalCoordinates(InternalCoordinates):
@@ -810,10 +862,14 @@ class RedundantInternalCoordinates(InternalCoordinates):
             output += dlines
         return '\n'.join(output)
 
+    def resetRotations(self, xyz):
+        for rot in self.Rotators.values():
+            rot.reset(xyz)
+
     def largeRots(self):
         for Internal in self.Internals:
             if type(Internal) in [RotationA, RotationB, RotationC]:
-                if Internal.Rotator.stored_norm > np.pi*2/3:
+                if Internal.Rotator.stored_norm > 2*np.pi/3:
                     return True
         return False
 
@@ -1024,13 +1080,19 @@ class RedundantInternalCoordinates(InternalCoordinates):
                     noncov.append(edge)
         if not connect:
             for i in frags:
-                self.addMultiCartesianX(i, w=1e0/len(i))
-                self.addMultiCartesianY(i, w=1e0/len(i))
-                self.addMultiCartesianZ(i, w=1e0/len(i))
-                # Reference coordinates are given in Bohr.
-                self.addRotationA(i, coords / 0.529, self.Rotators)
-                self.addRotationB(i, coords / 0.529, self.Rotators)
-                self.addRotationC(i, coords / 0.529, self.Rotators)
+                if len(i) >= 3:
+                    self.addMultiCartesianX(i, w=1.0/len(i))
+                    self.addMultiCartesianY(i, w=1.0/len(i))
+                    self.addMultiCartesianZ(i, w=1.0/len(i))
+                    # Reference coordinates are given in Bohr.
+                    self.addRotationA(i, coords / 0.529, self.Rotators)
+                    self.addRotationB(i, coords / 0.529, self.Rotators)
+                    self.addRotationC(i, coords / 0.529, self.Rotators)
+                else:
+                    for j in i:
+                        self.addCartesianX(j, w=1.0/len(i))
+                        self.addCartesianY(j, w=1.0/len(i))
+                        self.addCartesianZ(j, w=1.0/len(i))
             # for i in range(molecule.na):
             #     self.addCartesianX(i, w=1)
             #     self.addCartesianY(i, w=1)
@@ -1333,3 +1395,6 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
     def guess_hessian(self, coords):
         Hprim = np.matrix(self.Prims.guess_hessian(coords))
         return np.array(self.Vecs.T*Hprim*self.Vecs)
+
+    def resetRotations(self, xyz):
+        self.Prims.resetRotations(xyz)

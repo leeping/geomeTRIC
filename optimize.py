@@ -4,11 +4,12 @@ from __future__ import division
 import numpy as np
 from copy import deepcopy
 from collections import OrderedDict
-from internal import RedundantInternalCoordinates, DelocalizedInternalCoordinates
+from internal import RedundantInternalCoordinates, DelocalizedInternalCoordinates, RotationA, RotationB, RotationC
 from rotate import get_rot
 from forcebalance.molecule import Molecule
 from forcebalance.nifty import row, col, flat, invert_svd
 from scipy import optimize
+import traceback
 import argparse
 import subprocess
 import os, sys
@@ -65,7 +66,7 @@ precision {precision}
 """
 
 # Read in the molecule
-M = Molecule(sys.argv[1])
+M = Molecule(sys.argv[1], radii={'Na':0.0})
 if 'method' in M.qcrems[0]:
     method = method
 else:
@@ -123,7 +124,7 @@ def calc_qchem(coords):
         gradient = calc_qchem.stored_calcs[coord_hash]['gradient']
         return energy, gradient
     # print "Calling Qchem for energy and gradient"
-    dirname = os.path.splitext(sys.argv[1])[0]+".tmp"
+    # dirname = os.path.splitext(sys.argv[1])[0]+".tmp"
     # dirname = "calc_%04i" % calc_qchem.calcnum
     if not os.path.exists(dirname): os.makedirs(dirname)
     # Convert coordinates back to the xyz file
@@ -217,9 +218,9 @@ def RebuildHessian(IC, H0, coord_seq, grad_seq, trust=0.3):
         Mat2 = ((H*Dy)*(H*Dy).T)/(Dy.T*H*Dy)[0,0]
         Hstor = H.copy()
         H += Mat1-Mat2
-        if np.min(np.linalg.eig(H)[0]) < 0:
-            print "Negative eigenvalues at iteration %i - returning previous" % i
-            return Hstor
+        if np.min(np.linalg.eigh(H)[0]) < 0:
+            print "Negative eigenvalues at iteration %i - returning guess" % i
+            return H0.copy()
     return H
 
 def getNorm(X, dy, IC=None, CartesianTrust=False):
@@ -227,14 +228,17 @@ def getNorm(X, dy, IC=None, CartesianTrust=False):
         # Displacement of each atom in Angstrom
         try:
             Xnew = IC.newCartesian(X, dy)
-            disp = 0.529*(Xnew-X)
+            Xmat = np.matrix(Xnew.reshape(-1,3))
+            U = get_rot(Xmat, X.reshape(-1,3))
+            Xrot = np.array((U*Xmat.T).T).flatten()
+            displacement = np.sqrt(np.sum((((Xrot-X)*0.529).reshape(-1,3))**2, axis=1))
+            rms_displacement = np.sqrt(np.mean(displacement**2))
+            return rms_displacement
         except np.linalg.LinAlgError:
             return np.sum(dy**2)*1e10
     else:
-        disp = 0.529*dy
+        return np.linalg.norm(dy)
     # Number of atoms
-    Na = len(X)/3
-    return np.sqrt(np.sum(disp**2)/Na)
         
 def Optimize(coords, molecule, IC=None):
     progress = deepcopy(molecule)
@@ -267,7 +271,7 @@ def Optimize(coords, molecule, IC=None):
     # Loop of optimization
     Iteration = 0
     CoordCounter = 0
-    trust = 0.1
+    trust = 0.3
     # Print initial iteration
     atomgrad = np.sqrt(np.sum((gradx.reshape(-1,3))**2, axis=1))
     rms_gradient = np.sqrt(np.mean(atomgrad**2))
@@ -291,20 +295,21 @@ def Optimize(coords, molecule, IC=None):
     X_hist = [X]
     Gx_hist = [gradx]
     CartesianTrust = True
+    trustprint = "="
     while 1:
         Iteration += 1
         # Force Hessian to have positive eigenvalues.
         Eig = np.linalg.eigh(H)[0]
         Emin = min(Eig).real
         # eps = 1e-4
-        # H1 = H.copy()
-        if Emin < 0:
-            # Adj = eps-Emin
-            Adj = -2*Emin
-            # Adj = eps-Emin
-        else:
-            Adj = 0
-        H += Adj * np.eye(H.shape[0])
+        # if Emin < 0:
+        #     Adj = -2*Emin
+        # if Emin < eps:
+        #     Adj = eps-Emin
+        # else:
+        #     Adj = 0
+        # Adj = 0
+        # H += Adj * np.eye(H.shape[0])
         Eig = np.linalg.eigh(H)[0]
         Eig = sorted(Eig)
         print "Hessian Eigenvalues: %.5e %.5e %.5e ... %.5e %.5e %.5e" % (Eig[0],Eig[1],Eig[2],Eig[-3],Eig[-2],Eig[-1])
@@ -312,27 +317,51 @@ def Optimize(coords, molecule, IC=None):
         def solver(L):
             HT = H + (L-1)**2*np.eye(len(H))
             Hi = invert_svd(np.matrix(HT))
+            #Hi = np.linalg.inv(HT)
             dy = flat(-1 * Hi * col(G))
             sol = flat(0.5*row(dy)*np.matrix(H)*col(dy))[0] + np.dot(dy,G)
             return dy, sol
-        def trust_fun(L):
+        def trust_fun(L, target, useCart):
             try:
                 dy = solver(L)[0]
+                N = getNorm(X, dy, IC, useCart)
             except:
+                traceback.print_stack()
                 print "\x1b[1;91mError inverting Hessian - L = %.3f\x1b[0m" % L
-                return 1e10*(L-1)**2
-            N = getNorm(X, dy, IC, CartesianTrust)
-            # print "Finding trust radius: H%+.4f*I, length %.4e (target %.4e)" % ((L-1)**2,N,trust)
-            return (N - trust)**2
+                return trust_fun(L*1.1, target, useCart)
+                # N = dy = solver(L)[0]
+                # N = 1e10 #*(L-1)**2
+            # dy = solver(L)[0]
+            print "Finding trust radius: H%+.4f*I, length %.4e (target %.4e)" % ((L-1)**2,N,trust)
+            return (N - target)**2
         # This is the normal step from inverting the Hessian
         dy, expect = solver(1)
-        dynorm = getNorm(X, dy, IC, CartesianTrust)
-        # If the step is larger than the trust radius, then restrict it to the trust radius
-        if dynorm > trust:
-            LOpt = optimize.brent(trust_fun,brack=(1.0, 4.0),tol=1e-4)
-            dy, expect = solver(LOpt)
-            dynorm = getNorm(X, dy, IC, CartesianTrust)
-            # print "Trust-radius step found (length %.4e), % .4e added to Hessian diagonal" % (dynorm, (LOpt-1)**2)
+
+        if CartesianTrust:
+            while True:
+                dynorm = getNorm(X, dy, IC, True)
+                # print "dynorm = %.3e trust = %.3e" % (dynorm, trust)
+                if dynorm > 1.1*trust:
+                    inorm = getNorm(X, dy, IC, False)
+                    itrust = trust * (inorm/dynorm)
+                    LOpt = optimize.brent(trust_fun, brack=(1.0, 4.0), tol=1e-4, args=(itrust, False))
+                    dy, expect = solver(LOpt)
+                else:
+                    break
+        else:
+            dynorm = getNorm(X, dy, IC, False)
+            if dynorm > trust:
+                LOpt = optimize.brent(trust_fun, brack=(1.0, 4.0), tol=1e-4, args=(trust, False))
+                dy, expect = solver(LOpt)
+                dynorm = getNorm(X, dy, IC, False)
+        Dot = -np.dot(dy/np.linalg.norm(dy), G/np.linalg.norm(G))
+        # dynorm = getNorm(X, dy, IC, CartesianTrust)
+        # # If the step is larger than the trust radius, then restrict it to the trust radius
+        # if dynorm > trust:
+        #     LOpt = optimize.brent(trust_fun, brack=(1.0, 4.0), tol=1e-4, args=(trust, CartesianTrust))
+        #     dy, expect = solver(LOpt)
+        #     dynorm = getNorm(X, dy, IC, CartesianTrust)
+        #     # print "Trust-radius step found (length %.4e), % .4e added to Hessian diagonal" % (dynorm, (LOpt-1)**2)
         bump = dynorm > 0.8 * trust
         # Get the previous iteration stuff
         Yprev = Y.copy()
@@ -367,16 +396,18 @@ def Optimize(coords, molecule, IC=None):
         Converged_dmax = max_displacement < Convergence_dmax
         BadStep = (E-Eprev) > 0
             
-        print "Iteration %4i :" % Iteration,
+        print "Step %4i :" % Iteration,
         print "Displacement = %s%.3e\x1b[0m/%s%.3e\x1b[0m (rms/max)" % ("\x1b[92m" if Converged_drms else "\x1b[0m", rms_displacement, "\x1b[92m" if Converged_dmax else "\x1b[0m", max_displacement),
+        print "Trust = %.3e (%s)" % (trust, trustprint), 
         print "Gradient = %s%.3e\x1b[0m/%s%.3e\x1b[0m (rms/max)" % ("\x1b[92m" if Converged_grms else "\x1b[0m", rms_gradient, "\x1b[92m" if Converged_gmax else "\x1b[0m", max_gradient),
-        print "Energy (change) = % .10f (%s%+.3e\x1b[0m) Quality = %s%.3f\x1b[0m" % (E, "\x1b[91m" if BadStep else ("\x1b[92m" if Converged_energy else "\x1b[0m"), E-Eprev, "\x1b[91m" if BadStep else "\x1b[0m", Quality),
-        if IC is not None:
-            # if IC.largeRots():
-            #     print "(Large Rotations)"
-            print "(Bork)" if IC.bork else "(Good)"
-        else:
-            print
+        print "Dy.G = %.3e" % Dot,
+        print "Energy (change) = % .10f (%s%+.3e\x1b[0m) Quality = %s%.3f\x1b[0m" % (E, "\x1b[91m" if BadStep else ("\x1b[92m" if Converged_energy else "\x1b[0m"), E-Eprev, "\x1b[91m" if BadStep else "\x1b[0m", Quality)
+        # if IC is not None:
+        #     # if IC.largeRots():
+        #     #     print "(Large Rotations)"
+        #     print "(Bork)" if IC.bork else "(Good)"
+        # else:
+        #     print
         if IC is not None:
             idx = np.argmax(np.abs(dy))
             iunit = np.zeros_like(dy)
@@ -384,47 +415,56 @@ def Optimize(coords, molecule, IC=None):
             if type(IC) is RedundantInternalCoordinates:
                 print "Along %s %.3f" % (IC.Internals[idx], np.dot(dy/np.linalg.norm(dy), iunit))
         if Converged_energy and Converged_grms and Converged_drms and Converged_gmax and Converged_dmax:
-            print "Converged! =D"
-            break
+            if (trust > Convergence_dmax) or (not bump):
+                print "Converged! =D"
+                break
+            else:
+                print "Trust radius is too small to converge"
         if Quality <= ThreLQ:
-            trust = dynorm/4
-            # trust = dynorm/(1+adapt_fac)
-            trustprint = "Decreasing trust radius to % .4e" % trust
-            print_trust = True
+            trust = min(trust, dynorm) / 2
+            trustprint = "\x1b[91m-\x1b[0m"
+            #trustprint = "Decreasing trust radius to % .4e" % trust
+            #print_trust = True
         elif Quality >= ThreHQ and bump:
             if trust < 0.3:
-                trust = min(2*trust, 0.3)
-                trustprint = "Increasing trust radius to % .4e" % trust
-                print_trust = True
-        # elif Quality > 1.2:
-        #     print "-- Dividing Hessian by 2 --"
-        #     print_trust = False
-        #     H /= 2
+                trust = min(np.sqrt(2)*trust, 0.3)
+                trustprint = "\x1b[92m+\x1b[0m"
+                # trustprint = "Increasing trust radius to % .4e" % trust
+                # print_trust = True
+            else:
+                trustprint = "="
+                # print_trust = False
         else:
-            print_trust = False
-        if Quality < -1:
-            print "%s and rejecting step" % trustprint
+            trustprint = "="
+        # else:
+        #     print_trust = False
+        if Quality < -1: # and trust > 0.01: # and (E-Eprev) > 0.01:
+            # trustprint = "Decreasing trust radius to % .4e" % trust
+            trustprint = "\x1b[1;91mx\x1b[0m"
+            #print "%s and rejecting step" % trustprint
             Y = Yprev.copy()
             X = Xprev.copy()
             G = Gprev.copy()
             E = Eprev
         else:
-            # H = H1.copy()
             X_hist.append(X)
             Gx_hist.append(gradx)
             skipBFGS=False
-            if print_trust:
-                print trustprint
+            # if print_trust:
+            #     print trustprint
             if internal:
                 check = False
-                rebuild = False
-                if (IC.bork or IC.largeRots()):
-                    if IC.largeRots():
-                        print "Large rotations triggering rebuild of coordinates"
-                    if IC.bork:
-                        print "Failed inverse iteration triggering rebuild of coordinates"
+                reinit = False
+                if IC.largeRots():
+                    print "Large rotations - reinitializing coordinates"
+                    # for i in IC.Prims.Internals:
+                    #     if type(i) in [RotationA, RotationB, RotationC]:
+                    #         print i.a, i.Rotator.stored_norm
+                    reinit = True
+                if IC.bork:
+                    print "Failed inverse iteration - reinitializing coordinates"
                     check = True
-                    rebuild = True
+                    reinit = True
                 if CoordCounter == 9:
                     check = True
                 if check:
@@ -442,37 +482,63 @@ def Optimize(coords, molecule, IC=None):
                         print "\x1b[1;94mInternal coordinate system may have changed\x1b[0m"
                         if IC.repr_diff(IC1) != "":
                             print IC.repr_diff(IC1)
-                        rebuild = True
-                    if rebuild:
+                        reinit = True
                         IC = IC1
-                        if type(IC) is DelocalizedInternalCoordinates:
-                            IC.build_dlc(X)
-                        H0 = IC.guess_hessian(coords)
-                        # H0 = np.eye(len(IC.Internals))
-                        H = RebuildHessian(IC, H0, X_hist, Gx_hist, 0.3)
-                        # H = H0.copy()
-                        Y = IC.calculate(X)
-                        skipBFGS = True
-                        CoordCounter = 0 
+                    CoordCounter = 0
                 else:
                     CoordCounter += 1
+                if reinit:
+                    IC.resetRotations(X)
+                    if type(IC) is DelocalizedInternalCoordinates:
+                        IC.build_dlc(X)
+                    H0 = IC.guess_hessian(coords)
+                    # H0 = np.eye(len(IC.Internals))
+                    H = RebuildHessian(IC, H0, X_hist, Gx_hist, 0.3)
+                    # H = H0.copy()
+                    Y = IC.calculate(X)
+                    # for i in IC.Prims.Internals:
+                    #     if type(i) in [RotationA, RotationB, RotationC]:
+                    #         print i.a, i.Rotator.stored_norm
+                    skipBFGS = True
                 Gq = IC.calcGrad(X, gradx)
                 G = np.array(Gq).flatten()
                 rms_gq = np.sqrt(np.mean(G**2))
                 max_gq = np.max(np.abs(G))
                 if max_gq > 1:
                     print "Gq = %.3e/%.3e (rms/max)" % (rms_gq, max_gq),
-                    import IPython
-                    IPython.embed()
+                    # import IPython
+                    # IPython.embed()
             else:
                 G = gradx.copy()
+
             if not skipBFGS:
                 # BFGS Hessian update
                 Dy   = col(Y - Yprev)
                 Dg   = col(G - Gprev)
                 Mat1 = (Dg*Dg.T)/(Dg.T*Dy)[0,0]
                 Mat2 = ((H*Dy)*(H*Dy).T)/(Dy.T*H*Dy)[0,0]
+                Eig = np.linalg.eigh(H)[0]
+                Eig.sort()
+
+                ndy = np.array(Dy).flatten()/np.linalg.norm(np.array(Dy))
+                ndg = np.array(Dg).flatten()/np.linalg.norm(np.array(Dg))
+                nhdy = np.array(H*Dy).flatten()/np.linalg.norm(np.array(H*Dy))
+                print "Denoms: %.3e %.3e" % ((Dg.T*Dy)[0,0], (Dy.T*H*Dy)[0,0]),
+                print "Dots: %.3e %.3e" % (np.dot(ndg, ndy), np.dot(ndy, nhdy))
+                H1 = H.copy()
                 H += Mat1-Mat2
+                Eig1 = np.linalg.eigh(H)[0]
+                Eig1.sort()
+                if np.min(Eig1) < 1e-4:
+                    print "Tiny eigenvalue, resetting BFGS"
+                    H = IC.guess_hessian(coords)
+                if np.dot(ndg, ndy) < 5e-2 or np.dot(ndy, nhdy) < 5e-2:
+                    print "Small dots (may blow up Hessian), resetting BFGS"
+                    H = IC.guess_hessian(coords)
+                print "|y|: %.3e Dy: %.3e ... %.3e" % (np.linalg.norm(Y), np.min(Dy), np.max(Dy)),
+                print "|g|: %.3e Dg: %.3e ... %.3e" % (np.linalg.norm(G), np.min(Dg), np.max(Dg)),
+                print "Eig-ratios: %.5e ... %.5e" % (np.min(Eig1/Eig), np.max(Eig1/Eig))
+                
         # Then it's on to the next loop iteration!
     return X
 

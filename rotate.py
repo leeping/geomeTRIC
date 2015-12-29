@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 
 from __future__ import division
-from forcebalance.molecule import *
 from forcebalance.nifty import invert_svd
+from forcebalance.molecule import *
 import numpy as np
 
 """
@@ -10,6 +10,32 @@ References
 ----------
 1. E. A. Coutsias, C. Seok, K. A. Dill. "Using Quaternions to Calculate RMSD.". J. Comput. Chem 2004.
 """
+
+# def invert_svd(X,thresh=1e-12):
+    
+#     """ 
+
+#     Invert a matrix using singular value decomposition. 
+#     @param[in] X The matrix to be inverted
+#     @param[in] thresh The SVD threshold; eigenvalues below this are not inverted but set to zero
+#     @return Xt The inverted matrix
+
+#     """
+
+#     u,s,vh = np.linalg.svd(X, full_matrices=0)
+#     uh     = np.matrix(np.transpose(u))
+#     v      = np.matrix(np.transpose(vh))
+#     si     = s.copy()
+#     for i in range(s.shape[0]):
+#         # reg = s[i]**2 / (s[i]**2 + thresh**2)
+#         si[i] = s[i] / (s[i]**2 + thresh**2)
+#         # if abs(s[i]) > thresh:
+#         #     si[i] = 1./s[i]
+#         # else:
+#         #     si[i] = 0.0
+#     si     = np.matrix(np.diag(si))
+#     Xt     = v*si*uh
+#     return Xt
 
 def build_correlation(x, y):
     """
@@ -165,9 +191,9 @@ def form_rot(q):
     R4 = al(q)*ar(qc)
     return R4[1:, 1:]
 
-def sorted_eig(mat):
-    """ Return eigenvalues in descending order and associated eigenvectors """
-    L, Q = np.linalg.eig(mat)
+def sorted_eigh(mat):
+    """ Return eigenvalues of a symmetric matrix in descending order and associated eigenvectors """
+    L, Q = np.linalg.eigh(mat)
     idx = L.argsort()[::-1]   
     L = L[idx]
     Q = Q[:,idx]
@@ -193,7 +219,7 @@ def calc_rmsd(x, y):
     x = x - np.mean(x,axis=0)
     y = y - np.mean(y,axis=0)
     N = x.shape[0]
-    L, Q = sorted_eig(build_F(x, y))
+    L, Q = sorted_eigh(build_F(x, y))
     idx = L.argsort()[::-1]   
     L = L[idx]
     Q = Q[:,idx]
@@ -222,7 +248,7 @@ def get_quat(x, y, eig=False):
     x = x - np.mean(x,axis=0)
     y = y - np.mean(y,axis=0)
     N = x.shape[0]
-    L, Q = sorted_eig(build_F(x, y))
+    L, Q = sorted_eigh(build_F(x, y))
     q = Q[:,0]
     # Standardize the orientation somewhat
     if q[0] < 0:
