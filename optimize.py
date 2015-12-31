@@ -12,7 +12,7 @@ from scipy import optimize
 import traceback
 import argparse
 import subprocess
-import os, sys
+import os, sys, shutil
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--cart', action='store_true', help='Use Cartesian coordinate system.')
@@ -22,6 +22,7 @@ parser.add_argument('--terachem', action='store_true', help='Run optimization in
 parser.add_argument('--double', action='store_true', help='Run TeraChem in double precision mode.')
 parser.add_argument('--prefix', type=str, default=None, help='Specify a prefix for output file and temporary directory.')
 parser.add_argument('--displace', action='store_true', help='Write out the displacements.')
+parser.add_argument('-v', '--verbose', action='store_true', help='Write out the displacements.')
 
 print ' '.join(sys.argv)
 
@@ -42,12 +43,6 @@ dirname = prefix+".tmp"
 if os.path.exists(dirname):
     raise RuntimeError("Please delete temporary folder %s before proceeding" % dirname)
 os.makedirs(dirname)
-#     user_xyzout = raw_input("Enter an output file name (default %s) --> " % xyzout).strip()
-# if len(user_xyzout) != 0:
-#     if not user_xyzout.endswith('.xyz'):
-#         raise RuntimeError("Output must end with .xyz")
-#     print "Writing output to %s" % user_xyzout
-#     xyzout = user_xyzout
 
 os.environ['TeraChem'] = TCHome
 os.environ['PATH'] = os.path.join(TCHome,'bin')+":"+os.environ['PATH']
@@ -63,7 +58,12 @@ method {ur}{method}
 charge {charge}
 spinmult {mult}
 precision {precision}
+convthre 1.0e-6
+threall 1.0e-16
+{guess}
 """
+
+eps = 1e-6
 
 # Read in the molecule
 M = Molecule(sys.argv[1], radii={'Na':0.0})
@@ -80,19 +80,17 @@ def calc_terachem(coords):
         gradient = calc_terachem.stored_calcs[coord_hash]['gradient']
         return energy, gradient
     # print "Calling TeraChem for energy and gradient"
-    # dirname = "calc_%04i" % calc_terachem.calcnum
-    # dirname = os.path.splitext(sys.argv[1])[0]+".tmp"
-    # if not os.path.exists(dirname): os.makedirs(dirname)
-    # Write input files to directory
-    # if not os.path.exists(args.terachem): raise RuntimeError('TC input file does not exist')
+    if os.path.exists(os.path.join(dirname, 'scr', 'c0')):
+        shutil.copy2(os.path.join(dirname, 'scr', 'c0'), os.path.join(dirname, 'c0'))
+        have_guess = True
+    else: have_guess = False
     with open("%s/run.in" % dirname, "w") as f:
         print >> f, TeraTemp.format(basis = M.qcrems[0]['basis'],
                                     ur = "u" if M.mult != 1 else "r",
                                     method = method,
                                     charge = str(M.charge), mult=str(M.mult),
-                                    precision = "double" if args.double else "dynamic")
-    # os.system('cp %s %s/run.in' % (args.terachem, dirname))
-    # with open(os.path.join(dirname, 'run.in'), 'w') as f: print >> f, TeraTemp
+                                    precision = "double" if args.double else "dynamic",
+                                    guess = ("guess c0" if have_guess else ""))
     # Convert coordinates back to the xyz file
     M.xyzs[0] = coords.reshape(-1, 3) * 0.529
     M[0].write(os.path.join(dirname, 'start.xyz'))
@@ -103,14 +101,9 @@ def calc_terachem(coords):
     subprocess.call("awk '/Gradient units are Hartree/,/Net gradient/ {if ($1 ~ /^-?[0-9]/) {print}}' run.out > grad.txt", cwd=dirname, shell=True)
     energy = float(open(os.path.join(dirname,'energy.txt')).readlines()[0].strip())
     gradient = np.loadtxt(os.path.join(dirname,'grad.txt')).flatten()
-    # print "RMS gradient     : % .4e" % (np.sqrt(np.mean(gradient**2)))
-    # print "Max gradient     : % .4e" % (np.max(np.abs(gradient)))
     if len(calc_terachem.stored_calcs.keys()) > 0:
         PrevHash = calc_terachem.stored_calcs.keys()[-1]
         displacement = coords - calc_terachem.stored_calcs[PrevHash]['coords']
-        # print "Energy change    : % .4e" % (energy - calc_terachem.stored_calcs[PrevHash]['energy'])
-        # print "RMS displacement : % .4e" % (np.sqrt(np.mean(displacement**2)))
-        # print "Max displacement : % .4e" % (np.max(np.abs(displacement)))
     calc_terachem.stored_calcs[coord_hash] = {'coords':coords,'energy':energy,'gradient':gradient}
     return energy, gradient
 calc_terachem.calcnum = 0
@@ -119,13 +112,10 @@ calc_terachem.stored_calcs = OrderedDict()
 def calc_qchem(coords):
     coord_hash = tuple(list(coords))
     if coord_hash in calc_qchem.stored_calcs:
-        # print "Reading stored values"
         energy = calc_qchem.stored_calcs[coord_hash]['energy']
         gradient = calc_qchem.stored_calcs[coord_hash]['gradient']
         return energy, gradient
     # print "Calling Qchem for energy and gradient"
-    # dirname = os.path.splitext(sys.argv[1])[0]+".tmp"
-    # dirname = "calc_%04i" % calc_qchem.calcnum
     if not os.path.exists(dirname): os.makedirs(dirname)
     # Convert coordinates back to the xyz file
     M.xyzs[0] = coords.reshape(-1, 3) * 0.529
@@ -136,14 +126,9 @@ def calc_qchem(coords):
     M1 = Molecule('%s/run.out' % dirname)
     energy = M1.qm_energies[0]
     gradient = M1.qm_grads[0].flatten()
-    # print "RMS gradient     : % .4e" % (np.sqrt(np.mean(gradient**2)))
-    # print "Max gradient     : % .4e" % (np.max(np.abs(gradient)))
     if len(calc_qchem.stored_calcs.keys()) > 0:
         PrevHash = calc_qchem.stored_calcs.keys()[-1]
         displacement = coords - calc_qchem.stored_calcs[PrevHash]['coords']
-        # print "Energy change    : % .4e" % (energy - calc_qchem.stored_calcs[PrevHash]['energy'])
-        # print "RMS displacement : % .4e" % (np.sqrt(np.mean(displacement**2)))
-        # print "Max displacement : % .4e" % (np.max(np.abs(displacement)))
     calc_qchem.stored_calcs[coord_hash] = {'coords':coords,'energy':energy,'gradient':gradient}
     return energy, gradient
 calc_qchem.calcnum = 0
@@ -169,7 +154,7 @@ def energy_internal(q):
     x0 = energy_internal.x0
     q0 = IC.calculate(x0)
     dQ = IC.subtractInternal(q,q0)
-    newxyz = IC.newCartesian(x0, dQ)
+    newxyz = IC.newCartesian(x0, dQ, verbose=args.verbose)
     energy_internal.x0 = newxyz
     return calc(newxyz)[0]
 energy_internal.IC = None
@@ -180,7 +165,7 @@ def gradient_internal(q):
     x0 = gradient_internal.x0
     q0 = IC.calculate(x0)
     dQ = IC.subtractInternal(q,q0)
-    newxyz = IC.newCartesian(x0, dQ)
+    newxyz = IC.newCartesian(x0, dQ, verbose=args.verbose)
     gradient_internal.x0 = newxyz
     Gx = np.matrix(calc(newxyz)[1]).T
     Ginv = IC.GInverse(newxyz)
@@ -218,28 +203,96 @@ def RebuildHessian(IC, H0, coord_seq, grad_seq, trust=0.3):
         Mat2 = ((H*Dy)*(H*Dy).T)/(Dy.T*H*Dy)[0,0]
         Hstor = H.copy()
         H += Mat1-Mat2
-        if np.min(np.linalg.eigh(H)[0]) < 0:
-            print "Negative eigenvalues at iteration %i - returning guess" % i
-            return H0.copy()
+    if np.min(np.linalg.eigh(H)[0]) < eps:
+        print "Tiny eigenvalues - returning guess"
+        return H0.copy()
     return H
 
-def getNorm(X, dy, IC=None, CartesianTrust=False):
-    if IC is not None and CartesianTrust:
-        # Displacement of each atom in Angstrom
-        try:
-            Xnew = IC.newCartesian(X, dy)
-            Xmat = np.matrix(Xnew.reshape(-1,3))
-            U = get_rot(Xmat, X.reshape(-1,3))
-            Xrot = np.array((U*Xmat.T).T).flatten()
-            displacement = np.sqrt(np.sum((((Xrot-X)*0.529).reshape(-1,3))**2, axis=1))
-            rms_displacement = np.sqrt(np.mean(displacement**2))
-            return rms_displacement
-        except np.linalg.LinAlgError:
-            return np.sum(dy**2)*1e10
+def getCartesianNorm(X, dy, IC):
+    # Displacement of each atom in Angstrom
+    Xnew = IC.newCartesian(X, dy, verbose=args.verbose)
+    Xmat = np.matrix(Xnew.reshape(-1,3))
+    U = get_rot(Xmat, X.reshape(-1,3))
+    Xrot = np.array((U*Xmat.T).T).flatten()
+    displacement = np.sqrt(np.sum((((Xrot-X)*0.529).reshape(-1,3))**2, axis=1))
+    rms_displacement = np.sqrt(np.mean(displacement**2))
+    return rms_displacement
+
+def between(s, a, b):
+    if a < b:
+        return s > a and s < b
+    elif a > b:
+        return s > b and s < a
     else:
-        return np.linalg.norm(dy)
-    # Number of atoms
+        raise RuntimeError('a and b must be different')
+
+def brent_wiki(f, a, b, rel, cvg=0.1):
+    fa = f(a)
+    fb = f(b)
+    if fa*fb > 0:
+        raise RuntimeError('Not bracketed')
+    if np.abs(fa) < np.abs(fb):
+        # Swap if |f(a)| < |f(b)|
+        a, b = b, a
+        fa, fb = fb, fa
+    # Set c to a
+    c = a
+    fc = fa
+    mflag = True
+    delta = 1e-6
+    eps = min(0.01, 1e-2*np.abs(a-b))
+    while True:
+        if fa != fc and fb != fc:
+            # Inverse quadratic interpolation
+            s = a*fb*fc/((fa-fb)*(fa-fc))
+            s += b*fa*fc/((fb-fa)*(fb-fc))
+            s += c*fa*fb/((fc-fa)*(fc-fb))
+        else:
+            # Secant method
+            s = b-fb*(b-a)/(fb-fa)
+        # Evaluate conditions
+        condition1 = not between(s, (3*a+b)/4, b)
+        condition2 = mflag and (np.abs(s-b) >= np.abs(b-c)/2)
+        condition3 = (not mflag) and (np.abs(s-b) >= np.abs(c-d)/2)
+        condition4 = mflag and (np.abs(b-c) < delta)
+        condition5 = (not mflag) and (np.abs(c-d) < delta)
+        if any([condition1, condition2, condition3, condition4, condition5]):
+            # Bisection method
+            s = (a+b)/2
+            mflag = True
+        else:
+            mflag = False
+        # Calculate f(s)
+        fs = f(s)
+        # Check convergence
+        if np.abs(fs/rel) <= cvg:
+            return s
+        if np.abs(b-a) < eps:
+            if args.verbose: print "returning because interval is too small"
+            f.small_interval = True
+            return s
+        if hasattr(f, 'from_above'):
+            if f.from_above and fs > 0:
+                return s
+        d = c; fd = fc
+        c = b; fc = fb
+        if fa*fs < 0:
+            b = s; fb = fs
+        else:
+            a = s; fa = fs
+        if np.abs(fa) < np.abs(fb):
+            # Swap if |f(a)| < |f(b)|
+            a, b = b, a
+            fa, fb = fb, fa
         
+def ftest(x):
+    answer = (x+3)*(x-1)**2
+    print "(x, y) = ", x, answer
+    return answer
+
+#brent_wiki(ftest, -4, 4/3, 1, 1e-8)
+#sys.exit()
+
 def Optimize(coords, molecule, IC=None):
     progress = deepcopy(molecule)
     # Initial Hessian
@@ -271,17 +324,13 @@ def Optimize(coords, molecule, IC=None):
     # Loop of optimization
     Iteration = 0
     CoordCounter = 0
-    trust = 0.3
+    trust = 0.1
     # Print initial iteration
     atomgrad = np.sqrt(np.sum((gradx.reshape(-1,3))**2, axis=1))
     rms_gradient = np.sqrt(np.mean(atomgrad**2))
     max_gradient = np.max(atomgrad)
     print "Iteration %4i :" % Iteration,
     print "Gradient = %.3e/%.3e (rms/max) Energy = % .10f" % (rms_gradient, max_gradient, E)
-    # Adaptive trust radius
-    trust0 = 1.0
-    adapt_fac = 1.0
-    adapt_damp = 0.5
     # Threshold for "low quality step" which decreases trust radius.
     ThreLQ = 0.25
     # Threshold for "high quality step" which increases trust radius.
@@ -301,67 +350,106 @@ def Optimize(coords, molecule, IC=None):
         # Force Hessian to have positive eigenvalues.
         Eig = np.linalg.eigh(H)[0]
         Emin = min(Eig).real
-        # eps = 1e-4
-        # if Emin < 0:
-        #     Adj = -2*Emin
-        # if Emin < eps:
-        #     Adj = eps-Emin
-        # else:
-        #     Adj = 0
-        # Adj = 0
+        if Emin < 0.0:
+            v0 = eps-Emin
+        else:
+            v0 = 0.0
         # H += Adj * np.eye(H.shape[0])
         Eig = np.linalg.eigh(H)[0]
         Eig = sorted(Eig)
         print "Hessian Eigenvalues: %.5e %.5e %.5e ... %.5e %.5e %.5e" % (Eig[0],Eig[1],Eig[2],Eig[-3],Eig[-2],Eig[-1])
-        # Define two functions that help us to find the trust radius step.
-        def solver(L):
-            HT = H + (L-1)**2*np.eye(len(H))
-            Hi = invert_svd(np.matrix(HT))
-            #Hi = np.linalg.inv(HT)
-            dy = flat(-1 * Hi * col(G))
-            sol = flat(0.5*row(dy)*np.matrix(H)*col(dy))[0] + np.dot(dy,G)
-            return dy, sol
-        def trust_fun(L, target, useCart):
+        # Functions that help us to find the trust radius step.
+        # This returns the Newton-Raphson step given a multiple of the diagonal
+        # added to the Hessian, the expected decrease in the energy, and
+        # the derivative of the step length w/r.t. v.
+        def get_delta_prime(v):
+            HT = H + v*np.eye(len(H))
             try:
-                dy = solver(L)[0]
-                N = getNorm(X, dy, IC, useCart)
+                Hi = invert_svd(np.matrix(HT))
             except:
-                traceback.print_stack()
-                print "\x1b[1;91mError inverting Hessian - L = %.3f\x1b[0m" % L
-                return trust_fun(L*1.1, target, useCart)
-                # N = dy = solver(L)[0]
-                # N = 1e10 #*(L-1)**2
-            # dy = solver(L)[0]
-            print "Finding trust radius: H%+.4f*I, length %.4e (target %.4e)" % ((L-1)**2,N,trust)
-            return (N - target)**2
-        # This is the normal step from inverting the Hessian
-        dy, expect = solver(1)
-
-        if CartesianTrust:
+                print "SVD Error - increasing v by 0.001 and trying again"
+                return get_delta_prime(v+0.001)
+            dy = flat(-1 * Hi * col(G))
+            d_prime = flat(-1 * Hi * col(dy))
+            dy_prime = np.dot(dy,d_prime)/np.linalg.norm(dy)
+            sol = flat(0.5*row(dy)*np.matrix(H)*col(dy))[0] + np.dot(dy,G) # 
+            return dy, sol, dy_prime
+        # This applies an iteration formula to find the trust radius step,
+        # given the target value of the trust radius.
+        def trust_step(target):
+            dy, sol, dy_prime = get_delta_prime(v0)
+            ndy = np.linalg.norm(dy)
+            if ndy < target:
+                return dy, sol
+            v = v0
             while True:
-                dynorm = getNorm(X, dy, IC, True)
-                # print "dynorm = %.3e trust = %.3e" % (dynorm, trust)
-                if dynorm > 1.1*trust:
-                    inorm = getNorm(X, dy, IC, False)
-                    itrust = trust * (inorm/dynorm)
-                    LOpt = optimize.brent(trust_fun, brack=(1.0, 4.0), tol=1e-4, args=(itrust, False))
-                    dy, expect = solver(LOpt)
+                v += (1-ndy/target)*(ndy/dy_prime)
+                dy, sol, dy_prime = get_delta_prime(v)
+                ndy = np.linalg.norm(dy)
+                if np.abs((ndy-target)/target) < 0.001:
+                    return dy, sol
+        # If our trust radius is to be computed in Cartesian coordinates,
+        # then we use an outer loop to find the appropriate step
+        if CartesianTrust:
+            # Get the step in internal coordinates, and find the Cartesian displacement
+            dy, expect, _ = get_delta_prime(v0)
+            inorm = np.linalg.norm(dy)
+            dynorm = getCartesianNorm(X, dy, IC)
+            if args.verbose: print "dy(i): %.4f dy(c) -> target: %.4f -> %.4f" % (inorm, dynorm, trust)
+            if dynorm > 1.1 * trust:
+                def froot(trial):
+                    if trial == 0.0: 
+                        froot.from_above = False
+                        return -trust
+                    else:
+                        if trial in froot.stores:
+                            dynorm = froot.stores[trial]
+                            froot.from_above = False
+                        else:
+                            dy, expect = trust_step(trial)
+                            dynorm = getCartesianNorm(X, dy, IC)
+                            froot.from_above = (froot.above_flag and not IC.bork)
+                            froot.stores[trial] = dynorm
+                            froot.counter += 1
+                        # Store the largest trial value with dynorm below the target
+                        if froot.current_val is None:
+                            if dynorm-froot.target < 0:
+                                froot.current_arg = trial
+                                froot.current_val = dynorm
+                        elif dynorm-froot.target < 0:
+                            if dynorm > froot.current_val:
+                                froot.current_arg = trial
+                                froot.current_val = dynorm
+                        if args.verbose: print "dy(i) %.4f dy(c) -> target: %.4f -> %.4f%s" % (trial, dynorm, froot.target, " (done)" if froot.from_above else "")
+                        return dynorm-froot.target
+                froot.counter = 0
+                froot.stores = {inorm : dynorm}
+                froot.target = trust
+                froot.above_flag = False
+                froot.current_arg = None
+                froot.current_val = None
+                froot.small_interval = False
+                iopt = brent_wiki(froot, 0, inorm, trust, cvg=0.1)
+                if froot.small_interval:
+                    iopt = froot.current_arg
+                for i in range(3):
+                    if (not froot.small_interval) and IC.bork:
+                        froot.target /= 2
+                        if args.verbose: print "\x1b[93mReducing target to %.3e\x1b[0m" % froot.target
+                        froot.above_flag = True
+                        iopt = brent_wiki(froot, 0, iopt, froot.target, cvg=0.1)
+                    else: break
+                if IC.bork:
+                    if args.verbose: print "\x1b[91mInverse iteration for Cartesians failed\x1b[0m"
                 else:
-                    break
+                    if args.verbose: print "\x1b[93mBrent algorithm requires %i evaluations\x1b[0m" % froot.counter
+                dy, expect = trust_step(iopt)
         else:
-            dynorm = getNorm(X, dy, IC, False)
-            if dynorm > trust:
-                LOpt = optimize.brent(trust_fun, brack=(1.0, 4.0), tol=1e-4, args=(trust, False))
-                dy, expect = solver(LOpt)
-                dynorm = getNorm(X, dy, IC, False)
+            # This code is rarely used; trust radius in internal coordinates
+            dy, expect = trust_step(trust)
+            dynorm = np.linalg.norm(dy)
+
         Dot = -np.dot(dy/np.linalg.norm(dy), G/np.linalg.norm(G))
-        # dynorm = getNorm(X, dy, IC, CartesianTrust)
-        # # If the step is larger than the trust radius, then restrict it to the trust radius
-        # if dynorm > trust:
-        #     LOpt = optimize.brent(trust_fun, brack=(1.0, 4.0), tol=1e-4, args=(trust, CartesianTrust))
-        #     dy, expect = solver(LOpt)
-        #     dynorm = getNorm(X, dy, IC, CartesianTrust)
-        #     # print "Trust-radius step found (length %.4e), % .4e added to Hessian diagonal" % (dynorm, (LOpt-1)**2)
         bump = dynorm > 0.8 * trust
         # Get the previous iteration stuff
         Yprev = Y.copy()
@@ -370,7 +458,7 @@ def Optimize(coords, molecule, IC=None):
         Eprev = E
         Y += dy
         if internal:
-            X = IC.newCartesian(X, dy)
+            X = IC.newCartesian(X, dy, verbose=args.verbose)
         else:
             X = Y.copy()
         E, gradx = calc(X)
@@ -397,17 +485,11 @@ def Optimize(coords, molecule, IC=None):
         BadStep = (E-Eprev) > 0
             
         print "Step %4i :" % Iteration,
-        print "Displacement = %s%.3e\x1b[0m/%s%.3e\x1b[0m (rms/max)" % ("\x1b[92m" if Converged_drms else "\x1b[0m", rms_displacement, "\x1b[92m" if Converged_dmax else "\x1b[0m", max_displacement),
+        print "Displace = %s%.3e\x1b[0m/%s%.3e\x1b[0m (rms/max)" % ("\x1b[92m" if Converged_drms else "\x1b[0m", rms_displacement, "\x1b[92m" if Converged_dmax else "\x1b[0m", max_displacement),
         print "Trust = %.3e (%s)" % (trust, trustprint), 
-        print "Gradient = %s%.3e\x1b[0m/%s%.3e\x1b[0m (rms/max)" % ("\x1b[92m" if Converged_grms else "\x1b[0m", rms_gradient, "\x1b[92m" if Converged_gmax else "\x1b[0m", max_gradient),
-        print "Dy.G = %.3e" % Dot,
-        print "Energy (change) = % .10f (%s%+.3e\x1b[0m) Quality = %s%.3f\x1b[0m" % (E, "\x1b[91m" if BadStep else ("\x1b[92m" if Converged_energy else "\x1b[0m"), E-Eprev, "\x1b[91m" if BadStep else "\x1b[0m", Quality)
-        # if IC is not None:
-        #     # if IC.largeRots():
-        #     #     print "(Large Rotations)"
-        #     print "(Bork)" if IC.bork else "(Good)"
-        # else:
-        #     print
+        print "Grad = %s%.3e\x1b[0m/%s%.3e\x1b[0m (rms/max)" % ("\x1b[92m" if Converged_grms else "\x1b[0m", rms_gradient, "\x1b[92m" if Converged_gmax else "\x1b[0m", max_gradient),
+        print "Dy.G = %.3f" % Dot,
+        print "E (change) = % .10f (%s%+.3e\x1b[0m) Quality = %s%.3f\x1b[0m" % (E, "\x1b[91m" if BadStep else ("\x1b[92m" if Converged_energy else "\x1b[0m"), E-Eprev, "\x1b[91m" if BadStep else "\x1b[0m", Quality)
         if IC is not None:
             idx = np.argmax(np.abs(dy))
             iunit = np.zeros_like(dy)
@@ -423,25 +505,16 @@ def Optimize(coords, molecule, IC=None):
         if Quality <= ThreLQ:
             trust = min(trust, dynorm) / 2
             trustprint = "\x1b[91m-\x1b[0m"
-            #trustprint = "Decreasing trust radius to % .4e" % trust
-            #print_trust = True
         elif Quality >= ThreHQ and bump:
             if trust < 0.3:
                 trust = min(np.sqrt(2)*trust, 0.3)
                 trustprint = "\x1b[92m+\x1b[0m"
-                # trustprint = "Increasing trust radius to % .4e" % trust
-                # print_trust = True
             else:
                 trustprint = "="
-                # print_trust = False
         else:
             trustprint = "="
-        # else:
-        #     print_trust = False
-        if Quality < -1: # and trust > 0.01: # and (E-Eprev) > 0.01:
-            # trustprint = "Decreasing trust radius to % .4e" % trust
+        if Quality < -1:
             trustprint = "\x1b[1;91mx\x1b[0m"
-            #print "%s and rejecting step" % trustprint
             Y = Yprev.copy()
             X = Xprev.copy()
             G = Gprev.copy()
@@ -450,22 +523,17 @@ def Optimize(coords, molecule, IC=None):
             X_hist.append(X)
             Gx_hist.append(gradx)
             skipBFGS=False
-            # if print_trust:
-            #     print trustprint
             if internal:
                 check = False
                 reinit = False
                 if IC.largeRots():
                     print "Large rotations - reinitializing coordinates"
-                    # for i in IC.Prims.Internals:
-                    #     if type(i) in [RotationA, RotationB, RotationC]:
-                    #         print i.a, i.Rotator.stored_norm
                     reinit = True
                 if IC.bork:
                     print "Failed inverse iteration - reinitializing coordinates"
                     check = True
                     reinit = True
-                if CoordCounter == 9:
+                if CoordCounter == 0:
                     check = True
                 if check:
                     newmol = deepcopy(molecule)
@@ -477,7 +545,6 @@ def Optimize(coords, molecule, IC=None):
                         IC1 = DelocalizedInternalCoordinates(newmol, build=False, connect=args.connect)
                     else:
                         raise RuntimeError('Spoo!')
-                    # if IC.update(IC1):
                     if IC1 != IC:
                         print "\x1b[1;94mInternal coordinate system may have changed\x1b[0m"
                         if IC.repr_diff(IC1) != "":
@@ -496,9 +563,6 @@ def Optimize(coords, molecule, IC=None):
                     H = RebuildHessian(IC, H0, X_hist, Gx_hist, 0.3)
                     # H = H0.copy()
                     Y = IC.calculate(X)
-                    # for i in IC.Prims.Internals:
-                    #     if type(i) in [RotationA, RotationB, RotationC]:
-                    #         print i.a, i.Rotator.stored_norm
                     skipBFGS = True
                 Gq = IC.calcGrad(X, gradx)
                 G = np.array(Gq).flatten()
@@ -506,8 +570,6 @@ def Optimize(coords, molecule, IC=None):
                 max_gq = np.max(np.abs(G))
                 if max_gq > 1:
                     print "Gq = %.3e/%.3e (rms/max)" % (rms_gq, max_gq),
-                    # import IPython
-                    # IPython.embed()
             else:
                 G = gradx.copy()
 
@@ -523,22 +585,18 @@ def Optimize(coords, molecule, IC=None):
                 ndy = np.array(Dy).flatten()/np.linalg.norm(np.array(Dy))
                 ndg = np.array(Dg).flatten()/np.linalg.norm(np.array(Dg))
                 nhdy = np.array(H*Dy).flatten()/np.linalg.norm(np.array(H*Dy))
-                print "Denoms: %.3e %.3e" % ((Dg.T*Dy)[0,0], (Dy.T*H*Dy)[0,0]),
-                print "Dots: %.3e %.3e" % (np.dot(ndg, ndy), np.dot(ndy, nhdy))
+                if args.verbose: 
+                    print "Denoms: %.3e %.3e" % ((Dg.T*Dy)[0,0], (Dy.T*H*Dy)[0,0]),
+                    print "Dots: %.3e %.3e" % (np.dot(ndg, ndy), np.dot(ndy, nhdy)),
                 H1 = H.copy()
                 H += Mat1-Mat2
                 Eig1 = np.linalg.eigh(H)[0]
                 Eig1.sort()
-                if np.min(Eig1) < 1e-4:
-                    print "Tiny eigenvalue, resetting BFGS"
+                if args.verbose:
+                    print "Eig-ratios: %.5e ... %.5e" % (np.min(Eig1)/np.min(Eig), np.max(Eig1)/np.max(Eig))
+                if np.min(Eig1) <= eps:
+                    print "Tiny eigenvalues, resetting BFGS"
                     H = IC.guess_hessian(coords)
-                if np.dot(ndg, ndy) < 5e-2 or np.dot(ndy, nhdy) < 5e-2:
-                    print "Small dots (may blow up Hessian), resetting BFGS"
-                    H = IC.guess_hessian(coords)
-                print "|y|: %.3e Dy: %.3e ... %.3e" % (np.linalg.norm(Y), np.min(Dy), np.max(Dy)),
-                print "|g|: %.3e Dg: %.3e ... %.3e" % (np.linalg.norm(G), np.min(Dg), np.max(Dg)),
-                print "Eig-ratios: %.5e ... %.5e" % (np.min(Eig1/Eig), np.max(Eig1/Eig))
-                
         # Then it's on to the next loop iteration!
     return X
 
@@ -551,10 +609,10 @@ def CheckInternalGrad(coords, molecule, IC):
     for i in range(len(q0)):
         dq = np.zeros_like(q0)
         dq[i] += 1e-4
-        x1 = IC.newCartesian(coords, dq)
+        x1 = IC.newCartesian(coords, dq, verbose=args.verbose)
         EPlus, _ = calc(x1)
         dq[i] -= 2e-4
-        x1 = IC.newCartesian(coords, dq)
+        x1 = IC.newCartesian(coords, dq, verbose=args.verbose)
         EMinus, _ = calc(x1)
         fdiff = (EPlus-EMinus)/2e-4
         print "%s : % .6e % .6e % .6e" % (IC.Internals[i], Gq[i], fdiff, Gq[i]-fdiff)
@@ -567,10 +625,10 @@ def CalcInternalHess(coords, molecule, IC):
     for i in range(len(q0)):
         dq = np.zeros_like(q0)
         dq[i] += 1e-4
-        x1 = IC.newCartesian(coords, dq)
+        x1 = IC.newCartesian(coords, dq, verbose=args.verbose)
         EPlus, _ = calc(x1)
         dq[i] -= 2e-4
-        x1 = IC.newCartesian(coords, dq)
+        x1 = IC.newCartesian(coords, dq, verbose=args.verbose)
         EMinus, _ = calc(x1)
         fdiff = (EPlus+EMinus-2*E)/1e-6
         print "%s : % .6e" % (IC.Internals[i], fdiff)
@@ -585,13 +643,15 @@ def main():
     else:
         IC = DelocalizedInternalCoordinates(M, connect=args.connect)
     if args.displace:
+        # if not args.redund:
+        #     IC.weight_vectors(coords)
         for i in range(len(IC.Internals)):
             x = []
-            for j in np.linspace(-1.0, 1.0, 21):
+            for j in np.linspace(-1.0, 1.0, 11):
                 if j != 0:
                     dq = np.zeros(len(IC.Internals))
                     dq[i] = j
-                    x1 = IC.newCartesian(coords, dq)
+                    x1 = IC.newCartesian(coords, dq, verbose=args.verbose)
                 else:
                     x1 = coords.copy()
                 displacement = np.sqrt(np.sum((((x1-coords)*0.529).reshape(-1,3))**2, axis=1))

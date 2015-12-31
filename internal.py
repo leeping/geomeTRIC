@@ -5,7 +5,7 @@ import numpy as np
 import networkx as nx
 import itertools
 from copy import deepcopy
-from forcebalance.nifty import click
+from forcebalance.nifty import click, invert_svd
 from forcebalance.molecule import Molecule, Elements, Radii
 from collections import OrderedDict, defaultdict
 from scipy import optimize
@@ -89,13 +89,14 @@ class CartesianZ(object):
         derivatives[self.a][2] = self.w
         return derivatives
 
-class MultiCartesianX(object):
-    def __init__(self, a, w=1.0):
+class TranslationX(object):
+    def __init__(self, a, w):
         self.a = a
         self.w = w
+        assert len(a) == len(w)
 
     def __repr__(self):
-        return "MultiCartesian-X %s : Weight %.3f" % (' '.join([str(i+1) for i in self.a]), self.w)
+        return "Translation-X %s : Weights %s" % (' '.join([str(i+1) for i in self.a]), ' '.join(['%.2e' % i for i in self.w]))
         
     def __eq__(self, other):
         if type(self) is not type(other): return False
@@ -107,22 +108,23 @@ class MultiCartesianX(object):
     def value(self, xyz):
         xyz = xyz.reshape(-1,3)
         a = np.array(self.a)
-        return np.sum(xyz[a,0])*self.w
+        return np.sum(xyz[a,0]*self.w)
         
     def derivative(self, xyz):
         xyz = xyz.reshape(-1,3)
         derivatives = np.zeros_like(xyz)
-        for i in self.a:
-            derivatives[i][0] = self.w
+        for i, a in enumerate(self.a):
+            derivatives[a][0] = self.w[i]
         return derivatives
 
-class MultiCartesianY(object):
-    def __init__(self, a, w=1.0):
+class TranslationY(object):
+    def __init__(self, a, w):
         self.a = a
         self.w = w
+        assert len(a) == len(w)
 
     def __repr__(self):
-        return "MultiCartesian-Y %s : Weight %.3f" % (' '.join([str(i+1) for i in self.a]), self.w)
+        return "Translation-Y %s : Weights %s" % (' '.join([str(i+1) for i in self.a]), ' '.join(['%.2e' % i for i in self.w]))
         
     def __eq__(self, other):
         if type(self) is not type(other): return False
@@ -134,22 +136,23 @@ class MultiCartesianY(object):
     def value(self, xyz):
         xyz = xyz.reshape(-1,3)
         a = np.array(self.a)
-        return np.sum(xyz[a,1])*self.w
+        return np.sum(xyz[a,1]*self.w)
         
     def derivative(self, xyz):
         xyz = xyz.reshape(-1,3)
         derivatives = np.zeros_like(xyz)
-        for i in self.a:
-            derivatives[i][1] = self.w
+        for i, a in enumerate(self.a):
+            derivatives[a][1] = self.w[i]
         return derivatives
 
-class MultiCartesianZ(object):
-    def __init__(self, a, w=1.0):
+class TranslationZ(object):
+    def __init__(self, a, w):
         self.a = a
         self.w = w
+        assert len(a) == len(w)
 
     def __repr__(self):
-        return "MultiCartesian-Z %s : Weight %.3f" % (' '.join([str(i+1) for i in self.a]), self.w)
+        return "Translation-Z %s : Weights %s" % (' '.join([str(i+1) for i in self.a]), ' '.join(['%.2e' % i for i in self.w]))
         
     def __eq__(self, other):
         if type(self) is not type(other): return False
@@ -161,14 +164,95 @@ class MultiCartesianZ(object):
     def value(self, xyz):
         xyz = xyz.reshape(-1,3)
         a = np.array(self.a)
-        return np.sum(xyz[a,2])*self.w
+        return np.sum(xyz[a,2]*self.w)
         
     def derivative(self, xyz):
         xyz = xyz.reshape(-1,3)
         derivatives = np.zeros_like(xyz)
-        for i in self.a:
-            derivatives[i][2] = self.w
+        for i, a in enumerate(self.a):
+            derivatives[a][2] = self.w[i]
         return derivatives
+
+# class MultiCartesianX(object):
+#     def __init__(self, a, w=1.0):
+#         self.a = a
+#         self.w = w
+# 
+#     def __repr__(self):
+#         return "MultiCartesian-X %s : Weight %.3f" % (' '.join([str(i+1) for i in self.a]), self.w)
+#         
+#     def __eq__(self, other):
+#         if type(self) is not type(other): return False
+#         return set(self.a) == set(other.a)
+# 
+#     def __ne__(self, other):
+#         return not self.__eq__(other)
+#         
+#     def value(self, xyz):
+#         xyz = xyz.reshape(-1,3)
+#         a = np.array(self.a)
+#         return np.sum(xyz[a,0])*self.w
+#         
+#     def derivative(self, xyz):
+#         xyz = xyz.reshape(-1,3)
+#         derivatives = np.zeros_like(xyz)
+#         for i in self.a:
+#             derivatives[i][0] = self.w
+#         return derivatives
+# 
+# class MultiCartesianY(object):
+#     def __init__(self, a, w=1.0):
+#         self.a = a
+#         self.w = w
+# 
+#     def __repr__(self):
+#         return "MultiCartesian-Y %s : Weight %.3f" % (' '.join([str(i+1) for i in self.a]), self.w)
+#         
+#     def __eq__(self, other):
+#         if type(self) is not type(other): return False
+#         return set(self.a) == set(other.a)
+# 
+#     def __ne__(self, other):
+#         return not self.__eq__(other)
+#         
+#     def value(self, xyz):
+#         xyz = xyz.reshape(-1,3)
+#         a = np.array(self.a)
+#         return np.sum(xyz[a,1])*self.w
+#         
+#     def derivative(self, xyz):
+#         xyz = xyz.reshape(-1,3)
+#         derivatives = np.zeros_like(xyz)
+#         for i in self.a:
+#             derivatives[i][1] = self.w
+#         return derivatives
+# 
+# class MultiCartesianZ(object):
+#     def __init__(self, a, w=1.0):
+#         self.a = a
+#         self.w = w
+# 
+#     def __repr__(self):
+#         return "MultiCartesian-Z %s : Weight %.3f" % (' '.join([str(i+1) for i in self.a]), self.w)
+#         
+#     def __eq__(self, other):
+#         if type(self) is not type(other): return False
+#         return set(self.a) == set(other.a)
+# 
+#     def __ne__(self, other):
+#         return not self.__eq__(other)
+#         
+#     def value(self, xyz):
+#         xyz = xyz.reshape(-1,3)
+#         a = np.array(self.a)
+#         return np.sum(xyz[a,2])*self.w
+#         
+#     def derivative(self, xyz):
+#         xyz = xyz.reshape(-1,3)
+#         derivatives = np.zeros_like(xyz)
+#         for i in self.a:
+#             derivatives[i][2] = self.w
+#         return derivatives
 
 class Rotator(object):
 
@@ -221,11 +305,10 @@ class Rotator(object):
             xsel = xyz[self.a, :]
             ysel = self.x0[self.a, :]
             deriv_raw = get_expmap_der(xsel, ysel)
+            # if len(self.a) > 3: 
+            #     print "Rotation derivative:", deriv_raw
             derivatives = np.zeros((xyz.shape[0], 3, 3), dtype=float)
-            # print deriv_raw.shape
-            # print derivatives.shape
             for i, a in enumerate(self.a):
-                # print i, a
                 derivatives[a, :, :] = deriv_raw[i, :, :]
             self.stored_derxyz = xyz.copy()
             self.stored_deriv = derivatives
@@ -251,11 +334,11 @@ class RotationA(object):
         return not self.__eq__(other)
         
     def value(self, xyz):
-        return self.Rotator.value(xyz)[0]
+        return self.Rotator.value(xyz)[0]*self.w
         
     def derivative(self, xyz):
         der_all = self.Rotator.derivative(xyz)
-        derivatives = der_all[:, :, 0]
+        derivatives = der_all[:, :, 0]*self.w
         return derivatives
 
 class RotationB(object):
@@ -278,11 +361,11 @@ class RotationB(object):
         return not self.__eq__(other)
         
     def value(self, xyz):
-        return self.Rotator.value(xyz)[1]
+        return self.Rotator.value(xyz)[1]*self.w
         
     def derivative(self, xyz):
         der_all = self.Rotator.derivative(xyz)
-        derivatives = der_all[:, :, 1]
+        derivatives = der_all[:, :, 1]*self.w
         return derivatives
 
 class RotationC(object):
@@ -305,11 +388,11 @@ class RotationC(object):
         return not self.__eq__(other)
         
     def value(self, xyz):
-        return self.Rotator.value(xyz)[2]
+        return self.Rotator.value(xyz)[2]*self.w
         
     def derivative(self, xyz):
         der_all = self.Rotator.derivative(xyz)
-        derivatives = der_all[:, :, 2]
+        derivatives = der_all[:, :, 2]*self.w
         return derivatives
 
 class Distance(object):
@@ -638,17 +721,25 @@ class InternalCoordinates(object):
         xyz = xyz.reshape(-1,3)
         # Perform singular value decomposition
         click()
-        G = self.GMatrix(xyz, u)
-        time_G = click()
-        U, S, VT = np.linalg.svd(G)
-        time_svd = click()
+        try:
+            G = self.GMatrix(xyz, u)
+            time_G = click()
+            U, S, VT = np.linalg.svd(G)
+            time_svd = click()
+        except:
+            print "\x1b[1;91m SVD fails, perturbing coordinates and trying again\x1b[0m"
+            xyz = xyz + 1e-2*np.random.random(xyz.shape)
+            G = self.GMatrix(xyz, u)
+            time_G = click()
+            U, S, VT = np.linalg.svd(G)
+            time_svd = click()
         # print "Build G: %.3f SVD: %.3f" % (time_G, time_svd),
         V = np.matrix(VT).T
         UT = np.matrix(U).T
         Sinv = np.zeros_like(S)
         LargeVals = 0
         for ival, value in enumerate(S):
-            # print "% .5e" % value
+            # print "%.5e % .5e" % (ival,value)
             if np.abs(value) > 1e-6:
                 LargeVals += 1
                 Sinv[ival] = 1/value
@@ -681,18 +772,26 @@ class InternalCoordinates(object):
                 PMDiff = self.calcDiff(x1,x2)
                 FiniteDifference[:,i,j] = PMDiff/(2*h)
         for i in range(Analytical.shape[0]):
-            print "IC %i/%i : %s" % (i, Analytical.shape[0], self.Internals[i])
+            print "IC %i/%i : %s" % (i, Analytical.shape[0], self.Internals[i]), 
+            lines = [""]
+            maxerr = 0.0
             for j in range(Analytical.shape[1]):
-                print "Atom %i" % (j+1)
+                lines.append("Atom %i" % (j+1))
                 for k in range(Analytical.shape[2]):
-                    print "xyz"[k],
+                    lines.append("xyz"[k])
                     error = Analytical[i,j,k] - FiniteDifference[i,j,k]
                     if np.abs(error) > 1e-5:
                         color = "\x1b[91m"
                     else:
                         color = "\x1b[92m"
-                    # if np.abs(error) > 1e-5:
-                    print "% .5e % .5e %s% .5e\x1b[0m" % (Analytical[i,j,k], FiniteDifference[i,j,k], color, Analytical[i,j,k] - FiniteDifference[i,j,k])
+                    lines.append("% .5e % .5e %s% .5e\x1b[0m" % (Analytical[i,j,k], FiniteDifference[i,j,k], color, Analytical[i,j,k] - FiniteDifference[i,j,k]))
+                    if maxerr < np.abs(error):
+                        maxerr = np.abs(error)
+            if maxerr > 1e-5:
+                print '\n'.join(lines)
+            else:
+                print "Max Error = %.5e" % maxerr
+                
         print "Finite-difference Finished"
 
     def calcGrad(self, xyz, gradx):
@@ -730,24 +829,25 @@ class InternalCoordinates(object):
         dQ1 = dQ.copy()
         # Iterate until convergence:
         microiter = 0
+        ndqs = []
         rmsds = []
         self.bork = False
         # Damping factor
         damp = 1.0
-        # trust = None
-        # trust0 = None
+        # Function to exit from loop
+        def finish(microiter, rmsdt, ndqt, xyzsave, xyz_iter1):
+            if ndqt > 1e-1:
+                if verbose: print "Failed to obtain coordinates after %i microiterations (rmsd = %.3e |dQ| = %.3e)" % (microiter, rmsdt, ndqt)
+                self.bork = True
+                self.writeCache(xyz, dQ, xyz_iter1)
+                return xyz_iter1.flatten()
+            elif ndqt > 1e-3:
+                if verbose: print "Approximate coordinates obtained after %i microiterations (rmsd = %.3e |dQ| = %.3e)" % (microiter, rmsdt, ndqt)
+            self.writeCache(xyz, dQ, xyzsave)
+            return xyzsave.flatten()
+        fail_counter = 0
         while True:
             microiter += 1
-            if microiter > 1 and rmsd > 1000:
-                self.bork = True
-                if verbose: print "Approximate coordinates obtained after %i microiterations (rmsd = %.3f)" % (microiter, rmsdt)
-                self.writeCache(xyz, dQ, xyzsave)
-                return xyzsave.flatten()
-            if microiter == 50:
-                self.bork = True
-                if verbose: print "Approximate coordinates obtained after %i microiterations (rmsd = %.3f)" % (microiter, rmsdt)
-                self.writeCache(xyz, dQ, xyzsave)
-                return xyzsave.flatten()
             Bmat = np.matrix(self.wilsonB(xyz1))
             Ginv = self.GInverse(xyz1, u)
             # Get new Cartesian coordinates
@@ -755,45 +855,43 @@ class InternalCoordinates(object):
                 dxyz = damp*u*Bmat.T*Ginv*(np.matrix(dQ1).T)
             else:
                 dxyz = damp*Bmat.T*Ginv*(np.matrix(dQ1).T)
-            ndxyz = np.linalg.norm(dxyz)
-            # if trust is not None:
-            #     if ndxyz > trust:
-            #         dxyz *= trust/ndxyz
-            #         ndxyz = np.linalg.norm(dxyz)
-            # else:
-            #     trust = ndxyz
-            #     trust0 = trust
             xyz2 = xyz1 + np.array(dxyz).flatten()
             if microiter == 1:
                 xyzsave = xyz2.copy()
-            rmsd = np.sqrt(np.mean((np.array(xyz2-xyz1).flatten())**2))
-            if len(rmsds) > 0:
-                if rmsd > rmsdt:
-                    if verbose: print "Iter: %i RMSD: %.3e Thre: % .3e Norm: %.3e Damp: %.3e (Bad)" % (microiter, rmsd, rmsdt, ndxyz, damp)
-                    # trust = ndxyz / 4
-                    damp /= 4
-                    xyz2 = xyz1.copy()
-                else:
-                    if verbose: print "Iter: %i RMSD: %.3e Thre: % .3e Norm: %.3e Damp: %.3e (Good)" % (microiter, rmsd, rmsdt, ndxyz, damp)
-                    # trust = min(trust0, 1.2*trust)
-                    # damp = min(damp*1.2, 1.0)
-                    rmsdt = rmsd
-                    xyzsave = xyz2.copy()
-            else:
-                if verbose: print "Iter: %i RMSD: %.3e Thre:    (none)  Norm: %.3e Damp: %.3e" % (microiter, rmsd, ndxyz, damp)
-                rmsdt = rmsd
-            rmsds.append(rmsd)
-            # Are we converged?
-            if rmsd < 1e-6:
-                if verbose: print "Cartesian coordinates obtained after %i microiterations" % microiter
-                break
+                xyz_iter1 = xyz2.copy()
             # Calculate the actual change in internal coordinates
             dQ_actual = self.calcDiff(xyz2, xyz1)
+            rmsd = np.sqrt(np.mean((np.array(xyz2-xyz1).flatten())**2))
+            ndq = np.linalg.norm(dQ1-dQ_actual)
+            if len(ndqs) > 0:
+                if ndq > ndqt:
+                    if verbose: print "Iter: %i Err-dQ (Best) = %.5e (%.5e) RMSD: %.5e Damp: %.5e (Bad)" % (microiter, ndq, ndqt, rmsd, damp)
+                    damp /= 2
+                    fail_counter += 1
+                    # xyz2 = xyz1.copy()
+                else:
+                    if verbose: print "Iter: %i Err-dQ (Best) = %.5e (%.5e) RMSD: %.5e Damp: %.5e (Good)" % (microiter, ndq, ndqt, rmsd, damp)
+                    fail_counter = 0
+                    damp = min(damp*1.2, 1.0)
+                    rmsdt = rmsd
+                    ndqt = ndq
+                    xyzsave = xyz2.copy()
+            else:
+                if verbose: print "Iter: %i Err-dQ = %.5e RMSD: %.5e Damp: %.5e" % (microiter, ndq, rmsd, damp)
+                rmsdt = rmsd
+                ndqt = ndq
+            ndqs.append(ndq)
+            rmsds.append(rmsd)
+            # Check convergence / fail criteria
+            if rmsd < 1e-6 or ndq < 1e-6:
+                return finish(microiter, rmsdt, ndqt, xyzsave, xyz_iter1)
+            if fail_counter >= 5:
+                return finish(microiter, rmsdt, ndqt, xyzsave, xyz_iter1)
+            if microiter == 50:
+                return finish(microiter, rmsdt, ndqt, xyzsave, xyz_iter1)
             # Figure out the further change needed
-            dQ1 -= dQ_actual
+            dQ1 = dQ1 - dQ_actual
             xyz1 = xyz2.copy()
-        self.writeCache(xyz, dQ, xyz2)
-        return xyz2.flatten()
     
 class RedundantInternalCoordinates(InternalCoordinates):
     def __repr__(self):
@@ -869,7 +967,7 @@ class RedundantInternalCoordinates(InternalCoordinates):
     def largeRots(self):
         for Internal in self.Internals:
             if type(Internal) in [RotationA, RotationB, RotationC]:
-                if Internal.Rotator.stored_norm > 2*np.pi/3:
+                if Internal.Rotator.stored_norm > 3*np.pi/4:
                     return True
         return False
 
@@ -916,33 +1014,33 @@ class RedundantInternalCoordinates(InternalCoordinates):
     def GInverse(self, xyz, u=None):
         return self.GInverse_SVD(xyz, u)
 
-    def addMultiCartesianX(self, i, w=1.0):
-        Cart = MultiCartesianX(i, w)
-        if Cart not in self.Internals:
-            self.Internals.append(Cart)
+    def addTranslationX(self, i, w):
+        Tran = TranslationX(i, w)
+        if Tran not in self.Internals:
+            self.Internals.append(Tran)
 
-    def addMultiCartesianY(self, i, w=1.0):
-        Cart = MultiCartesianY(i, w)
-        if Cart not in self.Internals:
-            self.Internals.append(Cart)
+    def addTranslationY(self, i, w):
+        Tran = TranslationY(i, w)
+        if Tran not in self.Internals:
+            self.Internals.append(Tran)
 
-    def addMultiCartesianZ(self, i, w=1.0):
-        Cart = MultiCartesianZ(i, w)
-        if Cart not in self.Internals:
-            self.Internals.append(Cart)
+    def addTranslationZ(self, i, w):
+        Tran = TranslationZ(i, w)
+        if Tran not in self.Internals:
+            self.Internals.append(Tran)
 
     def addRotationA(self, i, x0, w=1.0):
-        Rot = RotationA(i, x0, w)
+        Rot = RotationA(i, x0, self.Rotators, w)
         if Rot not in self.Internals:
             self.Internals.append(Rot)
 
     def addRotationB(self, i, x0, w=1.0):
-        Rot = RotationB(i, x0, w)
+        Rot = RotationB(i, x0, self.Rotators, w)
         if Rot not in self.Internals:
             self.Internals.append(Rot)
 
     def addRotationC(self, i, x0, w=1.0):
-        Rot = RotationC(i, x0, w)
+        Rot = RotationC(i, x0, self.Rotators, w)
         if Rot not in self.Internals:
             self.Internals.append(Rot)
 
@@ -984,22 +1082,22 @@ class RedundantInternalCoordinates(InternalCoordinates):
         if Oop not in self.Internals:
             self.Internals.append(Oop)
 
-    def delMultiCartesianX(self, i):
-        Cart = MultiCartesianX(i)
+    def delTranslationX(self, i):
+        Tran = TranslationX(i)
         for ii in range(len(self.Internals))[::-1]:
-            if Cart == self.Internals[ii]:
+            if Tran == self.Internals[ii]:
                 del self.Internals[ii]
 
-    def delMultiCartesianY(self, i):
-        Cart = MultiCartesianY(i)
+    def delTranslationY(self, i):
+        Tran = TranslationY(i)
         for ii in range(len(self.Internals))[::-1]:
-            if Cart == self.Internals[ii]:
+            if Tran == self.Internals[ii]:
                 del self.Internals[ii]
 
-    def delMultiCartesianZ(self, i):
-        Cart = MultiCartesianZ(i)
+    def delTranslationZ(self, i):
+        Tran = TranslationZ(i)
         for ii in range(len(self.Internals))[::-1]:
-            if Cart == self.Internals[ii]:
+            if Tran == self.Internals[ii]:
                 del self.Internals[ii]
 
     def delCartesianX(self, i):
@@ -1056,7 +1154,6 @@ class RedundantInternalCoordinates(InternalCoordinates):
         frags = [m.nodes() for m in molecule.molecules]
         # coordinates in Angstrom
         coords = molecule.xyzs[0].flatten()
-
         # Make a distance matrix mapping atom pairs to interatomic distances
         AtomIterator, dxij = molecule.distance_matrix()
         D = {}
@@ -1078,21 +1175,32 @@ class RedundantInternalCoordinates(InternalCoordinates):
                 if connect:
                     molecule.topology.add_edge(edge[0], edge[1])
                     noncov.append(edge)
+        ThrowCarts = False
         if not connect:
-            for i in frags:
-                if len(i) >= 3:
-                    self.addMultiCartesianX(i, w=1.0/len(i))
-                    self.addMultiCartesianY(i, w=1.0/len(i))
-                    self.addMultiCartesianZ(i, w=1.0/len(i))
-                    # Reference coordinates are given in Bohr.
-                    self.addRotationA(i, coords / 0.529, self.Rotators)
-                    self.addRotationB(i, coords / 0.529, self.Rotators)
-                    self.addRotationC(i, coords / 0.529, self.Rotators)
-                else:
-                    for j in i:
-                        self.addCartesianX(j, w=1.0/len(i))
-                        self.addCartesianY(j, w=1.0/len(i))
-                        self.addCartesianZ(j, w=1.0/len(i))
+            if ThrowCarts:
+                for i in range(molecule.na):
+                    self.addCartesianX(i, w=1.0)
+                    self.addCartesianY(i, w=1.0)
+                    self.addCartesianZ(i, w=1.0)
+            else:
+                for i in frags:
+                    if len(i) >= 3:
+                        self.addTranslationX(i, w=np.ones(len(i))/len(i))
+                        self.addTranslationY(i, w=np.ones(len(i))/len(i))
+                        self.addTranslationZ(i, w=np.ones(len(i))/len(i))
+                        # Reference coordinates are given in Bohr.
+                        sel = coords.reshape(-1,3)[i,:] / 0.529
+                        sel -= np.mean(sel, axis=0)
+                        rg = np.sqrt(np.mean(np.sum(sel**2, axis=1)))
+                        self.addRotationA(i, coords / 0.529, w=rg)
+                        self.addRotationB(i, coords / 0.529, w=rg)
+                        self.addRotationC(i, coords / 0.529, w=rg)
+                    else:
+                        for j in i:
+                            self.addCartesianX(j, w=1.0)
+                            self.addCartesianY(j, w=1.0)
+                            self.addCartesianZ(j, w=1.0)
+            
             # for i in range(molecule.na):
             #     self.addCartesianX(i, w=1)
             #     self.addCartesianY(i, w=1)
@@ -1301,7 +1409,7 @@ class RedundantInternalCoordinates(InternalCoordinates):
                 #     Hdiag.append(0.023)
             elif type(ic) in [CartesianX, CartesianY, CartesianZ]:
                 Hdiag.append(0.05)
-            elif type(ic) in [MultiCartesianX, MultiCartesianY, MultiCartesianZ]:
+            elif type(ic) in [TranslationX, TranslationY, TranslationZ]:
                 Hdiag.append(0.05)
             elif type(ic) in [RotationA, RotationB, RotationC]:
                 Hdiag.append(0.05)
@@ -1352,6 +1460,24 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         #     Idxs = np.argsort(L)[-Expect:]
         #     self.Vecs = Q[:, Idxs]
         #     self.Internals = ["DLC %i" % (i+1) for i in range(Expect)]
+        # self.weight_vectors(xyz)
+
+    def weight_vectors(self, xyz):
+        Bmat = np.matrix(self.wilsonB(xyz))
+        Ginv = self.GInverse(xyz, None)
+        eps = 1e-6
+        dxdq = np.zeros(len(self.Internals))
+        for i in range(len(self.Internals)):
+            dQ = np.zeros(len(self.Internals), dtype=float)
+            dQ[i] = eps
+            dxyz = Bmat.T*Ginv*(np.matrix(dQ).T)
+            rmsd = np.sqrt(np.mean(np.sum(np.array(dxyz).reshape(-1,3)**2, axis=1)))
+            # rmsd = dxyz**2
+            dxdq[i] = rmsd/eps
+        dxdq /= np.max(dxdq)
+        for i in range(len(self.Internals)):
+            self.Vecs[:, i] *= dxdq[i]
+        #print dxdq
 
     def __eq__(self, other):
         return self.Prims == other.Prims
@@ -1387,7 +1513,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         return np.array(Answer1)
 
     def GInverse(self, xyz, u=None):
-        return self.GInverse_EIG(xyz, u)
+        return self.GInverse_SVD(xyz, u)
 
     def repr_diff(self, other):
         return self.Prims.repr_diff(other.Prims)
@@ -1395,6 +1521,9 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
     def guess_hessian(self, coords):
         Hprim = np.matrix(self.Prims.guess_hessian(coords))
         return np.array(self.Vecs.T*Hprim*self.Vecs)
+        # Vi = np.matrix(np.linalg.pinv(self.Vecs))
+        # cbh = np.array(Vi*Hprim*Vi.T)
+        # return cbh
 
     def resetRotations(self, xyz):
         self.Prims.resetRotations(xyz)

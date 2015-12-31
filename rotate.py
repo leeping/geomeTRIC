@@ -423,7 +423,7 @@ def get_q_der(x, y):
     dF = get_F_der(x, y)
     mat = np.eye(4)*l - F
     # pinv = np.matrix(np.linalg.pinv(np.eye(4)*l - F))
-    pinv = invert_svd(np.eye(4)*l - F)
+    pinv = invert_svd(np.eye(4)*l - F, thresh=1e-6)
     # print l
     # print pinv
     dq = np.zeros((x.shape[0], 3, 4), dtype=float)
