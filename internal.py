@@ -967,7 +967,7 @@ class RedundantInternalCoordinates(InternalCoordinates):
     def largeRots(self):
         for Internal in self.Internals:
             if type(Internal) in [RotationA, RotationB, RotationC]:
-                if Internal.Rotator.stored_norm > 3*np.pi/4:
+                if Internal.Rotator.stored_norm > 0.9*np.pi:
                     return True
         return False
 
