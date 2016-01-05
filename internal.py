@@ -893,7 +893,209 @@ class InternalCoordinates(object):
             dQ1 = dQ1 - dQ_actual
             xyz1 = xyz2.copy()
     
-class RedundantInternalCoordinates(InternalCoordinates):
+class PrimitiveInternalCoordinates(InternalCoordinates):
+    def __init__(self, molecule, connect=False):
+        self.connect = connect
+        self.Internals = []
+        self.cPrims = []
+        self.cVals = []
+        self.Rotators = OrderedDict()
+        self.elem = molecule.elem
+        if len(molecule) != 1:
+            raise RuntimeError('Only one frame allowed in molecule object')
+        # Determine the atomic connectivity
+        molecule.build_topology()
+        frags = [m.nodes() for m in molecule.molecules]
+        # coordinates in Angstrom
+        coords = molecule.xyzs[0].flatten()
+        # Make a distance matrix mapping atom pairs to interatomic distances
+        AtomIterator, dxij = molecule.distance_matrix()
+        D = {}
+        for i, j in zip(AtomIterator, dxij[0]):
+            assert i[0] < i[1]
+            D[tuple(i)] = j
+        dgraph = nx.Graph()
+        for i in range(molecule.na):
+            dgraph.add_node(i)
+        for k, v in D.items():
+            dgraph.add_edge(k[0], k[1], weight=v)
+        mst = sorted(list(nx.minimum_spanning_edges(dgraph, data=False)))
+        # Build a list of noncovalent distances
+        noncov = []
+        # Connect all non-bonded fragments together
+        for edge in mst:
+            if edge not in list(molecule.topology.edges()):
+                # print "Adding %s from minimum spanning tree" % str(edge)
+                if connect:
+                    molecule.topology.add_edge(edge[0], edge[1])
+                    noncov.append(edge)
+        ThrowCarts = False
+        if not connect:
+            if ThrowCarts:
+                for i in range(molecule.na):
+                    self.add(CartesianX(i, w=1.0))
+                    self.add(CartesianY(i, w=1.0))
+                    self.add(CartesianZ(i, w=1.0))
+            else:
+                for i in frags:
+                    if len(i) >= 3:
+                        self.add(TranslationX(i, w=np.ones(len(i))/len(i)))
+                        self.add(TranslationY(i, w=np.ones(len(i))/len(i)))
+                        self.add(TranslationZ(i, w=np.ones(len(i))/len(i)))
+                        # Reference coordinates are given in Bohr.
+                        sel = coords.reshape(-1,3)[i,:] / 0.529
+                        sel -= np.mean(sel, axis=0)
+                        rg = np.sqrt(np.mean(np.sum(sel**2, axis=1)))
+                        self.add(RotationA(i, coords / 0.529, self.Rotators, w=rg))
+                        self.add(RotationB(i, coords / 0.529, self.Rotators, w=rg))
+                        self.add(RotationC(i, coords / 0.529, self.Rotators, w=rg))
+                    else:
+                        for j in i:
+                            self.add(CartesianX(j, w=1.0))
+                            self.add(CartesianY(j, w=1.0))
+                            self.add(CartesianZ(j, w=1.0))
+
+        # # Build a list of noncovalent distances
+        # noncov = []
+        # # Connect all non-bonded fragments together
+        # while True:
+        #     # List of disconnected fragments
+        #     subg = list(nx.connected_component_subgraphs(molecule.topology))
+        #     # Break out of loop if all fragments are connected
+        #     if len(subg) == 1: break
+        #     # Find the smallest interatomic distance between any pair of fragments
+        #     minD = 1e10
+        #     for i in range(len(subg)):
+        #         for j in range(i):
+        #             for a in subg[i].nodes():
+        #                 for b in subg[j].nodes():
+        #                     if D[(min(a,b), max(a,b))] < minD:
+        #                         minD = D[(min(a,b), max(a,b))]
+        #     # Next, create one connection between pairs of fragments that have a
+        #     # close-contact distance of at most 1.2 times the minimum found above
+        #     for i in range(len(subg)):
+        #         for j in range(i):
+        #             tminD = 1e10
+        #             conn = False
+        #             conn_a = None
+        #             conn_b = None
+        #             for a in subg[i].nodes():
+        #                 for b in subg[j].nodes():
+        #                     if D[(min(a,b), max(a,b))] < tminD:
+        #                         tminD = D[(min(a,b), max(a,b))]
+        #                         conn_a = min(a,b)
+        #                         conn_b = max(a,b)
+        #                     if D[(min(a,b), max(a,b))] <= 1.3*minD:
+        #                         conn = True
+        #             if conn:
+        #                 molecule.topology.add_edge(conn_a, conn_b)
+        #                 noncov.append((conn_a, conn_b))
+
+        # Add an internal coordinate for all interatomic distances
+        for (a, b) in molecule.topology.edges():
+            self.add(Distance(a, b))
+
+        # Add an internal coordinate for all angles
+        LinThre = 0.99619469809174555
+        # LinThre = 0.999
+        AngDict = defaultdict(list)
+        for b in molecule.topology.nodes():
+            for a in molecule.topology.neighbors(b):
+                for c in molecule.topology.neighbors(b):
+                    if a < c:
+                        Ang = Angle(a, b, c)
+                        nnc = (min(a, b), max(a, b)) in noncov
+                        nnc += (min(b, c), max(b, c)) in noncov
+                        # if nnc >= 2: continue
+                        if np.abs(np.cos(Ang.value(coords))) < LinThre:
+                            self.add(Angle(a, b, c))
+                            AngDict[b].append(Ang)
+                        elif self.connect:
+                            # print Ang, "is linear: replacing with Cartesians"
+                            # Almost linear bends (greater than 175 or less than 5) are dropped. 
+                            # The dropped angle is replaced by the two Cartesians of the central 
+                            # atom that are most perpendicular to the line between the other two 
+                            # atoms forming the bend (as measured by the corresponding scalar 
+                            # products with the Cartesian axes).
+                            # if len(molecule.topology.neighbors(b)) == 2:
+                            # Unit vector connecting atoms a and c
+                            nac = molecule.xyzs[0][c] - molecule.xyzs[0][a]
+                            nac /= np.linalg.norm(nac)
+                            # Dot products of this vector with the Cartesian axes
+                            dots = [np.dot(ei, nac) for ei in np.eye(3)]
+                            # Functions for adding Cartesian coordinate
+                            carts = [CartesianX, CartesianY, CartesianZ]
+                            # Add two of the most perpendicular Cartesian coordinates
+                            for i in np.argsort(dots)[:2]:
+                                self.add(carts[i](b))
+
+        for b in molecule.topology.nodes():
+            for a in molecule.topology.neighbors(b):
+                for c in molecule.topology.neighbors(b):
+                    for d in molecule.topology.neighbors(b):
+                        if a < c < d:
+                            nnc = (min(a, b), max(a, b)) in noncov
+                            nnc += (min(b, c), max(b, c)) in noncov
+                            nnc += (min(b, d), max(b, d)) in noncov
+                            # if nnc >= 1: continue
+                            for i, j, k in list(itertools.permutations([a, c, d], 3)):
+                                Ang1 = Angle(b,i,j)
+                                Ang2 = Angle(i,j,k)
+                                if np.abs(np.cos(Ang1.value(coords))) > LinThre: continue
+                                if np.abs(np.cos(Ang2.value(coords))) > LinThre: continue
+                                if np.abs(np.dot(Ang1.normal_vector(coords), Ang2.normal_vector(coords))) > 0.95:
+                                    self.delete(Angle(i, b, j))
+                                    self.add(OutOfPlane(b, i, j, k))
+                                    break
+                                
+        # Lines-of-atoms code, commented out for now
+        # atom_lines = [list(i) for i in molecule.topology.edges()]
+        # while True:
+        #     atom_lines0 = deepcopy(atom_lines)
+        #     for aline in atom_lines:
+        #         # Imagine a line of atoms going like ab-ac-ax-ay.
+        #         # Our job is to extend the line until there are no more
+        #         ab = aline[0]
+        #         ac = aline[1]
+        #         ax = aline[-2]
+        #         ay = aline[-1]
+        #         for aa in molecule.topology.neighbors(ab):
+        #             if aa not in aline:
+        #                 ang = Angle(aa, ab, ac)
+        #                 if np.abs(np.cos(ang.value(coords))) > LinThre:
+        #                     # print "Prepending", aa, "to", aline
+        #                     aline.insert(0, aa)
+        #         for az in molecule.topology.neighbors(ay):
+        #             if az not in aline:
+        #                 ang = Angle(ax, ay, az)
+        #                 if np.abs(np.cos(ang.value(coords))) > LinThre:
+        #                     # print "Appending", az, "to", aline
+        #                     aline.append(az)
+        #     if atom_lines == atom_lines0: break
+        # atom_lines_uniq = []
+        # for i in atom_lines:
+        #     if tuple(i) not in set(atom_lines_uniq):
+        #         atom_lines_uniq.append(tuple(i))
+        # print "Lines of atoms:", atom_lines_uniq
+
+        for (b, c) in molecule.topology.edges():
+        # for aline in atom_lines_uniq:
+        #     b = aline[0]
+        #     c = aline[-1]
+            for a in molecule.topology.neighbors(b):
+                for d in molecule.topology.neighbors(c):
+                    # if a not in aline and d not in aline and a != d:
+                    if a != c and b != d and a != d:
+                        nnc = (min(a, b), max(a, b)) in noncov
+                        nnc += (min(b, c), max(b, c)) in noncov
+                        nnc += (min(c, d), max(c, d)) in noncov
+                        # if nnc >= 2: continue
+                        Ang1 = Angle(a,b,c)
+                        Ang2 = Angle(b,c,d)
+                        if np.abs(np.cos(Ang1.value(coords))) > LinThre: continue
+                        if np.abs(np.cos(Ang2.value(coords))) > LinThre: continue
+                        self.add(Dihedral(a, b, c, d))
+
     def __repr__(self):
         lines = ["Internal coordinate system (atoms numbered from 1):"]
         typedict = OrderedDict()
@@ -920,6 +1122,9 @@ class RedundantInternalCoordinates(InternalCoordinates):
                 answer = False
         return answer
 
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
     def update(self, other):
         Changed = False
         for i in self.Internals:
@@ -940,9 +1145,6 @@ class RedundantInternalCoordinates(InternalCoordinates):
                 self.Internals.append(i)
                 Changed = True
         return Changed
-
-    def __ne__(self, other):
-        return not self.__eq__(other)
 
     def repr_diff(self, other):
         alines = ["-- Added: --"]
@@ -1014,339 +1216,73 @@ class RedundantInternalCoordinates(InternalCoordinates):
     def GInverse(self, xyz, u=None):
         return self.GInverse_SVD(xyz, u)
 
-    def addTranslationX(self, i, w):
-        Tran = TranslationX(i, w)
-        if Tran not in self.Internals:
-            self.Internals.append(Tran)
+    def add(self, dof):
+        if dof not in self.Internals:
+            self.Internals.append(dof)
 
-    def addTranslationY(self, i, w):
-        Tran = TranslationY(i, w)
-        if Tran not in self.Internals:
-            self.Internals.append(Tran)
+    def delete(self, dof):
+        for ii in range(len(self.Internals))[::-1]:
+            if dof == self.Internals[ii]:
+                del self.Internals[ii]
 
-    def addTranslationZ(self, i, w):
-        Tran = TranslationZ(i, w)
-        if Tran not in self.Internals:
-            self.Internals.append(Tran)
+    def addConstraint(self, cPrim, cVal):
+        if cPrim in self.cPrims:
+            print "Updating constraint value to %.4e" % (cVal)
+            iPrim = self.cPrims.index(cPrim)
+            self.cVals[iPrim] = cVal
+        if cPrim not in self.Internals:
+            self.Internals.append(cPrim)
+        self.cPrims.append(cPrim)
+        self.cVals.append(cVal)
 
-    def addRotationA(self, i, x0, w=1.0):
-        Rot = RotationA(i, x0, self.Rotators, w)
-        if Rot not in self.Internals:
-            self.Internals.append(Rot)
+    def haveConstraints(self):
+        return len(self.cPrims) > 0
 
-    def addRotationB(self, i, x0, w=1.0):
-        Rot = RotationB(i, x0, self.Rotators, w)
-        if Rot not in self.Internals:
-            self.Internals.append(Rot)
+    def augmentGH(self, xyz, G, H):
+        # Number of internals (elements of G)
+        ni = len(G)
+        # Number of constraints
+        nc = len(self.cPrims)
+        # Total dimension
+        nt = ni+nc
+        # Lower block of the augmented Hessian
+        cT = np.zeros((nc, ni), dtype=float)
+        c0 = np.zeros(nc, dtype=float)
+        for ic, c in enumerate(self.cPrims):
+            # Look up the index of the primitive that is being constrained
+            iPrim = self.Internals.index(c)
+            # The constraint indexed by iC is simply the primitive indexed by iPrim
+            cT[ic, iPrim] = 1.0
+            # Calculate the further change needed in this constrained variable
+            c0[ic] = self.cVals[ic] - c.value(xyz)
+        # Construct augmented Hessian
+        HC = np.zeros((nt, nt), dtype=float)
+        HC[0:ni, 0:ni] = H[:,:]
+        HC[ni:nt, 0:ni] = cT[:,:]
+        HC[0:ni, ni:nt] = cT.T[:,:]
+        # Construct augmented gradient
+        GC = np.zeros(nt, dtype=float)
+        GC[0:ni] = G[:]
+        GC[ni:nt] = -c0[:]
+        return HC, GC
 
-    def addRotationC(self, i, x0, w=1.0):
-        Rot = RotationC(i, x0, self.Rotators, w)
-        if Rot not in self.Internals:
-            self.Internals.append(Rot)
-
-    def addCartesianX(self, i, w=1.0):
-        Cart = CartesianX(i, w)
-        if Cart not in self.Internals:
-            self.Internals.append(Cart)
-
-    def addCartesianY(self, i, w=1.0):
-        Cart = CartesianY(i, w)
-        if Cart not in self.Internals:
-            self.Internals.append(Cart)
-
-    def addCartesianZ(self, i, w=1.0):
-        Cart = CartesianZ(i, w)
-        if Cart not in self.Internals:
-            self.Internals.append(Cart)
+    def calcGradProj(self, xyz, gradx):
+        if len(self.cPrims) == 0:
+            return gradx
+        q0 = self.calculate(xyz)
+        Ginv = self.GInverse(xyz)
+        Bmat = self.wilsonB(xyz)
+        # Internal coordinate gradient
+        Gq = np.matrix(Ginv)*np.matrix(Bmat)*np.matrix(gradx).T
+        Gqc = np.array(Gq).flatten()
+        for ic, c in enumerate(self.cPrims):
+            # Look up the index of the primitive that is being constrained
+            iPrim = self.Internals.index(c)
+            # Zero out that component of the gradient
+            Gq[iPrim] = 0.0
+        Gxc = np.array(np.matrix(Bmat.T)*np.matrix(Gqc).T).flatten()
+        return Gxc
     
-    def addDistance(self, i, j):
-        # Ideally these three functions could somehow be generalized into one,
-        # because I think we could develop better internal coordinates with
-        # solid geometry
-        Dist = Distance(i,j)
-        if Dist not in self.Internals:
-            self.Internals.append(Dist)
-            
-    def addAngle(self, i, j, k):
-        Ang = Angle(i,j,k)
-        if Ang not in self.Internals:
-            self.Internals.append(Ang)
-
-    def addDihedral(self, i, j, k, l):
-        Dih = Dihedral(i,j,k,l)
-        if Dih not in self.Internals:
-            self.Internals.append(Dih)
-
-    def addOutOfPlane(self, i, j, k, l):
-        Oop = OutOfPlane(i,j,k,l)
-        if Oop not in self.Internals:
-            self.Internals.append(Oop)
-
-    def delTranslationX(self, i):
-        Tran = TranslationX(i)
-        for ii in range(len(self.Internals))[::-1]:
-            if Tran == self.Internals[ii]:
-                del self.Internals[ii]
-
-    def delTranslationY(self, i):
-        Tran = TranslationY(i)
-        for ii in range(len(self.Internals))[::-1]:
-            if Tran == self.Internals[ii]:
-                del self.Internals[ii]
-
-    def delTranslationZ(self, i):
-        Tran = TranslationZ(i)
-        for ii in range(len(self.Internals))[::-1]:
-            if Tran == self.Internals[ii]:
-                del self.Internals[ii]
-
-    def delCartesianX(self, i):
-        Cart = CartesianX(i)
-        for ii in range(len(self.Internals))[::-1]:
-            if Cart == self.Internals[ii]:
-                del self.Internals[ii]
-
-    def delCartesianY(self, i):
-        Cart = CartesianY(i)
-        for ii in range(len(self.Internals))[::-1]:
-            if Cart == self.Internals[ii]:
-                del self.Internals[ii]
-
-    def delCartesianZ(self, i):
-        Cart = CartesianZ(i)
-        for ii in range(len(self.Internals))[::-1]:
-            if Cart == self.Internals[ii]:
-                del self.Internals[ii]
-            
-    def delDistance(self, i, j):
-        Dist = Distance(i, j)
-        for ii in range(len(self.Internals))[::-1]:
-            if Dist == self.Internals[ii]:
-                del self.Internals[ii]
-
-    def delAngle(self, i, j, k):
-        Ang = Angle(i, j, k)
-        for ii in range(len(self.Internals))[::-1]:
-            if Ang == self.Internals[ii]:
-                del self.Internals[ii]
-
-    def delDihedral(self, i, j, k, l):
-        Dih = Dihedral(i, j, k, l)
-        for ii in range(len(self.Internals))[::-1]:
-            if Dih == self.Internals[ii]:
-                del self.Internals[ii]
-
-    def delOutOfPlane(self, i, j, k, l):
-        Oop = OutOfPlane(i, j, k, l)
-        for ii in range(len(self.Internals))[::-1]:
-            if Oop == self.Internals[ii]:
-                del self.Internals[ii]
-                
-    def __init__(self, molecule, connect=False):
-        self.connect = connect
-        self.Internals = []
-        self.Rotators = OrderedDict()
-        self.elem = molecule.elem
-        if len(molecule) != 1:
-            raise RuntimeError('Only one frame allowed in molecule object')
-        # Determine the atomic connectivity
-        molecule.build_topology()
-        frags = [m.nodes() for m in molecule.molecules]
-        # coordinates in Angstrom
-        coords = molecule.xyzs[0].flatten()
-        # Make a distance matrix mapping atom pairs to interatomic distances
-        AtomIterator, dxij = molecule.distance_matrix()
-        D = {}
-        for i, j in zip(AtomIterator, dxij[0]):
-            assert i[0] < i[1]
-            D[tuple(i)] = j
-        dgraph = nx.Graph()
-        for i in range(molecule.na):
-            dgraph.add_node(i)
-        for k, v in D.items():
-            dgraph.add_edge(k[0], k[1], weight=v)
-        mst = sorted(list(nx.minimum_spanning_edges(dgraph, data=False)))
-        # Build a list of noncovalent distances
-        noncov = []
-        # Connect all non-bonded fragments together
-        for edge in mst:
-            if edge not in list(molecule.topology.edges()):
-                # print "Adding %s from minimum spanning tree" % str(edge)
-                if connect:
-                    molecule.topology.add_edge(edge[0], edge[1])
-                    noncov.append(edge)
-        ThrowCarts = False
-        if not connect:
-            if ThrowCarts:
-                for i in range(molecule.na):
-                    self.addCartesianX(i, w=1.0)
-                    self.addCartesianY(i, w=1.0)
-                    self.addCartesianZ(i, w=1.0)
-            else:
-                for i in frags:
-                    if len(i) >= 3:
-                        self.addTranslationX(i, w=np.ones(len(i))/len(i))
-                        self.addTranslationY(i, w=np.ones(len(i))/len(i))
-                        self.addTranslationZ(i, w=np.ones(len(i))/len(i))
-                        # Reference coordinates are given in Bohr.
-                        sel = coords.reshape(-1,3)[i,:] / 0.529
-                        sel -= np.mean(sel, axis=0)
-                        rg = np.sqrt(np.mean(np.sum(sel**2, axis=1)))
-                        self.addRotationA(i, coords / 0.529, w=rg)
-                        self.addRotationB(i, coords / 0.529, w=rg)
-                        self.addRotationC(i, coords / 0.529, w=rg)
-                    else:
-                        for j in i:
-                            self.addCartesianX(j, w=1.0)
-                            self.addCartesianY(j, w=1.0)
-                            self.addCartesianZ(j, w=1.0)
-            
-            # for i in range(molecule.na):
-            #     self.addCartesianX(i, w=1)
-            #     self.addCartesianY(i, w=1)
-            #     self.addCartesianZ(i, w=1)
-
-        # # Build a list of noncovalent distances
-        # noncov = []
-        # # Connect all non-bonded fragments together
-        # while True:
-        #     # List of disconnected fragments
-        #     subg = list(nx.connected_component_subgraphs(molecule.topology))
-        #     # Break out of loop if all fragments are connected
-        #     if len(subg) == 1: break
-        #     # Find the smallest interatomic distance between any pair of fragments
-        #     minD = 1e10
-        #     for i in range(len(subg)):
-        #         for j in range(i):
-        #             for a in subg[i].nodes():
-        #                 for b in subg[j].nodes():
-        #                     if D[(min(a,b), max(a,b))] < minD:
-        #                         minD = D[(min(a,b), max(a,b))]
-        #     # Next, create one connection between pairs of fragments that have a
-        #     # close-contact distance of at most 1.2 times the minimum found above
-        #     for i in range(len(subg)):
-        #         for j in range(i):
-        #             tminD = 1e10
-        #             conn = False
-        #             conn_a = None
-        #             conn_b = None
-        #             for a in subg[i].nodes():
-        #                 for b in subg[j].nodes():
-        #                     if D[(min(a,b), max(a,b))] < tminD:
-        #                         tminD = D[(min(a,b), max(a,b))]
-        #                         conn_a = min(a,b)
-        #                         conn_b = max(a,b)
-        #                     if D[(min(a,b), max(a,b))] <= 1.3*minD:
-        #                         conn = True
-        #             if conn:
-        #                 molecule.topology.add_edge(conn_a, conn_b)
-        #                 noncov.append((conn_a, conn_b))
-
-        # Add an internal coordinate for all interatomic distances
-        for (a, b) in molecule.topology.edges():
-            self.addDistance(a, b)
-
-        # Add an internal coordinate for all angles
-        LinThre = 0.99619469809174555
-        # LinThre = 0.999
-        AngDict = defaultdict(list)
-        for b in molecule.topology.nodes():
-            for a in molecule.topology.neighbors(b):
-                for c in molecule.topology.neighbors(b):
-                    if a < c:
-                        Ang = Angle(a, b, c)
-                        nnc = (min(a, b), max(a, b)) in noncov
-                        nnc += (min(b, c), max(b, c)) in noncov
-                        # if nnc >= 2: continue
-                        if np.abs(np.cos(Ang.value(coords))) < LinThre:
-                            self.addAngle(a, b, c)
-                            AngDict[b].append(Ang)
-                        elif self.connect:
-                            # print Ang, "is linear: replacing with Cartesians"
-                            # Almost linear bends (greater than 175 or less than 5) are dropped. 
-                            # The dropped angle is replaced by the two Cartesians of the central 
-                            # atom that are most perpendicular to the line between the other two 
-                            # atoms forming the bend (as measured by the corresponding scalar 
-                            # products with the Cartesian axes).
-                            # if len(molecule.topology.neighbors(b)) == 2:
-                            # Unit vector connecting atoms a and c
-                            nac = molecule.xyzs[0][c] - molecule.xyzs[0][a]
-                            nac /= np.linalg.norm(nac)
-                            # Dot products of this vector with the Cartesian axes
-                            dots = [np.dot(ei, nac) for ei in np.eye(3)]
-                            # Functions for adding Cartesian coordinate
-                            carts = [self.addCartesianX, self.addCartesianY, self.addCartesianZ]
-                            # Add two of the most perpendicular Cartesian coordinates
-                            for i in np.argsort(dots)[:2]:
-                                carts[i](b)
-
-        for b in molecule.topology.nodes():
-            for a in molecule.topology.neighbors(b):
-                for c in molecule.topology.neighbors(b):
-                    for d in molecule.topology.neighbors(b):
-                        if a < c < d:
-                            nnc = (min(a, b), max(a, b)) in noncov
-                            nnc += (min(b, c), max(b, c)) in noncov
-                            nnc += (min(b, d), max(b, d)) in noncov
-                            # if nnc >= 1: continue
-                            for i, j, k in list(itertools.permutations([a, c, d], 3)):
-                                Ang1 = Angle(b,i,j)
-                                Ang2 = Angle(i,j,k)
-                                if np.abs(np.cos(Ang1.value(coords))) > LinThre: continue
-                                if np.abs(np.cos(Ang2.value(coords))) > LinThre: continue
-                                if np.abs(np.dot(Ang1.normal_vector(coords), Ang2.normal_vector(coords))) > 0.95:
-                                    self.delAngle(i, b, j)
-                                    self.addOutOfPlane(b, i, j, k)
-                                    break
-                                
-        # Lines-of-atoms code, commented out for now
-        # atom_lines = [list(i) for i in molecule.topology.edges()]
-        # while True:
-        #     atom_lines0 = deepcopy(atom_lines)
-        #     for aline in atom_lines:
-        #         # Imagine a line of atoms going like ab-ac-ax-ay.
-        #         # Our job is to extend the line until there are no more
-        #         ab = aline[0]
-        #         ac = aline[1]
-        #         ax = aline[-2]
-        #         ay = aline[-1]
-        #         for aa in molecule.topology.neighbors(ab):
-        #             if aa not in aline:
-        #                 ang = Angle(aa, ab, ac)
-        #                 if np.abs(np.cos(ang.value(coords))) > LinThre:
-        #                     # print "Prepending", aa, "to", aline
-        #                     aline.insert(0, aa)
-        #         for az in molecule.topology.neighbors(ay):
-        #             if az not in aline:
-        #                 ang = Angle(ax, ay, az)
-        #                 if np.abs(np.cos(ang.value(coords))) > LinThre:
-        #                     # print "Appending", az, "to", aline
-        #                     aline.append(az)
-        #     if atom_lines == atom_lines0: break
-        # atom_lines_uniq = []
-        # for i in atom_lines:
-        #     if tuple(i) not in set(atom_lines_uniq):
-        #         atom_lines_uniq.append(tuple(i))
-        # print "Lines of atoms:", atom_lines_uniq
-
-        for (b, c) in molecule.topology.edges():
-        # for aline in atom_lines_uniq:
-        #     b = aline[0]
-        #     c = aline[-1]
-            for a in molecule.topology.neighbors(b):
-                for d in molecule.topology.neighbors(c):
-                    # if a not in aline and d not in aline and a != d:
-                    if a != c and b != d and a != d:
-                        nnc = (min(a, b), max(a, b)) in noncov
-                        nnc += (min(b, c), max(b, c)) in noncov
-                        nnc += (min(c, d), max(c, d)) in noncov
-                        # if nnc >= 2: continue
-                        Ang1 = Angle(a,b,c)
-                        Ang2 = Angle(b,c,d)
-                        if np.abs(np.cos(Ang1.value(coords))) > LinThre: continue
-                        if np.abs(np.cos(Ang2.value(coords))) > LinThre: continue
-                        self.addDihedral(a, b, c, d)
-
     def guess_hessian(self, coords):
         xyzs = coords.reshape(-1,3)*0.529
         Hdiag = []
@@ -1418,8 +1354,8 @@ class RedundantInternalCoordinates(InternalCoordinates):
         return np.matrix(np.diag(Hdiag))
 
 class DelocalizedInternalCoordinates(InternalCoordinates):
-    def __init__(self, molecule, build=True, connect=False):
-        self.Prims = RedundantInternalCoordinates(molecule, connect)
+    def __init__(self, molecule, build=False, connect=False):
+        self.Prims = PrimitiveInternalCoordinates(molecule, connect)
         self.connect = connect
         xyz = molecule.xyzs[0].flatten() / 0.529
         self.na = molecule.na
@@ -1431,6 +1367,75 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
             
     def update(self, other):
         return self.Prims.update(other.Prims)
+
+    def addConstraint(self, cPrim, cVal):
+        """
+        Add a constrained degree of freedom.
+        """
+        self.Prims.addConstraint(cPrim, cVal)
+
+    def haveConstraints(self):
+        return len(self.Prims.cPrims) > 0
+
+    def augmentGH(self, xyz, G, H):
+        # Number of internals (elements of G)
+        ni = len(G)
+        # Number of constraints
+        nc = len(self.Prims.cPrims)
+        # Total dimension
+        nt = ni+nc
+        # Lower block of the augmented Hessian
+        cT = np.zeros((nc, ni), dtype=float)
+        c0 = np.zeros(nc, dtype=float)
+        for ic, c in enumerate(self.Prims.cPrims):
+            # Look up the index of the primitive that is being constrained
+            iPrim = self.Prims.Internals.index(c)
+            # Get the corresponding linear combination coefficients from the
+            # DLC that allows us to calculate the primitive
+            cT[ic, :] = np.array(self.Vecs[iPrim,:]).flatten()
+            # Calculate the further change needed in this constrained variable
+            c0[ic] = self.Prims.cVals[ic] - c.value(xyz)
+        # Construct augmented Hessian
+        HC = np.zeros((nt, nt), dtype=float)
+        HC[0:ni, 0:ni] = H[:,:]
+        HC[ni:nt, 0:ni] = cT[:,:]
+        HC[0:ni, ni:nt] = cT.T[:,:]
+        # Construct augmented gradient
+        GC = np.zeros(nt, dtype=float)
+        GC[0:ni] = G[:]
+        GC[ni:nt] = -c0[:]
+        return HC, GC
+
+    def calcGradProj(self, xyz, gradx):
+        if len(self.Prims.cPrims) == 0:
+            return gradx
+        q0 = self.calculate(xyz)
+        Ginv = self.GInverse(xyz)
+        Bmat = self.wilsonB(xyz)
+        # Internal coordinate gradient
+        Gq = np.matrix(Ginv)*np.matrix(Bmat)*np.matrix(gradx).T
+        # Schmidt orthogonalization procedure;
+        # build a list of mutually orthogonal directions
+        # representing the degrees of freedom that we constrained.
+        U = []
+        for ic, c in enumerate(self.Prims.cPrims):
+            # Look up the index of the primitive that is being constrained
+            iPrim = self.Prims.Internals.index(c)
+            # Linear combination of the DLC that represents the primitive
+            pvec = np.array(self.Vecs[iPrim,:]).flatten()
+            U.append(pvec.copy())
+            for Ui in U[:-1]:
+                # Subtract the projection of pvec along Ui
+                Uih = Ui / np.linalg.norm(Ui)
+                U[-1] -= Uih * np.dot(pvec, Uih)
+        # At the end of this loop, we should have a set of mutually orthogonal U vectors
+        Gqc = np.array(Gq).flatten()
+        for Ui in U:
+            # Calculate the projection of pvec along Ui
+            Uih = Ui / np.linalg.norm(Ui)
+            Gqc -= Uih * np.dot(Gqc, Uih)
+        Gxc = np.array(np.matrix(Bmat.T)*np.matrix(Gqc).T).flatten()
+        return Gxc
 
     def build_dlc(self, xyz):
         # Perform singular value decomposition
@@ -1497,6 +1502,13 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
     def calculate(self, coords):
         PrimVals = self.Prims.calculate(coords)
         Answer = np.matrix(PrimVals)*self.Vecs
+        # To obtain the primitive coordinates from the delocalized internal coordinates,
+        # simply multiply self.Vecs*Answer.T where Answer.T is the column vector of delocalized
+        # internal coordinates. That means the "c's" in Equation 23 of Schlegel's review paper
+        # are simply the rows of the Vecs matrix.
+        # print np.dot(np.array(self.Vecs[0,:]).flatten(), np.array(Answer).flatten())
+        # print PrimVals[0]
+        # raw_input()
         return np.array(Answer).flatten()
 
     def derivatives(self, coords):

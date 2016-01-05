@@ -4,7 +4,7 @@ from __future__ import division
 import numpy as np
 from copy import deepcopy
 from collections import OrderedDict
-from internal import RedundantInternalCoordinates, DelocalizedInternalCoordinates, RotationA, RotationB, RotationC
+from internal import PrimitiveInternalCoordinates, DelocalizedInternalCoordinates, RotationA, RotationB, RotationC, Distance, Angle, Dihedral, OutOfPlane, CartesianX, CartesianY, CartesianZ, TranslationX, TranslationY, TranslationZ
 from rotate import get_rot, sorted_eigh
 from forcebalance.molecule import Molecule
 from forcebalance.nifty import row, col, flat, invert_svd
@@ -308,6 +308,15 @@ def ftest(x):
 #brent_wiki(ftest, -4, 4/3, 1, 1e-8)
 #sys.exit()
 
+# def getConstraint(X, IC, cPrim):
+#     if type(IC) is DelocalizedInternalCoordinates:
+#         Prims = IC.Prims.Internals
+#         # Get the "primitive number" in the delocalized internal coordinates.
+#         iPrim = Prims.index(cPrim)
+#         return cPrim.value(X), np.array(IC.Vecs[iPrim, :]).flatten()
+#     else:
+#         raise RuntimeError('Spoo!')
+            
 def Optimize(coords, molecule, IC=None):
     progress = deepcopy(molecule)
     # Initial Hessian
@@ -342,7 +351,8 @@ def Optimize(coords, molecule, IC=None):
     trust = args.trust
     thre_rj = 0.01
     # Print initial iteration
-    atomgrad = np.sqrt(np.sum((gradx.reshape(-1,3))**2, axis=1))
+    gradxc = IC.calcGradProj(X, gradx)
+    atomgrad = np.sqrt(np.sum((gradxc.reshape(-1,3))**2, axis=1))
     rms_gradient = np.sqrt(np.mean(atomgrad**2))
     max_gradient = np.max(atomgrad)
     print "Iteration %4i :" % Iteration,
@@ -380,16 +390,20 @@ def Optimize(coords, molecule, IC=None):
         # added to the Hessian, the expected decrease in the energy, and
         # the derivative of the step length w/r.t. v.
         def get_delta_prime_trm(v):
-            HT = H + v*np.eye(len(H))
+            HC, GC = IC.augmentGH(X, G, H)
+            # print HC, GC
+            # raw_input()
+            HT = HC + v*np.eye(len(HC))
             try:
                 Hi = invert_svd(np.matrix(HT))
             except:
                 print "SVD Error - increasing v by 0.001 and trying again"
                 return get_delta_prime_trm(v+0.001)
-            dy = flat(-1 * Hi * col(G))
-            d_prime = flat(-1 * Hi * col(dy))
+            dyc = flat(-1 * Hi * col(GC))
+            dy = dyc[:len(G)]
+            d_prime = flat(-1 * Hi * col(dyc))[:len(G)]
             dy_prime = np.dot(dy,d_prime)/np.linalg.norm(dy)
-            sol = flat(0.5*row(dy)*np.matrix(H)*col(dy))[0] + np.dot(dy,G) # 
+            sol = flat(0.5*row(dy)*np.matrix(H)*col(dy))[0] + np.dot(dy,G)
             return dy, sol, dy_prime
 
         def get_delta_prime_rfo(alpha):
@@ -547,30 +561,33 @@ def Optimize(coords, molecule, IC=None):
         U = get_rot(Xmat, Xprev.reshape(-1,3))
         Xrot = np.array((U*Xmat.T).T).flatten()
         displacement = np.sqrt(np.sum((((Xrot-Xprev)*0.529).reshape(-1,3))**2, axis=1))
-        atomgrad = np.sqrt(np.sum((gradx.reshape(-1,3))**2, axis=1))
+        # Project out the degrees of freedom that are constrained
+        gradxc = IC.calcGradProj(X, gradx)
+        atomgrad = np.sqrt(np.sum((gradxc.reshape(-1,3))**2, axis=1))
         rms_displacement = np.sqrt(np.mean(displacement**2))
         rms_gradient = np.sqrt(np.mean(atomgrad**2))
         max_displacement = np.max(displacement)
         max_gradient = np.max(atomgrad)
         Quality = (E-Eprev)/expect
-        Converged_energy = ((E-Eprev) < 0 and np.abs(E-Eprev) < Convergence_energy)
+        Converged_energy = np.abs(E-Eprev) < Convergence_energy
         Converged_grms = rms_gradient < Convergence_grms
         Converged_gmax = max_gradient < Convergence_gmax
         Converged_drms = rms_displacement < Convergence_drms
         Converged_dmax = max_displacement < Convergence_dmax
-        BadStep = (E-Eprev) > 0
+        #BadStep = (E-Eprev) > 0
+        BadStep = Quality < 0
             
         print "Step %4i :" % Iteration,
         print "Displace = %s%.3e\x1b[0m/%s%.3e\x1b[0m (rms/max)" % ("\x1b[92m" if Converged_drms else "\x1b[0m", rms_displacement, "\x1b[92m" if Converged_dmax else "\x1b[0m", max_displacement),
         print "Trust = %.3e (%s)" % (trust, trustprint), 
-        print "Grad = %s%.3e\x1b[0m/%s%.3e\x1b[0m (rms/max)" % ("\x1b[92m" if Converged_grms else "\x1b[0m", rms_gradient, "\x1b[92m" if Converged_gmax else "\x1b[0m", max_gradient),
+        print "Grad%s = %s%.3e\x1b[0m/%s%.3e\x1b[0m (rms/max)" % ("_T" if IC.haveConstraints() else "", "\x1b[92m" if Converged_grms else "\x1b[0m", rms_gradient, "\x1b[92m" if Converged_gmax else "\x1b[0m", max_gradient),
         print "Dy.G = %.3f" % Dot,
         print "E (change) = % .10f (%s%+.3e\x1b[0m) Quality = %s%.3f\x1b[0m" % (E, "\x1b[91m" if BadStep else ("\x1b[92m" if Converged_energy else "\x1b[0m"), E-Eprev, "\x1b[91m" if BadStep else "\x1b[0m", Quality)
         if IC is not None:
             idx = np.argmax(np.abs(dy))
             iunit = np.zeros_like(dy)
             iunit[idx] = 1.0
-            if type(IC) is RedundantInternalCoordinates:
+            if type(IC) is PrimitiveInternalCoordinates:
                 print "Along %s %.3f" % (IC.Internals[idx], np.dot(dy/np.linalg.norm(dy), iunit))
         if Converged_energy and Converged_grms and Converged_drms and Converged_gmax and Converged_dmax:
             print "Converged! =D"
@@ -620,10 +637,16 @@ def Optimize(coords, molecule, IC=None):
                     newmol = deepcopy(molecule)
                     newmol.xyzs[0] = X.reshape(-1,3)*0.529
                     newmol.build_topology()
-                    if type(IC) is RedundantInternalCoordinates:
-                        IC1 = RedundantInternalCoordinates(newmol, connect=args.connect)
+                    if type(IC) is PrimitiveInternalCoordinates:
+                        IC1 = PrimitiveInternalCoordinates(newmol, connect=args.connect)
+                        # IC1.addConstraint(Angle(1, 0, 2), 100*np.pi/180)
+                        # IC1.addConstraint(Angle(0, 1, 2), 45*np.pi/180)
+                        IC.addConstraint(Dihedral(2, 0, 4, 5), 45*np.pi/180)
                     elif type(IC) is DelocalizedInternalCoordinates:
                         IC1 = DelocalizedInternalCoordinates(newmol, build=False, connect=args.connect)
+                        # IC1.addConstraint(Angle(1, 0, 2), 100*np.pi/180)
+                        # IC1.addConstraint(Angle(0, 1, 2), 50*np.pi/180)
+                        IC.addConstraint(Dihedral(2, 0, 4, 5), 45*np.pi/180)
                     else:
                         raise RuntimeError('Spoo!')
                     if IC1 != IC:
@@ -713,16 +736,23 @@ def CalcInternalHess(coords, molecule, IC):
         EMinus, _ = calc(x1)
         fdiff = (EPlus+EMinus-2*E)/1e-6
         print "%s : % .6e" % (IC.Internals[i], fdiff)
-            
+
 def main():
     # Get initial coordinates in bohr
     coords = M.xyzs[0].flatten() / 0.529
     if args.cart:
         IC = None
     elif args.redund:
-        IC = RedundantInternalCoordinates(M, connect=args.connect)
+        IC = PrimitiveInternalCoordinates(M, connect=args.connect)
+        # IC.addConstraint(Angle(1, 0, 2), 100*np.pi/180)
+        # IC.addConstraint(Angle(0, 1, 2), 45*np.pi/180)
+        IC.addConstraint(Dihedral(2, 0, 4, 5), 45*np.pi/180)
     else:
         IC = DelocalizedInternalCoordinates(M, connect=args.connect)
+        # IC.addConstraint(Angle(1, 0, 2), 100*np.pi/180)
+        # IC.addConstraint(Angle(0, 1, 2), 45*np.pi/180)
+        IC.addConstraint(Dihedral(2, 0, 4, 5), 45*np.pi/180)
+        IC.build_dlc(coords)
     if args.displace:
         # if not args.redund:
         #     IC.weight_vectors(coords)
@@ -751,11 +781,6 @@ def main():
         sys.exit()
     opt_coords = Optimize(coords, M, IC)
     M.xyzs[0] = opt_coords.reshape(-1,3) * 0.529
-    # IC = RedundantInternalCoordinates(M)
-    # CalcInternalHess(opt_coords, M, IC)
-    # if FDCheck:
-    #     IC.checkFiniteDifference(opt_coords)
-    #     CheckInternalGrad(opt_coords, M, IC)
     
 if __name__ == "__main__":
     main()

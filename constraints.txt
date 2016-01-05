@@ -1,0 +1,60 @@
+# File format for constrained geometry optimizations
+# Case-insensitive; characters after "#" are treated as comments
+# Atoms are numbered sequentially starting from 1
+# 
+# 1) The symbol $freeze, $set, $scan specifies the kind of
+# constraint for the degrees of freedom on the following lines. 
+# ------------------------------------------------------------
+# $freeze : The following degrees of freedom should not move from their initial positions
+# $set    : The following degrees of freedom are set equal to the value provided
+# $scan   : The following degrees of freedom are scanned from A to B in C steps. 
+#           If more degrees of freedom are present in $scan, then a multidimensional scan is performed.
+# 
+# 2) The constrained degrees of freedom follow the special symbols.
+# Use one of the following and provide the needed information:
+# ------------------------------------------------------------
+# x, y, z, xy, xz, yz, xyz : The indicated Cartesian coordinates are constrained.
+# -> If in $freeze, provide 1 number for the index of the atom,
+#    -or- a range of atoms using commas and dashes (i.e. 5-7,17,25 maps to 5,6,7,17,25),
+#    -or- an atomic symbol to select all atoms that match the symbol.
+# -> If in $set, provide the atom selection as above, 
+#    -and- 1-3 numbers for the values that the coordinates are set to.
+#    The centroid (i.e. average coordinate) of the atoms will be constrained.
+# -> If in $scan, provide the atom selection as above,
+#    -and- 2, 4, or 6 numbers for the starting (x,y,z) and ending (x,y,z) coordinates,
+#    -and- 1 number for the total number of steps including the endpoints.
+#    The centroid (i.e. average coordinate) of the atoms will be constrained.
+# 
+# distance : The indicated distance is constrained.
+#            Provide 2 numbers for the atomic indices.
+# -> If in $set, add 1 number for the value that the distance is set to.
+# -> If in $scan, add 2 numbers for the starting and ending values
+#    -and- 1 number for the total number of steps including the endpoints.
+#
+# angle : The indicated angle is constrained.
+#         Provide 3 atomic indices; the second atom is the center.
+# -> If in $set, add 1 number for the value that the distance is set to.
+# -> If in $scan, add 2 numbers for the starting and ending values of the distance
+#    -and- 1 number for the total number of steps including the endpoints.
+# 
+# dihedral : The indicated dihedral angle is constrained.
+#            Provide 4 atomic indices; the dihedral angle is defined 
+#            as the angle between planes A-B-C and B-C-D where
+#            B is the lower number of the two middle atoms, 
+#            A is the atom bonded to B, and D is the atom bonded to C.
+# 
+#  Provide 3 (resp. 4) numbers for the atomic indices.
+#  For angles A-B-C, the second atom is the center atom.
+#  Dihedral angles are defined as the angle between planes A-B-C and B-C-D
+#  where B is the lower number of the two middle atoms.
+#  
+
+$freeze
+bond 5 6
+xyz 5 xyz
+xy 5-11,13,35
+$set
+angle 3 1 2 30.0
+z 36 10.0
+$scan
+dihedral 4 2 3 5 0.0 180.0 19
