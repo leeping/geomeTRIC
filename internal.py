@@ -5,7 +5,7 @@ import numpy as np
 import networkx as nx
 import itertools
 from copy import deepcopy
-from forcebalance.nifty import click, invert_svd, commadash
+from forcebalance.nifty import click, invert_svd, commadash, row, col, flat
 from forcebalance.molecule import Molecule, Elements, Radii
 from collections import OrderedDict, defaultdict
 from scipy import optimize
@@ -1292,6 +1292,45 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
 #             Gq[iPrim] = 0.0
 #         Gxc = np.array(np.matrix(Bmat.T)*np.matrix(Gqc).T).flatten()
 #         return Gxc
+
+    # def applyConstraints(self, xyz):
+    #     # # Number of internals (elements of G)
+    #     # ni = len(G)
+    #     # # Number of constraints
+    #     # nc = len(self.cPrims)
+    #     # # Total dimension
+    #     # nt = ni+nc
+    #     # # Lower block of the augmented Hessian
+    #     # cT = np.zeros((nc, ni), dtype=float)
+    #     # c0 = np.zeros(nc, dtype=float)
+    #     dQ = np.zeros(len(self.Internals), dtype=float)
+    #     for ic, c in enumerate(self.cPrims):
+    #         # Look up the index of the primitive that is being constrained
+    #         iPrim = self.Internals.index(c)
+    #         # # The constraint indexed by iC is simply the primitive indexed by iPrim
+    #         # cT[ic, iPrim] = 1.0
+    #         # Calculate the further change needed in this constrained variable
+    #         dQ[iPrim] = self.cVals[ic] - c.value(xyz)
+    #         if type(c) in [Angle, Dihedral, OutOfPlane]:
+    #             Plus2Pi = dQ[iPrim] + 2*np.pi
+    #             Minus2Pi = dQ[iPrim] - 2*np.pi
+    #             if np.abs(dQ[iPrim]) > np.abs(Plus2Pi):
+    #                 dQ[iPrim] = Plus2Pi
+    #             if np.abs(dQ[iPrim]) > np.abs(Minus2Pi):
+    #                 dQ[iPrim] = Minus2Pi
+    #     print dQ
+    #     return self.newCartesian(xyz, dQ, verbose=True)
+        # # Construct augmented Hessian
+        # HC = np.zeros((nt, nt), dtype=float)
+        # HC[0:ni, 0:ni] = H[:,:]
+        # HC[ni:nt, 0:ni] = cT[:,:]
+        # HC[0:ni, ni:nt] = cT.T[:,:]
+        # # Construct augmented gradient
+        # GC = np.zeros(nt, dtype=float)
+        # GC[0:ni] = G[:]
+        # GC[ni:nt] = -c0[:]
+        # return HC, GC
+        
     
     def guess_hessian(self, coords):
         xyzs = coords.reshape(-1,3)*0.529
@@ -1426,7 +1465,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
             if len(constraints) != len(cvals):
                 raise RuntimeError("List of constraints should be same length as constraint values")
             for cons, cval in zip(constraints, cvals):
-                self.addConstraint(cons, cval)
+                self.addConstraint(cons, cval, xyz)
         if build:
             self.build_dlc(xyz)
 
@@ -1436,11 +1475,11 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
     def update(self, other):
         return self.Prims.update(other.Prims)
 
-    def addConstraint(self, cPrim, cVal):
+    def addConstraint(self, cPrim, cVal, xyz):
         """
         Add a constrained degree of freedom.
         """
-        self.Prims.addConstraint(cPrim, cVal)
+        self.Prims.addConstraint(cPrim, cVal, xyz)
 
     def getConstraints_from(self, other):
         self.Prims.getConstraint_from(other.Prims)
@@ -1450,6 +1489,47 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
 
     def printConstraints(self, xyz):
         self.Prims.printConstraints(xyz)
+
+    # def augmentGH(self, xyz, G, H):
+    #     # Number of internals (elements of G)
+    #     ni = len(G)
+    #     # Number of constraints
+    #     nc = len(self.Prims.cPrims)
+    #     # Augmented versions of gradient and Hessian
+    #     Gc = G.copy()
+    #     Hc = H.copy()
+    #     for ic, c in enumerate(self.Prims.cPrims):
+    #         # Look up the index of the primitive that is being constrained
+    #         iPrim = self.Prims.Internals.index(c)
+    #         nr = ni-nc+ic
+    #         Hc[nr, :] = 0.0
+    #         Hc[nr, 
+    #         # Hc[nr, :] = 0.0
+    #         # Hc[:, nr] = 0.0
+    #         # Hc[nr, nr] = 1.0
+    #         # Hc[ni-nc+ic, 
+    #         # Hc[ni-nc+ic, :] = 0.0
+    #         # cT[ic, :] = np.array(self.Vecs[iPrim,:]).flatten()
+    #         # Calculate the further change needed in this constrained variable
+    #         c0[ic] = self.Prims.cVals[ic] - c.value(xyz)
+    #         if type(c) in [Angle, Dihedral, OutOfPlane]:
+    #             Plus2Pi = c0[ic] + 2*np.pi
+    #             Minus2Pi = c0[ic] - 2*np.pi
+    #             if np.abs(c0[ic]) > np.abs(Plus2Pi):
+    #                 c0[ic] = Plus2Pi
+    #             if np.abs(c0[ic]) > np.abs(Minus2Pi):
+    #                 c0[ic] = Minus2Pi
+    #     # Construct augmented Hessian
+    #     HC = np.zeros((nt, nt), dtype=float)
+    #     HC[0:ni, 0:ni] = H[:,:]
+    #     HC[ni:nt, 0:ni] = cT[:,:]
+    #     HC[0:ni, ni:nt] = cT.T[:,:]
+    #     # print HC
+    #     # Construct augmented gradient
+    #     GC = np.zeros(nt, dtype=float)
+    #     GC[0:ni] = G[:]
+    #     GC[ni:nt] = -c0[:]
+    #     return HC, GC
 
     def augmentGH(self, xyz, G, H):
         # Number of internals (elements of G)
@@ -1466,20 +1546,162 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
             iPrim = self.Prims.Internals.index(c)
             # Get the corresponding linear combination coefficients from the
             # DLC that allows us to calculate the primitive
-            cT[ic, :] = np.array(self.Vecs[iPrim,:]).flatten()
+            # Note that the constraint DLCs occur at the end, and in increasing order
+            cT[ic, ni-nc+ic] = 1.0
+            # cT[ic, :] = np.array(self.Vecs[iPrim,:]).flatten()
             # Calculate the further change needed in this constrained variable
             c0[ic] = self.Prims.cVals[ic] - c.value(xyz)
+            if type(c) in [Angle, Dihedral, OutOfPlane]:
+                Plus2Pi = c0[ic] + 2*np.pi
+                Minus2Pi = c0[ic] - 2*np.pi
+                if np.abs(c0[ic]) > np.abs(Plus2Pi):
+                    c0[ic] = Plus2Pi
+                if np.abs(c0[ic]) > np.abs(Minus2Pi):
+                    c0[ic] = Minus2Pi
         # Construct augmented Hessian
         HC = np.zeros((nt, nt), dtype=float)
         HC[0:ni, 0:ni] = H[:,:]
         HC[ni:nt, 0:ni] = cT[:,:]
         HC[0:ni, ni:nt] = cT.T[:,:]
+        # print HC
         # Construct augmented gradient
         GC = np.zeros(nt, dtype=float)
         GC[0:ni] = G[:]
         GC[ni:nt] = -c0[:]
         return HC, GC
-
+    
+    # def augmentGH(self, xyz, G, H):
+    #     GC = G.copy()
+    #     HC = H.copy()
+    #     for ic, c in enumerate(self.Prims.cPrims):
+    #         iDLC = self.cDLC[ic]
+    #         GC[iDLC] = -(self.Prims.cVals[ic] - c.value(xyz))
+    #         if type(c) in [Angle, Dihedral, OutOfPlane]:
+    #             Plus2Pi = GC[iDLC] + 2*np.pi
+    #             Minus2Pi = GC[iDLC] - 2*np.pi
+    #             if np.abs(GC[iDLC]) > np.abs(Plus2Pi):
+    #                 GC[iDLC] = Plus2Pi
+    #             if np.abs(GC[iDLC]) > np.abs(Minus2Pi):
+    #                 GC[iDLC] = Minus2Pi
+            
+    #         HC[iDLC, :] = 0.0
+    #         HC[:, iDLC] = 0.0
+    #         HC[iDLC, iDLC] = 1.0
+    #     return HC, GC
+        # # Number of internals (elements of G)
+        # ni = len(G)
+        # # Number of constraints
+        # nc = len(self.Prims.cPrims)
+        # # Total dimension
+        # nt = ni+nc
+        # # Lower block of the augmented Hessian
+        # cT = np.zeros((nc, ni), dtype=float)
+        # c0 = np.zeros(nc, dtype=float)
+        # for ic, c in enumerate(self.Prims.cPrims):
+        #     # Look up the index of the primitive that is being constrained
+        #     iPrim = self.Prims.Internals.index(c)
+        #     # Get the corresponding linear combination coefficients from the
+        #     # DLC that allows us to calculate the primitive
+        #     # Note that the constraint DLCs occur at the end, and in increasing order
+        #     cT[ic, ni-nc+ic] = 1.0
+        #     # cT[ic, :] = np.array(self.Vecs[iPrim,:]).flatten()
+        #     # Calculate the further change needed in this constrained variable
+        #     c0[ic] = self.Prims.cVals[ic] - c.value(xyz)
+        #     if type(c) in [Angle, Dihedral, OutOfPlane]:
+        #         Plus2Pi = c0[ic] + 2*np.pi
+        #         Minus2Pi = c0[ic] - 2*np.pi
+        #         if np.abs(c0[ic]) > np.abs(Plus2Pi):
+        #             c0[ic] = Plus2Pi
+        #         if np.abs(c0[ic]) > np.abs(Minus2Pi):
+        #             c0[ic] = Minus2Pi
+        # # Construct augmented Hessian
+        # HC = np.zeros((nt, nt), dtype=float)
+        # HC[0:ni, 0:ni] = H[:,:]
+        # HC[ni:nt, 0:ni] = cT[:,:]
+        # HC[0:ni, ni:nt] = cT.T[:,:]
+        # # print HC
+        # # Construct augmented gradient
+        # GC = np.zeros(nt, dtype=float)
+        # GC[0:ni] = G[:]
+        # GC[ni:nt] = -c0[:]
+        # return HC, GC
+    
+    def applyConstraints(self, xyz):
+        xyz1 = xyz.copy()
+        niter = 0
+        while True:
+            dQ = np.zeros(len(self.Internals), dtype=float)
+            for ic, c in enumerate(self.Prims.cPrims):
+                # Look up the index of the primitive that is being constrained
+                iPrim = self.Prims.Internals.index(c)
+                # Look up the index of the DLC that corresponds to the constraint
+                iDLC = self.cDLC[ic]
+                # Get the corresponding linear combination coefficients from the
+                # DLC that allows us to calculate the primitive
+                # cT[ic, :] = np.array(self.Vecs[iPrim,:]).flatten()
+                # Calculate the further change needed in this constrained variable
+                dQ[iDLC] = (self.Prims.cVals[ic] - c.value(xyz1))/self.Vecs[iPrim, iDLC]
+                if type(c) in [Angle, Dihedral, OutOfPlane]:
+                    Plus2Pi = dQ[iDLC] + 2*np.pi
+                    Minus2Pi = dQ[iDLC] - 2*np.pi
+                    if np.abs(dQ[iDLC]) > np.abs(Plus2Pi):
+                        dQ[iDLC] = Plus2Pi
+                    if np.abs(dQ[iDLC]) > np.abs(Minus2Pi):
+                        dQ[iDLC] = Minus2Pi
+            xyz2 = self.newCartesian(xyz1, dQ, verbose=False)
+            if np.linalg.norm(dQ) < 1e-6:
+                return xyz2
+            xyz1 = xyz2.copy()
+            niter += 1
+            if niter == 50:
+                raise RuntimeError("Unable to obtain desired constrained geometry in 50 outer loops")
+        # return xyz2
+            # print c.value(xyz1)
+            # print c.value(xyz2)
+            # print dQ
+            # raw_input()
+            # xyz1 = xyz2.copy()
+            # dQ = c.value(xyz
+        # import sys
+        # sys.exit()
+            # dp = c.value(xyz) - np.dot(self.calculate(xyz), cT[ic, :])
+                    
+        
+    # def applyConstraints(self, xyz):
+    #     # # return self.Prims.applyConstraints(xyz)
+    #     nc = len(self.Prims.cPrims)
+    #     ni = len(self.Internals)
+    #     # Lower block of the augmented Hessian
+    #     cT = np.zeros((nc, ni), dtype=float)
+    #     c0 = np.zeros(nc, dtype=float)
+    #     # Initial values of the primitive internal coordinates
+    #     p0 = self.Prims.calculate(xyz)
+    #     dQ = np.zeros(len(self.Prims.Internals), dtype=float)
+    #     for ic, c in enumerate(self.Prims.cPrims):
+    #         # Look up the index of the primitive that is being constrained
+    #         iPrim = self.Prims.Internals.index(c)
+    #         # Get the corresponding linear combination coefficients from the
+    #         # DLC that allows us to calculate the primitive
+    #         cT[ic, :] = np.array(self.Vecs[iPrim,:]).flatten()
+    #         # Calculate the further change needed in this constrained variable
+    #         c0[ic] = self.Prims.cVals[ic] - c.value(xyz)
+    #         if type(c) in [Angle, Dihedral, OutOfPlane]:
+    #             Plus2Pi = c0[ic] + 2*np.pi
+    #             Minus2Pi = c0[ic] - 2*np.pi
+    #             if np.abs(c0[ic]) > np.abs(Plus2Pi):
+    #                 c0[ci] = Plus2Pi
+    #             if np.abs(c0[ic]) > np.abs(Minus2Pi):
+    #                 c0[ic] = Minus2Pi
+    #         dp = c.value(xyz) - np.dot(self.calculate(xyz), cT[ic, :])
+    #         # print c.value(xyz), 
+    #     print self.Vecs.shape
+            
+        # print c0
+        # dQ = flat(np.matrix(cT.T)*col(c0))
+        # print dQ
+        # xyz1 = self.newCartesian(xyz, dQ, verbose=True)
+        # print self.Prims.calculate(xyz1) - self.Prims.calculate(xyz)
+    
     def calcGradProj(self, xyz, gradx):
         if len(self.Prims.cPrims) == 0:
             return gradx
@@ -1535,11 +1757,45 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         # if LargeVals <= Expect:
         self.Vecs = Q[:, LargeIdx]
         self.Internals = ["DLC %i" % (i+1) for i in range(len(LargeIdx))]
-        # else:
-        #     Idxs = np.argsort(L)[-Expect:]
-        #     self.Vecs = Q[:, Idxs]
-        #     self.Internals = ["DLC %i" % (i+1) for i in range(Expect)]
-        # self.weight_vectors(xyz)
+
+        # Vecs has number of rows equal to the number of primitives, and
+        # number of columns equal to the number of delocalized internal coordinates.
+        # In the following, assume that we have 72 DLCs, 115 internals and 2 constraints.
+        if self.haveConstraints():
+            self.cDLC = []
+            uSpace = np.eye(self.Vecs.shape[1], dtype=float)
+            click()
+            print "Projecting out constraints...",
+            for ic, c in enumerate(self.Prims.cPrims):
+                print ic+1,
+                # Look up the index of the primitive that is being constrained
+                iPrim = self.Prims.Internals.index(c)
+                # Pick a row out of the eigenvector space. This is a linear combination of the DLCs.
+                cVec = self.Vecs[iPrim, :]
+                cVec = np.array(cVec)
+                cVec /= np.linalg.norm(cVec)
+                # This is a "new DLC" that corresponds to the primitive that we are constraining
+                cProj = self.Vecs*cVec.T
+                cProj /= np.linalg.norm(cProj)
+                # Now we project the new DLC out of the rest
+                U = [np.array(cProj).flatten()]
+                # We loop through the DLCs but omit the last one
+                for iv in range(self.Vecs.shape[1]-1):
+                    # Pick a column out of the eigenvector space.
+                    v = np.array(self.Vecs[:, iv]).flatten()
+                    U.append(v.copy())
+                    for ui in U[:-1]:
+                        U[-1] -= ui * np.dot(ui, v)
+                    # if np.linalg.norm(U[-1]) < 1e-3:
+                    #     print iv, np.linalg.norm(U[-1])
+                    U[-1] /= np.linalg.norm(U[-1])
+                # print self.Vecs.shape
+                # print "--"
+                self.Vecs = np.matrix(U).T
+            print "Done in", click(), "s"
+            # Rearrange the DLCs so that the ones corresponding to constraints are last, and in the same order that they were entered
+            self.Vecs = np.hstack((self.Vecs[:, len(self.Prims.cPrims):], self.Vecs[:, :len(self.Prims.cPrims)][:, ::-1]))
+            self.cDLC = [self.Vecs.shape[1] - len(self.Prims.cPrims) + i for i in range(len(self.Prims.cPrims))]
 
     def weight_vectors(self, xyz):
         Bmat = np.matrix(self.wilsonB(xyz))
@@ -1553,7 +1809,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
             rmsd = np.sqrt(np.mean(np.sum(np.array(dxyz).reshape(-1,3)**2, axis=1)))
             # rmsd = dxyz**2
             dxdq[i] = rmsd/eps
-        dxdq /= np.max(dxdq)
+        dxdq /= np.min(dxdq)
         for i in range(len(self.Internals)):
             self.Vecs[:, i] *= dxdq[i]
         #print dxdq

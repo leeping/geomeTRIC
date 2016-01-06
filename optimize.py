@@ -420,7 +420,7 @@ def ParseConstraints(molecule, cFile):
                     # atom in the range and append None to the values.
                     for a in atoms:
                         for cls in classes:
-                            objs.append([cls(atoms[0], w=1.0)])
+                            objs.append([cls(a, w=1.0)])
                             vals.append([[None]])
             elif key in ["distance", "angle", "dihedral"]:
                 if len(classes) != 1:
@@ -712,7 +712,7 @@ def Optimize(coords, molecule, IC=None, xyzout=None, printIC=True):
         Xrot = np.array((U*Xmat.T).T).flatten()
         displacement = np.sqrt(np.sum((((Xrot-Xprev)*0.529).reshape(-1,3))**2, axis=1))
         # Add new Cartesian coordinates and gradients to history
-        progress.xyzs.append(Xrot.reshape(-1,3) * 0.529)
+        progress.xyzs.append(X.reshape(-1,3) * 0.529)
         progress.comms.append('Iteration %i Energy % .8f' % (Iteration, E))
         progress.write(xyzout)
         # Project out the degrees of freedom that are constrained
@@ -773,7 +773,7 @@ def Optimize(coords, molecule, IC=None, xyzout=None, printIC=True):
             E = Eprev
         else:
             if Quality < -1:
-                print "\x1b[93mNot rejecting step - trust below %.3e\x1b[0m" % mint
+                print "\x1b[93mNot rejecting step - trust below %.3e\x1b[0m" % thre_rj
             X_hist.append(X)
             Gx_hist.append(gradx)
             skipBFGS=False
@@ -929,6 +929,7 @@ def main():
         xyzout = prefix+".xyz"
         opt_coords = Optimize(coords, M, IC, xyzout=xyzout)
     else:
+        # ccoord = []
         for ic, CVal in enumerate(CVals):
             IC = DelocalizedInternalCoordinates(M, connect=args.connect, constraints=Cons, cvals=CVal)
             IC.build_dlc(coords)
@@ -936,6 +937,7 @@ def main():
                 xyzout = prefix+"scan_%03i.xyz" % ic
             else:
                 xyzout = prefix+".xyz"
+            coords = IC.applyConstraints(coords)
             coords = Optimize(coords, M, IC, xyzout=xyzout, printIC=(ic==0))
     
 if __name__ == "__main__":
