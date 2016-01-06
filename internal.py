@@ -5,7 +5,7 @@ import numpy as np
 import networkx as nx
 import itertools
 from copy import deepcopy
-from forcebalance.nifty import click, invert_svd
+from forcebalance.nifty import click, invert_svd, commadash
 from forcebalance.molecule import Molecule, Elements, Radii
 from collections import OrderedDict, defaultdict
 from scipy import optimize
@@ -17,11 +17,15 @@ class CartesianX(object):
         self.w = w
 
     def __repr__(self):
-        return "Cartesian-X %i : Weight %.3f" % (self.a+1, self.w)
+        #return "Cartesian-X %i : Weight %.3f" % (self.a+1, self.w)
+        return "Cartesian-X %i" % (self.a+1)
         
     def __eq__(self, other):
         if type(self) is not type(other): return False
-        return self.a == other.a
+        eq = self.a == other.a
+        if eq and self.w != other.w:
+            print "Warning: CartesianX same atoms, different weights (%.4f %.4f)" % (self.w, other.w)
+        return eq
 
     def __ne__(self, other):
         return not self.__eq__(other)
@@ -43,11 +47,15 @@ class CartesianY(object):
         self.w = w
 
     def __repr__(self):
-        return "Cartesian-Y %i : Weight %.3f" % (self.a+1, self.w)
+        # return "Cartesian-Y %i : Weight %.3f" % (self.a+1, self.w)
+        return "Cartesian-Y %i" % (self.a+1)
         
     def __eq__(self, other):
         if type(self) is not type(other): return False
-        return self.a == other.a
+        eq = self.a == other.a
+        if eq and self.w != other.w:
+            print "Warning: CartesianY same atoms, different weights (%.4f %.4f)" % (self.w, other.w)
+        return eq
 
     def __ne__(self, other):
         return not self.__eq__(other)
@@ -69,11 +77,15 @@ class CartesianZ(object):
         self.w = w
 
     def __repr__(self):
-        return "Cartesian-Z %i : Weight %.3f" % (self.a+1, self.w)
+        # return "Cartesian-Z %i : Weight %.3f" % (self.a+1, self.w)
+        return "Cartesian-Z %i" % (self.a+1)
         
     def __eq__(self, other):
         if type(self) is not type(other): return False
-        return self.a == other.a
+        eq = self.a == other.a
+        if eq and self.w != other.w:
+            print "Warning: CartesianZ same atoms, different weights (%.4f %.4f)" % (self.w, other.w)
+        return eq
 
     def __ne__(self, other):
         return not self.__eq__(other)
@@ -96,11 +108,15 @@ class TranslationX(object):
         assert len(a) == len(w)
 
     def __repr__(self):
-        return "Translation-X %s : Weights %s" % (' '.join([str(i+1) for i in self.a]), ' '.join(['%.2e' % i for i in self.w]))
+        # return "Translation-X %s : Weights %s" % (' '.join([str(i+1) for i in self.a]), ' '.join(['%.2e' % i for i in self.w]))
+        return "Translation-X %s" % (commadash(self.a))
         
     def __eq__(self, other):
         if type(self) is not type(other): return False
-        return set(self.a) == set(other.a)
+        eq = set(self.a) == set(other.a)
+        if eq and np.sum((self.w-other.w)**2) > 1e-6:
+            print "Warning: TranslationX same atoms, different weights"
+        return eq
 
     def __ne__(self, other):
         return not self.__eq__(other)
@@ -124,11 +140,15 @@ class TranslationY(object):
         assert len(a) == len(w)
 
     def __repr__(self):
-        return "Translation-Y %s : Weights %s" % (' '.join([str(i+1) for i in self.a]), ' '.join(['%.2e' % i for i in self.w]))
+        # return "Translation-Y %s : Weights %s" % (' '.join([str(i+1) for i in self.a]), ' '.join(['%.2e' % i for i in self.w]))
+        return "Translation-Y %s" % (commadash(self.a))
         
     def __eq__(self, other):
         if type(self) is not type(other): return False
-        return set(self.a) == set(other.a)
+        eq = set(self.a) == set(other.a)
+        if eq and np.sum((self.w-other.w)**2) > 1e-6:
+            print "Warning: TranslationY same atoms, different weights"
+        return eq
 
     def __ne__(self, other):
         return not self.__eq__(other)
@@ -152,11 +172,15 @@ class TranslationZ(object):
         assert len(a) == len(w)
 
     def __repr__(self):
-        return "Translation-Z %s : Weights %s" % (' '.join([str(i+1) for i in self.a]), ' '.join(['%.2e' % i for i in self.w]))
+        # return "Translation-Z %s : Weights %s" % (' '.join([str(i+1) for i in self.a]), ' '.join(['%.2e' % i for i in self.w]))
+        return "Translation-Z %s" % (commadash(self.a))
         
     def __eq__(self, other):
         if type(self) is not type(other): return False
-        return set(self.a) == set(other.a)
+        eq = set(self.a) == set(other.a)
+        if eq and np.sum((self.w-other.w)**2) > 1e-6:
+            print "Warning: TranslationZ same atoms, different weights"
+        return eq
 
     def __ne__(self, other):
         return not self.__eq__(other)
@@ -172,87 +196,6 @@ class TranslationZ(object):
         for i, a in enumerate(self.a):
             derivatives[a][2] = self.w[i]
         return derivatives
-
-# class MultiCartesianX(object):
-#     def __init__(self, a, w=1.0):
-#         self.a = a
-#         self.w = w
-# 
-#     def __repr__(self):
-#         return "MultiCartesian-X %s : Weight %.3f" % (' '.join([str(i+1) for i in self.a]), self.w)
-#         
-#     def __eq__(self, other):
-#         if type(self) is not type(other): return False
-#         return set(self.a) == set(other.a)
-# 
-#     def __ne__(self, other):
-#         return not self.__eq__(other)
-#         
-#     def value(self, xyz):
-#         xyz = xyz.reshape(-1,3)
-#         a = np.array(self.a)
-#         return np.sum(xyz[a,0])*self.w
-#         
-#     def derivative(self, xyz):
-#         xyz = xyz.reshape(-1,3)
-#         derivatives = np.zeros_like(xyz)
-#         for i in self.a:
-#             derivatives[i][0] = self.w
-#         return derivatives
-# 
-# class MultiCartesianY(object):
-#     def __init__(self, a, w=1.0):
-#         self.a = a
-#         self.w = w
-# 
-#     def __repr__(self):
-#         return "MultiCartesian-Y %s : Weight %.3f" % (' '.join([str(i+1) for i in self.a]), self.w)
-#         
-#     def __eq__(self, other):
-#         if type(self) is not type(other): return False
-#         return set(self.a) == set(other.a)
-# 
-#     def __ne__(self, other):
-#         return not self.__eq__(other)
-#         
-#     def value(self, xyz):
-#         xyz = xyz.reshape(-1,3)
-#         a = np.array(self.a)
-#         return np.sum(xyz[a,1])*self.w
-#         
-#     def derivative(self, xyz):
-#         xyz = xyz.reshape(-1,3)
-#         derivatives = np.zeros_like(xyz)
-#         for i in self.a:
-#             derivatives[i][1] = self.w
-#         return derivatives
-# 
-# class MultiCartesianZ(object):
-#     def __init__(self, a, w=1.0):
-#         self.a = a
-#         self.w = w
-# 
-#     def __repr__(self):
-#         return "MultiCartesian-Z %s : Weight %.3f" % (' '.join([str(i+1) for i in self.a]), self.w)
-#         
-#     def __eq__(self, other):
-#         if type(self) is not type(other): return False
-#         return set(self.a) == set(other.a)
-# 
-#     def __ne__(self, other):
-#         return not self.__eq__(other)
-#         
-#     def value(self, xyz):
-#         xyz = xyz.reshape(-1,3)
-#         a = np.array(self.a)
-#         return np.sum(xyz[a,2])*self.w
-#         
-#     def derivative(self, xyz):
-#         xyz = xyz.reshape(-1,3)
-#         derivatives = np.zeros_like(xyz)
-#         for i in self.a:
-#             derivatives[i][2] = self.w
-#         return derivatives
 
 class Rotator(object):
 
@@ -277,7 +220,10 @@ class Rotator(object):
 
     def __eq__(self, other):
         if type(self) is not type(other): return False
-        return set(self.a) == set(other.a)
+        eq = set(self.a) == set(other.a)
+        if eq and np.sum((self.x0-other.x0)**2) > 1e-6:
+            print "Warning: Rotator same atoms, different reference positions"
+        return eq
 
     def __ne__(self, other):
         return not self.__eq__(other)
@@ -324,11 +270,17 @@ class RotationA(object):
         self.Rotator = Rotators[self.a]
 
     def __repr__(self):
-        return "Rotation-A %s : Weight %.3f" % (' '.join([str(i+1) for i in self.a]), self.w)
+        # return "Rotation-A %s : Weight %.3f" % (' '.join([str(i+1) for i in self.a]), self.w)
+        return "Rotation-A %s" % (commadash(self.a))
 
     def __eq__(self, other):
         if type(self) is not type(other): return False
-        return set(self.a) == set(other.a)
+        eq = set(self.a) == set(other.a)
+        # if eq and np.sum((self.w-other.w)**2) > 1e-6:
+        #     print "Warning: RotationA same atoms, different weights"
+        # if eq and np.sum((self.x0-other.x0)**2) > 1e-6:
+        #     print "Warning: RotationA same atoms, different reference positions"
+        return eq
 
     def __ne__(self, other):
         return not self.__eq__(other)
@@ -351,11 +303,17 @@ class RotationB(object):
         self.Rotator = Rotators[self.a]
 
     def __repr__(self):
-        return "Rotation-B %s : Weight %.3f" % (' '.join([str(i+1) for i in self.a]), self.w)
+        # return "Rotation-B %s : Weight %.3f" % (' '.join([str(i+1) for i in self.a]), self.w)
+        return "Rotation-B %s" % (commadash(self.a))
 
     def __eq__(self, other):
         if type(self) is not type(other): return False
-        return set(self.a) == set(other.a)
+        eq = set(self.a) == set(other.a)
+        # if eq and np.sum((self.w-other.w)**2) > 1e-6:
+        #     print "Warning: RotationB same atoms, different weights"
+        # if eq and np.sum((self.x0-other.x0)**2) > 1e-6:
+        #     print "Warning: RotationB same atoms, different reference positions"
+        return eq
 
     def __ne__(self, other):
         return not self.__eq__(other)
@@ -378,11 +336,17 @@ class RotationC(object):
         self.Rotator = Rotators[self.a]
 
     def __repr__(self):
-        return "Rotation-C %s : Weight %.3f" % (' '.join([str(i+1) for i in self.a]), self.w)
+        # return "Rotation-C %s : Weight %.3f" % (' '.join([str(i+1) for i in self.a]), self.w)
+        return "Rotation-C %s" % (commadash(self.a))
 
     def __eq__(self, other):
         if type(self) is not type(other): return False
-        return set(self.a) == set(other.a)
+        eq = set(self.a) == set(other.a)
+        # if eq and np.sum((self.w-other.w)**2) > 1e-6:
+        #     print "Warning: RotationC same atoms, different weights"
+        # if eq and np.sum((self.x0-other.x0)**2) > 1e-6:
+        #     print "Warning: RotationC same atoms, different reference positions"
+        return eq
 
     def __ne__(self, other):
         return not self.__eq__(other)
@@ -617,12 +581,14 @@ class OutOfPlane(object):
             raise RuntimeError('a, b, c and d must be different')
 
     def __repr__(self):
-        return "Improper Dihedral Angle %i-%i-%i-%i" % (self.a+1, self.b+1, self.c+1, self.d+1)
+        return "Out-of-Plane %i-%i-%i-%i" % (self.a+1, self.b+1, self.c+1, self.d+1)
 
     def __eq__(self, other):
         if type(self) is not type(other): return False
         if self.a == other.a:
             if set([self.b, self.c, self.d]) == set([other.b, other.c, other.d]):
+                if [self.b, self.c, self.d] != [other.b, other.c, other.d]:
+                    print "Warning: OutOfPlane atoms are the same, ordering is different"
                 return True
         #     if self.b == other.b:
         #         if self.c == other.c:
@@ -694,6 +660,18 @@ class OutOfPlane(object):
         return derivatives
 
 class InternalCoordinates(object):
+    def addConstraint(self, cPrim, cVal):
+        raise NotImplementedError("Constraints not supported with Cartesian coordinates")
+
+    def haveConstraints(self):
+        raise NotImplementedError("Constraints not supported with Cartesian coordinates")
+
+    def augmentGH(self, xyz, G, H):
+        raise NotImplementedError("Constraints not supported with Cartesian coordinates")
+
+    def calcGradProj(self, xyz, gradx):
+        raise NotImplementedError("Constraints not supported with Cartesian coordinates")
+
     def wilsonB(self, xyz):
         """
         Given Cartesian coordinates xyz, return the Wilson B-matrix
@@ -1038,7 +1016,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                             nnc += (min(b, c), max(b, c)) in noncov
                             nnc += (min(b, d), max(b, d)) in noncov
                             # if nnc >= 1: continue
-                            for i, j, k in list(itertools.permutations([a, c, d], 3)):
+                            for i, j, k in sorted(list(itertools.permutations([a, c, d], 3))):
                                 Ang1 = Angle(b,i,j)
                                 Ang2 = Angle(i,j,k)
                                 if np.abs(np.cos(Ang1.value(coords))) > LinThre: continue
@@ -1094,7 +1072,10 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                         Ang2 = Angle(b,c,d)
                         if np.abs(np.cos(Ang1.value(coords))) > LinThre: continue
                         if np.abs(np.cos(Ang2.value(coords))) > LinThre: continue
-                        self.add(Dihedral(a, b, c, d))
+                        if b < c:
+                            self.add(Dihedral(a, b, c, d))
+                        else:
+                            self.add(Dihedral(d, c, b, a))
 
     def __repr__(self):
         lines = ["Internal coordinate system (atoms numbered from 1):"]
@@ -1225,7 +1206,14 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
             if dof == self.Internals[ii]:
                 del self.Internals[ii]
 
-    def addConstraint(self, cPrim, cVal):
+    def addConstraint(self, cPrim, cVal=None, xyz=None):
+        if cVal is None and xyz is None:
+            raise RuntimeError('Please provide either cval or xyz')
+        if cVal is None:
+            # If coordinates are provided instead of a constraint value, 
+            # then calculate the constraint value from the positions.
+            # If both are provided, then the coordinates are ignored.
+            cVal = cPrim.value(xyz)
         if cPrim in self.cPrims:
             print "Updating constraint value to %.4e" % (cVal)
             iPrim = self.cPrims.index(cPrim)
@@ -1235,53 +1223,75 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         self.cPrims.append(cPrim)
         self.cVals.append(cVal)
 
+    def getConstraint_from(self, other):
+        if other.haveConstraints():
+            for cPrim, cVal in zip(other.cPrims, other.cVals):
+                self.addConstraint(cPrim, cVal)
+
     def haveConstraints(self):
         return len(self.cPrims) > 0
 
-    def augmentGH(self, xyz, G, H):
-        # Number of internals (elements of G)
-        ni = len(G)
-        # Number of constraints
+    def printConstraints(self, xyz):
         nc = len(self.cPrims)
-        # Total dimension
-        nt = ni+nc
-        # Lower block of the augmented Hessian
-        cT = np.zeros((nc, ni), dtype=float)
-        c0 = np.zeros(nc, dtype=float)
+        print "Constraint                         Current      Target       Diff."
         for ic, c in enumerate(self.cPrims):
-            # Look up the index of the primitive that is being constrained
-            iPrim = self.Internals.index(c)
-            # The constraint indexed by iC is simply the primitive indexed by iPrim
-            cT[ic, iPrim] = 1.0
-            # Calculate the further change needed in this constrained variable
-            c0[ic] = self.cVals[ic] - c.value(xyz)
-        # Construct augmented Hessian
-        HC = np.zeros((nt, nt), dtype=float)
-        HC[0:ni, 0:ni] = H[:,:]
-        HC[ni:nt, 0:ni] = cT[:,:]
-        HC[0:ni, ni:nt] = cT.T[:,:]
-        # Construct augmented gradient
-        GC = np.zeros(nt, dtype=float)
-        GC[0:ni] = G[:]
-        GC[ni:nt] = -c0[:]
-        return HC, GC
+            current = c.value(xyz)
+            reference = self.cVals[ic]
+            diff = (current - reference)
+            if np.abs(diff-2*np.pi) < np.abs(diff):
+                diff -= 2*np.pi
+            if np.abs(diff+2*np.pi) < np.abs(diff):
+                diff += 2*np.pi
+            if type(c) in [TranslationX, TranslationY, TranslationZ, CartesianX, CartesianY, CartesianZ, Distance]:
+                factor = 0.529
+            elif type(c) in [Angle, Dihedral, OutOfPlane]:
+                factor = 180.0/np.pi
+            print "%-30s  % 10.5f  % 10.5f  % 10.5f" % (str(c), current*factor, reference*factor, diff*factor)
 
-    def calcGradProj(self, xyz, gradx):
-        if len(self.cPrims) == 0:
-            return gradx
-        q0 = self.calculate(xyz)
-        Ginv = self.GInverse(xyz)
-        Bmat = self.wilsonB(xyz)
-        # Internal coordinate gradient
-        Gq = np.matrix(Ginv)*np.matrix(Bmat)*np.matrix(gradx).T
-        Gqc = np.array(Gq).flatten()
-        for ic, c in enumerate(self.cPrims):
-            # Look up the index of the primitive that is being constrained
-            iPrim = self.Internals.index(c)
-            # Zero out that component of the gradient
-            Gq[iPrim] = 0.0
-        Gxc = np.array(np.matrix(Bmat.T)*np.matrix(Gqc).T).flatten()
-        return Gxc
+#     def augmentGH(self, xyz, G, H):
+#         # Number of internals (elements of G)
+#         ni = len(G)
+#         # Number of constraints
+#         nc = len(self.cPrims)
+#         # Total dimension
+#         nt = ni+nc
+#         # Lower block of the augmented Hessian
+#         cT = np.zeros((nc, ni), dtype=float)
+#         c0 = np.zeros(nc, dtype=float)
+#         for ic, c in enumerate(self.cPrims):
+#             # Look up the index of the primitive that is being constrained
+#             iPrim = self.Internals.index(c)
+#             # The constraint indexed by iC is simply the primitive indexed by iPrim
+#             cT[ic, iPrim] = 1.0
+#             # Calculate the further change needed in this constrained variable
+#             c0[ic] = self.cVals[ic] - c.value(xyz)
+#         # Construct augmented Hessian
+#         HC = np.zeros((nt, nt), dtype=float)
+#         HC[0:ni, 0:ni] = H[:,:]
+#         HC[ni:nt, 0:ni] = cT[:,:]
+#         HC[0:ni, ni:nt] = cT.T[:,:]
+#         # Construct augmented gradient
+#         GC = np.zeros(nt, dtype=float)
+#         GC[0:ni] = G[:]
+#         GC[ni:nt] = -c0[:]
+#         return HC, GC
+# 
+#     def calcGradProj(self, xyz, gradx):
+#         if len(self.cPrims) == 0:
+#             return gradx
+#         q0 = self.calculate(xyz)
+#         Ginv = self.GInverse(xyz)
+#         Bmat = self.wilsonB(xyz)
+#         # Internal coordinate gradient
+#         Gq = np.matrix(Ginv)*np.matrix(Bmat)*np.matrix(gradx).T
+#         Gqc = np.array(Gq).flatten()
+#         for ic, c in enumerate(self.cPrims):
+#             # Look up the index of the primitive that is being constrained
+#             iPrim = self.Internals.index(c)
+#             # Zero out that component of the gradient
+#             Gq[iPrim] = 0.0
+#         Gxc = np.array(np.matrix(Bmat.T)*np.matrix(Gqc).T).flatten()
+#         return Gxc
     
     def guess_hessian(self, coords):
         xyzs = coords.reshape(-1,3)*0.529
@@ -1353,12 +1363,70 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                 raise RuntimeError('Spoo!')
         return np.matrix(np.diag(Hdiag))
 
-class DelocalizedInternalCoordinates(InternalCoordinates):
+class CartesianCoordinates(InternalCoordinates):
     def __init__(self, molecule, build=False, connect=False):
+        self.Internals = []
+        self.elem = molecule.elem
+        if len(molecule) != 1:
+            raise RuntimeError('Only one frame allowed in molecule object')
+        for i in range(molecule.na):
+            self.add(CartesianX(i, w=1.0))
+            self.add(CartesianY(i, w=1.0))
+            self.add(CartesianZ(i, w=1.0))
+
+    def __eq__(self, other):
+        answer = True
+        for i in self.Internals:
+            if i not in other.Internals:
+                answer = False
+        for i in other.Internals:
+            if i not in self.Internals:
+                answer = False
+        return answer
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    def calcDiff(self, coord1, coord2):
+        """ Calculate difference in internal coordinates, accounting for changes in 2*pi of angles. """
+        Q1 = self.calculate(coord1)
+        Q2 = self.calculate(coord2)
+        PMDiff = (Q1-Q2)
+        return PMDiff
+
+    def calculate(self, xyz):
+        answer = []
+        for Internal in self.Internals:
+            answer.append(Internal.value(xyz))
+        return np.array(answer)
+
+    def derivatives(self, xyz):
+        answer = []
+        for Internal in self.Internals:
+            answer.append(Internal.derivative(xyz))
+        # This array has dimensions:
+        # 1) Number of internal coordinates
+        # 2) Number of atoms
+        # 3) 3
+        return np.array(answer)
+
+    def GInverse(self, xyz, u=None):
+        return self.GInverse_SVD(xyz, u)
+
+    def guess_hessian(self, coords):
+        return np.eye(len(self.Internals)) * 0.05
+
+class DelocalizedInternalCoordinates(InternalCoordinates):
+    def __init__(self, molecule, build=False, connect=False, constraints=None, cvals=None):
         self.Prims = PrimitiveInternalCoordinates(molecule, connect)
         self.connect = connect
         xyz = molecule.xyzs[0].flatten() / 0.529
         self.na = molecule.na
+        if constraints is not None:
+            if len(constraints) != len(cvals):
+                raise RuntimeError("List of constraints should be same length as constraint values")
+            for cons, cval in zip(constraints, cvals):
+                self.addConstraint(cons, cval)
         if build:
             self.build_dlc(xyz)
 
@@ -1374,8 +1442,14 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         """
         self.Prims.addConstraint(cPrim, cVal)
 
+    def getConstraints_from(self, other):
+        self.Prims.getConstraint_from(other.Prims)
+        
     def haveConstraints(self):
         return len(self.Prims.cPrims) > 0
+
+    def printConstraints(self, xyz):
+        self.Prims.printConstraints(xyz)
 
     def augmentGH(self, xyz, G, H):
         # Number of internals (elements of G)
@@ -1457,7 +1531,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
             Expect = 1
         if self.na == 1:
             Expect = 0
-        print "%i atoms (expect %i coordinates); %i/%i singular values are > 1e-6" % (self.na, Expect, LargeVals, len(L))
+        # print "%i atoms (expect %i coordinates); %i/%i singular values are > 1e-6" % (self.na, Expect, LargeVals, len(L))
         # if LargeVals <= Expect:
         self.Vecs = Q[:, LargeIdx]
         self.Internals = ["DLC %i" % (i+1) for i in range(len(LargeIdx))]

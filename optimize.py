@@ -6,18 +6,20 @@ from copy import deepcopy
 from collections import OrderedDict
 from internal import PrimitiveInternalCoordinates, DelocalizedInternalCoordinates, RotationA, RotationB, RotationC, Distance, Angle, Dihedral, OutOfPlane, CartesianX, CartesianY, CartesianZ, TranslationX, TranslationY, TranslationZ
 from rotate import get_rot, sorted_eigh
-from forcebalance.molecule import Molecule
-from forcebalance.nifty import row, col, flat, invert_svd
+from forcebalance.molecule import Molecule, Elements
+from forcebalance.nifty import row, col, flat, invert_svd, uncommadash, isint
 from scipy import optimize
 import scipy
 import traceback
 import argparse
 import subprocess
+import itertools
 import os, sys, shutil
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--cart', action='store_true', help='Use Cartesian coordinate system.')
 parser.add_argument('--connect', action='store_true', help='Connect noncovalent molecules into a network.')
+parser.add_argument('--constraints', type=str, help='Provide a text file specifying geometry constraints.')
 parser.add_argument('--redund', action='store_true', help='Use redundant coordinate system.')
 parser.add_argument('--terachem', action='store_true', help='Run optimization in TeraChem (pass xyz as first argument).')
 parser.add_argument('--dftd', action='store_true', help='Turn on dispersion correction in TeraChem.')
@@ -41,10 +43,8 @@ TeraChem = args.terachem
 TCHome = "/home/leeping/src/terachem/production/build"
 
 if args.prefix is None:
-    xyzout = os.path.splitext(sys.argv[1])[0]+"_optim.xyz"
     prefix = os.path.splitext(sys.argv[1])[0]+"_optim"
 else:
-    xyzout = args.prefix + ".xyz"
     prefix = args.prefix
 
 dirname = prefix+".tmp"
@@ -316,13 +316,162 @@ def ftest(x):
 #         return cPrim.value(X), np.array(IC.Vecs[iPrim, :]).flatten()
 #     else:
 #         raise RuntimeError('Spoo!')
+
+def OneDScan(init, final, steps):
+    # Return a list of values 
+    if len(init) != len(final):
+        raise RuntimeError("init and final must have the same length")
+    Answer = []
+    for j in range(len(init)):
+        Answer.append(np.linspace(init[j], final[j], steps))
+    Answer = list([list(i) for i in np.array(Answer).T])
+    print Answer
+    return Answer
+
+def ParseConstraints(molecule, cFile):
+    mode = None
+    Freezes = []
+    # The key in this dictionary is for looking up the following information:
+    # 1) The classes for creating the primitive coordinates corresponding to the constraint
+    # 2) The number of atomic indices that are required to specify the constraint
+    ClassDict = {"distance":([Distance], 2), 
+                 "angle":([Angle], 3), 
+                 "dihedral":([Dihedral], 4), 
+                 "x":([CartesianX], 1), 
+                 "y":([CartesianY], 1), 
+                 "z":([CartesianZ], 1),
+                 "xy":([CartesianX, CartesianY], 1), 
+                 "xz":([CartesianX, CartesianZ], 1), 
+                 "yz":([CartesianY, CartesianZ], 1), 
+                 "xyz":([CartesianX, CartesianY, CartesianZ], 1)
+                 }
+    CDict_Trans = {"x":([TranslationX], 1), 
+                   "y":([TranslationY], 1), 
+                   "z":([TranslationZ], 1),
+                   "xy":([TranslationX, TranslationY], 1), 
+                   "xz":([TranslationX, TranslationZ], 1), 
+                   "yz":([TranslationY, TranslationZ], 1), 
+                   "xyz":([TranslationX, TranslationY, TranslationZ], 1)
+                   }
+    AtomKeys = ["x", "y", "z", "xy", "yz", "xz", "xyz"]
+    objs = []
+    vals = []
+    for line in open(cFile).readlines():
+        line = line.split("#")[0].strip().lower()
+        # This is a list-of-lists. The intention is to create a multidimensional grid
+        # of constraint values if necessary.
+        if len(line) == 0: continue
+        print line
+        if line.startswith("$"):
+            mode = line.replace("$","")
+        else:
+            if mode is None:
+                raise RuntimeError("Mode ($freeze, $set, $scan) must be set before specifying any constraints")
+            s = line.split()
+            key = s[0]
+            if ''.join(sorted(key)) in AtomKeys:
+                key = ''.join(sorted(key))
+            classes, n_atom = ClassDict[key]
+            if mode == "freeze":
+                ntok = n_atom
+            elif mode == "set":
+                ntok = n_atom + len(classes)
+            elif mode == "scan":
+                ntok = n_atom + 2*len(classes) + 1
+            if len(s) != (ntok+1):
+                raise RuntimeError("For this line:%s\nExpected %i tokens but got %i" % (line, ntok+1, len(s)))
+            if key in AtomKeys:
+                # Special code that works for atom position constraints.
+                # First figure out the range of atoms.
+                if isint(s[1]):
+                    atoms = [int(s[1])-1]
+                elif s[1] in [k.lower() for k in Elements]:
+                    atoms = [i for i in range(molecule.na) if molecule.elem[i].lower() == key]
+                else:
+                    atoms = uncommadash(s[1])
+                if any([i<0 for i in atoms]):
+                    raise RuntimeError("Atom numbers must start from 1")
+                if any([i>=molecule.na for i in atoms]):
+                    raise RuntimeError("Constraints refer to higher atom indices than the number of atoms")
+                if mode in ["set", "scan"]:
+                    # If there is more than one atom and the mode is "set" or "scan", then the
+                    # center of mass is constrained, so we pick the corresponding classes.
+                    if len(atoms) > 1:
+                        objs.append([cls(atoms, w=np.ones(len(atoms))/len(atoms)) for cls in CDict_Trans[key][0]])
+                        # for cls in CDict_Trans[key][0]:
+                        #     objs.append(cls(atoms, w=np.ones(len(atoms))/len(atoms)))
+                    else:
+                        objs.append([cls(atoms[0], w=1.0) for cls in classes])
+                        # for cls in classes:
+                        #     objs.append(cls(atoms[0], w=1.0))
+                    # Depending on how many coordinates are constrained, we read in the corresponding
+                    # number of constraint values.
+                    x1 = [float(i)/0.529 for i in s[2:2+len(classes)]]
+                    # If there's just one constraint value then we append it to the value list-of-lists
+                    if mode == "set":
+                        vals.append([x1])
+                    elif mode == "scan":
+                        # If we're scanning it, then we add the whole list of distances to the list-of-lists
+                        x2 = [float(i)/0.529 for i in s[2+len(classes):2+2*len(classes)]]
+                        nstep = int(s[2+2*len(classes)])
+                        vals.append(OneDScan(x1, x2, nstep))
+                elif mode == "freeze":
+                    # Freezing atoms works a bit differently, we add one constraint for each
+                    # atom in the range and append None to the values.
+                    for a in atoms:
+                        for cls in classes:
+                            objs.append([cls(atoms[0], w=1.0)])
+                            vals.append([[None]])
+            elif key in ["distance", "angle", "dihedral"]:
+                if len(classes) != 1:
+                    raise RuntimeError("Not OK!")
+                atoms = [int(i)-1 for i in s[1:1+n_atom]]
+                if key == "bond" and atoms[0] > atoms[1]:
+                    atoms = atoms[::-1]
+                if key == "angle" and atoms[0] > atoms[2]:
+                    atoms = atoms[::-1]
+                if key == "dihedral" and atoms[1] > atoms[2]:
+                    atoms = atoms[::-1]
+                if any([i<0 for i in atoms]):
+                    raise RuntimeError("Atom numbers must start from 1")
+                if any([i>=molecule.na for i in atoms]):
+                    raise RuntimeError("Constraints refer to higher atom indices than the number of atoms")
+                objs.append([classes[0](*atoms)])
+                if mode == "freeze":
+                    vals.append([[None]])
+                elif mode in ["set", "scan"]:
+                    if key == "distance": x1 = float(s[1+n_atom])/0.529
+                    else: x1 = float(s[1+n_atom])*np.pi/180.0
+                    if mode == "set":
+                        vals.append([[x1]])
+                    else:
+                        if key == "distance": x2 = float(s[2+n_atom])/0.529
+                        else: x2 = float(s[2+n_atom])*np.pi/180.0
+                        nstep = int(s[3+n_atom])
+                        vals.append([[i] for i in list(np.linspace(x1,x2,nstep))])
+            else:
+                raise RuntimeError("Line not supported: %s" % line)
+    if len(objs) != len(vals):
+        raise RuntimeError("objs and vals should be the same length")
+    valgrps = [list(itertools.chain(*i)) for i in list(itertools.product(*vals))]
+    # print valgrps
+    objs = list(itertools.chain(*objs))
+    return objs, valgrps
+
+# Read in the constraints
+if args.constraints is not None:
+    Cons, CVals = ParseConstraints(M, args.constraints)
+else:
+    Cons = None
+    CVals = None
             
-def Optimize(coords, molecule, IC=None):
+def Optimize(coords, molecule, IC=None, xyzout=None, printIC=True):
     progress = deepcopy(molecule)
     # Initial Hessian
     if IC is not None:
-        print "%i internal coordinates being used (rather than %i Cartesians)" % (len(IC.Internals), 3*molecule.na)
-        print IC
+        if printIC:
+            print "%i internal coordinates being used (rather than %i Cartesians)" % (len(IC.Internals), 3*molecule.na)
+            print IC
         internal = True
         H0 = IC.guess_hessian(coords)
     else:
@@ -355,13 +504,15 @@ def Optimize(coords, molecule, IC=None):
     atomgrad = np.sqrt(np.sum((gradxc.reshape(-1,3))**2, axis=1))
     rms_gradient = np.sqrt(np.mean(atomgrad**2))
     max_gradient = np.max(atomgrad)
-    print "Iteration %4i :" % Iteration,
+    print "Step %4i :" % Iteration,
     print "Gradient = %.3e/%.3e (rms/max) Energy = % .10f" % (rms_gradient, max_gradient, E)
+    if IC is not None and IC.haveConstraints():
+        IC.printConstraints(X)
     # Threshold for "low quality step" which decreases trust radius.
     ThreLQ = 0.25
     # Threshold for "high quality step" which increases trust radius.
     ThreHQ = 0.75
-    print np.diag(H)
+    # print np.diag(H)
     Convergence_energy = 1e-6
     Convergence_grms = 3e-4
     Convergence_gmax = 4.5e-4
@@ -530,9 +681,12 @@ def Optimize(coords, molecule, IC=None):
                         iopt = brent_wiki(froot, 0, iopt, froot.target, cvg=0.1)
                     else: break
                 if IC.bork:
-                    if args.verbose: print "\x1b[91mInverse iteration for Cartesians failed\x1b[0m"
+                    print "\x1b[91mInverse iteration for Cartesians failed\x1b[0m"
+                    iopt = 1e-3
                 else:
                     if args.verbose: print "\x1b[93mBrent algorithm requires %i evaluations\x1b[0m" % froot.counter
+                if iopt is None:
+                    iopt = 1e-3
                 dy, expect = trust_step(iopt, v0)
         else:
             # This code is rarely used; trust radius in internal coordinates
@@ -552,15 +706,15 @@ def Optimize(coords, molecule, IC=None):
         else:
             X = Y.copy()
         E, gradx = calc(X)
-        # Add new Cartesian coordinates and gradients to history
-        progress.xyzs.append(X.reshape(-1,3) * 0.529)
-        progress.comms.append('Iteration %i Energy % .8f' % (Iteration, E))
-        progress.write(xyzout)
         # Calculate quantities for convergence
         Xmat = X.reshape(-1,3)
         U = get_rot(Xmat, Xprev.reshape(-1,3))
         Xrot = np.array((U*Xmat.T).T).flatten()
         displacement = np.sqrt(np.sum((((Xrot-Xprev)*0.529).reshape(-1,3))**2, axis=1))
+        # Add new Cartesian coordinates and gradients to history
+        progress.xyzs.append(Xrot.reshape(-1,3) * 0.529)
+        progress.comms.append('Iteration %i Energy % .8f' % (Iteration, E))
+        progress.write(xyzout)
         # Project out the degrees of freedom that are constrained
         gradxc = IC.calcGradProj(X, gradx)
         atomgrad = np.sqrt(np.sum((gradxc.reshape(-1,3))**2, axis=1))
@@ -583,6 +737,8 @@ def Optimize(coords, molecule, IC=None):
         print "Grad%s = %s%.3e\x1b[0m/%s%.3e\x1b[0m (rms/max)" % ("_T" if IC.haveConstraints() else "", "\x1b[92m" if Converged_grms else "\x1b[0m", rms_gradient, "\x1b[92m" if Converged_gmax else "\x1b[0m", max_gradient),
         print "Dy.G = %.3f" % Dot,
         print "E (change) = % .10f (%s%+.3e\x1b[0m) Quality = %s%.3f\x1b[0m" % (E, "\x1b[91m" if BadStep else ("\x1b[92m" if Converged_energy else "\x1b[0m"), E-Eprev, "\x1b[91m" if BadStep else "\x1b[0m", Quality)
+        if IC is not None and IC.haveConstraints():
+            IC.printConstraints(X)
         if IC is not None:
             idx = np.argmax(np.abs(dy))
             iunit = np.zeros_like(dy)
@@ -639,14 +795,9 @@ def Optimize(coords, molecule, IC=None):
                     newmol.build_topology()
                     if type(IC) is PrimitiveInternalCoordinates:
                         IC1 = PrimitiveInternalCoordinates(newmol, connect=args.connect)
-                        # IC1.addConstraint(Angle(1, 0, 2), 100*np.pi/180)
-                        # IC1.addConstraint(Angle(0, 1, 2), 45*np.pi/180)
-                        IC.addConstraint(Dihedral(2, 0, 4, 5), 45*np.pi/180)
                     elif type(IC) is DelocalizedInternalCoordinates:
                         IC1 = DelocalizedInternalCoordinates(newmol, build=False, connect=args.connect)
-                        # IC1.addConstraint(Angle(1, 0, 2), 100*np.pi/180)
-                        # IC1.addConstraint(Angle(0, 1, 2), 50*np.pi/180)
-                        IC.addConstraint(Dihedral(2, 0, 4, 5), 45*np.pi/180)
+                        IC1.getConstraints_from(IC)
                     else:
                         raise RuntimeError('Spoo!')
                     if IC1 != IC:
@@ -744,14 +895,8 @@ def main():
         IC = None
     elif args.redund:
         IC = PrimitiveInternalCoordinates(M, connect=args.connect)
-        # IC.addConstraint(Angle(1, 0, 2), 100*np.pi/180)
-        # IC.addConstraint(Angle(0, 1, 2), 45*np.pi/180)
-        IC.addConstraint(Dihedral(2, 0, 4, 5), 45*np.pi/180)
     else:
         IC = DelocalizedInternalCoordinates(M, connect=args.connect)
-        # IC.addConstraint(Angle(1, 0, 2), 100*np.pi/180)
-        # IC.addConstraint(Angle(0, 1, 2), 45*np.pi/180)
-        IC.addConstraint(Dihedral(2, 0, 4, 5), 45*np.pi/180)
         IC.build_dlc(coords)
     if args.displace:
         # if not args.redund:
@@ -779,8 +924,19 @@ def main():
         IC.checkFiniteDifference(coords)
         CheckInternalGrad(coords, M, IC)
         sys.exit()
-    opt_coords = Optimize(coords, M, IC)
-    M.xyzs[0] = opt_coords.reshape(-1,3) * 0.529
+
+    if Cons is None:
+        xyzout = prefix+".xyz"
+        opt_coords = Optimize(coords, M, IC, xyzout=xyzout)
+    else:
+        for ic, CVal in enumerate(CVals):
+            IC = DelocalizedInternalCoordinates(M, connect=args.connect, constraints=Cons, cvals=CVal)
+            IC.build_dlc(coords)
+            if len(CVals) > 1:
+                xyzout = prefix+"scan_%03i.xyz" % ic
+            else:
+                xyzout = prefix+".xyz"
+            coords = Optimize(coords, M, IC, xyzout=xyzout, printIC=(ic==0))
     
 if __name__ == "__main__":
     main()
