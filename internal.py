@@ -805,7 +805,7 @@ class InternalCoordinates(object):
         self.stored_dQ = dQ.copy()
         self.stored_newxyz = newxyz.copy()
 
-    def newCartesian(self, xyz, dQ, u=None, verbose=True, applyCon=True):
+    def newCartesian(self, xyz, dQ, u=None, verbose=True, applyCon=False):
         cached = self.readCache(xyz, dQ)
         if cached is not None:
             # print "Returning cached result"
@@ -828,7 +828,10 @@ class InternalCoordinates(object):
                 return xyz_iter1.flatten()
             elif ndqt > 1e-3:
                 if verbose: print "Approximate coordinates obtained after %i microiterations (rmsd = %.3e |dQ| = %.3e)" % (microiter, rmsdt, ndqt)
+            else:
+                print "Cartesian coordinates obtained after %i microiterations (rmsd = %.3e |dQ| = %.3e)" % (microiter, rmsdt, ndqt)
             # These two lines of code make sure that we remove any residual constraint violations
+            # Presently it is broken
             if applyCon:
                 print "newCartesian calling applyConstraints"
                 xyzCon = self.applyConstraints(xyzsave.flatten())
@@ -1598,12 +1601,16 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
                         dQ[iDLC] = Plus2Pi
                     if np.abs(dQ[iDLC]) > np.abs(Minus2Pi):
                         dQ[iDLC] = Minus2Pi
-            print "applyConstraints calling newCartesian"
-            xyz2 = self.newCartesian(xyz1, dQ, verbose=False, applyCon=False)
+            print "applyConstraints calling newCartesian (%i), |dQ| = %.3e" % (niter, np.linalg.norm(dQ))
+            xyz2 = self.newCartesian(xyz1, dQ, verbose=True, applyCon=False)
             if np.linalg.norm(dQ) < 1e-6:
                 return xyz2
+            if niter > 1 and np.linalg.norm(dQ) > np.linalg.norm(dQ0):
+                print "\x1b[1;93mWarning: Failed to apply Constraint\x1b[0m"
+                return xyz1
             xyz1 = xyz2.copy()
             niter += 1
+            dQ0 = dQ.copy()
             # if niter == 50:
             #     raise RuntimeError("Unable to obtain desired constrained geometry in 50 outer loops")
         # return xyz2
@@ -1748,11 +1755,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
                         if n_orth > 1:
                             raise RuntimeError("Gram-Schmidt orthogonalization has failed")
                         continue
-                    # if np.linalg.norm(U[-1]) < 1e-3:
-                    #     print iv, np.linalg.norm(U[-1])
                     U[-1] /= np.linalg.norm(U[-1])
-                # print self.Vecs.shape
-                # print "--"
                 self.Vecs = np.matrix(U).T
             print "Done in", click(), "s"
             # Rearrange the DLCs so that the ones corresponding to constraints are last, and in the same order that they were entered
