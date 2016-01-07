@@ -4,7 +4,7 @@ from __future__ import division
 import numpy as np
 from copy import deepcopy
 from collections import OrderedDict
-from internal import PrimitiveInternalCoordinates, DelocalizedInternalCoordinates, RotationA, RotationB, RotationC, Distance, Angle, Dihedral, OutOfPlane, CartesianX, CartesianY, CartesianZ, TranslationX, TranslationY, TranslationZ
+from internal import PrimitiveInternalCoordinates, DelocalizedInternalCoordinates, RotationA, RotationB, RotationC, Distance, Angle, Dihedral, OutOfPlane, CartesianX, CartesianY, CartesianZ, TranslationX, TranslationY, TranslationZ, print2D
 from rotate import get_rot, sorted_eigh
 from forcebalance.molecule import Molecule, Elements
 from forcebalance.nifty import row, col, flat, invert_svd, uncommadash, isint
@@ -19,7 +19,6 @@ import os, sys, shutil
 parser = argparse.ArgumentParser()
 parser.add_argument('--cart', action='store_true', help='Use Cartesian coordinate system.')
 parser.add_argument('--connect', action='store_true', help='Connect noncovalent molecules into a network.')
-parser.add_argument('--constraints', type=str, help='Provide a text file specifying geometry constraints.')
 parser.add_argument('--redund', action='store_true', help='Use redundant coordinate system.')
 parser.add_argument('--terachem', action='store_true', help='Run optimization in TeraChem (pass xyz as first argument).')
 parser.add_argument('--dftd', action='store_true', help='Turn on dispersion correction in TeraChem.')
@@ -33,17 +32,21 @@ parser.add_argument('--reseth', action='store_true', help='Reset Hessian when ei
 parser.add_argument('--rfo', action='store_true', help='Use rational function optimization (leave off = trust radius Newton Raphson).')
 parser.add_argument('--trust', type=float, default=0.1, help='Starting trust radius.')
 parser.add_argument('--tmax', type=float, default=0.3, help='Maximum trust radius.')
+parser.add_argument('input', type=str, help='Q-Chem input file (will be converted into TeraChem file if --terachem is specified')
+parser.add_argument('constraints', type=str, nargs='?', help='Constraint input file (optional)')
 
 print ' '.join(sys.argv)
 
-args, sys.argv = parser.parse_known_args(sys.argv)
+#args, sys.argv = parser.parse_known_args(sys.argv)
+
+args = parser.parse_args(sys.argv[1:])
 
 TeraChem = args.terachem
 
 TCHome = "/home/leeping/src/terachem/production/build"
 
 if args.prefix is None:
-    prefix = os.path.splitext(sys.argv[1])[0]+"_optim"
+    prefix = os.path.splitext(args.input)[0]+"_optim"
 else:
     prefix = args.prefix
 
@@ -77,7 +80,7 @@ scf diis+a
 eps = args.epsilon
 
 # Read in the molecule
-M = Molecule(sys.argv[1], radii={'Na':0.0})
+M = Molecule(args.input, radii={'Na':0.0})
 if 'method' in M.qcrems[0]:
     method = method
 else:
@@ -542,9 +545,14 @@ def Optimize(coords, molecule, IC=None, xyzout=None, printIC=True):
         # the derivative of the step length w/r.t. v.
         def get_delta_prime_trm(v):
             HC, GC = IC.augmentGH(X, G, H)
-            # print HC, GC
-            # raw_input()
-            HT = HC + v*np.eye(len(HC))
+            HT = HC + v**2*np.eye(len(HC))
+            F = np.eye(len(HC))
+            # The constrained degrees of freedom should not have anything added to diagonal
+            for i in range(len(G), len(GC)):
+                HT[i, i] = 0.0
+                F[i, i] = 0.0
+            F = np.matrix(F)
+            # print2D(np.matrix(sorted(np.linalg.eig(HT)[0])))
             try:
                 Hi = invert_svd(np.matrix(HT))
             except:
@@ -552,8 +560,8 @@ def Optimize(coords, molecule, IC=None, xyzout=None, printIC=True):
                 return get_delta_prime_trm(v+0.001)
             dyc = flat(-1 * Hi * col(GC))
             dy = dyc[:len(G)]
-            d_prime = flat(-1 * Hi * col(dyc))[:len(G)]
-            dy_prime = np.dot(dy,d_prime)/np.linalg.norm(dy)
+            d_prime = flat(-1 * F * Hi * col(dyc))[:len(G)]
+            dy_prime = 2*v*np.dot(dy,d_prime)/np.linalg.norm(dy)
             sol = flat(0.5*row(dy)*np.matrix(H)*col(dy))[0] + np.dot(dy,G)
             return dy, sol, dy_prime
 
@@ -621,14 +629,28 @@ def Optimize(coords, molecule, IC=None, xyzout=None, printIC=True):
             if ndy < target:
                 return dy, sol
             v = v0
-            # print "v: %.4e ndy -> target: %.4e -> %.4e" % (v, ndy, target)
+            niter = 0
+            ndy_last = 0
             while True:
-                v += (1-ndy/target)*(ndy/dy_prime)
+                if dy_prime == 0:
+                    v = 0.1
+                else:
+                    v += (1-ndy/target)*(ndy/dy_prime)
                 dy, sol, dy_prime, = get_delta_prime(v)
                 ndy = np.linalg.norm(dy)
-                # print "v: %.4e ndy -> target: %.4e -> %.4e" % (v, ndy, target)
+                # print "v = %.5f dy -> target = %.5f -> %.5f" % (v, ndy, target)
                 if np.abs((ndy-target)/target) < 0.001:
                     return dy, sol
+                # With Lagrange multipliers it may be impossible to go under a target step size
+                elif niter > 10 and np.abs(ndy_last-ndy)/ndy < 0.001:
+                    return dy, sol
+                niter += 1
+                ndy_last = ndy
+                # Break out of infinite oscillation loops
+                if niter == 100:
+                    print "trust_step hit niter = 100, randomizing"
+                    v += np.random.random()
+                    niter = 0
 
         # If our trust radius is to be computed in Cartesian coordinates,
         # then we use an outer loop to find the appropriate step
@@ -936,10 +958,11 @@ def main():
             IC = DelocalizedInternalCoordinates(M, connect=args.connect, constraints=Cons, cvals=CVal)
             IC.build_dlc(coords)
             if len(CVals) > 1:
-                xyzout = prefix+"scan_%03i.xyz" % ic
+                xyzout = prefix+"-%03i.xyz" % ic
             else:
                 xyzout = prefix+".xyz"
-            coords = IC.applyConstraints(coords)
+            # We may explicitly enforce the constraints here if we want to.
+            # coords = IC.applyConstraints(coords)
             coords = Optimize(coords, M, IC, xyzout=xyzout, printIC=(ic==0))
     
 if __name__ == "__main__":

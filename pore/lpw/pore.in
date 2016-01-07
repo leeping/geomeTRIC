@@ -179,7 +179,7 @@ $end
 $rem
 jobtype force
 exchange b3lyp
-basis 3-21g
+basis 6-31g*
 symmetry off
 sym_ignore true
 scf_convergence 10
