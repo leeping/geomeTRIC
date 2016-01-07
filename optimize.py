@@ -545,7 +545,8 @@ def Optimize(coords, molecule, IC=None, xyzout=None, printIC=True):
         # the derivative of the step length w/r.t. v.
         def get_delta_prime_trm(v):
             HC, GC = IC.augmentGH(X, G, H)
-            HT = HC + v**2*np.eye(len(HC))
+            # HT = HC + v**2*np.eye(len(HC))
+            HT = HC + v*np.eye(len(HC))
             F = np.eye(len(HC))
             # The constrained degrees of freedom should not have anything added to diagonal
             for i in range(len(G), len(GC)):
@@ -561,7 +562,7 @@ def Optimize(coords, molecule, IC=None, xyzout=None, printIC=True):
             dyc = flat(-1 * Hi * col(GC))
             dy = dyc[:len(G)]
             d_prime = flat(-1 * F * Hi * col(dyc))[:len(G)]
-            dy_prime = 2*v*np.dot(dy,d_prime)/np.linalg.norm(dy)
+            dy_prime = np.dot(dy,d_prime)/np.linalg.norm(dy)
             sol = flat(0.5*row(dy)*np.matrix(H)*col(dy))[0] + np.dot(dy,G)
             return dy, sol, dy_prime
 
