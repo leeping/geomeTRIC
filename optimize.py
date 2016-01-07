@@ -386,7 +386,7 @@ def ParseConstraints(molecule, cFile):
                 if isint(s[1]):
                     atoms = [int(s[1])-1]
                 elif s[1] in [k.lower() for k in Elements]:
-                    atoms = [i for i in range(molecule.na) if molecule.elem[i].lower() == key]
+                    atoms = [i for i in range(molecule.na) if molecule.elem[i].lower() == s[1]]
                 else:
                     atoms = uncommadash(s[1])
                 if any([i<0 for i in atoms]):
@@ -701,6 +701,8 @@ def Optimize(coords, molecule, IC=None, xyzout=None, printIC=True):
         Gprev = G.copy()
         Eprev = E
         Y += dy
+        # print dy
+        # raw_input()
         if internal:
             X = IC.newCartesian(X, dy, verbose=args.verbose)
         else:
