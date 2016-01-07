@@ -805,7 +805,7 @@ class InternalCoordinates(object):
         self.stored_dQ = dQ.copy()
         self.stored_newxyz = newxyz.copy()
 
-    def newCartesian(self, xyz, dQ, u=None, verbose=True, applyCon=False):
+    def newCartesian(self, xyz, dQ, u=None, verbose=True, applyCon=True):
         cached = self.readCache(xyz, dQ)
         if cached is not None:
             # print "Returning cached result"
@@ -829,7 +829,7 @@ class InternalCoordinates(object):
             elif ndqt > 1e-3:
                 if verbose: print "Approximate coordinates obtained after %i microiterations (rmsd = %.3e |dQ| = %.3e)" % (microiter, rmsdt, ndqt)
             else:
-                print "Cartesian coordinates obtained after %i microiterations (rmsd = %.3e |dQ| = %.3e)" % (microiter, rmsdt, ndqt)
+                if verbose: print "Cartesian coordinates obtained after %i microiterations (rmsd = %.3e |dQ| = %.3e)" % (microiter, rmsdt, ndqt)
             # These two lines of code make sure that we remove any residual constraint violations
             # Presently it is broken
             if applyCon:
@@ -838,7 +838,6 @@ class InternalCoordinates(object):
                 xyzsave = xyzCon.copy()
             self.writeCache(xyz, dQ, xyzsave)
             return xyzsave.flatten()
-            # return self.applyConstraints(xyzsave.flatten())
         fail_counter = 0
         while True:
             microiter += 1
@@ -1532,14 +1531,9 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
                 if np.abs(GC[nr]) > np.abs(Minus2Pi):
                     GC[nr] = Minus2Pi
             GC[nr] = 0.0
-        # print "GC:"
-        # print2D(row(GC))
-        # print "HC:"
-        # print2D(HC)
-        # print
         return HC, GC
 
-    # This is the one that wurx
+    # # This is the one that wurx
     # def augmentGH(self, xyz, G, H):
     #     # Number of internals (elements of G)
     #     ni = len(G)
