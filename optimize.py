@@ -26,9 +26,9 @@ parser.add_argument('--double', action='store_true', help='Run TeraChem in doubl
 parser.add_argument('--prefix', type=str, default=None, help='Specify a prefix for output file and temporary directory.')
 parser.add_argument('--displace', action='store_true', help='Write out the displacements.')
 parser.add_argument('--epsilon', type=float, default=1e-5, help='Small eigenvalue threshold.')
-parser.add_argument('-c', '--check', type=int, default=10, help='Check coordinates every N steps (-1 for no check).')
+parser.add_argument('-c', '--check', type=int, default=0, help='Check coordinates every N steps (0 for no check).')
 parser.add_argument('-v', '--verbose', action='store_true', help='Write out the displacements.')
-parser.add_argument('--reseth', action='store_true', help='Reset Hessian when eigenvalues are under epsilon.')
+parser.add_argument('--reset', action='store_true', help='Reset Hessian when eigenvalues are under epsilon.')
 parser.add_argument('--rfo', action='store_true', help='Use rational function optimization (leave off = trust radius Newton Raphson).')
 parser.add_argument('--trust', type=float, default=0.1, help='Starting trust radius.')
 parser.add_argument('--tmax', type=float, default=0.3, help='Maximum trust radius.')
@@ -224,7 +224,7 @@ def RebuildHessian(IC, H0, coord_seq, grad_seq, trust=0.3):
         Mat2 = ((H*Dy)*(H*Dy).T)/(Dy.T*H*Dy)[0,0]
         Hstor = H.copy()
         H += Mat1-Mat2
-    if np.min(np.linalg.eigh(H)[0]) < eps and args.reseth:
+    if np.min(np.linalg.eigh(H)[0]) < eps and args.reset:
         print "Eigenvalues below %.4e (%.4e) - returning guess" % (eps,np.min(np.linalg.eigh(H)[0]))
         return H0.copy()
     return H
@@ -919,7 +919,7 @@ def Optimize(coords, molecule, IC=None, xyzout=None, printIC=True):
                 Eig1.sort()
                 if args.verbose:
                     print "Eig-ratios: %.5e ... %.5e" % (np.min(Eig1)/np.min(Eig), np.max(Eig1)/np.max(Eig))
-                if np.min(Eig1) <= eps and args.reseth:
+                if np.min(Eig1) <= eps and args.reset:
                     print "Eigenvalues below %.4e (%.4e) - returning guess" % (eps, np.min(Eig1))
                     H = IC.guess_hessian(coords)
         # Then it's on to the next loop iteration!
