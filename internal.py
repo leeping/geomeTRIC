@@ -1218,7 +1218,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
             for a in molecule.topology.neighbors(b):
                 for c in molecule.topology.neighbors(b):
                     if a < c:
-                        if (a, c) in molecule.topology.edges() or (c, a) in molecule.topology.edges(): continue
+                        # if (a, c) in molecule.topology.edges() or (c, a) in molecule.topology.edges(): continue
                         Ang = Angle(a, b, c)
                         nnc = (min(a, b), max(a, b)) in noncov
                         nnc += (min(b, c), max(b, c)) in noncov
@@ -1308,7 +1308,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                 for d in molecule.topology.neighbors(c):
                     if a not in aline and d not in aline and a != d:
                     # if a != c and b != d and a != d:
-                        if (a, d) in molecule.topology.edges() or (d, a) in molecule.topology.edges(): continue
+                        # if (a, d) in molecule.topology.edges() or (d, a) in molecule.topology.edges(): continue
                         nnc = (min(a, b), max(a, b)) in noncov
                         nnc += (min(b, c), max(b, c)) in noncov
                         nnc += (min(c, d), max(c, d)) in noncov
