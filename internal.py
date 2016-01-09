@@ -1210,8 +1210,9 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
             self.add(Distance(a, b))
 
         # Add an internal coordinate for all angles
-        LinThre = 0.99619469809174555
+        # LinThre = 0.99619469809174555
         # LinThre = 0.999
+        # This number works best for the iron complex
         LinThre = 0.95
         AngDict = defaultdict(list)
         for b in molecule.topology.nodes():
@@ -1267,7 +1268,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                                     self.add(OutOfPlane(b, i, j, k))
                                     break
                                 
-        # Lines-of-atoms code
+        # Find groups of atoms that are in straight lines
         atom_lines = [list(i) for i in molecule.topology.edges()]
         while True:
             atom_lines0 = deepcopy(atom_lines)
@@ -1302,76 +1303,99 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
 
         # Normal dihedral code
         for aline in atom_lines_uniq:
-            b = aline[0]
-            c = aline[-1]
-            for a in molecule.topology.neighbors(b):
-                for d in molecule.topology.neighbors(c):
-                    if a not in aline and d not in aline and a != d:
-                    # if a != c and b != d and a != d:
-                        # if (a, d) in molecule.topology.edges() or (d, a) in molecule.topology.edges(): continue
-                        nnc = (min(a, b), max(a, b)) in noncov
-                        nnc += (min(b, c), max(b, c)) in noncov
-                        nnc += (min(c, d), max(c, d)) in noncov
-                        # if nnc >= 2: continue
-                        # print aline, a, b, c, d
-                        Ang1 = Angle(a,b,c)
-                        Ang2 = Angle(b,c,d)
-                        if np.abs(np.cos(Ang1.value(coords))) > LinThre: continue
-                        if np.abs(np.cos(Ang2.value(coords))) > LinThre: continue
-                        if b < c:
-                            self.add(Dihedral(a, b, c, d))
-                        else:
-                            self.add(Dihedral(d, c, b, a))
+            for (b, c) in itertools.combinations(aline, 2):
+                if b > c: (b, c) = (c, b)
+                for a in molecule.topology.neighbors(b):
+                    for d in molecule.topology.neighbors(c):
+                        # Make sure the end-atoms are not in the line
+                        if a not in aline and d not in aline and a != d:
+                            nnc = (min(a, b), max(a, b)) in noncov
+                            nnc += (min(b, c), max(b, c)) in noncov
+                            nnc += (min(c, d), max(c, d)) in noncov
+                            # print aline, a, b, c, d
+                            Ang1 = Angle(a,b,c)
+                            Ang2 = Angle(b,c,d)
+                            # Eliminate dihedrals containing angles that are almost linear
+                            # (should be eliminated already)
+                            if np.abs(np.cos(Ang1.value(coords))) > LinThre: continue
+                            if np.abs(np.cos(Ang2.value(coords))) > LinThre: continue
+                            if b < c:
+                                self.add(Dihedral(a, b, c, d))
+                            else:
+                                self.add(Dihedral(d, c, b, a))
             
-        # def pull_lines(a, front=True):
-        #     # Get lines-of-atoms where the first (or last) element matches "i"
-        #     # Strip "i" itself from the front or back.
+        
+        ### Following are codes that evaluate angles and dihedrals involving entire lines-of-atoms
+        ### as single degrees of freedom
+        ### Unfortunately, they do not seem to improve the performance
+
+        # def pull_lines(a, front=True, middle=False):
+        #     """
+        #     Given an atom, pull all lines-of-atoms that it is in, e.g.
+        #     e.g. 
+        #               D
+        #               C
+        #               B
+        #           EFGHAIJKL
+        #     returns (B, C, D), (H, G, F, E), (I, J, K, L).
+            
+        #     A is the implicit first item in the list.
+        #     Set front to False to make A the implicit last item in the list.
+        #     Set middle to True to return lines where A is in the middle e.g. (H, G, F, E) and (I, J, K, L).
+        #     """
         #     answer = []
         #     for l in atom_lines_uniq:
         #         if l[0] == a:
         #             answer.append(l[:][1:])
-        #         if l[-1] == a:
+        #         elif l[-1] == a:
         #             answer.append(l[::-1][1:])
+        #         elif middle and a in l:
+        #             answer.append(l[l.index(a):][1:])
+        #             answer.append(l[:l.index(a)][::-1])
         #     if front: return answer
         #     else: return [l[::-1] for l in answer]
 
+        # def same_line(al, bl):
+        #     for l in atom_lines_uniq:
+        #         if set(al).issubset(set(l)) and set(bl).issubset(set(l)):
+        #             return True
+        #     return False
+        
+        ## Multiple angle code; does not improve performance for Fe4N system.
         # for b in molecule.topology.nodes():
-        #     for al in pull_lines(b, front=False):
-        #         for cl in pull_lines(b, front=True):
+        #     for al in pull_lines(b, front=False, middle=True):
+        #         for cl in pull_lines(b, front=True, middle=True):
         #             if al[0] == cl[-1]: continue
+        #             if al[-1] == cl[0]: continue
         #             self.delete(Angle(al[-1], b, cl[0]))
         #             self.delete(Angle(cl[0], b, al[-1]))
-        #             if any([i in molecule.topology.edges() for i in itertools.product(al, cl)]):
-        #                 print "Skipping", al, b, cl
-        #                 continue
-        #             if any([i in molecule.topology.edges() for i in itertools.product(cl, al)]):
-        #                 print "Skipping", al, b, cl
+        #             if len(set(al).intersection(set(cl))) > 0: continue
+        #             if same_line(al, cl):
         #                 continue
         #             if al[-1] < cl[0]:
-        #                 #print MultiAngle(al, b, cl)
         #                 self.add(MultiAngle(al, b, cl))
         #             else:
-        #                 #print MultiAngle(cl[::-1], b, al[::-1])
         #                 self.add(MultiAngle(cl[::-1], b, al[::-1]))
-            
-        # for aline in atom_lines_uniq:
-        #     b = aline[0]
-        #     c = aline[-1]
-        #     for al in pull_lines(b, front=False):
-        #         if al[0] == c: continue
-        #         for dl in pull_lines(c, front=True):
-        #             if dl[-1] == b: continue
-        #             if len(set(al).intersection(set(dl))) > 0: continue
-        #             if any([i in molecule.topology.edges() for i in itertools.product(al, dl)]):
-        #                 print "Skipping", al, b, c, dl
-        #                 continue
-        #             if b < c:
-        #                 # print MultiDihedral(al, b, c, dl)
-        #                 self.add(MultiDihedral(al, b, c, dl))
-        #             else:
-        #                 # print MultiDihedral(dl[::-1], c, b, al[::-1])
-        #                 self.add(MultiDihedral(dl[::-1], c, b, al[::-1]))
 
+        ## Multiple dihedral code
+        ## Note: This suffers from a problem where it cannot rebuild the Cartesian coordinates,
+        ## possibly due to a bug in the MultiDihedral class.
+        # for aline in atom_lines_uniq:
+        #     for (b, c) in itertools.combinations(aline, 2):
+        #         if b > c: (b, c) = (c, b)
+        #         for al in pull_lines(b, front=False):
+        #             if same_line(al, aline):
+        #                 # print "Same line:", al, aline
+        #                 continue
+        #             for dl in pull_lines(c, front=True):
+        #                 if same_line(dl, aline):
+        #                     # print "Same line:", dl, aline
+        #                     continue
+        #                 if len(set(al).intersection(set(dl))) > 0: continue
+        #                 # print MultiDihedral(al, b, c, dl)
+        #                 self.delete(Dihedral(al[-1], b, c, dl[0]))
+        #                 self.add(MultiDihedral(al, b, c, dl))
+                
 
     def __repr__(self):
         lines = ["Internal coordinate system (atoms numbered from 1):"]
@@ -1797,8 +1821,8 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
     def haveConstraints(self):
         return len(self.Prims.cPrims) > 0
 
-    def printConstraints(self, xyz):
-        self.Prims.printConstraints(xyz)
+    def printConstraints(self, xyz, thre=1e-5):
+        self.Prims.printConstraints(xyz, thre=thre)
 
     # def augmentGH(self, xyz, G, H):
     #     # Number of internals (elements of G)

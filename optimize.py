@@ -685,7 +685,7 @@ def Optimize(coords, molecule, IC=None, xyzout=None, printIC=True):
                         else:
                             dy, expect = trust_step(trial, v0)
                             dynorm = getCartesianNorm(X, dy, IC)
-                            froot.from_above = (froot.above_flag and not IC.bork)
+                            froot.from_above = (froot.above_flag and not IC.bork and dynorm < trust)
                             froot.stores[trial] = dynorm
                             froot.counter += 1
                         # Store the largest trial value with dynorm below the target
@@ -724,6 +724,7 @@ def Optimize(coords, molecule, IC=None, xyzout=None, printIC=True):
                 else:
                     if args.verbose: print "\x1b[93mBrent algorithm requires %i evaluations\x1b[0m" % froot.counter
                 if iopt is None:
+                    if args.verbose: print "\x1b[93mNo iopt - continuing\x1b[0m" % froot.counter
                     ForceRebuild = True
                 if ForceRebuild:
                     # Force a rebuild of the coordinate system
@@ -1004,8 +1005,10 @@ def main():
     else:
         # ccoord = []
         for ic, CVal in enumerate(CVals):
+            print "---=== Scan %i/%i : Constrained Optimization ===---" % (ic+1, len(CVals))
             IC = DelocalizedInternalCoordinates(M, connect=args.connect, constraints=Cons, cvals=CVal)
             IC.build_dlc(coords)
+            IC.printConstraints(coords, thre=-1)
             if len(CVals) > 1:
                 xyzout = prefix+"-%03i.xyz" % ic
             else:
@@ -1013,6 +1016,7 @@ def main():
             # We may explicitly enforce the constraints here if we want to.
             # coords = IC.applyConstraints(coords)
             coords = Optimize(coords, M, IC, xyzout=xyzout, printIC=(ic==0))
+            print
     
 if __name__ == "__main__":
     main()
