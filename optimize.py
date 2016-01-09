@@ -4,7 +4,7 @@ from __future__ import division
 import numpy as np
 from copy import deepcopy
 from collections import OrderedDict
-from internal import PrimitiveInternalCoordinates, DelocalizedInternalCoordinates, RotationA, RotationB, RotationC, Distance, Angle, Dihedral, OutOfPlane, CartesianX, CartesianY, CartesianZ, TranslationX, TranslationY, TranslationZ, print2D
+from internal import PrimitiveInternalCoordinates, DelocalizedInternalCoordinates, RotationA, RotationB, RotationC, Distance, Angle, Dihedral, OutOfPlane, CartesianX, CartesianY, CartesianZ, TranslationX, TranslationY, TranslationZ, printArray
 from rotate import get_rot, sorted_eigh
 from forcebalance.molecule import Molecule, Elements
 from forcebalance.nifty import row, col, flat, invert_svd, uncommadash, isint
@@ -73,6 +73,9 @@ convthre 1.0e-6
 threall 1.0e-16
 mixguess 0.0
 scf diis+a
+maxit 50
+threspdp 1e-8
+dftgrid 1
 {guess}
 {dftd}
 """
@@ -95,19 +98,19 @@ def calc_terachem(coords):
         return energy, gradient
     # print "Calling TeraChem for energy and gradient"
     guesses = []
+    have_guess = False
     for f in ['c0', 'ca0', 'cb0']:
         if os.path.exists(os.path.join(dirname, 'scr', f)):
             shutil.copy2(os.path.join(dirname, 'scr', f), os.path.join(dirname, f))
             guesses.append(f)
             have_guess = True
-    else: have_guess = False
     with open("%s/run.in" % dirname, "w") as f:
         print >> f, TeraTemp.format(basis = M.qcrems[0]['basis'],
                                     ur = "u" if M.mult != 1 else "r",
                                     method = method,
                                     charge = str(M.charge), mult=str(M.mult),
-                                    precision = "double" if args.double else "dynamic",
-                                    guess = ("guess " + ' '.join(guesses) if have_guess else ""),
+                                    precision = "double" if args.double else "mixed",
+                                    guess = ("guess " + ' '.join(guesses) + "\npurify no" if have_guess else ""),
                                     dftd = ("dispersion yes" if args.dftd else ""))
     # Convert coordinates back to the xyz file
     M.xyzs[0] = coords.reshape(-1, 3) * 0.529
@@ -346,7 +349,8 @@ def ParseConstraints(molecule, cFile):
                  "xy":([CartesianX, CartesianY], 1), 
                  "xz":([CartesianX, CartesianZ], 1), 
                  "yz":([CartesianY, CartesianZ], 1), 
-                 "xyz":([CartesianX, CartesianY, CartesianZ], 1)
+                 "xyz":([CartesianX, CartesianY, CartesianZ], 1),
+                 "rotation":([RotationA, RotationB, RotationC], 1)
                  }
     CDict_Trans = {"x":([TranslationX], 1), 
                    "y":([TranslationY], 1), 
@@ -359,6 +363,7 @@ def ParseConstraints(molecule, cFile):
     AtomKeys = ["x", "y", "z", "xy", "yz", "xz", "xyz"]
     objs = []
     vals = []
+    coords = molecule.xyzs[0].flatten() / 0.529
     for line in open(cFile).readlines():
         line = line.split("#")[0].strip().lower()
         # This is a list-of-lists. The intention is to create a multidimensional grid
@@ -452,8 +457,16 @@ def ParseConstraints(molecule, cFile):
                         else: x2 = float(s[2+n_atom])*np.pi/180.0
                         nstep = int(s[3+n_atom])
                         vals.append([[i] for i in list(np.linspace(x1,x2,nstep))])
-            else:
-                raise RuntimeError("Line not supported: %s" % line)
+            elif key in ["rotation"]:
+                # User can only specify ranges of atoms
+                atoms = uncommadash(s[1])
+                if mode == "freeze":
+                    for cls in classes:
+                        objs.append([cls(atoms, coords, {})])
+                        vals.append([[None]])
+                else:
+                    raise RuntimeError("Orientation constraints can only be used with $freeze")
+                # raise RuntimeError("Line not supported: %s" % line)
     if len(objs) != len(vals):
         raise RuntimeError("objs and vals should be the same length")
     valgrps = [list(itertools.chain(*i)) for i in list(itertools.product(*vals))]
@@ -553,7 +566,7 @@ def Optimize(coords, molecule, IC=None, xyzout=None, printIC=True):
                 HT[i, i] = 0.0
                 F[i, i] = 0.0
             F = np.matrix(F)
-            # print2D(np.matrix(sorted(np.linalg.eig(HT)[0])))
+            # printArray(np.matrix(sorted(np.linalg.eig(HT)[0])))
             try:
                 Hi = invert_svd(np.matrix(HT))
             except:
@@ -703,13 +716,44 @@ def Optimize(coords, molecule, IC=None, xyzout=None, printIC=True):
                         froot.above_flag = True
                         iopt = brent_wiki(froot, 0, iopt, froot.target, cvg=0.1)
                     else: break
+                ForceRebuild = False
                 if IC.bork:
                     print "\x1b[91mInverse iteration for Cartesians failed\x1b[0m"
-                    iopt = 1e-3
+                    # This variable is added because IC.bork is unset later.
+                    ForceRebuild = True
                 else:
                     if args.verbose: print "\x1b[93mBrent algorithm requires %i evaluations\x1b[0m" % froot.counter
                 if iopt is None:
-                    iopt = 1e-3
+                    ForceRebuild = True
+                if ForceRebuild:
+                    # Force a rebuild of the coordinate system
+                    #####
+                    CoordCounter = 0
+                    newmol = deepcopy(molecule)
+                    newmol.xyzs[0] = X.reshape(-1,3)*0.529
+                    newmol.build_topology()
+                    if type(IC) is PrimitiveInternalCoordinates:
+                        IC1 = PrimitiveInternalCoordinates(newmol, connect=args.connect)
+                    elif type(IC) is DelocalizedInternalCoordinates:
+                        IC1 = DelocalizedInternalCoordinates(newmol, build=False, connect=args.connect)
+                        IC1.getConstraints_from(IC)
+                    else:
+                        raise RuntimeError('Spoo!')
+                    if IC1 != IC:
+                        print "\x1b[1;94mInternal coordinate system may have changed\x1b[0m"
+                        if IC.repr_diff(IC1) != "":
+                            print IC.repr_diff(IC1)
+                        reinit = True
+                        IC = IC1
+                    IC.resetRotations(X)
+                    if type(IC) is DelocalizedInternalCoordinates:
+                        IC.build_dlc(X)
+                    H0 = IC.guess_hessian(coords)
+                    H = RebuildHessian(IC, H0, X_hist, Gx_hist, 0.3)
+                    Y = IC.calculate(X)
+                    print "\x1b[1;93mSkipping optimization step\x1b[0m"
+                    continue
+                    #####
                 dy, expect = trust_step(iopt, v0)
         else:
             # This code is rarely used; trust radius in internal coordinates
@@ -928,7 +972,7 @@ def main():
         #     IC.weight_vectors(coords)
         for i in range(len(IC.Internals)):
             x = []
-            for j in np.linspace(-1.0, 1.0, 11):
+            for j in np.linspace(-0.3, 0.3, 7):
                 if j != 0:
                     dq = np.zeros(len(IC.Internals))
                     dq[i] = j
@@ -938,7 +982,11 @@ def main():
                 displacement = np.sqrt(np.sum((((x1-coords)*0.529).reshape(-1,3))**2, axis=1))
                 rms_displacement = np.sqrt(np.mean(displacement**2))
                 max_displacement = np.max(displacement)
-                x.append(x1.reshape(-1,3) * 0.529)
+                if j != 0:
+                    dx = (x1-coords)*np.abs(j)*2/max_displacement
+                else:
+                    dx = 0.0
+                x.append((coords+dx).reshape(-1,3) * 0.529)
                 print i, j, "Displacement (rms/max) = %.5f / %.5f" % (rms_displacement, max_displacement), "(Bork)" if IC.bork else "(Good)"
             M.xyzs = x
             M.write("%s/ic_%03i.xyz" % (dirname, i))

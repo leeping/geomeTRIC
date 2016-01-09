@@ -11,12 +11,19 @@ from collections import OrderedDict, defaultdict
 from scipy import optimize
 from rotate import get_expmap, get_expmap_der
 
-def print2D(mat, precision=3):
+def printArray(mat, precision=3):
     fmt="%% .%if" % precision
-    for i in range(mat.shape[0]):
-        for j in range(mat.shape[1]):
-            print fmt % mat[i,j],
+    if len(mat.shape) == 1:
+        for i in range(mat.shape[0]):
+            print fmt % mat[i],
         print
+    elif len(mat.shape) == 2:
+        for i in range(mat.shape[0]):
+            for j in range(mat.shape[1]):
+                print fmt % mat[i,j],
+            print
+    else:
+        raise RuntimeError("One or two dimensional arrays only")
 
 class CartesianX(object):
     def __init__(self, a, w=1.0):
@@ -494,6 +501,109 @@ class Angle(object):
         derivatives[o, :] = -(term1 + term2)
         return derivatives
 
+class MultiAngle(object):
+    def __init__(self, a, b, c):
+        if type(a) is int:
+            a = [a]
+        if type(c) is int:
+            c = [c]
+        self.a = tuple(a)
+        self.b = b
+        self.c = tuple(c)
+        if len(set([a, b, c])) != 3:
+            raise RuntimeError('a, b, and c must be different')
+
+    def __repr__(self):
+        stra = ("("+','.join(["%i" % (i+1) for i in self.a])+")") if len(self.a) > 1 else "%i" % (self.a[0]+1)
+        strc = ("("+','.join(["%i" % (i+1) for i in self.c])+")") if len(self.c) > 1 else "%i" % (self.c[0]+1)
+        return "%sAngle %s-%i-%s" % ("Multi" if (len(self.a) > 1 or len(self.c) > 1) else "", stra, self.b+1, strc)
+
+    def __eq__(self, other):
+        if type(self) is not type(other): return False
+        if self.b == other.b:
+            if set(self.a) == set(other.a):
+                if set(self.c) == set(other.c):
+                    return True
+            if set(self.a) == set(other.c):
+                if set(self.c) == set(other.a):
+                    return True
+        return False
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+        
+    def value(self, xyz):
+        xyz = xyz.reshape(-1,3)
+        a = np.array(self.a)
+        b = self.b
+        c = np.array(self.c)
+        xyza = np.mean(xyz[a], axis=0)
+        xyzc = np.mean(xyz[c], axis=0)
+        # vector from first atom to central atom
+        vector1 = xyza - xyz[b]
+        # vector from last atom to central atom
+        vector2 = xyzc - xyz[b]
+        # norm of the two vectors
+        norm1 = np.sqrt(np.sum(vector1**2))
+        norm2 = np.sqrt(np.sum(vector2**2))
+        dot = np.dot(vector1, vector2)
+        return np.arccos(dot / (norm1 * norm2))
+
+    def normal_vector(self, xyz):
+        xyz = xyz.reshape(-1,3)
+        a = np.array(self.a)
+        b = self.b
+        c = np.array(self.c)
+        xyza = np.mean(xyz[a], axis=0)
+        xyzc = np.mean(xyz[c], axis=0)
+        # vector from first atom to central atom
+        vector1 = xyza - xyz[b]
+        # vector from last atom to central atom
+        vector2 = xyzc - xyz[b]
+        # norm of the two vectors
+        norm1 = np.sqrt(np.sum(vector1**2))
+        norm2 = np.sqrt(np.sum(vector2**2))
+        crs = np.cross(vector1, vector2)
+        crs /= np.linalg.norm(crs)
+        return crs
+        
+    def derivative(self, xyz):
+        xyz = xyz.reshape(-1,3)
+        derivatives = np.zeros_like(xyz)
+        m = np.array(self.a)
+        o = self.b
+        n = np.array(self.c)
+        xyzm = np.mean(xyz[m], axis=0)
+        xyzn = np.mean(xyz[n], axis=0)
+        # Unit displacement vectors
+        u_prime = (xyzm - xyz[o])
+        u_norm = np.linalg.norm(u_prime)
+        v_prime = (xyzn - xyz[o])
+        v_norm = np.linalg.norm(v_prime)
+        u = u_prime / u_norm
+        v = v_prime / v_norm
+        VECTOR1 = np.array([1, -1, 1]) / np.sqrt(3)
+        VECTOR2 = np.array([-1, 1, 1]) / np.sqrt(3)
+        if np.linalg.norm(u + v) < 1e-10 or np.linalg.norm(u - v) < 1e-10:
+            # if they're parallel
+            if ((np.linalg.norm(u + VECTOR1) < 1e-10) or
+                    (np.linalg.norm(u - VECTOR2) < 1e-10)):
+                # and they're parallel o [1, -1, 1]
+                w_prime = np.cross(u, VECTOR2)
+            else:
+                w_prime = np.cross(u, VECTOR1)
+        else:
+            w_prime = np.cross(u, v)
+        w = w_prime / np.linalg.norm(w_prime)
+        term1 = np.cross(u, w) / u_norm
+        term2 = np.cross(w, v) / v_norm
+        for i in m:
+            derivatives[i, :] = term1/len(m)
+        for i in n:
+            derivatives[i, :] = term2/len(n)
+        derivatives[o, :] = -(term1 + term2)
+        return derivatives
+    
 class Dihedral(object):
     def __init__(self, a, b, c, d):
         self.a = a
@@ -578,6 +688,104 @@ class Dihedral(object):
         derivatives[p, :] = term2 - term3 + term4
         return derivatives
 
+class MultiDihedral(object):
+    def __init__(self, a, b, c, d):
+        if type(a) is int:
+            a = [a]
+        if type(d) is int:
+            d = [d]
+        self.a = tuple(a)
+        self.b = b
+        self.c = c
+        self.d = tuple(d)
+        if len(set([a, b, c, d])) != 4:
+            raise RuntimeError('a, b, c and d must be different')
+
+    def __repr__(self):
+        stra = ("("+','.join(["%i" % (i+1) for i in self.a])+")") if len(self.a) > 1 else "%i" % (self.a[0]+1)
+        strd = ("("+','.join(["%i" % (i+1) for i in self.d])+")") if len(self.d) > 1 else "%i" % (self.d[0]+1)
+        return "%sDihedral %s-%i-%i-%s" % ("Multi" if (len(self.a) > 1 or len(self.d) > 1) else "", stra, self.b+1, self.c+1, strd)
+
+    def __eq__(self, other):
+        if type(self) is not type(other): return False
+        if set(self.a) == set(other.a):
+            if self.b == other.b:
+                if self.c == other.c:
+                    if set(self.d) == set(other.d):
+                        return True
+        if set(self.a) == set(other.d):
+            if self.b == other.c:
+                if self.c == other.b:
+                    if set(self.d) == set(other.a):
+                        return True
+        return False
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+        
+    def value(self, xyz):
+        xyz = xyz.reshape(-1,3)
+        a = np.array(self.a)
+        b = self.b
+        c = self.c
+        d = np.array(self.d)
+        xyza = np.mean(xyz[a], axis=0)
+        xyzd = np.mean(xyz[d], axis=0)
+        
+        vec1 = xyz[b] - xyza
+        vec2 = xyz[c] - xyz[b]
+        vec3 = xyzd - xyz[c]
+        cross1 = np.cross(vec2, vec3)
+        cross2 = np.cross(vec1, vec2)
+        arg1 = np.sum(np.multiply(vec1, cross1)) * \
+               np.sqrt(np.sum(vec2**2))
+        arg2 = np.sum(np.multiply(cross1, cross2))
+        answer = np.arctan2(arg1, arg2)
+        return answer
+        
+    def derivative(self, xyz):
+        xyz = xyz.reshape(-1,3)
+        derivatives = np.zeros_like(xyz)
+        m = np.array(self.a)
+        o = self.b
+        p = self.c
+        n = np.array(self.d)
+        xyzm = np.mean(xyz[m], axis=0)
+        xyzn = np.mean(xyz[n], axis=0)
+        
+        u_prime = (xyzm - xyz[o])
+        w_prime = (xyz[p] - xyz[o])
+        v_prime = (xyzn - xyz[p])
+        u_norm = np.linalg.norm(u_prime)
+        w_norm = np.linalg.norm(w_prime)
+        v_norm = np.linalg.norm(v_prime)
+        u = u_prime / u_norm
+        w = w_prime / w_norm
+        v = v_prime / v_norm
+        if (1 - np.dot(u, w)**2) < 1e-6:
+            term1 = np.cross(u, w) * 0
+            term3 = np.cross(u, w) * 0
+        else:
+            term1 = np.cross(u, w) / (u_norm * (1 - np.dot(u, w)**2))
+            term3 = np.cross(u, w) * np.dot(u, w) / (w_norm * (1 - np.dot(u, w)**2))
+        if (1 - np.dot(v, w)**2) < 1e-6:
+            term2 = np.cross(v, w) * 0
+            term4 = np.cross(v, w) * 0
+        else:
+            term2 = np.cross(v, w) / (v_norm * (1 - np.dot(v, w)**2))
+            term4 = np.cross(v, w) * np.dot(v, w) / (w_norm * (1 - np.dot(v, w)**2))
+        # term1 = np.cross(u, w) / (u_norm * (1 - np.dot(u, w)**2))
+        # term2 = np.cross(v, w) / (v_norm * (1 - np.dot(v, w)**2))
+        # term3 = np.cross(u, w) * np.dot(u, w) / (w_norm * (1 - np.dot(u, w)**2))
+        # term4 = np.cross(v, w) * np.dot(v, w) / (w_norm * (1 - np.dot(v, w)**2))
+        for i in self.a:
+            derivatives[i, :] = term1/len(self.a)
+        for i in self.d:
+            derivatives[i, :] = -term2/len(self.d)
+        derivatives[o, :] = -term1 + term3 - term4
+        derivatives[p, :] = term2 - term3 + term4
+        return derivatives
+    
 class OutOfPlane(object):
     def __init__(self, a, b, c, d):
         self.a = a
@@ -747,7 +955,7 @@ class InternalCoordinates(object):
         xyz = xyz.reshape(-1,3)
         Analytical = self.derivatives(xyz)
         FiniteDifference = np.zeros_like(Analytical)
-        h = 0.001
+        h = 0.0001
         for i in range(xyz.shape[0]):
             for j in range(3):
                 x1 = xyz.copy()
@@ -948,6 +1156,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                             self.add(CartesianY(j, w=1.0))
                             self.add(CartesianZ(j, w=1.0))
                 ####
+                # Net translations and rotations.
                 # na = molecule.na
                 # alla = range(molecule.na)
                 # sel = coords.reshape(-1,3) / 0.529
@@ -1003,11 +1212,13 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         # Add an internal coordinate for all angles
         LinThre = 0.99619469809174555
         # LinThre = 0.999
+        LinThre = 0.95
         AngDict = defaultdict(list)
         for b in molecule.topology.nodes():
             for a in molecule.topology.neighbors(b):
                 for c in molecule.topology.neighbors(b):
                     if a < c:
+                        if (a, c) in molecule.topology.edges() or (c, a) in molecule.topology.edges(): continue
                         Ang = Angle(a, b, c)
                         nnc = (min(a, b), max(a, b)) in noncov
                         nnc += (min(b, c), max(b, c)) in noncov
@@ -1015,8 +1226,8 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                         if np.abs(np.cos(Ang.value(coords))) < LinThre:
                             self.add(Angle(a, b, c))
                             AngDict[b].append(Ang)
-                        elif self.connect:
-                            # print Ang, "is linear: replacing with Cartesians"
+                        elif (self.connect or not ThrowCarts):
+                            print Ang, "is linear: replacing with Cartesians"
                             # Almost linear bends (greater than 175 or less than 5) are dropped. 
                             # The dropped angle is replaced by the two Cartesians of the central 
                             # atom that are most perpendicular to the line between the other two 
@@ -1027,12 +1238,15 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                             nac = molecule.xyzs[0][c] - molecule.xyzs[0][a]
                             nac /= np.linalg.norm(nac)
                             # Dot products of this vector with the Cartesian axes
-                            dots = [np.dot(ei, nac) for ei in np.eye(3)]
+                            dots = [np.abs(np.dot(ei, nac)) for ei in np.eye(3)]
                             # Functions for adding Cartesian coordinate
-                            carts = [CartesianX, CartesianY, CartesianZ]
+                            # carts = [CartesianX, CartesianY, CartesianZ]
+                            trans = [TranslationX, TranslationY, TranslationZ]
+                            w = np.array([-1.0, 2.0, -1.0])
                             # Add two of the most perpendicular Cartesian coordinates
                             for i in np.argsort(dots)[:2]:
-                                self.add(carts[i](b))
+                                self.add(trans[i]([a, b, c], w=w))
+                                # self.add(carts[i](b))
 
         for b in molecule.topology.nodes():
             for a in molecule.topology.neighbors(b):
@@ -1053,48 +1267,53 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                                     self.add(OutOfPlane(b, i, j, k))
                                     break
                                 
-        # Lines-of-atoms code, commented out for now
-        # atom_lines = [list(i) for i in molecule.topology.edges()]
-        # while True:
-        #     atom_lines0 = deepcopy(atom_lines)
-        #     for aline in atom_lines:
-        #         # Imagine a line of atoms going like ab-ac-ax-ay.
-        #         # Our job is to extend the line until there are no more
-        #         ab = aline[0]
-        #         ac = aline[1]
-        #         ax = aline[-2]
-        #         ay = aline[-1]
-        #         for aa in molecule.topology.neighbors(ab):
-        #             if aa not in aline:
-        #                 ang = Angle(aa, ab, ac)
-        #                 if np.abs(np.cos(ang.value(coords))) > LinThre:
-        #                     # print "Prepending", aa, "to", aline
-        #                     aline.insert(0, aa)
-        #         for az in molecule.topology.neighbors(ay):
-        #             if az not in aline:
-        #                 ang = Angle(ax, ay, az)
-        #                 if np.abs(np.cos(ang.value(coords))) > LinThre:
-        #                     # print "Appending", az, "to", aline
-        #                     aline.append(az)
-        #     if atom_lines == atom_lines0: break
-        # atom_lines_uniq = []
-        # for i in atom_lines:
-        #     if tuple(i) not in set(atom_lines_uniq):
-        #         atom_lines_uniq.append(tuple(i))
-        # print "Lines of atoms:", atom_lines_uniq
+        # Lines-of-atoms code
+        atom_lines = [list(i) for i in molecule.topology.edges()]
+        while True:
+            atom_lines0 = deepcopy(atom_lines)
+            for aline in atom_lines:
+                # Imagine a line of atoms going like ab-ac-ax-ay.
+                # Our job is to extend the line until there are no more
+                ab = aline[0]
+                ac = aline[1]
+                ax = aline[-2]
+                ay = aline[-1]
+                for aa in molecule.topology.neighbors(ab):
+                    if aa not in aline:
+                        # print [ac for ac in aline[:-1]], ab
+                        if all([np.abs(np.cos(Angle(aa, ab, ac).value(coords))) > LinThre for ac in aline[1:] if ac != ab]):
+                            # print "Prepending", aa, "to", aline
+                            aline.insert(0, aa)
+                for az in molecule.topology.neighbors(ay):
+                    if az not in aline:
+                        # print aline
+                        # print [ax for ax in aline[:-1]], ay
+                        if all([np.abs(np.cos(Angle(ax, ay, az).value(coords))) > LinThre for ax in aline[:-1] if ax != ay]):
+                            # print "Appending", az, "to", aline
+                            aline.append(az)
+            if atom_lines == atom_lines0: break
+        atom_lines_uniq = []
+        for i in atom_lines:    # 
+            if tuple(i) not in set(atom_lines_uniq):
+                atom_lines_uniq.append(tuple(i))
+        lthree = [l for l in atom_lines_uniq if len(l) > 2]
+        if len(lthree) > 0:
+            print "Lines of three or more atoms:", ', '.join(['-'.join(["%i" % (i+1) for i in l]) for l in lthree])
 
-        for (b, c) in molecule.topology.edges():
-        # for aline in atom_lines_uniq:
-        #     b = aline[0]
-        #     c = aline[-1]
+        # Normal dihedral code
+        for aline in atom_lines_uniq:
+            b = aline[0]
+            c = aline[-1]
             for a in molecule.topology.neighbors(b):
                 for d in molecule.topology.neighbors(c):
-                    # if a not in aline and d not in aline and a != d:
-                    if a != c and b != d and a != d:
+                    if a not in aline and d not in aline and a != d:
+                    # if a != c and b != d and a != d:
+                        if (a, d) in molecule.topology.edges() or (d, a) in molecule.topology.edges(): continue
                         nnc = (min(a, b), max(a, b)) in noncov
                         nnc += (min(b, c), max(b, c)) in noncov
                         nnc += (min(c, d), max(c, d)) in noncov
                         # if nnc >= 2: continue
+                        # print aline, a, b, c, d
                         Ang1 = Angle(a,b,c)
                         Ang2 = Angle(b,c,d)
                         if np.abs(np.cos(Ang1.value(coords))) > LinThre: continue
@@ -1103,6 +1322,56 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                             self.add(Dihedral(a, b, c, d))
                         else:
                             self.add(Dihedral(d, c, b, a))
+            
+        # def pull_lines(a, front=True):
+        #     # Get lines-of-atoms where the first (or last) element matches "i"
+        #     # Strip "i" itself from the front or back.
+        #     answer = []
+        #     for l in atom_lines_uniq:
+        #         if l[0] == a:
+        #             answer.append(l[:][1:])
+        #         if l[-1] == a:
+        #             answer.append(l[::-1][1:])
+        #     if front: return answer
+        #     else: return [l[::-1] for l in answer]
+
+        # for b in molecule.topology.nodes():
+        #     for al in pull_lines(b, front=False):
+        #         for cl in pull_lines(b, front=True):
+        #             if al[0] == cl[-1]: continue
+        #             self.delete(Angle(al[-1], b, cl[0]))
+        #             self.delete(Angle(cl[0], b, al[-1]))
+        #             if any([i in molecule.topology.edges() for i in itertools.product(al, cl)]):
+        #                 print "Skipping", al, b, cl
+        #                 continue
+        #             if any([i in molecule.topology.edges() for i in itertools.product(cl, al)]):
+        #                 print "Skipping", al, b, cl
+        #                 continue
+        #             if al[-1] < cl[0]:
+        #                 #print MultiAngle(al, b, cl)
+        #                 self.add(MultiAngle(al, b, cl))
+        #             else:
+        #                 #print MultiAngle(cl[::-1], b, al[::-1])
+        #                 self.add(MultiAngle(cl[::-1], b, al[::-1]))
+            
+        # for aline in atom_lines_uniq:
+        #     b = aline[0]
+        #     c = aline[-1]
+        #     for al in pull_lines(b, front=False):
+        #         if al[0] == c: continue
+        #         for dl in pull_lines(c, front=True):
+        #             if dl[-1] == b: continue
+        #             if len(set(al).intersection(set(dl))) > 0: continue
+        #             if any([i in molecule.topology.edges() for i in itertools.product(al, dl)]):
+        #                 print "Skipping", al, b, c, dl
+        #                 continue
+        #             if b < c:
+        #                 # print MultiDihedral(al, b, c, dl)
+        #                 self.add(MultiDihedral(al, b, c, dl))
+        #             else:
+        #                 # print MultiDihedral(dl[::-1], c, b, al[::-1])
+        #                 self.add(MultiDihedral(dl[::-1], c, b, al[::-1]))
+
 
     def __repr__(self):
         lines = ["Internal coordinate system (atoms numbered from 1):"]
@@ -1258,9 +1527,10 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
     def haveConstraints(self):
         return len(self.cPrims) > 0
 
-    def printConstraints(self, xyz):
+    def printConstraints(self, xyz, thre=1e-5):
         nc = len(self.cPrims)
-        print "Constraint                         Current      Target       Diff."
+        out_lines = []
+        header = "Constraint                         Current      Target       Diff."
         for ic, c in enumerate(self.cPrims):
             current = c.value(xyz)
             reference = self.cVals[ic]
@@ -1271,9 +1541,16 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                 diff += 2*np.pi
             if type(c) in [TranslationX, TranslationY, TranslationZ, CartesianX, CartesianY, CartesianZ, Distance]:
                 factor = 0.529
-            elif type(c) in [Angle, Dihedral, OutOfPlane]:
+            elif type(c) in [Angle, Dihedral, OutOfPlane, RotationA, RotationB, RotationC]:
                 factor = 180.0/np.pi
-            print "%-30s  % 10.5f  % 10.5f  % 10.5f" % (str(c), current*factor, reference*factor, diff*factor)
+            if np.abs(diff*factor) > thre:
+                out_lines.append("%-30s  % 10.5f  % 10.5f  % 10.5f" % (str(c), current*factor, reference*factor, diff*factor))
+        if len(out_lines) > 0:
+            print header
+            print '\n'.join(out_lines)
+            # if type(c) in [RotationA, RotationB, RotationC]:
+            #     print c, c.value(xyz)
+            #     printArray(c.x0)
 
 #     def augmentGH(self, xyz, G, H):
 #         # Number of internals (elements of G)
@@ -1391,18 +1668,24 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                     Hdiag.append(A/(r-B)**3)
                 else:
                     Hdiag.append(0.1)
-            elif type(ic) is Angle:
-                if min(Elements.index(self.elem[ic.a]),
+            elif type(ic) in [Angle, MultiAngle]:
+                if type(ic) is Angle:
+                    a = ic.a
+                    c = ic.c
+                else:
+                    a = ic.a[-1]
+                    c = ic.c[0]
+                if min(Elements.index(self.elem[a]),
                        Elements.index(self.elem[ic.b]),
-                       Elements.index(self.elem[ic.c])) < 3:
+                       Elements.index(self.elem[c])) < 3:
                     A = 0.160
                 else:
                     A = 0.250
-                if covalent(ic.a, ic.b) and covalent(ic.b, ic.c):
+                if covalent(a, ic.b) and covalent(ic.b, c):
                     Hdiag.append(A)
                 else:
                     Hdiag.append(0.1)
-            elif type(ic) is Dihedral:
+            elif type(ic) in [Dihedral, MultiDihedral]:
                 r = np.linalg.norm(xyzs[ic.b]-xyzs[ic.c])
                 rcov = Radii[Elements.index(self.elem[ic.b])-1] + Radii[Elements.index(self.elem[ic.c])-1]
                 Hdiag.append(0.1)
@@ -1420,7 +1703,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                 # else:
                 #     Hdiag.append(0.023)
             elif type(ic) in [CartesianX, CartesianY, CartesianZ]:
-                Hdiag.append(0.05)
+                Hdiag.append(0.02)
             elif type(ic) in [TranslationX, TranslationY, TranslationZ]:
                 Hdiag.append(0.05)
             elif type(ic) in [RotationA, RotationB, RotationC]:
@@ -1792,9 +2075,8 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
             dQ[i] = eps
             dxyz = Bmat.T*Ginv*(np.matrix(dQ).T)
             rmsd = np.sqrt(np.mean(np.sum(np.array(dxyz).reshape(-1,3)**2, axis=1)))
-            # rmsd = dxyz**2
             dxdq[i] = rmsd/eps
-        dxdq /= np.min(dxdq)
+        dxdq /= np.max(dxdq)
         for i in range(len(self.Internals)):
             self.Vecs[:, i] *= dxdq[i]
         #print dxdq
