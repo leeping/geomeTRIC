@@ -285,6 +285,7 @@ def brent_wiki(f, a, b, rel, cvg=0.1):
             mflag = False
         # Calculate f(s)
         fs = f(s)
+        # print a, s, b, fs, rel, cvg
         # Check convergence
         if np.abs(fs/rel) <= cvg:
             return s
@@ -331,7 +332,6 @@ def OneDScan(init, final, steps):
     for j in range(len(init)):
         Answer.append(np.linspace(init[j], final[j], steps))
     Answer = list([list(i) for i in np.array(Answer).T])
-    print Answer
     return Answer
 
 def ParseConstraints(molecule, cFile):
@@ -481,13 +481,10 @@ else:
     Cons = None
     CVals = None
             
-def Optimize(coords, molecule, IC=None, xyzout=None, printIC=True):
+def Optimize(coords, molecule, IC=None, xyzout=None):
     progress = deepcopy(molecule)
     # Initial Hessian
     if IC is not None:
-        if printIC:
-            print "%i internal coordinates being used (rather than %i Cartesians)" % (len(IC.Internals), 3*molecule.na)
-            print IC
         internal = True
         H0 = IC.guess_hessian(coords)
     else:
@@ -706,15 +703,18 @@ def Optimize(coords, molecule, IC=None, xyzout=None, printIC=True):
                 froot.current_arg = None
                 froot.current_val = None
                 froot.small_interval = False
-                iopt = brent_wiki(froot, 0, inorm, trust, cvg=0.1)
+                iopt = brent_wiki(froot, 0.0, inorm, trust, cvg=0.1)
                 if froot.small_interval:
-                    iopt = froot.current_arg
+                    if froot.current_arg is not None:
+                        iopt = froot.current_arg
+                    else:
+                        froot.small_interval = False
                 for i in range(3):
                     if (not froot.small_interval) and IC.bork:
                         froot.target /= 2
                         if args.verbose: print "\x1b[93mReducing target to %.3e\x1b[0m" % froot.target
                         froot.above_flag = True
-                        iopt = brent_wiki(froot, 0, iopt, froot.target, cvg=0.1)
+                        iopt = brent_wiki(froot, 0.0, iopt, froot.target, cvg=0.1)
                     else: break
                 ForceRebuild = False
                 if IC.bork:
@@ -725,7 +725,7 @@ def Optimize(coords, molecule, IC=None, xyzout=None, printIC=True):
                     if args.verbose: print "\x1b[93mBrent algorithm requires %i evaluations\x1b[0m" % froot.counter
                 if iopt is None:
                     if args.verbose: print "\x1b[93mNo iopt - continuing\x1b[0m" % froot.counter
-                    ForceRebuild = True
+                    iopt = 0.01
                 if ForceRebuild:
                     # Force a rebuild of the coordinate system
                     #####
@@ -998,6 +998,9 @@ def main():
         IC.checkFiniteDifference(coords)
         CheckInternalGrad(coords, M, IC)
         sys.exit()
+        
+    print "%i internal coordinates being used (rather than %i Cartesians)" % (len(IC.Internals), 3*M.na)
+    print IC
 
     if Cons is None:
         xyzout = prefix+".xyz"
@@ -1015,7 +1018,7 @@ def main():
                 xyzout = prefix+".xyz"
             # We may explicitly enforce the constraints here if we want to.
             # coords = IC.applyConstraints(coords)
-            coords = Optimize(coords, M, IC, xyzout=xyzout, printIC=(ic==0))
+            coords = Optimize(coords, M, IC, xyzout=xyzout)
             print
     
 if __name__ == "__main__":
