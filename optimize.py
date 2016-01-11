@@ -4,7 +4,7 @@ from __future__ import division
 import numpy as np
 from copy import deepcopy
 from collections import OrderedDict
-from internal import PrimitiveInternalCoordinates, DelocalizedInternalCoordinates, RotationA, RotationB, RotationC, Distance, Angle, Dihedral, OutOfPlane, CartesianX, CartesianY, CartesianZ, TranslationX, TranslationY, TranslationZ, printArray
+from internal import *
 from rotate import get_rot, sorted_eigh
 from forcebalance.molecule import Molecule, Elements
 from forcebalance.nifty import row, col, flat, invert_svd, uncommadash, isint
@@ -22,6 +22,7 @@ parser.add_argument('--connect', action='store_true', help='Connect noncovalent 
 parser.add_argument('--redund', action='store_true', help='Use redundant coordinate system.')
 parser.add_argument('--terachem', action='store_true', help='Run optimization in TeraChem (pass xyz as first argument).')
 parser.add_argument('--dftd', action='store_true', help='Turn on dispersion correction in TeraChem.')
+parser.add_argument('--gpus', type=int, help='Specify number of GPUs for TeraChem.')
 parser.add_argument('--double', action='store_true', help='Run TeraChem in double precision mode.')
 parser.add_argument('--prefix', type=str, default=None, help='Specify a prefix for output file and temporary directory.')
 parser.add_argument('--displace', action='store_true', help='Write out the displacements.')
@@ -78,6 +79,7 @@ threspdp 1e-8
 dftgrid 1
 {guess}
 {dftd}
+{gpus}
 """
 
 eps = args.epsilon
@@ -111,7 +113,8 @@ def calc_terachem(coords):
                                     charge = str(M.charge), mult=str(M.mult),
                                     precision = "double" if args.double else "mixed",
                                     guess = ("guess " + ' '.join(guesses) + "\npurify no" if have_guess else ""),
-                                    dftd = ("dispersion yes" if args.dftd else ""))
+                                    dftd = ("dispersion yes" if args.dftd else ""),
+                                    gpus = ("gpus %i %s" % (args.gpus, ' '.join(["%i" % i for i in range(args.gpus)])) if args.gpus is not None else ""))
     # Convert coordinates back to the xyz file
     M.xyzs[0] = coords.reshape(-1, 3) * 0.529
     M[0].write(os.path.join(dirname, 'start.xyz'))
@@ -554,7 +557,7 @@ def Optimize(coords, molecule, IC=None, xyzout=None):
         # added to the Hessian, the expected decrease in the energy, and
         # the derivative of the step length w/r.t. v.
         def get_delta_prime_trm(v):
-            HC, GC = IC.augmentGH(X, G, H)
+            GC, HC = IC.augmentGH(X, G, H)
             # HT = HC + v**2*np.eye(len(HC))
             HT = HC + v*np.eye(len(HC))
             F = np.eye(len(HC))
@@ -750,7 +753,10 @@ def Optimize(coords, molecule, IC=None, xyzout=None):
                     if type(IC) is DelocalizedInternalCoordinates:
                         IC.build_dlc(X)
                     H0 = IC.guess_hessian(coords)
-                    H = RebuildHessian(IC, H0, X_hist, Gx_hist, 0.3)
+                    if args.reset:
+                        H = H0.copy()
+                    else:
+                        H = RebuildHessian(IC, H0, X_hist, Gx_hist, 0.3)
                     Y = IC.calculate(X)
                     print "\x1b[1;93mSkipping optimization step\x1b[0m"
                     continue

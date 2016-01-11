@@ -29,7 +29,9 @@ class CartesianX(object):
     def __init__(self, a, w=1.0):
         self.a = a
         self.w = w
-
+        self.isAngular = False
+        self.isPeriodic = False
+        
     def __repr__(self):
         #return "Cartesian-X %i : Weight %.3f" % (self.a+1, self.w)
         return "Cartesian-X %i" % (self.a+1)
@@ -59,6 +61,8 @@ class CartesianY(object):
     def __init__(self, a, w=1.0):
         self.a = a
         self.w = w
+        self.isAngular = False
+        self.isPeriodic = False
 
     def __repr__(self):
         # return "Cartesian-Y %i : Weight %.3f" % (self.a+1, self.w)
@@ -89,6 +93,8 @@ class CartesianZ(object):
     def __init__(self, a, w=1.0):
         self.a = a
         self.w = w
+        self.isAngular = False
+        self.isPeriodic = False
 
     def __repr__(self):
         # return "Cartesian-Z %i : Weight %.3f" % (self.a+1, self.w)
@@ -120,6 +126,8 @@ class TranslationX(object):
         self.a = a
         self.w = w
         assert len(a) == len(w)
+        self.isAngular = False
+        self.isPeriodic = False
 
     def __repr__(self):
         # return "Translation-X %s : Weights %s" % (' '.join([str(i+1) for i in self.a]), ' '.join(['%.2e' % i for i in self.w]))
@@ -152,6 +160,8 @@ class TranslationY(object):
         self.a = a
         self.w = w
         assert len(a) == len(w)
+        self.isAngular = False
+        self.isPeriodic = False
 
     def __repr__(self):
         # return "Translation-Y %s : Weights %s" % (' '.join([str(i+1) for i in self.a]), ' '.join(['%.2e' % i for i in self.w]))
@@ -184,6 +194,8 @@ class TranslationZ(object):
         self.a = a
         self.w = w
         assert len(a) == len(w)
+        self.isAngular = False
+        self.isPeriodic = False
 
     def __repr__(self):
         # return "Translation-Z %s : Weights %s" % (' '.join([str(i+1) for i in self.a]), ' '.join(['%.2e' % i for i in self.w]))
@@ -282,6 +294,8 @@ class RotationA(object):
         if self.a not in Rotators:
             Rotators[self.a] = Rotator(self.a, x0)
         self.Rotator = Rotators[self.a]
+        self.isAngular = True
+        self.isPeriodic = False
 
     def __repr__(self):
         # return "Rotation-A %s : Weight %.3f" % (' '.join([str(i+1) for i in self.a]), self.w)
@@ -315,6 +329,8 @@ class RotationB(object):
         if self.a not in Rotators:
             Rotators[self.a] = Rotator(self.a, x0)
         self.Rotator = Rotators[self.a]
+        self.isAngular = True
+        self.isPeriodic = False
 
     def __repr__(self):
         # return "Rotation-B %s : Weight %.3f" % (' '.join([str(i+1) for i in self.a]), self.w)
@@ -348,6 +364,8 @@ class RotationC(object):
         if self.a not in Rotators:
             Rotators[self.a] = Rotator(self.a, x0)
         self.Rotator = Rotators[self.a]
+        self.isAngular = True
+        self.isPeriodic = False
 
     def __repr__(self):
         # return "Rotation-C %s : Weight %.3f" % (' '.join([str(i+1) for i in self.a]), self.w)
@@ -379,6 +397,8 @@ class Distance(object):
         self.b = b
         if a == b:
             raise RuntimeError('a and b must be different')
+        self.isAngular = False
+        self.isPeriodic = False
 
     def __repr__(self):
         return "Distance %i-%i" % (self.a+1, self.b+1)
@@ -417,6 +437,8 @@ class Angle(object):
         self.a = a
         self.b = b
         self.c = c
+        self.isAngular = True
+        self.isPeriodic = False
         if len(set([a, b, c])) != 3:
             raise RuntimeError('a, b, and c must be different')
 
@@ -504,12 +526,14 @@ class Angle(object):
 class MultiAngle(object):
     def __init__(self, a, b, c):
         if type(a) is int:
-            a = [a]
+            a = (a,)
         if type(c) is int:
-            c = [c]
+            c = (c,)
         self.a = tuple(a)
         self.b = b
         self.c = tuple(c)
+        self.isAngular = True
+        self.isPeriodic = False
         if len(set([a, b, c])) != 3:
             raise RuntimeError('a, b, and c must be different')
 
@@ -610,6 +634,8 @@ class Dihedral(object):
         self.b = b
         self.c = c
         self.d = d
+        self.isAngular = True
+        self.isPeriodic = True
         if len(set([a, b, c, d])) != 4:
             raise RuntimeError('a, b, c and d must be different')
 
@@ -691,13 +717,15 @@ class Dihedral(object):
 class MultiDihedral(object):
     def __init__(self, a, b, c, d):
         if type(a) is int:
-            a = [a]
+            a = (a, )
         if type(d) is int:
-            d = [d]
+            d = (d, )
         self.a = tuple(a)
         self.b = b
         self.c = c
         self.d = tuple(d)
+        self.isAngular = True
+        self.isPeriodic = True
         if len(set([a, b, c, d])) != 4:
             raise RuntimeError('a, b, c and d must be different')
 
@@ -792,6 +820,8 @@ class OutOfPlane(object):
         self.b = b
         self.c = c
         self.d = d
+        self.isAngular = True
+        self.isPeriodic = True
         if len(set([a, b, c, d])) != 4:
             raise RuntimeError('a, b, c and d must be different')
 
@@ -1263,7 +1293,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                                 Ang2 = Angle(i,j,k)
                                 if np.abs(np.cos(Ang1.value(coords))) > LinThre: continue
                                 if np.abs(np.cos(Ang2.value(coords))) > LinThre: continue
-                                if np.abs(np.dot(Ang1.normal_vector(coords), Ang2.normal_vector(coords))) > 0.95:
+                                if np.abs(np.dot(Ang1.normal_vector(coords), Ang2.normal_vector(coords))) > LinThre:
                                     self.delete(Angle(i, b, j))
                                     self.add(OutOfPlane(b, i, j, k))
                                     break
@@ -1383,15 +1413,16 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         # for aline in atom_lines_uniq:
         #     for (b, c) in itertools.combinations(aline, 2):
         #         if b > c: (b, c) = (c, b)
-        #         for al in pull_lines(b, front=False):
-        #             if same_line(al, aline):
+        #         for al in pull_lines(b, front=False, middle=True):
+        #             if same_line(al, aline): continue
         #                 # print "Same line:", al, aline
-        #                 continue
-        #             for dl in pull_lines(c, front=True):
-        #                 if same_line(dl, aline):
+        #             for dl in pull_lines(c, front=True, middle=True):
+        #                 if same_line(dl, aline): continue
         #                     # print "Same line:", dl, aline
-        #                     continue
-        #                 if len(set(al).intersection(set(dl))) > 0: continue
+        #                     # continue
+        #                 # if same_line(dl, al): continue
+        #                 if al[-1] == dl[0]: continue
+        #                 # if len(set(al).intersection(set(dl))) > 0: continue
         #                 # print MultiDihedral(al, b, c, dl)
         #                 self.delete(Dihedral(al[-1], b, c, dl[0]))
         #                 self.add(MultiDihedral(al, b, c, dl))
@@ -1484,7 +1515,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         answer = []
         for Internal in self.Internals:
             value = Internal.value(xyz)
-            if type(Internal) in [Angle, Dihedral, OutOfPlane]:
+            if Internal.isAngular:
                 value *= 180/np.pi
             answer.append(value)
         return np.array(answer)
@@ -1505,7 +1536,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         Q2 = self.calculate(coord2)
         PMDiff = (Q1-Q2)
         for k in range(len(PMDiff)):
-            if type(self.Internals[k]) in [Angle, Dihedral, OutOfPlane]:
+            if self.Internals[k].isPeriodic:
                 Plus2Pi = PMDiff[k] + 2*np.pi
                 Minus2Pi = PMDiff[k] - 2*np.pi
                 if np.abs(PMDiff[k]) > np.abs(Plus2Pi):
@@ -1552,6 +1583,8 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
             for p in self.Internals:
                 if type(p) is typ and p not in self.cPrims:
                     newPrims.append(p)
+        if len(newPrims) != len(self.Internals):
+            raise RuntimeError("Not all internal coordinates have been accounted for. You may need to add something to reorderPrimitives()")
         self.Internals = newPrims
 
     def getConstraint_from(self, other):
@@ -1576,7 +1609,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                 diff += 2*np.pi
             if type(c) in [TranslationX, TranslationY, TranslationZ, CartesianX, CartesianY, CartesianZ, Distance]:
                 factor = 0.529
-            elif type(c) in [Angle, Dihedral, OutOfPlane, RotationA, RotationB, RotationC]:
+            elif c.isAngular:
                 factor = 180.0/np.pi
             if np.abs(diff*factor) > thre:
                 out_lines.append("%-30s  % 10.5f  % 10.5f  % 10.5f" % (str(c), current*factor, reference*factor, diff*factor))
@@ -1589,6 +1622,9 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
 
     
     def guess_hessian(self, coords):
+        """
+        Build a guess Hessian that roughly follows Schlegel's guidelines. 
+        """
         xyzs = coords.reshape(-1,3)*0.529
         Hdiag = []
         def covalent(a, b):
@@ -1664,7 +1700,342 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                 raise RuntimeError('Spoo!')
         return np.matrix(np.diag(Hdiag))
 
+class DelocalizedInternalCoordinates(InternalCoordinates):
+    def __init__(self, molecule, build=False, connect=False, constraints=None, cvals=None):
+        # The DLC contains an instance of primitive internal coordinates.
+        self.Prims = PrimitiveInternalCoordinates(molecule, connect)
+        xyz = molecule.xyzs[0].flatten() / 0.529
+        self.na = molecule.na
+        # Add the list of constraints
+        if constraints is not None:
+            if len(constraints) != len(cvals):
+                raise RuntimeError("List of constraints should be same length as constraint values")
+            for cons, cval in zip(constraints, cvals):
+                self.addConstraint(cons, cval, xyz)
+        # Reorder primitives for checking with cc's code in TC.
+        # Note that reorderPrimitives() _must_ be updated with each new InternalCoordinate class written.
+        self.Prims.reorderPrimitives()
+        # Build the DLC's. This takes some time, so we have the option to turn it off.
+        if build:
+            self.build_dlc(xyz)
+
+    def __repr__(self):
+        return self.Prims.__repr__()
+            
+    def update(self, other):
+        return self.Prims.update(other.Prims)
+
+    def addConstraint(self, cPrim, cVal, xyz):
+        self.Prims.addConstraint(cPrim, cVal, xyz)
+
+    def getConstraints_from(self, other):
+        self.Prims.getConstraint_from(other.Prims)
+        
+    def haveConstraints(self):
+        return len(self.Prims.cPrims) > 0
+
+    def printConstraints(self, xyz, thre=1e-5):
+        self.Prims.printConstraints(xyz, thre=thre)
+
+    def augmentGH(self, xyz, G, H):
+        """
+        Add extra dimensions to the gradient and Hessian corresponding to the constrained degrees of freedom.
+        The Hessian becomes:  H  c
+                              cT 0
+        where the elements of cT are the first derivatives of the constraint function 
+        (typically a single primitive minus a constant) with respect to the DLCs. 
+        
+        Since we picked a DLC to represent the constraint (cProj), we only set one element 
+        in each row of cT to be nonzero. Because cProj = a_i * Prim_i + a_j * Prim_j, we have
+        d(Prim_c)/d(cProj) = 1.0/a_c where "c" is the index of the primitive being constrained.
+        
+        The extended elements of the Gradient are equal to the constraint violation.
+        
+        Parameters
+        ----------
+        xyz : np.ndarray
+            Flat array containing Cartesian coordinates in atomic units
+        G : np.ndarray
+            Flat array containing internal coordinate gradient
+        H : np.ndarray
+            Square array containing internal coordinate Hessian
+
+        Returns
+        -------
+        GC : np.ndarray
+            Flat array containing gradient extended by constraint violations
+        HC : np.ndarray
+            Square matrix extended by partial derivatives d(Prim)/d(cProj)
+        """
+        # Number of internals (elements of G)
+        ni = len(G)
+        # Number of constraints
+        nc = len(self.Prims.cPrims)
+        # Total dimension
+        nt = ni+nc
+        # Lower block of the augmented Hessian
+        cT = np.zeros((nc, ni), dtype=float)
+        c0 = np.zeros(nc, dtype=float)
+        for ic, c in enumerate(self.Prims.cPrims):
+            # Look up the index of the primitive that is being constrained
+            iPrim = self.Prims.Internals.index(c)
+            # The DLC corresponding to the constrained primitive (a.k.a. cProj) is self.Vecs[self.cDLC[ic]].
+            # For a differential change in the DLC, the primitive that we are constraining changes by:
+            cT[ic, self.cDLC[ic]] = 1.0/self.Vecs[iPrim, self.cDLC[ic]]
+            # Calculate the further change needed in this constrained variable
+            c0[ic] = self.Prims.cVals[ic] - c.value(xyz)
+            if c.isPeriodic:
+                Plus2Pi = c0[ic] + 2*np.pi
+                Minus2Pi = c0[ic] - 2*np.pi
+                if np.abs(c0[ic]) > np.abs(Plus2Pi):
+                    c0[ic] = Plus2Pi
+                if np.abs(c0[ic]) > np.abs(Minus2Pi):
+                    c0[ic] = Minus2Pi
+        # Construct augmented Hessian
+        HC = np.zeros((nt, nt), dtype=float)
+        HC[0:ni, 0:ni] = H[:,:]
+        HC[ni:nt, 0:ni] = cT[:,:]
+        HC[0:ni, ni:nt] = cT.T[:,:]
+        # Construct augmented gradient
+        GC = np.zeros(nt, dtype=float)
+        GC[0:ni] = G[:]
+        GC[ni:nt] = -c0[:]
+        return GC, HC
+    
+    def applyConstraints(self, xyz):
+        """
+        Pass in Cartesian coordinates and return new coordinates that satisfy the constraints exactly.
+        This is not used in the current constrained optimization code that uses Lagrange multipliers instead.
+        """
+        xyz1 = xyz.copy()
+        niter = 0
+        while True:
+            dQ = np.zeros(len(self.Internals), dtype=float)
+            for ic, c in enumerate(self.Prims.cPrims):
+                # Look up the index of the primitive that is being constrained
+                iPrim = self.Prims.Internals.index(c)
+                # Look up the index of the DLC that corresponds to the constraint
+                iDLC = self.cDLC[ic]
+                # Calculate the further change needed in this constrained variable
+                dQ[iDLC] = (self.Prims.cVals[ic] - c.value(xyz1))/self.Vecs[iPrim, iDLC]
+                if c.isPeriodic:
+                    Plus2Pi = dQ[iDLC] + 2*np.pi
+                    Minus2Pi = dQ[iDLC] - 2*np.pi
+                    if np.abs(dQ[iDLC]) > np.abs(Plus2Pi):
+                        dQ[iDLC] = Plus2Pi
+                    if np.abs(dQ[iDLC]) > np.abs(Minus2Pi):
+                        dQ[iDLC] = Minus2Pi
+            print "applyConstraints calling newCartesian (%i), |dQ| = %.3e" % (niter, np.linalg.norm(dQ))
+            xyz2 = self.newCartesian(xyz1, dQ, verbose=True, applyCon=False)
+            if np.linalg.norm(dQ) < 1e-6:
+                return xyz2
+            if niter > 1 and np.linalg.norm(dQ) > np.linalg.norm(dQ0):
+                print "\x1b[1;93mWarning: Failed to apply Constraint\x1b[0m"
+                return xyz1
+            xyz1 = xyz2.copy()
+            niter += 1
+            dQ0 = dQ.copy()
+    
+    def calcGradProj(self, xyz, gradx):
+        """
+        Project out the components of the internal coordinate gradient along the
+        constrained degrees of freedom. This is used to calculate the convergence
+        criteria for constrained optimizations.
+
+        Parameters
+        ----------
+        xyz : np.ndarray
+            Flat array containing Cartesian coordinates in atomic units
+        gradx : np.ndarray
+            Flat array containing gradient in Cartesian coordinates
+
+        """
+        if len(self.Prims.cPrims) == 0:
+            return gradx
+        q0 = self.calculate(xyz)
+        Ginv = self.GInverse(xyz)
+        Bmat = self.wilsonB(xyz)
+        # Internal coordinate gradient
+        Gq = np.matrix(Ginv)*np.matrix(Bmat)*np.matrix(gradx).T
+        Gqc = np.array(Gq).flatten()
+        # Remove the directions that are along the DLCs that we are constraining
+        for i in self.cDLC:
+            Gqc[i] = 0.0
+        Gxc = np.array(np.matrix(Bmat.T)*np.matrix(Gqc).T).flatten()
+        return Gxc
+    
+    def build_dlc(self, xyz):
+        """
+        Build the delocalized internal coordinates (DLCs) which are linear 
+        combinations of the primitive internal coordinates. Each DLC is stored
+        as a column in self.Vecs.
+        
+        In short, each DLC is an eigenvector of the G-matrix, and the number of
+        nonzero eigenvalues of G should be equal to 3*N. 
+        
+        After creating the DLCs, we construct special ones corresponding to primitive
+        coordinates that are constrained (cProj).  These are placed in the front (i.e. left)
+        of the list of DLCs, and then we perform a Gram-Schmidt orthogonalization.
+
+        This function is called at the end of __init__ after the coordinate system is already
+        specified (including which primitives are constraints).
+
+        Parameters
+        ----------
+        xyz : np.ndarray
+            Flat array containing Cartesian coordinates in atomic units
+        """
+        # Perform singular value decomposition
+        click()
+        G = self.Prims.GMatrix(xyz)
+        time_G = click()
+        L, Q = np.linalg.eigh(G)
+        time_eig = click()
+        # print "Build G: %.3f Eig: %.3f" % (time_G, time_eig)
+        LargeVals = 0
+        LargeIdx = []
+        for ival, value in enumerate(L):
+            # print ival, value
+            if np.abs(value) > 1e-6:
+                LargeVals += 1
+                LargeIdx.append(ival)
+        Expect = 3*self.na - 6
+        if self.na == 2:
+            Expect = 1
+        if self.na == 1:
+            Expect = 0
+        # print "%i atoms (expect %i coordinates); %i/%i singular values are > 1e-6" % (self.na, Expect, LargeVals, len(L))
+        # if LargeVals <= Expect:
+        self.Vecs = Q[:, LargeIdx]
+        self.Internals = ["DLC %i" % (i+1) for i in range(len(LargeIdx))]
+
+        # Vecs has number of rows equal to the number of primitives, and
+        # number of columns equal to the number of delocalized internal coordinates.
+        if self.haveConstraints():
+            click()
+            print "Projecting out constraints...",
+            V = []
+            for ic, c in enumerate(self.Prims.cPrims):
+                # Look up the index of the primitive that is being constrained
+                iPrim = self.Prims.Internals.index(c)
+                # Pick a row out of the eigenvector space. This is a linear combination of the DLCs.
+                cVec = self.Vecs[iPrim, :]
+                cVec = np.array(cVec)
+                cVec /= np.linalg.norm(cVec)
+                # This is a "new DLC" that corresponds to the primitive that we are constraining
+                cProj = self.Vecs*cVec.T
+                cProj /= np.linalg.norm(cProj)
+                V.append(np.array(cProj).flatten())
+            # V contains the constraint vectors on the left, and the original DLCs on the right
+            V = np.hstack((np.array(V).T, np.array(self.Vecs)))
+            # Apply Gram-Schmidt to V, and produce U.
+            # The Gram-Schmidt process should produce a number of orthogonal DLCs equal to the original number
+            U = []
+            for iv in range(V.shape[1]):
+                v = V[:, iv].flatten()
+                U.append(v.copy())
+                for ui in U[:-1]:
+                    U[-1] -= ui * np.dot(ui, v)
+                if np.linalg.norm(U[-1]) < 1e-6:
+                    U = U[:-1]
+                    continue
+                U[-1] /= np.linalg.norm(U[-1])
+            if len(U) != self.Vecs.shape[1]:
+                raise RuntimeError('Gram-Schmidt orthogonalization has failed')
+            self.Vecs = np.matrix(U).T
+            # Constrained DLCs are on the left of self.Vecs.
+            self.cDLC = [i for i in range(len(self.Prims.cPrims))]
+
+    def weight_vectors(self, xyz):
+        """
+        Not used anymore: Multiply each DLC by a constant so that a small displacement along each produces the
+        same Cartesian displacement. Otherwise, some DLCs "move by a lot" and others only "move by a little".
+
+        Parameters
+        ----------
+        xyz : np.ndarray
+            Flat array containing Cartesian coordinates in atomic units
+        """
+        Bmat = np.matrix(self.wilsonB(xyz))
+        Ginv = self.GInverse(xyz, None)
+        eps = 1e-6
+        dxdq = np.zeros(len(self.Internals))
+        for i in range(len(self.Internals)):
+            dQ = np.zeros(len(self.Internals), dtype=float)
+            dQ[i] = eps
+            dxyz = Bmat.T*Ginv*(np.matrix(dQ).T)
+            rmsd = np.sqrt(np.mean(np.sum(np.array(dxyz).reshape(-1,3)**2, axis=1)))
+            dxdq[i] = rmsd/eps
+        dxdq /= np.max(dxdq)
+        for i in range(len(self.Internals)):
+            self.Vecs[:, i] *= dxdq[i]
+
+    def __eq__(self, other):
+        return self.Prims == other.Prims
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    def largeRots(self):
+        """ Determine whether a molecule has rotated by an amount larger than some threshold (hardcoded in Prims.largeRots()). """
+        return self.Prims.largeRots()
+
+    def calcDiff(self, coord1, coord2):
+        """ Calculate difference in internal coordinates, accounting for changes in 2*pi of angles. """
+        PMDiff = self.Prims.calcDiff(coord1, coord2)
+        Answer = np.matrix(PMDiff)*self.Vecs
+        return np.array(Answer).flatten()
+
+    def calculate(self, coords):
+        """ Calculate the DLCs given the Cartesian coordinates. """
+        PrimVals = self.Prims.calculate(coords)
+        Answer = np.matrix(PrimVals)*self.Vecs
+        # To obtain the primitive coordinates from the delocalized internal coordinates,
+        # simply multiply self.Vecs*Answer.T where Answer.T is the column vector of delocalized
+        # internal coordinates. That means the "c's" in Equation 23 of Schlegel's review paper
+        # are simply the rows of the Vecs matrix.
+        # print np.dot(np.array(self.Vecs[0,:]).flatten(), np.array(Answer).flatten())
+        # print PrimVals[0]
+        # raw_input()
+        return np.array(Answer).flatten()
+
+    def derivatives(self, coords):
+        """ Obtain the change of the DLCs with respect to the Cartesian coordinates. """
+        PrimDers = self.Prims.derivatives(coords)
+        # The following code does the same as "tensordot"
+        # print PrimDers.shape
+        # print self.Vecs.shape
+        # Answer = np.zeros((self.Vecs.shape[1], PrimDers.shape[1], PrimDers.shape[2]), dtype=float)
+        # for i in range(self.Vecs.shape[1]):
+        #     for j in range(self.Vecs.shape[0]):
+        #         Answer[i, :, :] += self.Vecs[j, i] * PrimDers[j, :, :]
+        # print Answer.shape
+        Answer1 = np.tensordot(self.Vecs, PrimDers, axes=(0, 0))
+        return np.array(Answer1)
+
+    def GInverse(self, xyz, u=None):
+        return self.GInverse_SVD(xyz, u)
+
+    def repr_diff(self, other):
+        return self.Prims.repr_diff(other.Prims)
+
+    def guess_hessian(self, coords):
+        """ Build the guess Hessian, consisting of a diagonal matrix 
+        in the primitive space and changed to the basis of DLCs. """
+        Hprim = np.matrix(self.Prims.guess_hessian(coords))
+        return np.array(self.Vecs.T*Hprim*self.Vecs)
+
+    def resetRotations(self, xyz):
+        """ Reset the reference geometries for calculating the orientational variables. """
+        self.Prims.resetRotations(xyz)
+
+
 class CartesianCoordinates(InternalCoordinates):
+    """
+    Cartesian coordinate system, written as a kind of internal coordinate class.  
+    This one does not support constraints, because that requires adding some 
+    primitive internal coordinates.
+    """
     def __init__(self, molecule, build=False, connect=False):
         self.Internals = []
         self.elem = molecule.elem
@@ -1716,322 +2087,3 @@ class CartesianCoordinates(InternalCoordinates):
 
     def guess_hessian(self, coords):
         return np.eye(len(self.Internals)) * 0.05
-
-class DelocalizedInternalCoordinates(InternalCoordinates):
-    def __init__(self, molecule, build=False, connect=False, constraints=None, cvals=None):
-        self.Prims = PrimitiveInternalCoordinates(molecule, connect)
-        self.connect = connect
-        xyz = molecule.xyzs[0].flatten() / 0.529
-        self.na = molecule.na
-        if constraints is not None:
-            if len(constraints) != len(cvals):
-                raise RuntimeError("List of constraints should be same length as constraint values")
-            for cons, cval in zip(constraints, cvals):
-                self.addConstraint(cons, cval, xyz)
-        self.Prims.reorderPrimitives()
-        if build:
-            self.build_dlc(xyz)
-
-    def __repr__(self):
-        return self.Prims.__repr__()
-            
-    def update(self, other):
-        return self.Prims.update(other.Prims)
-
-    def addConstraint(self, cPrim, cVal, xyz):
-        """
-        Add a constrained degree of freedom.
-        """
-        self.Prims.addConstraint(cPrim, cVal, xyz)
-
-    def getConstraints_from(self, other):
-        self.Prims.getConstraint_from(other.Prims)
-        
-    def haveConstraints(self):
-        return len(self.Prims.cPrims) > 0
-
-    def printConstraints(self, xyz, thre=1e-5):
-        self.Prims.printConstraints(xyz, thre=thre)
-
-    # This is the one that wurx
-    def augmentGH(self, xyz, G, H):
-        # Number of internals (elements of G)
-        ni = len(G)
-        # Number of constraints
-        nc = len(self.Prims.cPrims)
-        # Total dimension
-        nt = ni+nc
-        # Lower block of the augmented Hessian
-        cT = np.zeros((nc, ni), dtype=float)
-        c0 = np.zeros(nc, dtype=float)
-        for ic, c in enumerate(self.Prims.cPrims):
-            # Look up the index of the primitive that is being constrained
-            iPrim = self.Prims.Internals.index(c)
-            # This is the primitive that we are constraining
-            cT[ic, ic] = 1.0/self.Vecs[iPrim, self.cDLC[ic]]
-            # cT[ic, ni-nc+ic] = 1.0/self.Vecs[iPrim, self.cDLC[ic]]
-            # cT[ic, :] = np.array(self.Vecs[iPrim,:]).flatten()
-            # Calculate the further change needed in this constrained variable
-            c0[ic] = self.Prims.cVals[ic] - c.value(xyz)
-            if type(c) in [Angle, Dihedral, OutOfPlane]:
-                Plus2Pi = c0[ic] + 2*np.pi
-                Minus2Pi = c0[ic] - 2*np.pi
-                if np.abs(c0[ic]) > np.abs(Plus2Pi):
-                    c0[ic] = Plus2Pi
-                if np.abs(c0[ic]) > np.abs(Minus2Pi):
-                    c0[ic] = Minus2Pi
-        # Construct augmented Hessian
-        HC = np.zeros((nt, nt), dtype=float)
-        HC[0:ni, 0:ni] = H[:,:]
-        HC[ni:nt, 0:ni] = cT[:,:]
-        HC[0:ni, ni:nt] = cT.T[:,:]
-        # print HC
-        # Construct augmented gradient
-        GC = np.zeros(nt, dtype=float)
-        GC[0:ni] = G[:]
-        GC[ni:nt] = -c0[:]
-        Eig = np.linalg.eigh(HC)[0]
-        # print "Augment Eigenvalues: %.3f %.3f %.3f %.3f %.3f ... %.3f %.3f %.3f %.3f %.3f" % (Eig[0],Eig[1],Eig[2],Eig[3],Eig[4],Eig[-5],Eig[-4],Eig[-3],Eig[-2],Eig[-1])
-        return HC, GC
-    
-    def applyConstraints(self, xyz):
-        xyz1 = xyz.copy()
-        niter = 0
-        while True:
-            dQ = np.zeros(len(self.Internals), dtype=float)
-            for ic, c in enumerate(self.Prims.cPrims):
-                # Look up the index of the primitive that is being constrained
-                iPrim = self.Prims.Internals.index(c)
-                # Look up the index of the DLC that corresponds to the constraint
-                iDLC = self.cDLC[ic]
-                # Get the corresponding linear combination coefficients from the
-                # DLC that allows us to calculate the primitive
-                # cT[ic, :] = np.array(self.Vecs[iPrim,:]).flatten()
-                # Calculate the further change needed in this constrained variable
-                # print self.Prims.cVals[ic] - c.value(xyz1)
-                dQ[iDLC] = (self.Prims.cVals[ic] - c.value(xyz1))/self.Vecs[iPrim, iDLC]
-                if type(c) in [Angle, Dihedral, OutOfPlane]:
-                    Plus2Pi = dQ[iDLC] + 2*np.pi
-                    Minus2Pi = dQ[iDLC] - 2*np.pi
-                    if np.abs(dQ[iDLC]) > np.abs(Plus2Pi):
-                        dQ[iDLC] = Plus2Pi
-                    if np.abs(dQ[iDLC]) > np.abs(Minus2Pi):
-                        dQ[iDLC] = Minus2Pi
-            print "applyConstraints calling newCartesian (%i), |dQ| = %.3e" % (niter, np.linalg.norm(dQ))
-            xyz2 = self.newCartesian(xyz1, dQ, verbose=True, applyCon=False)
-            if np.linalg.norm(dQ) < 1e-6:
-                return xyz2
-            if niter > 1 and np.linalg.norm(dQ) > np.linalg.norm(dQ0):
-                print "\x1b[1;93mWarning: Failed to apply Constraint\x1b[0m"
-                return xyz1
-            xyz1 = xyz2.copy()
-            niter += 1
-            dQ0 = dQ.copy()
-    
-    def calcGradProj(self, xyz, gradx):
-        if len(self.Prims.cPrims) == 0:
-            return gradx
-        q0 = self.calculate(xyz)
-        Ginv = self.GInverse(xyz)
-        Bmat = self.wilsonB(xyz)
-        # Internal coordinate gradient
-        Gq = np.matrix(Ginv)*np.matrix(Bmat)*np.matrix(gradx).T
-        # Schmidt orthogonalization procedure;
-        # build a list of mutually orthogonal directions
-        # representing the degrees of freedom that we constrained.
-        U = []
-        for ic, c in enumerate(self.Prims.cPrims):
-            # Look up the index of the primitive that is being constrained
-            iPrim = self.Prims.Internals.index(c)
-            # Linear combination of the DLC that represents the primitive
-            pvec = np.array(self.Vecs[iPrim,:]).flatten()
-            U.append(pvec.copy())
-            for Ui in U[:-1]:
-                # Subtract the projection of pvec along Ui
-                Uih = Ui / np.linalg.norm(Ui)
-                U[-1] -= Uih * np.dot(pvec, Uih)
-        # At the end of this loop, we should have a set of mutually orthogonal U vectors
-        Gqc = np.array(Gq).flatten()
-        for Ui in U:
-            # Calculate the projection of pvec along Ui
-            Uih = Ui / np.linalg.norm(Ui)
-            Gqc -= Uih * np.dot(Gqc, Uih)
-        Gxc = np.array(np.matrix(Bmat.T)*np.matrix(Gqc).T).flatten()
-        return Gxc
-
-    def build_dlc(self, xyz):
-        # Perform singular value decomposition
-        click()
-        G = self.Prims.GMatrix(xyz)
-        time_G = click()
-        L, Q = np.linalg.eigh(G)
-        time_eig = click()
-        # print "Build G: %.3f Eig: %.3f" % (time_G, time_eig)
-        LargeVals = 0
-        LargeIdx = []
-        for ival, value in enumerate(L):
-            # print ival, value
-            if np.abs(value) > 1e-6:
-                LargeVals += 1
-                LargeIdx.append(ival)
-        Expect = 3*self.na - 6
-        if self.na == 2:
-            Expect = 1
-        if self.na == 1:
-            Expect = 0
-        # print "%i atoms (expect %i coordinates); %i/%i singular values are > 1e-6" % (self.na, Expect, LargeVals, len(L))
-        # if LargeVals <= Expect:
-        self.Vecs = Q[:, LargeIdx]
-        self.Internals = ["DLC %i" % (i+1) for i in range(len(LargeIdx))]
-
-        # Vecs has number of rows equal to the number of primitives, and
-        # number of columns equal to the number of delocalized internal coordinates.
-        # In the following, assume that we have 72 DLCs, 115 internals and 2 constraints.
-        if self.haveConstraints():
-            self.cDLC = []
-            uSpace = np.eye(self.Vecs.shape[1], dtype=float)
-            click()
-            print "Projecting out constraints...",
-            V = []
-            for ic, c in enumerate(self.Prims.cPrims):
-                # Look up the index of the primitive that is being constrained
-                iPrim = self.Prims.Internals.index(c)
-                # Pick a row out of the eigenvector space. This is a linear combination of the DLCs.
-                cVec = self.Vecs[iPrim, :]
-                cVec = np.array(cVec)
-                cVec /= np.linalg.norm(cVec)
-                # This is a "new DLC" that corresponds to the primitive that we are constraining
-                cProj = self.Vecs*cVec.T
-                cProj /= np.linalg.norm(cProj)
-                V.append(np.array(cProj).flatten())
-            # V contains the constraint vectors on the left, and the original DLCs on the right
-            V = np.hstack((np.array(V).T, np.array(self.Vecs)))
-            # The Gram-Schmidt process should produce a number of orthogonal DLCs
-            # equal to the original number
-            n_orth = 0
-            U = []
-            for iv in range(V.shape[1]):
-                v = V[:, iv].flatten()
-                U.append(v.copy())
-                for ui in U[:-1]:
-                    U[-1] -= ui * np.dot(ui, v)
-                if np.linalg.norm(U[-1]) < 1e-6:
-                    U = U[:-1]
-                    continue
-                U[-1] /= np.linalg.norm(U[-1])
-            if len(U) != self.Vecs.shape[1]:
-                raise RuntimeError('Gram-Schmidt orthogonalization has failed')
-            self.Vecs = np.matrix(U).T
-                
-            # The following code is N times too expensive
-            # for ic, c in enumerate(self.Prims.cPrims):
-            #     print ic+1,
-            #     # Look up the index of the primitive that is being constrained
-            #     iPrim = self.Prims.Internals.index(c)
-            #     # Pick a row out of the eigenvector space. This is a linear combination of the DLCs.
-            #     cVec = self.Vecs[iPrim, :]
-            #     cVec = np.array(cVec)
-            #     cVec /= np.linalg.norm(cVec)
-            #     # This is a "new DLC" that corresponds to the primitive that we are constraining
-            #     cProj = self.Vecs*cVec.T
-            #     cProj /= np.linalg.norm(cProj)
-            #     # Now we project the new DLC out of the rest
-            #     U = [np.array(cProj).flatten()]
-            #     # We loop through the DLCs but omit the last one
-            #     n_orth = 0
-            #     for iv in range(self.Vecs.shape[1]):
-            #         if iv == self.Vecs.shape[1] - 1 + n_orth: break
-            #         # Pick a column out of the eigenvector space.
-            #         v = np.array(self.Vecs[:, iv]).flatten()
-            #         U.append(v.copy())
-            #         for ui in U[:-1]:
-            #             U[-1] -= ui * np.dot(ui, v)
-            #         if np.linalg.norm(U[-1]) < 1e-6: 
-            #             # This catches the corner case that one of the eigenvectors is already the one we're constraining,
-            #             # in which case the orthogonal projection will have a norm of zero. In this case, then we skip over
-            #             # this vector and go to the next one, but this should only happen once.
-            #             n_orth += 1
-            #             U = U[:-1]
-            #             if n_orth > 1:
-            #                 raise RuntimeError("Gram-Schmidt orthogonalization has failed")
-            #             continue
-            #         U[-1] /= np.linalg.norm(U[-1])
-            #     self.Vecs = np.matrix(U).T
-            print "Done in", click(), "s"
-            # Constrained DLCs are on the left of self.Vecs.
-            self.cDLC = [i for i in range(len(self.Prims.cPrims))]
-            # Rearrange the DLCs so that the ones corresponding to constraints are last, and in the same order that they were entered
-            # self.Vecs = np.hstack((self.Vecs[:, len(self.Prims.cPrims):], self.Vecs[:, :len(self.Prims.cPrims)][:, ::-1]))
-            # self.cDLC = [self.Vecs.shape[1] - len(self.Prims.cPrims) + i for i in range(len(self.Prims.cPrims))]
-
-    def weight_vectors(self, xyz):
-        Bmat = np.matrix(self.wilsonB(xyz))
-        Ginv = self.GInverse(xyz, None)
-        eps = 1e-6
-        dxdq = np.zeros(len(self.Internals))
-        for i in range(len(self.Internals)):
-            dQ = np.zeros(len(self.Internals), dtype=float)
-            dQ[i] = eps
-            dxyz = Bmat.T*Ginv*(np.matrix(dQ).T)
-            rmsd = np.sqrt(np.mean(np.sum(np.array(dxyz).reshape(-1,3)**2, axis=1)))
-            dxdq[i] = rmsd/eps
-        dxdq /= np.max(dxdq)
-        for i in range(len(self.Internals)):
-            self.Vecs[:, i] *= dxdq[i]
-        #print dxdq
-
-    def __eq__(self, other):
-        return self.Prims == other.Prims
-
-    def __ne__(self, other):
-        return not self.__eq__(other)
-
-    def largeRots(self):
-        return self.Prims.largeRots()
-
-    def calcDiff(self, coord1, coord2):
-        """ Calculate difference in internal coordinates, accounting for changes in 2*pi of angles. """
-        PMDiff = self.Prims.calcDiff(coord1, coord2)
-        Answer = np.matrix(PMDiff)*self.Vecs
-        return np.array(Answer).flatten()
-
-    def calculate(self, coords):
-        PrimVals = self.Prims.calculate(coords)
-        Answer = np.matrix(PrimVals)*self.Vecs
-        # To obtain the primitive coordinates from the delocalized internal coordinates,
-        # simply multiply self.Vecs*Answer.T where Answer.T is the column vector of delocalized
-        # internal coordinates. That means the "c's" in Equation 23 of Schlegel's review paper
-        # are simply the rows of the Vecs matrix.
-        # print np.dot(np.array(self.Vecs[0,:]).flatten(), np.array(Answer).flatten())
-        # print PrimVals[0]
-        # raw_input()
-        return np.array(Answer).flatten()
-
-    def derivatives(self, coords):
-        PrimDers = self.Prims.derivatives(coords)
-        # The following code does the same as "tensordot"
-        # print PrimDers.shape
-        # print self.Vecs.shape
-        # Answer = np.zeros((self.Vecs.shape[1], PrimDers.shape[1], PrimDers.shape[2]), dtype=float)
-        # for i in range(self.Vecs.shape[1]):
-        #     for j in range(self.Vecs.shape[0]):
-        #         Answer[i, :, :] += self.Vecs[j, i] * PrimDers[j, :, :]
-        # print Answer.shape
-        Answer1 = np.tensordot(self.Vecs, PrimDers, axes=(0, 0))
-        return np.array(Answer1)
-
-    def GInverse(self, xyz, u=None):
-        return self.GInverse_SVD(xyz, u)
-
-    def repr_diff(self, other):
-        return self.Prims.repr_diff(other.Prims)
-
-    def guess_hessian(self, coords):
-        Hprim = np.matrix(self.Prims.guess_hessian(coords))
-        return np.array(self.Vecs.T*Hprim*self.Vecs)
-        # Vi = np.matrix(np.linalg.pinv(self.Vecs))
-        # cbh = np.array(Vi*Hprim*Vi.T)
-        # return cbh
-
-    def resetRotations(self, xyz):
-        self.Prims.resetRotations(xyz)
