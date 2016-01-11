@@ -1043,7 +1043,7 @@ class InternalCoordinates(object):
         self.stored_dQ = dQ.copy()
         self.stored_newxyz = newxyz.copy()
 
-    def newCartesian(self, xyz, dQ, u=None, verbose=True, applyCon=False):
+    def newCartesian(self, xyz, dQ, u=None, verbose=True):
         cached = self.readCache(xyz, dQ)
         if cached is not None:
             # print "Returning cached result"
@@ -1068,12 +1068,6 @@ class InternalCoordinates(object):
                 if verbose: print "Approximate coordinates obtained after %i microiterations (rmsd = %.3e |dQ| = %.3e)" % (microiter, rmsdt, ndqt)
             else:
                 if verbose: print "Cartesian coordinates obtained after %i microiterations (rmsd = %.3e |dQ| = %.3e)" % (microiter, rmsdt, ndqt)
-            # These two lines of code make sure that we remove any residual constraint violations
-            # Presently it is broken
-            if applyCon:
-                print "newCartesian calling applyConstraints"
-                xyzCon = self.applyConstraints(xyzsave.flatten())
-                xyzsave = xyzCon.copy()
             self.writeCache(xyz, dQ, xyzsave)
             return xyzsave.flatten()
         fail_counter = 0
@@ -1125,8 +1119,7 @@ class InternalCoordinates(object):
             xyz1 = xyz2.copy()
     
 class PrimitiveInternalCoordinates(InternalCoordinates):
-    def __init__(self, molecule, connect=False):
-        self.connect = connect
+    def __init__(self, molecule, build=False, connect=False, addcart=False, constraints=None, cvals=None):
         self.Internals = []
         self.cPrims = []
         self.cVals = []
@@ -1160,9 +1153,8 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                 if connect:
                     molecule.topology.add_edge(edge[0], edge[1])
                     noncov.append(edge)
-        ThrowCarts = False
         if not connect:
-            if ThrowCarts:
+            if addcart:
                 for i in range(molecule.na):
                     self.add(CartesianX(i, w=1.0))
                     self.add(CartesianY(i, w=1.0))
@@ -1257,7 +1249,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                         if np.abs(np.cos(Ang.value(coords))) < LinThre:
                             self.add(Angle(a, b, c))
                             AngDict[b].append(Ang)
-                        elif (self.connect or not ThrowCarts):
+                        elif (connect or not addcart):
                             print Ang, "is linear: replacing with Cartesians"
                             # Almost linear bends (greater than 175 or less than 5) are dropped. 
                             # The dropped angle is replaced by the two Cartesians of the central 
@@ -1354,11 +1346,22 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                             else:
                                 self.add(Dihedral(d, c, b, a))
             
+        # Add the list of constraints
+        xyz = molecule.xyzs[0].flatten() / 0.529
+        if constraints is not None:
+            if len(constraints) != len(cvals):
+                raise RuntimeError("List of constraints should be same length as constraint values")
+            for cons, cval in zip(constraints, cvals):
+                self.addConstraint(cons, cval, xyz)
+
+        # Reorder primitives for checking with cc's code in TC.
+        # Note that reorderPrimitives() _must_ be updated with each new InternalCoordinate class written.
+        self.reorderPrimitives()
         
         ### Following are codes that evaluate angles and dihedrals involving entire lines-of-atoms
         ### as single degrees of freedom
         ### Unfortunately, they do not seem to improve the performance
-
+        #
         # def pull_lines(a, front=True, middle=False):
         #     """
         #     Given an atom, pull all lines-of-atoms that it is in, e.g.
@@ -1368,7 +1371,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         #               B
         #           EFGHAIJKL
         #     returns (B, C, D), (H, G, F, E), (I, J, K, L).
-            
+        #   
         #     A is the implicit first item in the list.
         #     Set front to False to make A the implicit last item in the list.
         #     Set middle to True to return lines where A is in the middle e.g. (H, G, F, E) and (I, J, K, L).
@@ -1384,13 +1387,13 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         #             answer.append(l[:l.index(a)][::-1])
         #     if front: return answer
         #     else: return [l[::-1] for l in answer]
-
+        #
         # def same_line(al, bl):
         #     for l in atom_lines_uniq:
         #         if set(al).issubset(set(l)) and set(bl).issubset(set(l)):
         #             return True
         #     return False
-        
+        #
         # ## Multiple angle code; does not improve performance for Fe4N system.
         # for b in molecule.topology.nodes():
         #     for al in pull_lines(b, front=False, middle=True):
@@ -1406,7 +1409,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         #                 self.add(MultiAngle(al, b, cl))
         #             else:
         #                 self.add(MultiAngle(cl[::-1], b, al[::-1]))
-
+        #
         ## Multiple dihedral code
         ## Note: This suffers from a problem where it cannot rebuild the Cartesian coordinates,
         ## possibly due to a bug in the MultiDihedral class.
@@ -1426,7 +1429,6 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         #                 # print MultiDihedral(al, b, c, dl)
         #                 self.delete(Dihedral(al[-1], b, c, dl[0]))
         #                 self.add(MultiDihedral(al, b, c, dl))
-                
 
     def __repr__(self):
         lines = ["Internal coordinate system (atoms numbered from 1):"]
@@ -1587,7 +1589,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
             raise RuntimeError("Not all internal coordinates have been accounted for. You may need to add something to reorderPrimitives()")
         self.Internals = newPrims
 
-    def getConstraint_from(self, other):
+    def getConstraints_from(self, other):
         if other.haveConstraints():
             for cPrim, cVal in zip(other.cPrims, other.cVals):
                 self.addConstraint(cPrim, cVal)
@@ -1620,6 +1622,93 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
             #     print c, c.value(xyz)
             #     printArray(c.x0)
 
+    # def augmentGH(self, xyz, G, H):
+    #     """
+    #     Add extra dimensions to the gradient and Hessian corresponding to the constrained degrees of freedom.
+    #     The Hessian becomes:  H  c
+    #                           cT 0
+    #     where the elements of cT are the first derivatives of the constraint function 
+    #     (typically a single primitive minus a constant) with respect to the internal coordinates. 
+        
+    #     The extended elements of the Gradient are equal to the constraint violation.
+        
+    #     Parameters
+    #     ----------
+    #     xyz : np.ndarray
+    #         Flat array containing Cartesian coordinates in atomic units
+    #     G : np.ndarray
+    #         Flat array containing internal coordinate gradient
+    #     H : np.ndarray
+    #         Square array containing internal coordinate Hessian
+
+    #     Returns
+    #     -------
+    #     GC : np.ndarray
+    #         Flat array containing gradient extended by constraint violations
+    #     HC : np.ndarray
+    #         Square matrix extended by partial derivatives
+    #     """
+    #     # Number of internals (elements of G)
+    #     ni = len(G)
+    #     # Number of constraints
+    #     nc = len(self.cPrims)
+    #     # Total dimension
+    #     nt = ni+nc
+    #     # Lower block of the augmented Hessian
+    #     cT = np.zeros((nc, ni), dtype=float)
+    #     c0 = np.zeros(nc, dtype=float)
+    #     for ic, c in enumerate(self.cPrims):
+    #         # Look up the index of the primitive that is being constrained
+    #         iPrim = self.Internals.index(c)
+    #         cT[ic, iPrim] = 1.0
+    #         # Calculate the further change needed in this constrained variable
+    #         c0[ic] = self.cVals[ic] - c.value(xyz)
+    #         if c.isPeriodic:
+    #             Plus2Pi = c0[ic] + 2*np.pi
+    #             Minus2Pi = c0[ic] - 2*np.pi
+    #             if np.abs(c0[ic]) > np.abs(Plus2Pi):
+    #                 c0[ic] = Plus2Pi
+    #             if np.abs(c0[ic]) > np.abs(Minus2Pi):
+    #                 c0[ic] = Minus2Pi
+    #     # Construct augmented Hessian
+    #     HC = np.zeros((nt, nt), dtype=float)
+    #     HC[0:ni, 0:ni] = H[:,:]
+    #     HC[ni:nt, 0:ni] = cT[:,:]
+    #     HC[0:ni, ni:nt] = cT.T[:,:]
+    #     # Construct augmented gradient
+    #     GC = np.zeros(nt, dtype=float)
+    #     GC[0:ni] = G[:]
+    #     GC[ni:nt] = -c0[:]
+    #     return GC, HC
+
+    # def calcGradProj(self, xyz, gradx):
+    #     """
+    #     Project out the components of the internal coordinate gradient along the
+    #     constrained degrees of freedom. This is used to calculate the convergence
+    #     criteria for constrained optimizations.
+
+    #     Parameters
+    #     ----------
+    #     xyz : np.ndarray
+    #         Flat array containing Cartesian coordinates in atomic units
+    #     gradx : np.ndarray
+    #         Flat array containing gradient in Cartesian coordinates
+    #     """
+    #     if len(self.cPrims) == 0:
+    #         return gradx
+    #     q0 = self.calculate(xyz)
+    #     Ginv = self.GInverse(xyz)
+    #     Bmat = self.wilsonB(xyz)
+    #     # Internal coordinate gradient
+    #     Gq = np.matrix(Ginv)*np.matrix(Bmat)*np.matrix(gradx).T
+    #     Gqc = np.array(Gq).flatten()
+    #     # Remove the directions that are along the coordinates that we are constraining
+    #     for ic, c in enumerate(self.cPrims):
+    #         # Look up the index of the primitive that is being constrained
+    #         iPrim = self.Internals.index(c)
+    #         Gqc[iPrim] = 0.0
+    #     Gxc = np.array(np.matrix(Bmat.T)*np.matrix(Gqc).T).flatten()
+    #     return Gxc
     
     def guess_hessian(self, coords):
         """
@@ -1691,7 +1780,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                 # else:
                 #     Hdiag.append(0.023)
             elif type(ic) in [CartesianX, CartesianY, CartesianZ]:
-                Hdiag.append(0.02)
+                Hdiag.append(0.05)
             elif type(ic) in [TranslationX, TranslationY, TranslationZ]:
                 Hdiag.append(0.05)
             elif type(ic) in [RotationA, RotationB, RotationC]:
@@ -1700,22 +1789,14 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                 raise RuntimeError('Spoo!')
         return np.matrix(np.diag(Hdiag))
 
+    
 class DelocalizedInternalCoordinates(InternalCoordinates):
-    def __init__(self, molecule, build=False, connect=False, constraints=None, cvals=None):
+    def __init__(self, molecule, build=False, connect=False, addcart=False, constraints=None, cvals=None):
         # The DLC contains an instance of primitive internal coordinates.
-        self.Prims = PrimitiveInternalCoordinates(molecule, connect)
-        xyz = molecule.xyzs[0].flatten() / 0.529
+        self.Prims = PrimitiveInternalCoordinates(molecule, connect=connect, addcart=addcart, constraints=constraints, cvals=cvals)
         self.na = molecule.na
-        # Add the list of constraints
-        if constraints is not None:
-            if len(constraints) != len(cvals):
-                raise RuntimeError("List of constraints should be same length as constraint values")
-            for cons, cval in zip(constraints, cvals):
-                self.addConstraint(cons, cval, xyz)
-        # Reorder primitives for checking with cc's code in TC.
-        # Note that reorderPrimitives() _must_ be updated with each new InternalCoordinate class written.
-        self.Prims.reorderPrimitives()
         # Build the DLC's. This takes some time, so we have the option to turn it off.
+        xyz = molecule.xyzs[0].flatten() / 0.529
         if build:
             self.build_dlc(xyz)
 
@@ -1729,7 +1810,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         self.Prims.addConstraint(cPrim, cVal, xyz)
 
     def getConstraints_from(self, other):
-        self.Prims.getConstraint_from(other.Prims)
+        self.Prims.getConstraints_from(other.Prims)
         
     def haveConstraints(self):
         return len(self.Prims.cPrims) > 0
@@ -1826,7 +1907,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
                     if np.abs(dQ[iDLC]) > np.abs(Minus2Pi):
                         dQ[iDLC] = Minus2Pi
             print "applyConstraints calling newCartesian (%i), |dQ| = %.3e" % (niter, np.linalg.norm(dQ))
-            xyz2 = self.newCartesian(xyz1, dQ, verbose=True, applyCon=False)
+            xyz2 = self.newCartesian(xyz1, dQ, verbose=True)
             if np.linalg.norm(dQ) < 1e-6:
                 return xyz2
             if niter > 1 and np.linalg.norm(dQ) > np.linalg.norm(dQ0):
@@ -2029,15 +2110,16 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         """ Reset the reference geometries for calculating the orientational variables. """
         self.Prims.resetRotations(xyz)
 
-
-class CartesianCoordinates(InternalCoordinates):
+class CartesianCoordinates(PrimitiveInternalCoordinates):
     """
     Cartesian coordinate system, written as a kind of internal coordinate class.  
     This one does not support constraints, because that requires adding some 
     primitive internal coordinates.
     """
-    def __init__(self, molecule, build=False, connect=False):
+    def __init__(self, molecule, build=False, connect=False, addcart=False, constraints=None, cvals=None):
         self.Internals = []
+        self.cPrims = []
+        self.cVals = []
         self.elem = molecule.elem
         if len(molecule) != 1:
             raise RuntimeError('Only one frame allowed in molecule object')
@@ -2046,44 +2128,5 @@ class CartesianCoordinates(InternalCoordinates):
             self.add(CartesianY(i, w=1.0))
             self.add(CartesianZ(i, w=1.0))
 
-    def __eq__(self, other):
-        answer = True
-        for i in self.Internals:
-            if i not in other.Internals:
-                answer = False
-        for i in other.Internals:
-            if i not in self.Internals:
-                answer = False
-        return answer
-
-    def __ne__(self, other):
-        return not self.__eq__(other)
-
-    def calcDiff(self, coord1, coord2):
-        """ Calculate difference in internal coordinates, accounting for changes in 2*pi of angles. """
-        Q1 = self.calculate(coord1)
-        Q2 = self.calculate(coord2)
-        PMDiff = (Q1-Q2)
-        return PMDiff
-
-    def calculate(self, xyz):
-        answer = []
-        for Internal in self.Internals:
-            answer.append(Internal.value(xyz))
-        return np.array(answer)
-
-    def derivatives(self, xyz):
-        answer = []
-        for Internal in self.Internals:
-            answer.append(Internal.derivative(xyz))
-        # This array has dimensions:
-        # 1) Number of internal coordinates
-        # 2) Number of atoms
-        # 3) 3
-        return np.array(answer)
-
-    def GInverse(self, xyz, u=None):
-        return self.GInverse_SVD(xyz, u)
-
-    def guess_hessian(self, coords):
-        return np.eye(len(self.Internals)) * 0.05
+    def guess_hessian(self, xyz):
+        return np.eye(len(xyz.flatten()))

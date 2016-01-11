@@ -17,30 +17,39 @@ import itertools
 import os, sys, shutil
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--cart', action='store_true', help='Use Cartesian coordinate system.')
-parser.add_argument('--connect', action='store_true', help='Connect noncovalent molecules into a network.')
-parser.add_argument('--redund', action='store_true', help='Use redundant coordinate system.')
+parser.add_argument('--coordsys', type=str, default='xdlc', help='Coordinate system: "cart" for Cartesian, "prim" for Primitive (a.k.a redundant), '
+                    '"dlc" for Delocalized Internal Coordinates, "hdlc" for Hybrid Delocalized Internal Coordinates, "xdlc" for explicit translations'
+                    'and rotations added to DLC (default).')
 parser.add_argument('--terachem', action='store_true', help='Run optimization in TeraChem (pass xyz as first argument).')
 parser.add_argument('--dftd', action='store_true', help='Turn on dispersion correction in TeraChem.')
 parser.add_argument('--gpus', type=int, help='Specify number of GPUs for TeraChem.')
 parser.add_argument('--double', action='store_true', help='Run TeraChem in double precision mode.')
 parser.add_argument('--prefix', type=str, default=None, help='Specify a prefix for output file and temporary directory.')
-parser.add_argument('--displace', action='store_true', help='Write out the displacements.')
+parser.add_argument('--displace', action='store_true', help='Write out the displacements of the coordinates.')
 parser.add_argument('--epsilon', type=float, default=1e-5, help='Small eigenvalue threshold.')
-parser.add_argument('-c', '--check', type=int, default=0, help='Check coordinates every N steps (0 for no check).')
+parser.add_argument('-c', '--check', type=int, default=0, help='Check coordinates every N steps to see whether it has changed.')
 parser.add_argument('-v', '--verbose', action='store_true', help='Write out the displacements.')
 parser.add_argument('--reset', action='store_true', help='Reset Hessian when eigenvalues are under epsilon.')
-parser.add_argument('--rfo', action='store_true', help='Use rational function optimization (leave off = trust radius Newton Raphson).')
+parser.add_argument('--rfo', action='store_true', help='Use rational function optimization (default is trust-radius Newton Raphson).')
 parser.add_argument('--trust', type=float, default=0.1, help='Starting trust radius.')
 parser.add_argument('--tmax', type=float, default=0.3, help='Maximum trust radius.')
 parser.add_argument('input', type=str, help='Q-Chem input file (will be converted into TeraChem file if --terachem is specified')
 parser.add_argument('constraints', type=str, nargs='?', help='Constraint input file (optional)')
 
+# First item in tuple: The class to be initialized
+# Second item in tuple: Whether to connect nonbonded fragments
+# Third item in tuple: Whether to throw in all Cartesians (no effect if second item is True)
+CoordSysDict = {'cart':(CartesianCoordinates, False, False),
+                'prim':(PrimitiveInternalCoordinates, True, False),
+                'dlc':(DelocalizedInternalCoordinates, True, False),
+                'hdlc':(DelocalizedInternalCoordinates, False, True),
+                'xdlc':(DelocalizedInternalCoordinates, False, False)}
+
 print ' '.join(sys.argv)
 
-#args, sys.argv = parser.parse_known_args(sys.argv)
-
 args = parser.parse_args(sys.argv[1:])
+
+CoordClass, connect, addcart = CoordSysDict[args.coordsys.lower()]
 
 TeraChem = args.terachem
 
@@ -516,7 +525,7 @@ def Optimize(coords, molecule, IC=None, xyzout=None):
     trust = args.trust
     thre_rj = 0.01
     # Print initial iteration
-    gradxc = IC.calcGradProj(X, gradx)
+    gradxc = IC.calcGradProj(X, gradx) if IC.haveConstraints() else gradx.copy()
     atomgrad = np.sqrt(np.sum((gradxc.reshape(-1,3))**2, axis=1))
     rms_gradient = np.sqrt(np.mean(atomgrad**2))
     max_gradient = np.max(atomgrad)
@@ -557,7 +566,7 @@ def Optimize(coords, molecule, IC=None, xyzout=None):
         # added to the Hessian, the expected decrease in the energy, and
         # the derivative of the step length w/r.t. v.
         def get_delta_prime_trm(v):
-            GC, HC = IC.augmentGH(X, G, H)
+            GC, HC = IC.augmentGH(X, G, H) if IC.haveConstraints() else (G, H)
             # HT = HC + v**2*np.eye(len(HC))
             HT = HC + v*np.eye(len(HC))
             F = np.eye(len(HC))
@@ -736,13 +745,15 @@ def Optimize(coords, molecule, IC=None, xyzout=None):
                     newmol = deepcopy(molecule)
                     newmol.xyzs[0] = X.reshape(-1,3)*0.529
                     newmol.build_topology()
-                    if type(IC) is PrimitiveInternalCoordinates:
-                        IC1 = PrimitiveInternalCoordinates(newmol, connect=args.connect)
-                    elif type(IC) is DelocalizedInternalCoordinates:
-                        IC1 = DelocalizedInternalCoordinates(newmol, build=False, connect=args.connect)
-                        IC1.getConstraints_from(IC)
-                    else:
-                        raise RuntimeError('Spoo!')
+                    IC1 = CoordClass(newmol, connect=connect, addcart=addcart, build=False)
+                    if IC.haveConstraints(): IC1.getConstraints_from(IC)
+                    # if type(IC) is PrimitiveInternalCoordinates:
+                    #     IC1 = PrimitiveInternalCoordinates(newmol, connect=args.connect)
+                    # elif type(IC) is DelocalizedInternalCoordinates:
+                    #     IC1 = DelocalizedInternalCoordinates(newmol, build=False, connect=args.connect)
+                    #     IC1.getConstraints_from(IC)
+                    # else:
+                    #     raise RuntimeError('Spoo!')
                     if IC1 != IC:
                         print "\x1b[1;94mInternal coordinate system may have changed\x1b[0m"
                         if IC.repr_diff(IC1) != "":
@@ -758,6 +769,7 @@ def Optimize(coords, molecule, IC=None, xyzout=None):
                     else:
                         H = RebuildHessian(IC, H0, X_hist, Gx_hist, 0.3)
                     Y = IC.calculate(X)
+                    G = IC.calcGrad(X, gradx)
                     print "\x1b[1;93mSkipping optimization step\x1b[0m"
                     continue
                     #####
@@ -792,7 +804,7 @@ def Optimize(coords, molecule, IC=None, xyzout=None):
         progress.comms.append('Iteration %i Energy % .8f' % (Iteration, E))
         progress.write(xyzout)
         # Project out the degrees of freedom that are constrained
-        gradxc = IC.calcGradProj(X, gradx)
+        gradxc = IC.calcGradProj(X, gradx) if IC.haveConstraints() else gradx.copy()
         atomgrad = np.sqrt(np.sum((gradxc.reshape(-1,3))**2, axis=1))
         rms_displacement = np.sqrt(np.mean(displacement**2))
         rms_gradient = np.sqrt(np.mean(atomgrad**2))
@@ -869,13 +881,15 @@ def Optimize(coords, molecule, IC=None, xyzout=None):
                     newmol = deepcopy(molecule)
                     newmol.xyzs[0] = X.reshape(-1,3)*0.529
                     newmol.build_topology()
-                    if type(IC) is PrimitiveInternalCoordinates:
-                        IC1 = PrimitiveInternalCoordinates(newmol, connect=args.connect)
-                    elif type(IC) is DelocalizedInternalCoordinates:
-                        IC1 = DelocalizedInternalCoordinates(newmol, build=False, connect=args.connect)
-                        IC1.getConstraints_from(IC)
-                    else:
-                        raise RuntimeError('Spoo!')
+                    IC1 = CoordClass(newmol, build=False, connect=connect, addcart=addcart)
+                    if IC.haveConstraints(): IC1.getConstraints_from(IC)
+                    # if type(IC) is PrimitiveInternalCoordinates:
+                    #     IC1 = PrimitiveInternalCoordinates(newmol, connect=args.connect)
+                    # elif type(IC) is DelocalizedInternalCoordinates:
+                    #     IC1 = DelocalizedInternalCoordinates(newmol, build=False, connect=args.connect)
+                    #     IC1.getConstraints_from(IC)
+                    # else:
+                    #     raise RuntimeError('Spoo!')
                     if IC1 != IC:
                         print "\x1b[1;94mInternal coordinate system may have changed\x1b[0m"
                         if IC.repr_diff(IC1) != "":
@@ -967,13 +981,14 @@ def CalcInternalHess(coords, molecule, IC):
 def main():
     # Get initial coordinates in bohr
     coords = M.xyzs[0].flatten() / 0.529
-    if args.cart:
-        IC = None
-    elif args.redund:
-        IC = PrimitiveInternalCoordinates(M, connect=args.connect)
-    else:
-        IC = DelocalizedInternalCoordinates(M, connect=args.connect)
-        IC.build_dlc(coords)
+    IC = CoordClass(M, build=True, connect=connect, addcart=addcart)
+    # if args.cart:
+    #     IC = None
+    # elif args.redund:
+    #     IC = PrimitiveInternalCoordinates(M, connect=args.connect)
+    # else:
+    #     IC = DelocalizedInternalCoordinates(M, connect=args.connect)
+    #     IC.build_dlc(coords)
     if args.displace:
         # if not args.redund:
         #     IC.weight_vectors(coords)
@@ -1005,18 +1020,20 @@ def main():
         CheckInternalGrad(coords, M, IC)
         sys.exit()
         
-    print "%i internal coordinates being used (rather than %i Cartesians)" % (len(IC.Internals), 3*M.na)
+    print "%i coordinates being used (3*Na = %i)" % (len(IC.Internals), 3*M.na)
     print IC
 
     if Cons is None:
         xyzout = prefix+".xyz"
         opt_coords = Optimize(coords, M, IC, xyzout=xyzout)
     else:
-        # ccoord = []
+        if type(IC) in [CartesianCoordinates, PrimitiveInternalCoordinates]:
+            raise RuntimeError("Constraints only work with delocalized internal coordinates")
         for ic, CVal in enumerate(CVals):
             print "---=== Scan %i/%i : Constrained Optimization ===---" % (ic+1, len(CVals))
-            IC = DelocalizedInternalCoordinates(M, connect=args.connect, constraints=Cons, cvals=CVal)
-            IC.build_dlc(coords)
+            IC = CoordClass(M, build=True, connect=connect, addcart=addcart, constraints=Cons, cvals=CVal)
+            # IC = DelocalizedInternalCoordinates(M, connect=args.connect, constraints=Cons, cvals=CVal)
+            # IC.build_dlc(coords)
             IC.printConstraints(coords, thre=-1)
             if len(CVals) > 1:
                 xyzout = prefix+"-%03i.xyz" % ic
