@@ -35,6 +35,7 @@ parser.add_argument('--trust', type=float, default=0.1, help='Starting trust rad
 parser.add_argument('--tmax', type=float, default=0.3, help='Maximum trust radius.')
 parser.add_argument('input', type=str, help='Q-Chem input file (will be converted into TeraChem file if --terachem is specified')
 parser.add_argument('constraints', type=str, nargs='?', help='Constraint input file (optional)')
+parser.add_argument('--psi4', action='store_true', help='Compute gradients in Psi4')
 
 # First item in tuple: The class to be initialized
 # Second item in tuple: Whether to connect nonbonded fragments
@@ -54,11 +55,9 @@ CoordClass, connect, addcart = CoordSysDict[args.coordsys.lower()]
 TeraChem = args.terachem
 
 TCHome = "/home/leeping/src/terachem/production/build"
+Psi4exe = '/home/qyd/codes/python/bin/psi4'
 
-if args.prefix is None:
-    prefix = os.path.splitext(args.input)[0]+"_optim"
-else:
-    prefix = args.prefix
+prefix = args.prefix if args.prefix is not None else os.path.splitext(args.input)[0]
 
 dirname = prefix+".tmp"
 if os.path.exists(dirname):
@@ -95,12 +94,27 @@ eps = args.epsilon
 
 # Read in the molecule
 M = Molecule(args.input, radii={'Na':0.0})
-if 'method' in M.qcrems[0]:
-    method = method
-else:
-    method = M.qcrems[0]['exchange']
+method = M.qcrems[0].get('method', M.qcrems[0]['exchange'])
+
+### Above this line: Global variables that should go into main()
+### Below this line: function definitions
 
 def calc_terachem(coords):
+    """ 
+    Run a TeraChem energy and gradient calculation.
+    
+    Parameters
+    ----------
+    coords : np.ndarray
+        Cartesian coordinates in atomic units
+
+    Returns
+    -------
+    energy : float
+        Total energy in atomic units
+    gradient : np.ndarray
+        Gradient of energy in atomic units
+    """
     coord_hash = tuple(list(coords))
     if coord_hash in calc_terachem.stored_calcs:
         # print "Reading stored values"
@@ -121,11 +135,11 @@ def calc_terachem(coords):
                                     method = method,
                                     charge = str(M.charge), mult=str(M.mult),
                                     precision = "double" if args.double else "mixed",
-                                    guess = ("guess " + ' '.join(guesses) + "\npurify no" if have_guess else ""),
+                                    guess = ("guess " + ' '.join(guesses) + "\npurify no" if have_guess else "guess sad"),
                                     dftd = ("dispersion yes" if args.dftd else ""),
                                     gpus = ("gpus %i %s" % (args.gpus, ' '.join(["%i" % i for i in range(args.gpus)])) if args.gpus is not None else ""))
     # Convert coordinates back to the xyz file
-    M.xyzs[0] = coords.reshape(-1, 3) * 0.529
+    M.xyzs[0] = coords.reshape(-1, 3) * 0.529177
     M[0].write(os.path.join(dirname, 'start.xyz'))
     # Run TeraChem
     subprocess.call('terachem run.in > run.out', cwd=dirname, shell=True)
@@ -143,6 +157,21 @@ calc_terachem.calcnum = 0
 calc_terachem.stored_calcs = OrderedDict()
 
 def calc_qchem(coords):
+    """ 
+    Run a Q-Chem energy and gradient calculation.
+    
+    Parameters
+    ----------
+    coords : np.ndarray
+        Cartesian coordinates in atomic units
+
+    Returns
+    -------
+    energy : float
+        Total energy in atomic units
+    gradient : np.ndarray
+        Gradient of energy in atomic units
+    """
     coord_hash = tuple(list(coords))
     if coord_hash in calc_qchem.stored_calcs:
         energy = calc_qchem.stored_calcs[coord_hash]['energy']
@@ -151,7 +180,7 @@ def calc_qchem(coords):
     # print "Calling Qchem for energy and gradient"
     if not os.path.exists(dirname): os.makedirs(dirname)
     # Convert coordinates back to the xyz file
-    M.xyzs[0] = coords.reshape(-1, 3) * 0.529
+    M.xyzs[0] = coords.reshape(-1, 3) * 0.529177
     M.edit_qcrems({'jobtype':'force'})
     M[0].write(os.path.join(dirname, 'run.in'))
     # Run Qchem
@@ -167,54 +196,106 @@ def calc_qchem(coords):
 calc_qchem.calcnum = 0
 calc_qchem.stored_calcs = OrderedDict()
 
+Psi4Temp = """
+molecule {{
+{charge} {mult}
+{geometry}
+}}
+
+set basis {basis}
+
+gradient('{method}{dftd}')
+
+"""
+
+def calc_psi4(coords):
+    coord_hash = tuple(list(coords))
+    if coord_hash in calc_psi4.stored_calcs:
+        energy = calc_psi4.stored_calcs[coord_hash]['energy']
+        gradient = calc_psi4.stored_calcs[coord_hash]['gradient']
+        return energy, gradient
+    # print "Calling Psi4 for energy and gradient"
+    if not os.path.exists(dirname): os.mkdir(dirname)
+    # Convert coordinates back to the xyz file
+    M.xyzs[0] = coords.reshape(-1, 3) * 0.529177
+    M[0].write(os.path.join(dirname, 'start.xyz'))
+    # Write Psi4 input.dat
+    with open(os.path.join(dirname,'input.dat'),'w') as inputfile:
+        geometrylines = []
+        with open(os.path.join(dirname, 'start.xyz'),'r') as xyzinput:
+            xyzinput.readline()
+            xyzinput.readline()
+            for line in xyzinput:
+                geometrylines.append(line)
+        print >>inputfile, Psi4Temp.format(geometry = ''.join(geometrylines),
+                                    charge = str(M.charge), mult=str(M.mult),
+                                    basis = M.qcrems[0]['basis'],
+                                    method = method,
+                                    dftd = ('-d' if args.dftd else ""))
+    # Run Psi4
+    subprocess.call(Psi4exe, cwd = dirname, shell=True)
+    # Read energy and gradients from Psi4 output
+    energy = 0
+    gradient = []
+    with open(os.path.join(dirname,'output.dat'), 'r') as psi4output:
+        grad_block = False
+        with open(os.path.join(dirname,'grad.txt'), 'w') as gradoutput:
+            for line in psi4output:
+                if '-Total Gradient:' in line:
+                    grad_block = True
+                if grad_block:
+                    if len(line.split()) == 4 and line.split()[0].isdigit():
+                        gradoutput.write('   '.join(line.split()[1:]) + '\n')
+                    elif len(line.split()) == 0:
+                        grad_block = False
+                if 'CURRENT ENERGY:' in line and len(line.split()) == 3:
+                    energy = float(line.split()[-1])
+        gradient = np.loadtxt(os.path.join(dirname,'grad.txt')).flatten()
+    if len(calc_psi4.stored_calcs.keys()) > 0:
+        PrevHash = calc_psi4.stored_calcs.keys()[-1]
+        displacement = coords - calc_psi4.stored_calcs[PrevHash]['coords']
+    calc_psi4.stored_calcs[coord_hash] = {'coords':coords,'energy':energy,'gradient':gradient}
+    return energy, gradient
+calc_psi4.calcnum = 0
+calc_psi4.stored_calcs = OrderedDict()
+
 def calc(coords):
+    """ Run the selected quantum chemistry code. """
     if args.terachem:
         e, g = calc_terachem(coords)
+    elif args.psi4:
+        e, g = calc_psi4(coords)
     else:
         e, g = calc_qchem(coords)
     return e, g
 
-def calc_energy(coords):
-    print "Getting energy:",
-    return calc(coords)[0]
-
-def calc_grad(coords):
-    print "Getting gradient:",
-    return calc(coords)[1]
-
-def energy_internal(q):
-    IC = energy_internal.IC
-    x0 = energy_internal.x0
-    q0 = IC.calculate(x0)
-    dQ = IC.subtractInternal(q,q0)
-    newxyz = IC.newCartesian(x0, dQ, verbose=args.verbose)
-    energy_internal.x0 = newxyz
-    return calc(newxyz)[0]
-energy_internal.IC = None
-energy_internal.x0 = None
-
-def gradient_internal(q):
-    IC = gradient_internal.IC
-    x0 = gradient_internal.x0
-    q0 = IC.calculate(x0)
-    dQ = IC.subtractInternal(q,q0)
-    newxyz = IC.newCartesian(x0, dQ, verbose=args.verbose)
-    gradient_internal.x0 = newxyz
-    Gx = np.matrix(calc(newxyz)[1]).T
-    Ginv = IC.GInverse(newxyz)
-    Bmat = IC.wilsonB(newxyz)
-    Gq = np.matrix(Ginv)*np.matrix(Bmat)*Gx
-    return np.array(Gq).flatten()
-gradient_internal.IC = None
-gradient_internal.x0 = None
-
 def RebuildHessian(IC, H0, coord_seq, grad_seq, trust=0.3):
+    """
+    Rebuild the Hessian after making a change to the internal coordinate system.
+    
+    Parameters
+    ----------
+    IC : InternalCoordinates
+        Object describing the internal coordinate system
+    H0 : np.ndarray
+        N_ic x N_ic square matrix containing the guess Hessian
+    coord_seq : list
+        List of N_atom x 3 Cartesian coordinates in atomic units
+    grad_seq : list
+        List of N_atom x 3 Cartesian gradients in atomic units 
+    trust : float
+        Include only the geometries with RMSD < trust of the last point
+    
+    Returns
+    -------
+    np.ndarray
+        Internal coordinate Hessian updated with series of internal coordinate gradients
+    """
     Na = len(coord_seq[0])/3
     history = 0
     for i in range(2, len(coord_seq)+1):
-        disp = 0.529*(coord_seq[-i]-coord_seq[-1])
+        disp = 0.529177*(coord_seq[-i]-coord_seq[-1])
         rmsd = np.sqrt(np.sum(disp**2)/Na)
-        # print -i, rmsd
         if rmsd > trust: break
         history += 1
     if history < 1:
@@ -242,12 +323,29 @@ def RebuildHessian(IC, H0, coord_seq, grad_seq, trust=0.3):
     return H
 
 def getCartesianNorm(X, dy, IC):
+    """
+    Get the norm of the optimization step in Cartesian coordinates.
+    
+    Parameters
+    ----------
+    X : np.ndarray
+        Nx3 array of Cartesian coordinates in atomic units
+    dy : np.ndarray
+        N_ic array of internal coordinate displacements
+    IC : InternalCoordinates
+        Object describing the internal coordinate system
+
+    Returns
+    -------
+    float
+        The RMSD between the updated and original Cartesian coordinates
+    """
     # Displacement of each atom in Angstrom
     Xnew = IC.newCartesian(X, dy, verbose=args.verbose)
     Xmat = np.matrix(Xnew.reshape(-1,3))
     U = get_rot(Xmat, X.reshape(-1,3))
     Xrot = np.array((U*Xmat.T).T).flatten()
-    displacement = np.sqrt(np.sum((((Xrot-X)*0.529).reshape(-1,3))**2, axis=1))
+    displacement = np.sqrt(np.sum((((Xrot-X)*0.529177).reshape(-1,3))**2, axis=1))
     rms_displacement = np.sqrt(np.mean(displacement**2))
     return rms_displacement
 
@@ -259,7 +357,30 @@ def between(s, a, b):
     else:
         raise RuntimeError('a and b must be different')
 
-def brent_wiki(f, a, b, rel, cvg=0.1):
+def brent_wiki(f, a, b, rel, cvg=0.1, obj=None):
+    """
+    Brent's method for finding the root of a function.
+    
+    Parameters
+    ----------
+    f : function
+        The function containing the root to be found
+    a : float
+        One side of the "bracket" to start finding the root
+    b : float
+        The other side of the "bracket"
+    rel : float
+        The denominator used to calculate the fractional error (in our case, the trust radius)
+    cvg : float
+        The convergence threshold for the relative error
+    obj : object
+        Object associated with the function that we may communicate with if desired
+    
+    Returns
+    -------
+    float
+        The location of the root
+    """
     fa = f(a)
     fb = f(b)
     if fa*fb > 0:
@@ -303,10 +424,10 @@ def brent_wiki(f, a, b, rel, cvg=0.1):
             return s
         if np.abs(b-a) < epsilon:
             if args.verbose: print "returning because interval is too small"
-            f.small_interval = True
+            if obj is not None: obj.small_interval = True
             return s
-        if hasattr(f, 'from_above'):
-            if f.from_above and fs > 0:
+        if hasattr(obj, 'from_above'):
+            if (obj is not None and obj.from_above) and fs > 0:
                 return s
         d = c; fd = fc
         c = b; fc = fb
@@ -324,20 +445,25 @@ def ftest(x):
     print "(x, y) = ", x, answer
     return answer
 
-#brent_wiki(ftest, -4, 4/3, 1, 1e-8)
-#sys.exit()
-
-# def getConstraint(X, IC, cPrim):
-#     if type(IC) is DelocalizedInternalCoordinates:
-#         Prims = IC.Prims.Internals
-#         # Get the "primitive number" in the delocalized internal coordinates.
-#         iPrim = Prims.index(cPrim)
-#         return cPrim.value(X), np.array(IC.Vecs[iPrim, :]).flatten()
-#     else:
-#         raise RuntimeError('Spoo!')
-
 def OneDScan(init, final, steps):
-    # Return a list of values 
+    """ 
+    Return a list of N equally spaced values between initial and final.
+    This method works with lists of numbers
+
+    Parameters
+    ----------
+    init : list
+        List of numbers to be interpolated
+    final : np.ndarray or list
+        List of final numbers, must have same shape as "init"
+    steps : int
+        Number of interpolation steps
+
+    Returns
+    -------
+    list
+        List of lists that interpolate between init and final, including endpoints.
+    """
     if len(init) != len(final):
         raise RuntimeError("init and final must have the same length")
     Answer = []
@@ -347,6 +473,21 @@ def OneDScan(init, final, steps):
     return Answer
 
 def ParseConstraints(molecule, cFile):
+    """
+    Parameters
+    ----------
+    molecule : Molecule
+        Molecule object
+    cFile : str
+        File containing the constraint specification.
+    
+    Returns
+    -------
+    objs : list
+        List of primitive internal coordinates corresponding to the constraints
+    valgrps : list
+        List of lists of constraint values. (There are multiple lists when we are scanning)
+    """
     mode = None
     Freezes = []
     # The key in this dictionary is for looking up the following information:
@@ -375,7 +516,7 @@ def ParseConstraints(molecule, cFile):
     AtomKeys = ["x", "y", "z", "xy", "yz", "xz", "xyz"]
     objs = []
     vals = []
-    coords = molecule.xyzs[0].flatten() / 0.529
+    coords = molecule.xyzs[0].flatten() / 0.529177
     for line in open(cFile).readlines():
         line = line.split("#")[0].strip().lower()
         # This is a list-of-lists. The intention is to create a multidimensional grid
@@ -426,13 +567,13 @@ def ParseConstraints(molecule, cFile):
                         #     objs.append(cls(atoms[0], w=1.0))
                     # Depending on how many coordinates are constrained, we read in the corresponding
                     # number of constraint values.
-                    x1 = [float(i)/0.529 for i in s[2:2+len(classes)]]
+                    x1 = [float(i)/0.529177 for i in s[2:2+len(classes)]]
                     # If there's just one constraint value then we append it to the value list-of-lists
                     if mode == "set":
                         vals.append([x1])
                     elif mode == "scan":
                         # If we're scanning it, then we add the whole list of distances to the list-of-lists
-                        x2 = [float(i)/0.529 for i in s[2+len(classes):2+2*len(classes)]]
+                        x2 = [float(i)/0.529177 for i in s[2+len(classes):2+2*len(classes)]]
                         nstep = int(s[2+2*len(classes)])
                         vals.append(OneDScan(x1, x2, nstep))
                 elif mode == "freeze":
@@ -460,12 +601,12 @@ def ParseConstraints(molecule, cFile):
                 if mode == "freeze":
                     vals.append([[None]])
                 elif mode in ["set", "scan"]:
-                    if key == "distance": x1 = float(s[1+n_atom])/0.529
+                    if key == "distance": x1 = float(s[1+n_atom])/0.529177
                     else: x1 = float(s[1+n_atom])*np.pi/180.0
                     if mode == "set":
                         vals.append([[x1]])
                     else:
-                        if key == "distance": x2 = float(s[2+n_atom])/0.529
+                        if key == "distance": x2 = float(s[2+n_atom])/0.529177
                         else: x2 = float(s[2+n_atom])*np.pi/180.0
                         nstep = int(s[3+n_atom])
                         vals.append([[i] for i in list(np.linspace(x1,x2,nstep))])
@@ -486,39 +627,350 @@ def ParseConstraints(molecule, cFile):
     objs = list(itertools.chain(*objs))
     return objs, valgrps
 
-# Read in the constraints
-if args.constraints is not None:
-    Cons, CVals = ParseConstraints(M, args.constraints)
-else:
-    Cons = None
-    CVals = None
-            
-def Optimize(coords, molecule, IC=None, xyzout=None):
+def get_delta_prime_trm(v, X, G, H, IC):
+    """
+    Returns the Newton-Raphson step given a multiple of the diagonal
+    added to the Hessian, the expected decrease in the energy, and
+    the derivative of the step length w/r.t. v.
+    
+    Parameters
+    ----------
+    v : float
+        Number that is added to the Hessian diagonal
+    X : np.ndarray
+        Flat array of Cartesian coordinates in atomic units
+    G : np.ndarray
+        Flat array containing internal gradient
+    H : np.ndarray
+        Square array containing internal Hessian
+    IC : InternalCoordinates
+        Object describing the internal coordinate system
+
+    Returns
+    -------
+    dy : np.ndarray
+        The internal coordinate step
+    expect : float
+        Expected change of the objective function
+    dy_prime : float
+        Derivative of the internal coordinate step size w/r.t. v
+    """
+    GC, HC = IC.augmentGH(X, G, H) if IC.haveConstraints() else (G, H)
+    HT = HC + v*np.eye(len(HC))
+    F = np.eye(len(HC))
+    # The constrained degrees of freedom should not have anything added to diagonal
+    for i in range(len(G), len(GC)):
+        HT[i, i] = 0.0
+        F[i, i] = 0.0
+    F = np.matrix(F)
+    seig = sorted(np.linalg.eig(HT)[0])
+    print "sorted(eig) : % .5e % .5e % .5e ... % .5e % .5e % .5e" % (seig[0], seig[1], seig[2], seig[-3], seig[-2], seig[-1])
+    try:
+        Hi = invert_svd(np.matrix(HT))
+    except:
+        print "\x1b[1;91mSVD Error - increasing v by 0.001 and trying again\x1b[0m"
+        return get_delta_prime_trm(v+0.001, X, G, H, IC)
+    dyc = flat(-1 * Hi * col(GC))
+    dy = dyc[:len(G)]
+    d_prime = flat(-1 * F * Hi * col(dyc))[:len(G)]
+    dy_prime = np.dot(dy,d_prime)/np.linalg.norm(dy)
+    sol = flat(0.5*row(dy)*np.matrix(H)*col(dy))[0] + np.dot(dy,G)
+    return dy, sol, dy_prime
+
+def get_delta_prime_rfo(alpha, X, G, H, IC):
+    """
+    Return the restricted-step rational functional optimization
+    step, given a particular value of alpha. The step is given by:
+    1) Solving the generalized eigenvalue problem
+    [[0 G]  = lambda * [[1 0] * vec ,
+     [G H]]             [0 S]]
+       where the LHS matrix is called the augmented Hessian,
+       and S is alpha times the identity (starting value 1.0).
+    2) Dividing vec through by the 0th element, and keeping the rest
+    This function also calculates the derivative of the norm of the step
+    with respect to alpha, which allows trust_step() to rapidly find
+    the RS-RFO step that satisfies a desired step length.
+
+    Currently does not work with constraints, and gives equivalent performance 
+    to the trust radius method.
+
+    Parameters
+    ----------
+    alpha : float
+        Multiple of the identity in the S-matrix
+    X : np.ndarray
+        Flat array of Cartesian coordinates in atomic units
+    G : np.ndarray
+        Flat array containing internal gradient
+    H : np.ndarray
+        Square array containing internal Hessian
+    IC : InternalCoordinates
+        Object describing the internal coordinate system
+
+    Returns
+    -------
+    dy : np.ndarray
+        The internal coordinate step
+    expect : float
+        Expected change of the objective function
+    dy_prime : float
+        Derivative of the internal coordinate step size w/r.t. v
+    """
+    if IC.haveConstraints():
+        raise RuntimeError("Still need to implement RFO with constraints")
+    S = alpha*np.matrix(np.eye(len(H)))
+    # Augmented Hessian matrix
+    AH = np.zeros((H.shape[0]+1, H.shape[1]+1), dtype=float)
+    AH[1:, 1:] = H
+    AH[0, 1:] = G
+    AH[1:, 0] = G
+    B = np.zeros_like(AH)
+    B[0,0] = 1.0
+    B[1:,1:] = S
+    # Solve the generalized eigenvalue problem
+    AHeig, AHvec = scipy.linalg.eigh(AH, b=B)
+    lmin = AHeig[0]
+    # print "AH eigenvalues: %.5e %.5e %.5e ... %.5e %.5e %.5e" % (AHeig[0],AHeig[1],AHeig[2],AHeig[-3],AHeig[-2],AHeig[-1])
+    vmin = np.array(AHvec[:, 0]).flatten()
+    dy = (vmin / vmin[0])[1:]
+    nu = alpha*lmin
+    # Now get eigenvectors of the Hessian
+    Heig, Hvec = sorted_eigh(H, asc=True)
+    Hvec = np.array(Hvec)
+    dyprime2 = 0
+    dy2 = 0
+    for i in range(H.shape[0]):
+        dyprime2 += np.dot(Hvec[:,i].T,G)**2/(Heig[i]-nu)**3
+        dy2 += np.dot(Hvec[:,i].T,G)**2/(Heig[i]-nu)**2
+    dyprime2 *= (2*lmin)/(1+alpha*np.dot(dy,dy))
+    expect = lmin/2*(1+row(dy)*S*col(dy))[0]
+    dyprime1 = dyprime2 / (2*np.sqrt(dy2))
+    return dy, expect, dyprime1
+
+def get_delta_prime(v, X, G, H, IC):
+    """
+    Return the internal coordinate step given a parameter "v". 
+    "v" refers to the multiple of the identity added to the Hessian
+    in trust-radius Newton Raphson (TRM), and the multiple of the
+    identity on the RHS matrix in rational function optimization (RFO).
+    Note that reasonable default values are v = 0.0 in TRM and 1.0 in RFO.
+
+    Parameters
+    ----------
+    v : float
+        Number that is added to the Hessian diagonal
+    X : np.ndarray
+        Flat array of Cartesian coordinates in atomic units
+    G : np.ndarray
+        Flat array containing internal gradient
+    H : np.ndarray
+        Square array containing internal Hessian
+    IC : InternalCoordinates
+        Object describing the internal coordinate system
+
+    Returns
+    -------
+    dy : np.ndarray
+        The internal coordinate step
+    expect : float
+        Expected change of the objective function
+    dy_prime : float
+        Derivative of the internal coordinate step size w/r.t. v
+    """
+    if args.rfo:
+        return get_delta_prime_rfo(v, X, G, H, IC)
+    else:
+        return get_delta_prime_trm(v, X, G, H, IC)
+
+# this applies an iteration formula to find the trust radius step,
+# given the target value of the trust radius.
+def trust_step(target, v0, X, G, H, IC):
+    dy, sol, dy_prime = get_delta_prime(v0, X, G, H, IC)
+    ndy = np.linalg.norm(dy)
+    if ndy < target:
+        return dy, sol
+    v = v0
+    niter = 0
+    ndy_last = 0
+    # Store the minimum norm in case we give up
+    m_ndy = ndy
+    m_dy = dy.copy()
+    m_sol = sol
+    while True:
+        v += (1-ndy/target)*(ndy/dy_prime)
+        dy, sol, dy_prime, = get_delta_prime(v, X, G, H, IC)
+        ndy = np.linalg.norm(dy)
+        # print "v = %.5f dy -> target = %.5f -> %.5f" % (v, ndy, target)
+        if np.abs((ndy-target)/target) < 0.001:
+            return dy, sol
+        # With Lagrange multipliers it may be impossible to go under a target step size
+        elif niter > 10 and np.abs(ndy_last-ndy)/ndy < 0.001:
+            return dy, sol
+        niter += 1
+        ndy_last = ndy
+        if ndy < m_ndy:
+            m_ndy = ndy
+            m_dy = dy.copy()
+            m_sol = sol
+        # Break out of infinite oscillation loops
+        if niter%100 == 99:
+            print "trust_step hit niter = 100, randomizing"
+            v += np.random.random() * niter / 100
+        if niter%1000 == 999:
+            print "trust_step hit niter = 1000, giving up"
+            return m_dy, m_sol
+
+class Froot(object):
+    """
+    Object describing a function of the internal coordinate step
+    length, which returns the Cartesian coordinate step length minus
+    the trust radius.  
+
+    This is an object instead of a function mainly because we want the
+    Brent root-finding method to read and write extra attributes of
+    this function and not just its value, for example: Did we converge
+    to a root? Under what conditions are we allowed to exit the algorithm?
+    """
+    def __init__(self, trust, v0, X, G, H, IC):
+        self.counter = 0
+        self.stores = {}
+        self.trust = trust
+        self.target = trust
+        self.above_flag = False
+        self.current_arg = None
+        self.current_val = None
+        self.small_interval = False
+        self.v0 = v0
+        self.X = X
+        self.G = G
+        self.H = H
+        self.IC = IC
+
+    def evaluate(self, trial):
+        """
+        This is a one-argument "function" that is called by brent_wiki which takes
+        an internal coordinate step length as input, and returns the Cartesian coordinate
+        step length (minus the target) as output.
+        """
+        v0 = self.v0
+        X = self.X
+        G = self.G
+        H = self.H
+        IC = self.IC
+        trust = self.trust
+        if trial == 0.0: 
+            self.from_above = False
+            return -trust
+        else:
+            if trial in self.stores:
+                cnorm = self.stores[trial]
+                self.from_above = False
+            else:
+                dy, expect = trust_step(trial, v0, X, G, H, IC)
+                cnorm = getCartesianNorm(X, dy, IC)
+                # Early "convergence"; this signals whether we have found a valid step that is
+                # above the current target, but below the original trust radius. This happens
+                # when the original trust radius fails, and we reduce the target step-length
+                # as a contingency
+                self.from_above = (self.above_flag and not IC.bork and cnorm < trust)
+                self.stores[trial] = cnorm
+                self.counter += 1
+            # Store the largest trial value with cnorm below the target
+            if cnorm-self.target < 0:
+                if self.current_val is None or cnorm > self.current_val:
+                    self.current_arg = trial
+                    self.current_val = cnorm
+            if args.verbose: print "dy(i) %.4f dy(c) -> target: %.4f -> %.4f%s" % (trial, cnorm, self.target, " (done)" if self.from_above else "")
+            return cnorm-self.target    
+
+def recover(molecule, IC, X, gradx, X_hist, Gx_hist, connect, addcart):
+    """
+    Recover from a failed optimization.
+
+    Parameters
+    ----------
+    molecule : Molecule
+        Molecule object for rebuilding internal coordinates
+    IC : InternalCoordinates
+        Object describing the current internal coordinate system
+    X : np.ndarray
+        Nx3 array of Cartesian coordinates in atomic units
+    gradx : np.ndarray
+        Nx3 array of Cartesian gradients in atomic units
+    X_hist : list
+        List of previous Cartesian coordinates
+    Gx_hist : list
+        List of previous Cartesian gradients
+    connect : bool
+        Connect molecules when building internal coordinates ("prim" and "dlc" options)
+    addcart : bool
+        Add all Cartesians when building internal coordinates ("hdlc" option)
+
+    Returns
+    -------
+    Y : np.ndarray
+        New internal coordinates
+    G : np.ndarray
+        New internal gradients
+    H : np.ndarray
+        New internal Hessian
+    """
+    newmol = deepcopy(molecule)
+    newmol.xyzs[0] = X.reshape(-1,3)*0.529177
+    newmol.build_topology()
+    IC1 = IC.__class__(newmol, connect=connect, addcart=addcart, build=False)
+    if IC.haveConstraints(): IC1.getConstraints_from(IC)
+    if IC1 != IC:
+        print "\x1b[1;94mInternal coordinate system may have changed\x1b[0m"
+        if IC.repr_diff(IC1) != "":
+            print IC.repr_diff(IC1)
+    IC = IC1
+    IC.resetRotations(X)
+    if type(IC) is DelocalizedInternalCoordinates:
+        IC.build_dlc(X)
+    H0 = IC.guess_hessian(X)
+    if args.reset:
+        H = H0.copy()
+    else:
+        H = RebuildHessian(IC, H0, X_hist, Gx_hist, 0.3)
+    Y = IC.calculate(X)
+    G = IC.calcGrad(X, gradx)
+    return Y, G, H, IC
+        
+def Optimize(coords, molecule, IC, xyzout):
+    """
+    Optimize the geometry of a molecule.
+    
+    Parameters
+    ----------
+    coords : np.ndarray
+        Nx3 array of Cartesian coordinates in atomic units
+    molecule : Molecule
+        Molecule object
+    IC : InternalCoordinates
+        Object describing the internal coordinate system
+    xyzout : str
+        Output file name for writing the progress of the optimization.
+
+    Returns
+    -------
+    np.ndarray
+        Nx3 array of optimized Cartesian coordinates in atomic units
+    """
     progress = deepcopy(molecule)
     # Initial Hessian
-    if IC is not None:
-        internal = True
-        H0 = IC.guess_hessian(coords)
-    else:
-        internal = False
-        H0 = np.eye(len(coords))
+    H0 = IC.guess_hessian(coords)
     H = H0.copy()
     # Cartesian coordinates
     X = coords.copy()
     # Initial energy and gradient
     E, gradx = calc(coords)
-    if internal:
-        # Initial internal coordinates
-        q0 = IC.calculate(coords)
-        Gq = IC.calcGrad(X, gradx)
-        # The optimization variables are the internal coordinates.
-        Y = q0.copy()
-        G = np.array(Gq).flatten()
-    else:
-        # The optimization variables are the Cartesian coordinates.
-        Y = coords.copy()
-        G = gradx.copy()
-
+    # Initial internal coordinates
+    q0 = IC.calculate(coords)
+    Gq = IC.calcGrad(X, gradx)
+    # The optimization variables are the internal coordinates.
+    Y = q0.copy()
+    G = np.array(Gq).flatten()
     # Loop of optimization
     Iteration = 0
     CoordCounter = 0
@@ -531,13 +983,12 @@ def Optimize(coords, molecule, IC=None, xyzout=None):
     max_gradient = np.max(atomgrad)
     print "Step %4i :" % Iteration,
     print "Gradient = %.3e/%.3e (rms/max) Energy = % .10f" % (rms_gradient, max_gradient, E)
-    if IC is not None and IC.haveConstraints():
-        IC.printConstraints(X)
+    if IC.haveConstraints(): IC.printConstraints(X)
     # Threshold for "low quality step" which decreases trust radius.
     ThreLQ = 0.25
     # Threshold for "high quality step" which increases trust radius.
     ThreHQ = 0.75
-    # print np.diag(H)
+    # Convergence criteria
     Convergence_energy = 1e-6
     Convergence_grms = 3e-4
     Convergence_gmax = 4.5e-4
@@ -545,12 +996,12 @@ def Optimize(coords, molecule, IC=None, xyzout=None):
     Convergence_dmax = 1.8e-3
     X_hist = [X]
     Gx_hist = [gradx]
-    CartesianTrust = True
     trustprint = "="
+    ForceRebuild = False
     while 1:
         Iteration += 1
-        # Force Hessian to have positive eigenvalues.
-        Eig = np.linalg.eigh(H)[0]
+        # At the start of the loop, the function value, gradient and Hessian are known.
+        Eig = sorted(np.linalg.eigh(H)[0])
         Emin = min(Eig).real
         if args.rfo:
             v0 = 1.0
@@ -558,249 +1009,85 @@ def Optimize(coords, molecule, IC=None, xyzout=None):
             v0 = eps-Emin
         else:
             v0 = 0.0
-        Eig = np.linalg.eigh(H)[0]
-        Eig = sorted(Eig)
         print "Hessian Eigenvalues: %.5e %.5e %.5e ... %.5e %.5e %.5e" % (Eig[0],Eig[1],Eig[2],Eig[-3],Eig[-2],Eig[-1])
-        # Functions that help us to find the trust radius step.
-        # This returns the Newton-Raphson step given a multiple of the diagonal
-        # added to the Hessian, the expected decrease in the energy, and
-        # the derivative of the step length w/r.t. v.
-        def get_delta_prime_trm(v):
-            GC, HC = IC.augmentGH(X, G, H) if IC.haveConstraints() else (G, H)
-            # HT = HC + v**2*np.eye(len(HC))
-            HT = HC + v*np.eye(len(HC))
-            F = np.eye(len(HC))
-            # The constrained degrees of freedom should not have anything added to diagonal
-            for i in range(len(G), len(GC)):
-                HT[i, i] = 0.0
-                F[i, i] = 0.0
-            F = np.matrix(F)
-            # printArray(np.matrix(sorted(np.linalg.eig(HT)[0])))
-            try:
-                Hi = invert_svd(np.matrix(HT))
-            except:
-                print "SVD Error - increasing v by 0.001 and trying again"
-                return get_delta_prime_trm(v+0.001)
-            dyc = flat(-1 * Hi * col(GC))
-            dy = dyc[:len(G)]
-            d_prime = flat(-1 * F * Hi * col(dyc))[:len(G)]
-            dy_prime = np.dot(dy,d_prime)/np.linalg.norm(dy)
-            sol = flat(0.5*row(dy)*np.matrix(H)*col(dy))[0] + np.dot(dy,G)
-            return dy, sol, dy_prime
+        ### OBTAIN AN OPTIMIZATION STEP ###
+        # The trust radius is to be computed in Cartesian coordinates.
+        # First take a full-size Newton Raphson step
+        dy, expect, _ = get_delta_prime(v0, X, G, H, IC)
+        # Internal coordinate step size
+        inorm = np.linalg.norm(dy)
+        # Cartesian coordinate step size
+        cnorm = getCartesianNorm(X, dy, IC)
+        if args.verbose: print "dy(i): %.4f dy(c) -> target: %.4f -> %.4f" % (inorm, cnorm, trust)
+        # If the step is above the trust radius in Cartesian coordinates, then
+        # do the following to reduce the step length:
+        if cnorm > 1.1 * trust:
+            # This is the function f(inorm) = cnorm-target that we find a root
+            # for obtaining a step with the desired Cartesian step size.
+            froot = Froot(trust, v0, X, G, H, IC)
+            froot.stores[inorm] = cnorm
+            # Find the internal coordinate norm that matches the desired
+            # Cartesian coordinate norm
+            iopt = brent_wiki(froot.evaluate, 0.0, inorm, trust, cvg=0.1, obj=froot)
 
-        def get_delta_prime_rfo(alpha):
-            """
-            Return the restricted-step rational functional optimization
-            step, given a particular value of alpha. The step is given by:
-            1) Solving the generalized eigenvalue problem
-            [[0 G]  = lambda * [[1 0] * vec ,
-             [G H]]             [0 S]]
-               where the LHS matrix is called the augmented Hessian,
-               and S is alpha times the identity (starting value 1.0).
-            2) Dividing vec through by the 0th element, and keeping the rest
-            This function also calculates the derivative of the norm of the step
-            with respect to alpha, which allows trust_step() to rapidly find
-            the RS-RFO step that satisfies a desired step length.
-            """
-            S = alpha*np.matrix(np.eye(len(H)))
-            # Augmented Hessian matrix
-            AH = np.zeros((H.shape[0]+1, H.shape[1]+1), dtype=float)
-            AH[1:, 1:] = H
-            AH[0, 1:] = G
-            AH[1:, 0] = G
-            B = np.zeros_like(AH)
-            B[0,0] = 1.0
-            B[1:,1:] = S
-            # Solve the generalized eigenvalue problem
-            AHeig, AHvec = scipy.linalg.eigh(AH, b=B)
-            lmin = AHeig[0]
-            # print "AH eigenvalues: %.5e %.5e %.5e ... %.5e %.5e %.5e" % (AHeig[0],AHeig[1],AHeig[2],AHeig[-3],AHeig[-2],AHeig[-1])
-            vmin = np.array(AHvec[:, 0]).flatten()
-            dy = (vmin / vmin[0])[1:]
-            nu = alpha*lmin
-            # Now get eigenvectors of the Hessian
-            Heig, Hvec = sorted_eigh(H, asc=True)
-            Hvec = np.array(Hvec)
-            dyprime2 = 0
-            dy2 = 0
-            for i in range(H.shape[0]):
-                dyprime2 += np.dot(Hvec[:,i].T,G)**2/(Heig[i]-nu)**3
-                dy2 += np.dot(Hvec[:,i].T,G)**2/(Heig[i]-nu)**2
-            dyprime2 *= (2*lmin)/(1+alpha*np.dot(dy,dy))
-            expect = lmin/2*(1+row(dy)*S*col(dy))[0]
-            dyprime1 = dyprime2 / (2*np.sqrt(dy2))
-            return dy, expect, dyprime1
-
-        def get_delta_prime(v):
-            """
-            Return the internal coordinate step given a parameter "v". 
-            "v" refers to the multiple of the identity added to the Hessian
-            in trust-radius Newton Raphson (TRM), and the multiple of the
-            identity on the RHS matrix in rational function optimization (RFO).
-            Note that reasonable default values are v = 0.0 in TRM and 1.0 in RFO.
-            """
-            if args.rfo:
-                return get_delta_prime_rfo(v)
-            else:
-                return get_delta_prime_trm(v)
-
-        # this applies an iteration formula to find the trust radius step,
-        # given the target value of the trust radius.
-        def trust_step(target, v0):
-            dy, sol, dy_prime = get_delta_prime(v0)
-            ndy = np.linalg.norm(dy)
-            if ndy < target:
-                return dy, sol
-            v = v0
-            niter = 0
-            ndy_last = 0
-            while True:
-                if dy_prime == 0:
-                    v = 0.1
-                else:
-                    v += (1-ndy/target)*(ndy/dy_prime)
-                dy, sol, dy_prime, = get_delta_prime(v)
-                ndy = np.linalg.norm(dy)
-                # print "v = %.5f dy -> target = %.5f -> %.5f" % (v, ndy, target)
-                if np.abs((ndy-target)/target) < 0.001:
-                    return dy, sol
-                # With Lagrange multipliers it may be impossible to go under a target step size
-                elif niter > 10 and np.abs(ndy_last-ndy)/ndy < 0.001:
-                    return dy, sol
-                niter += 1
-                ndy_last = ndy
-                # Break out of infinite oscillation loops
-                if niter == 100:
-                    print "trust_step hit niter = 100, randomizing"
-                    v += np.random.random()
-                    niter = 0
-
-        # If our trust radius is to be computed in Cartesian coordinates,
-        # then we use an outer loop to find the appropriate step
-        if CartesianTrust:
-            dy, expect, _ = get_delta_prime(v0)
-            inorm = np.linalg.norm(dy)
-            dynorm = getCartesianNorm(X, dy, IC)
-            if args.verbose: print "dy(i): %.4f dy(c) -> target: %.4f -> %.4f" % (inorm, dynorm, trust)
-            if dynorm > 1.1 * trust:
-                def froot(trial):
-                    if trial == 0.0: 
-                        froot.from_above = False
-                        return -trust
-                    else:
-                        if trial in froot.stores:
-                            dynorm = froot.stores[trial]
-                            froot.from_above = False
-                        else:
-                            dy, expect = trust_step(trial, v0)
-                            dynorm = getCartesianNorm(X, dy, IC)
-                            froot.from_above = (froot.above_flag and not IC.bork and dynorm < trust)
-                            froot.stores[trial] = dynorm
-                            froot.counter += 1
-                        # Store the largest trial value with dynorm below the target
-                        if froot.current_val is None:
-                            if dynorm-froot.target < 0:
-                                froot.current_arg = trial
-                                froot.current_val = dynorm
-                        elif dynorm-froot.target < 0:
-                            if dynorm > froot.current_val:
-                                froot.current_arg = trial
-                                froot.current_val = dynorm
-                        if args.verbose: print "dy(i) %.4f dy(c) -> target: %.4f -> %.4f%s" % (trial, dynorm, froot.target, " (done)" if froot.from_above else "")
-                        return dynorm-froot.target
-                froot.counter = 0
-                froot.stores = {inorm : dynorm}
-                froot.target = trust
-                froot.above_flag = False
-                froot.current_arg = None
-                froot.current_val = None
-                froot.small_interval = False
-                iopt = brent_wiki(froot, 0.0, inorm, trust, cvg=0.1)
-                if froot.small_interval:
-                    if froot.current_arg is not None:
-                        iopt = froot.current_arg
-                    else:
-                        froot.small_interval = False
+            if froot.small_interval and froot.current_arg is not None:
+                iopt = froot.current_arg
+            elif IC.bork:
                 for i in range(3):
-                    if (not froot.small_interval) and IC.bork:
-                        froot.target /= 2
-                        if args.verbose: print "\x1b[93mReducing target to %.3e\x1b[0m" % froot.target
-                        froot.above_flag = True
-                        iopt = brent_wiki(froot, 0.0, iopt, froot.target, cvg=0.1)
-                    else: break
-                ForceRebuild = False
-                if IC.bork:
-                    print "\x1b[91mInverse iteration for Cartesians failed\x1b[0m"
-                    # This variable is added because IC.bork is unset later.
-                    ForceRebuild = True
-                else:
-                    if args.verbose: print "\x1b[93mBrent algorithm requires %i evaluations\x1b[0m" % froot.counter
-                if iopt is None:
-                    if args.verbose: print "\x1b[93mNo iopt - continuing\x1b[0m" % froot.counter
-                    iopt = 0.01
-                if ForceRebuild:
-                    # Force a rebuild of the coordinate system
-                    #####
-                    CoordCounter = 0
-                    newmol = deepcopy(molecule)
-                    newmol.xyzs[0] = X.reshape(-1,3)*0.529
-                    newmol.build_topology()
-                    IC1 = CoordClass(newmol, connect=connect, addcart=addcart, build=False)
-                    if IC.haveConstraints(): IC1.getConstraints_from(IC)
-                    # if type(IC) is PrimitiveInternalCoordinates:
-                    #     IC1 = PrimitiveInternalCoordinates(newmol, connect=args.connect)
-                    # elif type(IC) is DelocalizedInternalCoordinates:
-                    #     IC1 = DelocalizedInternalCoordinates(newmol, build=False, connect=args.connect)
-                    #     IC1.getConstraints_from(IC)
-                    # else:
-                    #     raise RuntimeError('Spoo!')
-                    if IC1 != IC:
-                        print "\x1b[1;94mInternal coordinate system may have changed\x1b[0m"
-                        if IC.repr_diff(IC1) != "":
-                            print IC.repr_diff(IC1)
-                        reinit = True
-                        IC = IC1
-                    IC.resetRotations(X)
-                    if type(IC) is DelocalizedInternalCoordinates:
-                        IC.build_dlc(X)
-                    H0 = IC.guess_hessian(coords)
-                    if args.reset:
-                        H = H0.copy()
+                    froot.target /= 2
+                    if args.verbose: print "\x1b[93mReducing target to %.3e\x1b[0m" % froot.target
+                    froot.above_flag = True
+                    iopt = brent_wiki(froot.evaluate, 0.0, iopt, froot.target, cvg=0.1)
+                    if not IC.bork: break
+            LastForce = ForceRebuild
+            ForceRebuild = False
+            if IC.bork or iopt is None:
+                print "\x1b[91mInverse iteration for Cartesians failed\x1b[0m"
+                # This variable is added because IC.bork is unset later.
+                ForceRebuild = True
+            else:
+                if args.verbose: print "\x1b[93mBrent algorithm requires %i evaluations\x1b[0m" % froot.counter
+            ##### Force a rebuild of the coordinate system
+            if ForceRebuild:
+                if LastForce:
+                    print "\x1b[1;91mFailed twice in a row to rebuild the coordinate system\x1b[0m"
+                    if IC.haveConstraints():
+                        print "Cannot continue a constrained optimization; please implement constrained optimization in Cartesian coordinates"
+                        sys.exit()
                     else:
-                        H = RebuildHessian(IC, H0, X_hist, Gx_hist, 0.3)
-                    Y = IC.calculate(X)
-                    G = IC.calcGrad(X, gradx)
-                    print "\x1b[1;93mSkipping optimization step\x1b[0m"
-                    continue
-                    #####
-                dy, expect = trust_step(iopt, v0)
-        else:
-            # This code is rarely used; trust radius in internal coordinates
-            dy, expect = trust_step(trust, v0)
-            dynorm = np.linalg.norm(dy)
-
+                        print "\x1b[93mContinuing in Cartesian coordinates\x1b[0m"
+                        IC = CartesianCoordinates(newmol)
+                CoordCounter = 0
+                Y, G, H, IC = recover(molecule, IC, X, gradx, X_hist, Gx_hist, connect, addcart)
+                print "\x1b[1;93mSkipping optimization step\x1b[0m"
+                Iteration -= 1
+                continue
+            ##### End Rebuild
+            # Finally, take an internal coordinate step of the desired length.
+            dy, expect = trust_step(iopt, v0, X, G, H, IC)
+        ### DONE OBTAINING THE STEP ###
+        # Dot product of the gradient with the step direction
         Dot = -np.dot(dy/np.linalg.norm(dy), G/np.linalg.norm(G))
-        bump = dynorm > 0.8 * trust
-        # Get the previous iteration stuff
+        # Whether the Cartesian norm comes close to the trust radius
+        bump = cnorm > 0.8 * trust
+        # Before updating any of our variables, copy current variables to "previous"
         Yprev = Y.copy()
         Xprev = X.copy()
         Gprev = G.copy()
         Eprev = E
+        ### Update the Internal Coordinates ###
         Y += dy
-        # print dy
-        # raw_input()
-        if internal:
-            X = IC.newCartesian(X, dy, verbose=args.verbose)
-        else:
-            X = Y.copy()
+        X = IC.newCartesian(X, dy, verbose=args.verbose)
+        ### Calculate Energy and Gradient ###
         E, gradx = calc(X)
-        # Calculate quantities for convergence
+        ### Check Convergence ###
         Xmat = X.reshape(-1,3)
+        # The displacement is calculated after rotating structures into maximum overlap
         U = get_rot(Xmat, Xprev.reshape(-1,3))
         Xrot = np.array((U*Xmat.T).T).flatten()
-        displacement = np.sqrt(np.sum((((Xrot-Xprev)*0.529).reshape(-1,3))**2, axis=1))
+        displacement = np.sqrt(np.sum((((Xrot-Xprev)*0.529177).reshape(-1,3))**2, axis=1))
         # Add new Cartesian coordinates and gradients to history
-        progress.xyzs.append(X.reshape(-1,3) * 0.529)
+        progress.xyzs.append(X.reshape(-1,3) * 0.529177)
         progress.comms.append('Iteration %i Energy % .8f' % (Iteration, E))
         progress.write(xyzout)
         # Project out the degrees of freedom that are constrained
@@ -810,15 +1097,15 @@ def Optimize(coords, molecule, IC=None, xyzout=None):
         rms_gradient = np.sqrt(np.mean(atomgrad**2))
         max_displacement = np.max(displacement)
         max_gradient = np.max(atomgrad)
+        # The ratio of the actual energy change to the expected change
         Quality = (E-Eprev)/expect
         Converged_energy = np.abs(E-Eprev) < Convergence_energy
         Converged_grms = rms_gradient < Convergence_grms
         Converged_gmax = max_gradient < Convergence_gmax
         Converged_drms = rms_displacement < Convergence_drms
         Converged_dmax = max_displacement < Convergence_dmax
-        #BadStep = (E-Eprev) > 0
         BadStep = Quality < 0
-            
+        # Print status
         print "Step %4i :" % Iteration,
         print "Displace = %s%.3e\x1b[0m/%s%.3e\x1b[0m (rms/max)" % ("\x1b[92m" if Converged_drms else "\x1b[0m", rms_displacement, "\x1b[92m" if Converged_dmax else "\x1b[0m", max_displacement),
         print "Trust = %.3e (%s)" % (trust, trustprint), 
@@ -827,26 +1114,25 @@ def Optimize(coords, molecule, IC=None, xyzout=None):
         print "E (change) = % .10f (%s%+.3e\x1b[0m) Quality = %s%.3f\x1b[0m" % (E, "\x1b[91m" if BadStep else ("\x1b[92m" if Converged_energy else "\x1b[0m"), E-Eprev, "\x1b[91m" if BadStep else "\x1b[0m", Quality)
         if IC is not None and IC.haveConstraints():
             IC.printConstraints(X)
-        if IC is not None:
+        if type(IC) is PrimitiveInternalCoordinates:
             idx = np.argmax(np.abs(dy))
             iunit = np.zeros_like(dy)
             iunit[idx] = 1.0
-            if type(IC) is PrimitiveInternalCoordinates:
-                print "Along %s %.3f" % (IC.Internals[idx], np.dot(dy/np.linalg.norm(dy), iunit))
+            print "Along %s %.3f" % (IC.Internals[idx], np.dot(dy/np.linalg.norm(dy), iunit))
         if Converged_energy and Converged_grms and Converged_drms and Converged_gmax and Converged_dmax:
             print "Converged! =D"
             break
-            # if (trust > Convergence_dmax) or (not bump):
-            #     print "Converged! =D"
-            #     break
-            # else:
-            #     print "Trust radius is too small to converge"
-        rejectOk = trust > thre_rj
+
+        ### Adjust Trust Radius and/or Reject Step ###
+        # If the trust radius is under thre_rj then do not reject.
+        rejectOk = (trust > thre_rj and E > Eprev)
         if Quality <= ThreLQ:
-            trust = max(Convergence_drms, min(trust, dynorm)/2)
+            # For bad steps, the trust radius is reduced
+            trust = max(Convergence_drms, min(trust, cnorm)/2)
             trustprint = "\x1b[91m-\x1b[0m"
         elif Quality >= ThreHQ and bump:
             if trust < args.tmax:
+                # For good steps, the trust radius is increased
                 trust = min(np.sqrt(2)*trust, args.tmax)
                 trustprint = "\x1b[92m+\x1b[0m"
             else:
@@ -854,95 +1140,89 @@ def Optimize(coords, molecule, IC=None, xyzout=None):
         else:
             trustprint = "="
         if Quality < -1 and rejectOk:
+            # Reject the step and take a smaller one from the previous iteration
             trustprint = "\x1b[1;91mx\x1b[0m"
             Y = Yprev.copy()
             X = Xprev.copy()
             G = Gprev.copy()
             E = Eprev
+            continue
+
+        # Steps that are bad, but are very small (under thre_rj) are not rejected.
+        # This is because some systems (e.g. formate) have discontinuities on the
+        # potential surface that can cause an infinite loop
+        if Quality < -1:
+            if trust < thre_rj: print "\x1b[93mNot rejecting step - trust below %.3e\x1b[0m" % thre_rj
+            elif E < Eprev: print "\x1b[93mNot rejecting step - energy decreases\x1b[0m"
+        # Append steps to history (for rebuilding Hessian)
+        X_hist.append(X)
+        Gx_hist.append(gradx)
+        ### Rebuild Coordinate System if Necessary ###
+        # Check to see whether the coordinate system has changed
+        check = False
+        # Reinitialize certain variables (i.e. DLC and rotations)
+        reinit = False
+        if IC.largeRots():
+            print "Large rotations - reinitializing coordinates"
+            reinit = True
+        if IC.bork:
+            print "Failed inverse iteration - reinitializing coordinates"
+            check = True
+            reinit = True
+        # Check the coordinate system every (N) steps
+        if (CoordCounter == (args.check - 1)) or check:
+            newmol = deepcopy(molecule)
+            newmol.xyzs[0] = X.reshape(-1,3)*0.529177
+            newmol.build_topology()
+            IC1 = IC.__class__(newmol, build=False, connect=connect, addcart=addcart)
+            if IC.haveConstraints(): IC1.getConstraints_from(IC)
+            if IC1 != IC:
+                print "\x1b[1;94mInternal coordinate system may have changed\x1b[0m"
+                if IC.repr_diff(IC1) != "":
+                    print IC.repr_diff(IC1)
+                reinit = True
+                IC = IC1
+            CoordCounter = 0
         else:
-            if Quality < -1:
-                print "\x1b[93mNot rejecting step - trust below %.3e\x1b[0m" % thre_rj
-            X_hist.append(X)
-            Gx_hist.append(gradx)
-            skipBFGS=False
-            if internal:
-                check = False
-                reinit = False
-                if IC.largeRots():
-                    print "Large rotations - reinitializing coordinates"
-                    reinit = True
-                if IC.bork:
-                    print "Failed inverse iteration - reinitializing coordinates"
-                    check = True
-                    reinit = True
-                if CoordCounter == (args.check - 1):
-                    check = True
-                if check:
-                    newmol = deepcopy(molecule)
-                    newmol.xyzs[0] = X.reshape(-1,3)*0.529
-                    newmol.build_topology()
-                    IC1 = CoordClass(newmol, build=False, connect=connect, addcart=addcart)
-                    if IC.haveConstraints(): IC1.getConstraints_from(IC)
-                    # if type(IC) is PrimitiveInternalCoordinates:
-                    #     IC1 = PrimitiveInternalCoordinates(newmol, connect=args.connect)
-                    # elif type(IC) is DelocalizedInternalCoordinates:
-                    #     IC1 = DelocalizedInternalCoordinates(newmol, build=False, connect=args.connect)
-                    #     IC1.getConstraints_from(IC)
-                    # else:
-                    #     raise RuntimeError('Spoo!')
-                    if IC1 != IC:
-                        print "\x1b[1;94mInternal coordinate system may have changed\x1b[0m"
-                        if IC.repr_diff(IC1) != "":
-                            print IC.repr_diff(IC1)
-                        reinit = True
-                        IC = IC1
-                    CoordCounter = 0
-                else:
-                    CoordCounter += 1
-                if reinit:
-                    IC.resetRotations(X)
-                    if type(IC) is DelocalizedInternalCoordinates:
-                        IC.build_dlc(X)
-                    H0 = IC.guess_hessian(coords)
-                    # H0 = np.eye(len(IC.Internals))
-                    H = RebuildHessian(IC, H0, X_hist, Gx_hist, 0.3)
-                    # H = H0.copy()
-                    Y = IC.calculate(X)
-                    skipBFGS = True
-                Gq = IC.calcGrad(X, gradx)
-                G = np.array(Gq).flatten()
-                rms_gq = np.sqrt(np.mean(G**2))
-                max_gq = np.max(np.abs(G))
-                if max_gq > 1:
-                    print "Gq = %.3e/%.3e (rms/max)" % (rms_gq, max_gq),
-            else:
-                G = gradx.copy()
+            CoordCounter += 1
+        # Reinitialize the coordinates (may happen even if coordinate system does not change)
+        UpdateHessian = True
+        if reinit:
+            IC.resetRotations(X)
+            if type(IC) is DelocalizedInternalCoordinates:
+                IC.build_dlc(X)
+            H0 = IC.guess_hessian(coords)
+            H = RebuildHessian(IC, H0, X_hist, Gx_hist, 0.3)
+            UpdateHessian = False
+            Y = IC.calculate(X)
+        Gq = IC.calcGrad(X, gradx)
+        G = np.array(Gq).flatten()
 
-            if not skipBFGS:
-                # BFGS Hessian update
-                Dy   = col(Y - Yprev)
-                Dg   = col(G - Gprev)
-                Mat1 = (Dg*Dg.T)/(Dg.T*Dy)[0,0]
-                Mat2 = ((H*Dy)*(H*Dy).T)/(Dy.T*H*Dy)[0,0]
-                Eig = np.linalg.eigh(H)[0]
-                Eig.sort()
-
-                ndy = np.array(Dy).flatten()/np.linalg.norm(np.array(Dy))
-                ndg = np.array(Dg).flatten()/np.linalg.norm(np.array(Dg))
-                nhdy = np.array(H*Dy).flatten()/np.linalg.norm(np.array(H*Dy))
-                if args.verbose: 
-                    print "Denoms: %.3e %.3e" % ((Dg.T*Dy)[0,0], (Dy.T*H*Dy)[0,0]),
-                    print "Dots: %.3e %.3e" % (np.dot(ndg, ndy), np.dot(ndy, nhdy)),
-                H1 = H.copy()
-                H += Mat1-Mat2
-                Eig1 = np.linalg.eigh(H)[0]
-                Eig1.sort()
-                if args.verbose:
-                    print "Eig-ratios: %.5e ... %.5e" % (np.min(Eig1)/np.min(Eig), np.max(Eig1)/np.max(Eig))
-                if np.min(Eig1) <= eps and args.reset:
-                    print "Eigenvalues below %.4e (%.4e) - returning guess" % (eps, np.min(Eig1))
-                    H = IC.guess_hessian(coords)
-        # Then it's on to the next loop iteration!
+        ### Update the Hessian ###
+        if UpdateHessian:
+            # BFGS Hessian update
+            Dy   = col(Y - Yprev)
+            Dg   = col(G - Gprev)
+            Mat1 = (Dg*Dg.T)/(Dg.T*Dy)[0,0]
+            Mat2 = ((H*Dy)*(H*Dy).T)/(Dy.T*H*Dy)[0,0]
+            Eig = np.linalg.eigh(H)[0]
+            Eig.sort()
+            ndy = np.array(Dy).flatten()/np.linalg.norm(np.array(Dy))
+            ndg = np.array(Dg).flatten()/np.linalg.norm(np.array(Dg))
+            nhdy = np.array(H*Dy).flatten()/np.linalg.norm(np.array(H*Dy))
+            if args.verbose: 
+                print "Denoms: %.3e %.3e" % ((Dg.T*Dy)[0,0], (Dy.T*H*Dy)[0,0]),
+                print "Dots: %.3e %.3e" % (np.dot(ndg, ndy), np.dot(ndy, nhdy)),
+            H1 = H.copy()
+            H += Mat1-Mat2
+            Eig1 = np.linalg.eigh(H)[0]
+            Eig1.sort()
+            if args.verbose:
+                print "Eig-ratios: %.5e ... %.5e" % (np.min(Eig1)/np.min(Eig), np.max(Eig1)/np.max(Eig))
+            if np.min(Eig1) <= eps and args.reset:
+                print "Eigenvalues below %.4e (%.4e) - returning guess" % (eps, np.min(Eig1))
+                H = IC.guess_hessian(coords)
+            # Then it's on to the next loop iteration!
     return X
 
 def CheckInternalGrad(coords, molecule, IC):
@@ -980,7 +1260,7 @@ def CalcInternalHess(coords, molecule, IC):
 
 def main():
     # Get initial coordinates in bohr
-    coords = M.xyzs[0].flatten() / 0.529
+    coords = M.xyzs[0].flatten() / 0.529177
     IC = CoordClass(M, build=True, connect=connect, addcart=addcart)
     # if args.cart:
     #     IC = None
@@ -1001,14 +1281,14 @@ def main():
                     x1 = IC.newCartesian(coords, dq, verbose=args.verbose)
                 else:
                     x1 = coords.copy()
-                displacement = np.sqrt(np.sum((((x1-coords)*0.529).reshape(-1,3))**2, axis=1))
+                displacement = np.sqrt(np.sum((((x1-coords)*0.529177).reshape(-1,3))**2, axis=1))
                 rms_displacement = np.sqrt(np.mean(displacement**2))
                 max_displacement = np.max(displacement)
                 if j != 0:
                     dx = (x1-coords)*np.abs(j)*2/max_displacement
                 else:
                     dx = 0.0
-                x.append((coords+dx).reshape(-1,3) * 0.529)
+                x.append((coords+dx).reshape(-1,3) * 0.529177)
                 print i, j, "Displacement (rms/max) = %.5f / %.5f" % (rms_displacement, max_displacement), "(Bork)" if IC.bork else "(Good)"
             M.xyzs = x
             M.write("%s/ic_%03i.xyz" % (dirname, i))
@@ -1019,29 +1299,47 @@ def main():
         IC.checkFiniteDifference(coords)
         CheckInternalGrad(coords, M, IC)
         sys.exit()
-        
-    print "%i coordinates being used (3*Na = %i)" % (len(IC.Internals), 3*M.na)
+
+    if type(IC) is CartesianCoordinates:
+        print "%i Cartesian coordinates being used" % (3*M.na)
+    else:
+        print "%i internal coordinates being used (instead of %i Cartesians)" % (len(IC.Internals), 3*M.na)
     print IC
 
+    # Read in the constraints
+    if args.constraints is not None:
+        Cons, CVals = ParseConstraints(M, args.constraints)
+    else:
+        Cons = None
+        CVals = None
+                
     if Cons is None:
-        xyzout = prefix+".xyz"
-        opt_coords = Optimize(coords, M, IC, xyzout=xyzout)
+        if prefix == os.path.splitext(args.input)[0]:
+            xyzout = prefix+"_optim.xyz"
+        else:
+            xyzout = prefix+".xyz"
+        opt_coords = Optimize(coords, M, IC, xyzout)
     else:
         if type(IC) in [CartesianCoordinates, PrimitiveInternalCoordinates]:
             raise RuntimeError("Constraints only work with delocalized internal coordinates")
         for ic, CVal in enumerate(CVals):
-            print "---=== Scan %i/%i : Constrained Optimization ===---" % (ic+1, len(CVals))
+            if len(CVals) > 1:
+                print "---=== Scan %i/%i : Constrained Optimization ===---" % (ic+1, len(CVals))
             IC = CoordClass(M, build=True, connect=connect, addcart=addcart, constraints=Cons, cvals=CVal)
             # IC = DelocalizedInternalCoordinates(M, connect=args.connect, constraints=Cons, cvals=CVal)
             # IC.build_dlc(coords)
             IC.printConstraints(coords, thre=-1)
+
             if len(CVals) > 1:
-                xyzout = prefix+"-%03i.xyz" % ic
+                xyzout = prefix+"_scan-%03i.xyz" % ic
+            elif prefix == os.path.splitext(args.input)[0]:
+                xyzout = prefix+"_optim.xyz"
             else:
                 xyzout = prefix+".xyz"
-            # We may explicitly enforce the constraints here if we want to.
+
+                # We may explicitly enforce the constraints here if we want to.
             # coords = IC.applyConstraints(coords)
-            coords = Optimize(coords, M, IC, xyzout=xyzout)
+            coords = Optimize(coords, M, IC, xyzout)
             print
     
 if __name__ == "__main__":

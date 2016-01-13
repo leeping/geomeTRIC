@@ -11,8 +11,8 @@ from collections import OrderedDict, defaultdict
 from scipy import optimize
 from rotate import get_expmap, get_expmap_der
 
-def printArray(mat, precision=3):
-    fmt="%% .%if" % precision
+def printArray(mat, precision=3, fmt="f"):
+    fmt="%% .%i%s" % (precision, fmt)
     if len(mat.shape) == 1:
         for i in range(mat.shape[0]):
             print fmt % mat[i],
@@ -1166,12 +1166,12 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                         self.add(TranslationY(i, w=np.ones(len(i))/len(i)))
                         self.add(TranslationZ(i, w=np.ones(len(i))/len(i)))
                         # Reference coordinates are given in Bohr.
-                        sel = coords.reshape(-1,3)[i,:] / 0.529
+                        sel = coords.reshape(-1,3)[i,:] / 0.529177
                         sel -= np.mean(sel, axis=0)
                         rg = np.sqrt(np.mean(np.sum(sel**2, axis=1)))
-                        self.add(RotationA(i, coords / 0.529, self.Rotators, w=rg))
-                        self.add(RotationB(i, coords / 0.529, self.Rotators, w=rg))
-                        self.add(RotationC(i, coords / 0.529, self.Rotators, w=rg))
+                        self.add(RotationA(i, coords / 0.529177, self.Rotators, w=rg))
+                        self.add(RotationB(i, coords / 0.529177, self.Rotators, w=rg))
+                        self.add(RotationC(i, coords / 0.529177, self.Rotators, w=rg))
                     else:
                         for j in i:
                             self.add(CartesianX(j, w=1.0))
@@ -1181,7 +1181,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                 # Net translations and rotations.
                 # na = molecule.na
                 # alla = range(molecule.na)
-                # sel = coords.reshape(-1,3) / 0.529
+                # sel = coords.reshape(-1,3) / 0.529177
                 # sel -= np.mean(sel, axis=0)
                 # rg = np.sqrt(np.mean(np.sum(sel**2, axis=1)))
                 # self.addConstraint(TranslationX(alla, w=np.ones(na)/na), xyz=coords)
@@ -1347,7 +1347,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                                 self.add(Dihedral(d, c, b, a))
             
         # Add the list of constraints
-        xyz = molecule.xyzs[0].flatten() / 0.529
+        xyz = molecule.xyzs[0].flatten() / 0.529177
         if constraints is not None:
             if len(constraints) != len(cvals):
                 raise RuntimeError("List of constraints should be same length as constraint values")
@@ -1610,7 +1610,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
             if np.abs(diff+2*np.pi) < np.abs(diff):
                 diff += 2*np.pi
             if type(c) in [TranslationX, TranslationY, TranslationZ, CartesianX, CartesianY, CartesianZ, Distance]:
-                factor = 0.529
+                factor = 0.529177
             elif c.isAngular:
                 factor = 180.0/np.pi
             if np.abs(diff*factor) > thre:
@@ -1714,7 +1714,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         """
         Build a guess Hessian that roughly follows Schlegel's guidelines. 
         """
-        xyzs = coords.reshape(-1,3)*0.529
+        xyzs = coords.reshape(-1,3)*0.529177
         Hdiag = []
         def covalent(a, b):
             r = np.linalg.norm(xyzs[a]-xyzs[b])
@@ -1723,7 +1723,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         
         for ic in self.Internals:
             if type(ic) is Distance:
-                r = np.linalg.norm(xyzs[ic.a]-xyzs[ic.b]) / 0.529
+                r = np.linalg.norm(xyzs[ic.a]-xyzs[ic.b]) / 0.529177
                 elem1 = min(Elements.index(self.elem[ic.a]), Elements.index(self.elem[ic.b]))
                 elem2 = max(Elements.index(self.elem[ic.a]), Elements.index(self.elem[ic.b]))
                 A = 1.734
@@ -1796,7 +1796,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         self.Prims = PrimitiveInternalCoordinates(molecule, connect=connect, addcart=addcart, constraints=constraints, cvals=cvals)
         self.na = molecule.na
         # Build the DLC's. This takes some time, so we have the option to turn it off.
-        xyz = molecule.xyzs[0].flatten() / 0.529
+        xyz = molecule.xyzs[0].flatten() / 0.529177
         if build:
             self.build_dlc(xyz)
 
@@ -1994,7 +1994,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         # number of columns equal to the number of delocalized internal coordinates.
         if self.haveConstraints():
             click()
-            print "Projecting out constraints...",
+            # print "Projecting out constraints...",
             V = []
             for ic, c in enumerate(self.Prims.cPrims):
                 # Look up the index of the primitive that is being constrained
@@ -2004,25 +2004,32 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
                 cVec = np.array(cVec)
                 cVec /= np.linalg.norm(cVec)
                 # This is a "new DLC" that corresponds to the primitive that we are constraining
-                cProj = self.Vecs*cVec.T
+                cProj = self.Vecs*np.matrix(cVec.T)
                 cProj /= np.linalg.norm(cProj)
                 V.append(np.array(cProj).flatten())
             # V contains the constraint vectors on the left, and the original DLCs on the right
             V = np.hstack((np.array(V).T, np.array(self.Vecs)))
             # Apply Gram-Schmidt to V, and produce U.
             # The Gram-Schmidt process should produce a number of orthogonal DLCs equal to the original number
-            U = []
-            for iv in range(V.shape[1]):
-                v = V[:, iv].flatten()
-                U.append(v.copy())
-                for ui in U[:-1]:
-                    U[-1] -= ui * np.dot(ui, v)
-                if np.linalg.norm(U[-1]) < 1e-6:
-                    U = U[:-1]
-                    continue
-                U[-1] /= np.linalg.norm(U[-1])
-            if len(U) != self.Vecs.shape[1]:
-                raise RuntimeError('Gram-Schmidt orthogonalization has failed')
+            thre = 1e-6
+            while True:
+                U = []
+                for iv in range(V.shape[1]):
+                    v = V[:, iv].flatten()
+                    U.append(v.copy())
+                    for ui in U[:-1]:
+                        U[-1] -= ui * np.dot(ui, v)
+                    if np.linalg.norm(U[-1]) < thre:
+                        U = U[:-1]
+                        continue
+                    U[-1] /= np.linalg.norm(U[-1])
+                if len(U) > self.Vecs.shape[1]:
+                    thre *= 10
+                elif len(U) == self.Vecs.shape[1]:
+                    break
+                elif len(U) < self.vecs.shape[1]:
+                    raise RuntimeError('Gram-Schmidt orthogonalization has failed (expect %i length %i)' % (self.Vecs.shape[1], len(U)))
+            print "Gram-Schmidt completed with thre=%.0e" % thre
             self.Vecs = np.matrix(U).T
             # Constrained DLCs are on the left of self.Vecs.
             self.cDLC = [i for i in range(len(self.Prims.cPrims))]
