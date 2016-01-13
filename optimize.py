@@ -663,8 +663,6 @@ def get_delta_prime_trm(v, X, G, H, IC):
         HT[i, i] = 0.0
         F[i, i] = 0.0
     F = np.matrix(F)
-    seig = sorted(np.linalg.eig(HT)[0])
-    print "sorted(eig) : % .5e % .5e % .5e ... % .5e % .5e % .5e" % (seig[0], seig[1], seig[2], seig[-3], seig[-2], seig[-1])
     try:
         Hi = invert_svd(np.matrix(HT))
     except:
@@ -999,6 +997,10 @@ def Optimize(coords, molecule, IC, xyzout):
     trustprint = "="
     ForceRebuild = False
     while 1:
+        if np.isnan(G).any():
+            raise RuntimeError("Gradient contains nan - check output and temp-files for possible errors")
+        if np.isnan(H).any():
+            raise RuntimeError("Hessian contains nan - check output and temp-files for possible errors")
         Iteration += 1
         # At the start of the loop, the function value, gradient and Hessian are known.
         Eig = sorted(np.linalg.eigh(H)[0])
