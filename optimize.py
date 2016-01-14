@@ -700,14 +700,12 @@ def get_delta_prime_trm(v, X, G, H, IC):
     """
     GC, HC = IC.augmentGH(X, G, H) if IC.haveConstraints() else (G, H)
     HT = HC + v*np.eye(len(HC))
-    F = np.eye(len(HC))
     # The constrained degrees of freedom should not have anything added to diagonal
     for i in range(len(G), len(GC)):
         HT[i, i] = 0.0
-        F[i, i] = 0.0
-    F = np.matrix(F)
-    # seig = sorted(np.linalg.eig(HT)[0])
-    # print "sorted(eig) : % .5e % .5e % .5e ... % .5e % .5e % .5e" % (seig[0], seig[1], seig[2], seig[-3], seig[-2], seig[-1])
+    if args.verbose:
+        seig = sorted(np.linalg.eig(HT)[0])
+        print "sorted(eig) : % .5e % .5e % .5e ... % .5e % .5e % .5e" % (seig[0], seig[1], seig[2], seig[-3], seig[-2], seig[-1])
     try:
         Hi = invert_svd(np.matrix(HT))
     except:
@@ -715,7 +713,7 @@ def get_delta_prime_trm(v, X, G, H, IC):
         return get_delta_prime_trm(v+0.001, X, G, H, IC)
     dyc = flat(-1 * Hi * col(GC))
     dy = dyc[:len(G)]
-    d_prime = flat(-1 * F * Hi * col(dyc))[:len(G)]
+    d_prime = flat(-1 * Hi * col(dyc))[:len(G)]
     dy_prime = np.dot(dy,d_prime)/np.linalg.norm(dy)
     sol = flat(0.5*row(dy)*np.matrix(H)*col(dy))[0] + np.dot(dy,G)
     return dy, sol, dy_prime
@@ -843,7 +841,7 @@ def trust_step(target, v0, X, G, H, IC):
         v += (1-ndy/target)*(ndy/dy_prime)
         dy, sol, dy_prime, = get_delta_prime(v, X, G, H, IC)
         ndy = np.linalg.norm(dy)
-        # print "v = %.5f dy -> target = %.5f -> %.5f" % (v, ndy, target)
+        if args.verbose: print "v = %.5f dy -> target = %.5f -> %.5f" % (v, ndy, target)
         if np.abs((ndy-target)/target) < 0.001:
             return dy, sol
         # With Lagrange multipliers it may be impossible to go under a target step size
@@ -923,7 +921,7 @@ class Froot(object):
                 if self.current_val is None or cnorm > self.current_val:
                     self.current_arg = trial
                     self.current_val = cnorm
-            if args.verbose: print "dy(i) %.4f dy(c) -> target: %.4f -> %.4f%s" % (trial, cnorm, self.target, " (done)" if self.from_above else "")
+            if args.verbose: print "dy(i): %.4f dy(c) -> target: %.4f -> %.4f%s" % (trial, cnorm, self.target, " (done)" if self.from_above else "")
             return cnorm-self.target    
 
 def recover(molecule, IC, X, gradx, X_hist, Gx_hist, connect, addcart):
