@@ -1,0 +1,6 @@
+#!/bin/bash
+
+# Strips carriage returns and ANSI escape codes from a file, useful for
+# cleaning up ForceBalance printout.
+
+awk -F '\r' '{print $NF}' $1 | sed -r "s/\x1B\[([0-9]{1,2}(;[0-9]{1,2})?)*[m|K]//g"

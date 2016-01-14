@@ -5,7 +5,7 @@ import numpy as np
 from copy import deepcopy
 from collections import OrderedDict
 from internal import *
-from rotate import get_rot, sorted_eigh
+from rotate import get_rot, sorted_eigh, calc_fac_dfac
 from forcebalance.molecule import Molecule, Elements
 from forcebalance.nifty import row, col, flat, invert_svd, uncommadash, isint
 from scipy import optimize
@@ -536,9 +536,15 @@ def ParseConstraints(molecule, cFile):
             if mode == "freeze":
                 ntok = n_atom
             elif mode == "set":
-                ntok = n_atom + len(classes)
+                if key == 'rotation':
+                    ntok = n_atom + 4
+                else:
+                    ntok = n_atom + len(classes)
             elif mode == "scan":
-                ntok = n_atom + 2*len(classes) + 1
+                if key == 'rotation':
+                    ntok = n_atom + 6
+                else:
+                    ntok = n_atom + 2*len(classes) + 1
             if len(s) != (ntok+1):
                 raise RuntimeError("For this line:%s\nExpected %i tokens but got %i" % (line, ntok+1, len(s)))
             if key in AtomKeys:
@@ -613,17 +619,54 @@ def ParseConstraints(molecule, cFile):
             elif key in ["rotation"]:
                 # User can only specify ranges of atoms
                 atoms = uncommadash(s[1])
+                sel = coords.reshape(-1,3)[atoms,:] / 0.529177
+                sel -= np.mean(sel, axis=0)
+                rg = np.sqrt(np.mean(np.sum(sel**2, axis=1)))
                 if mode == "freeze":
                     for cls in classes:
-                        objs.append([cls(atoms, coords, {})])
+                        objs.append([cls(atoms, coords, {}, w=rg)])
                         vals.append([[None]])
-                else:
-                    raise RuntimeError("Orientation constraints can only be used with $freeze")
-                # raise RuntimeError("Line not supported: %s" % line)
+                elif mode in ["set", "scan"]:
+                    objs.append([cls(atoms, coords, {}, w=rg) for cls in classes])
+                    # Get the axis
+                    u = np.array([float(s[i]) for i in range(2, 5)])
+                    u /= np.linalg.norm(u)
+                    # Get the angle
+                    theta1 = float(s[5]) * np.pi / 180
+                    if np.abs(theta1) > np.pi * 0.9:
+                        print "Large rotation: Your constraint may not work"
+                    if mode == "set":
+                        c = np.cos(theta1/2.0)
+                        s = np.sin(theta1/2.0)
+                        q = np.array([c, u[0]*s, u[1]*s, u[2]*s])
+                        fac, _ = calc_fac_dfac(c)
+                        v1 = fac*q[1]*rg
+                        v2 = fac*q[2]*rg
+                        v3 = fac*q[3]*rg
+                        vals.append([[v1, v2, v3]])
+                    elif mode == "scan":
+                        theta2 = float(s[6]) * np.pi / 180
+                        if np.abs(theta2) > np.pi * 0.9:
+                            print "Large rotation: Your constraint may not work"
+                        steps = int(s[7])
+                        # To alleviate future confusion:
+                        # There is one group of three constraints that we are going to scan over in one dimension.
+                        # Here we create one group of constraint values.
+                        # We will add triplets of constraint values to this group
+                        vs = []
+                        for theta in np.linspace(theta1, theta2, steps):
+                            c = np.cos(theta/2.0)
+                            s = np.sin(theta/2.0)
+                            q = np.array([c, u[0]*s, u[1]*s, u[2]*s])
+                            fac, _ = calc_fac_dfac(c)
+                            v1 = fac*q[1]*rg
+                            v2 = fac*q[2]*rg
+                            v3 = fac*q[3]*rg
+                            vs.append([v1, v2, v3])
+                        vals.append(vs)
     if len(objs) != len(vals):
         raise RuntimeError("objs and vals should be the same length")
     valgrps = [list(itertools.chain(*i)) for i in list(itertools.product(*vals))]
-    # print valgrps
     objs = list(itertools.chain(*objs))
     return objs, valgrps
 
@@ -663,6 +706,8 @@ def get_delta_prime_trm(v, X, G, H, IC):
         HT[i, i] = 0.0
         F[i, i] = 0.0
     F = np.matrix(F)
+    # seig = sorted(np.linalg.eig(HT)[0])
+    # print "sorted(eig) : % .5e % .5e % .5e ... % .5e % .5e % .5e" % (seig[0], seig[1], seig[2], seig[-3], seig[-2], seig[-1])
     try:
         Hi = invert_svd(np.matrix(HT))
     except:
@@ -1112,7 +1157,7 @@ def Optimize(coords, molecule, IC, xyzout):
         print "Displace = %s%.3e\x1b[0m/%s%.3e\x1b[0m (rms/max)" % ("\x1b[92m" if Converged_drms else "\x1b[0m", rms_displacement, "\x1b[92m" if Converged_dmax else "\x1b[0m", max_displacement),
         print "Trust = %.3e (%s)" % (trust, trustprint), 
         print "Grad%s = %s%.3e\x1b[0m/%s%.3e\x1b[0m (rms/max)" % ("_T" if IC.haveConstraints() else "", "\x1b[92m" if Converged_grms else "\x1b[0m", rms_gradient, "\x1b[92m" if Converged_gmax else "\x1b[0m", max_gradient),
-        print "Dy.G = %.3f" % Dot,
+        # print "Dy.G = %.3f" % Dot,
         print "E (change) = % .10f (%s%+.3e\x1b[0m) Quality = %s%.3f\x1b[0m" % (E, "\x1b[91m" if BadStep else ("\x1b[92m" if Converged_energy else "\x1b[0m"), E-Eprev, "\x1b[91m" if BadStep else "\x1b[0m", Quality)
         if IC is not None and IC.haveConstraints():
             IC.printConstraints(X)
@@ -1205,6 +1250,9 @@ def Optimize(coords, molecule, IC, xyzout):
             # BFGS Hessian update
             Dy   = col(Y - Yprev)
             Dg   = col(G - Gprev)
+            # Catch some abnormal cases of extremely small changes.
+            if np.linalg.norm(Dg) < 1e-6: continue
+            if np.linalg.norm(Dy) < 1e-6: continue
             Mat1 = (Dg*Dg.T)/(Dg.T*Dy)[0,0]
             Mat2 = ((H*Dy)*(H*Dy).T)/(Dy.T*H*Dy)[0,0]
             Eig = np.linalg.eigh(H)[0]
@@ -1263,17 +1311,15 @@ def CalcInternalHess(coords, molecule, IC):
 def main():
     # Get initial coordinates in bohr
     coords = M.xyzs[0].flatten() / 0.529177
-    IC = CoordClass(M, build=True, connect=connect, addcart=addcart)
-    # if args.cart:
-    #     IC = None
-    # elif args.redund:
-    #     IC = PrimitiveInternalCoordinates(M, connect=args.connect)
-    # else:
-    #     IC = DelocalizedInternalCoordinates(M, connect=args.connect)
-    #     IC.build_dlc(coords)
+    # Read in the constraints
+    if args.constraints is not None:
+        Cons, CVals = ParseConstraints(M, args.constraints)
+    else:
+        Cons = None
+        CVals = None
+                
+    IC = CoordClass(M, build=True, connect=connect, addcart=addcart, constraints=Cons, cvals=CVals[0] if CVals is not None else None)
     if args.displace:
-        # if not args.redund:
-        #     IC.weight_vectors(coords)
         for i in range(len(IC.Internals)):
             x = []
             for j in np.linspace(-0.3, 0.3, 7):
@@ -1308,13 +1354,6 @@ def main():
         print "%i internal coordinates being used (instead of %i Cartesians)" % (len(IC.Internals), 3*M.na)
     print IC
 
-    # Read in the constraints
-    if args.constraints is not None:
-        Cons, CVals = ParseConstraints(M, args.constraints)
-    else:
-        Cons = None
-        CVals = None
-                
     if Cons is None:
         if prefix == os.path.splitext(args.input)[0]:
             xyzout = prefix+"_optim.xyz"

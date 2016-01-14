@@ -1602,8 +1602,9 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         out_lines = []
         header = "Constraint                         Current      Target       Diff."
         for ic, c in enumerate(self.cPrims):
-            current = c.value(xyz)
-            reference = self.cVals[ic]
+            w = c.w if type(c) in [RotationA, RotationB, RotationC] else 1.0
+            current = c.value(xyz)/w
+            reference = self.cVals[ic]/w
             diff = (current - reference)
             if np.abs(diff-2*np.pi) < np.abs(diff):
                 diff -= 2*np.pi
