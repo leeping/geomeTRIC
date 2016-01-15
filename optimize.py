@@ -20,81 +20,114 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--coordsys', type=str, default='xdlc', help='Coordinate system: "cart" for Cartesian, "prim" for Primitive (a.k.a redundant), '
                     '"dlc" for Delocalized Internal Coordinates, "hdlc" for Hybrid Delocalized Internal Coordinates, "xdlc" for explicit translations'
                     'and rotations added to DLC (default).')
-parser.add_argument('--terachem', action='store_true', help='Run optimization in TeraChem (pass xyz as first argument).')
-parser.add_argument('--dftd', action='store_true', help='Turn on dispersion correction in TeraChem.')
-parser.add_argument('--gpus', type=int, help='Specify number of GPUs for TeraChem.')
-parser.add_argument('--double', action='store_true', help='Run TeraChem in double precision mode.')
+parser.add_argument('--qchem', action='store_true', help='Run optimization in Q-Chem (pass Q-Chem input).')
+parser.add_argument('--psi4', action='store_true', help='Compute gradients in Psi4.')
 parser.add_argument('--prefix', type=str, default=None, help='Specify a prefix for output file and temporary directory.')
 parser.add_argument('--displace', action='store_true', help='Write out the displacements of the coordinates.')
 parser.add_argument('--epsilon', type=float, default=1e-5, help='Small eigenvalue threshold.')
-parser.add_argument('-c', '--check', type=int, default=0, help='Check coordinates every N steps to see whether it has changed.')
-parser.add_argument('-v', '--verbose', action='store_true', help='Write out the displacements.')
+parser.add_argument('--check', type=int, default=0, help='Check coordinates every N steps to see whether it has changed.')
+parser.add_argument('--verbose', action='store_true', help='Write out the displacements.')
 parser.add_argument('--reset', action='store_true', help='Reset Hessian when eigenvalues are under epsilon.')
 parser.add_argument('--rfo', action='store_true', help='Use rational function optimization (default is trust-radius Newton Raphson).')
 parser.add_argument('--trust', type=float, default=0.1, help='Starting trust radius.')
 parser.add_argument('--tmax', type=float, default=0.3, help='Maximum trust radius.')
-parser.add_argument('input', type=str, help='Q-Chem input file (will be converted into TeraChem file if --terachem is specified')
+parser.add_argument('input', type=str, help='TeraChem or Q-Chem input file')
 parser.add_argument('constraints', type=str, nargs='?', help='Constraint input file (optional)')
-parser.add_argument('--psi4', action='store_true', help='Compute gradients in Psi4')
-
-# First item in tuple: The class to be initialized
-# Second item in tuple: Whether to connect nonbonded fragments
-# Third item in tuple: Whether to throw in all Cartesians (no effect if second item is True)
-CoordSysDict = {'cart':(CartesianCoordinates, False, False),
-                'prim':(PrimitiveInternalCoordinates, True, False),
-                'dlc':(DelocalizedInternalCoordinates, True, False),
-                'hdlc':(DelocalizedInternalCoordinates, False, True),
-                'xdlc':(DelocalizedInternalCoordinates, False, False)}
 
 print ' '.join(sys.argv)
 
 args = parser.parse_args(sys.argv[1:])
 
-CoordClass, connect, addcart = CoordSysDict[args.coordsys.lower()]
+def edit_tcin(fin=None, fout=None, options={}, defaults={}):
+    """
+    Parse a TeraChem input file.
 
-TeraChem = args.terachem
+    Parameters
+    ----------
+    fin : str, optional
+        Name of the TeraChem input file to be read
+    fout : str, optional
+        Name of the TeraChem output file to be written, if desired
+    options : dict, optional
+        Dictionary of options to overrule TeraChem input file
+    defaults : dict, optional
+        Dictionary of options to add to the end
+    
+    Returns
+    -------
+    dictionary
+        Keys mapped to values as strings.  Certain keys will be changed to integers (e.g. charge, spinmult).
+        Keys are standardized to lowercase.
+    """
+    intkeys = ['charge', 'spinmult']
+    Answer = OrderedDict()
+    # Read from the input if provided
+    if fin is not None:
+        for line in open(args.input).readlines():
+            line = line.split("#")[0].strip()
+            if len(line) == 0: continue
+            s = line.split(' ', 1)
+            k = s[0].lower()
+            v = s[1].strip()
+            if k == 'coordinates':
+                if not os.path.exists(v.strip()):
+                    raise RuntimeError("TeraChem coordinate file does not exist")
+            if k in intkeys:
+                v = int(v)
+            if k in Answer:
+                raise RuntimeError("Found duplicate key in TeraChem input file: %s" % k)
+            Answer[k] = v
+    # Replace existing keys with ones from options
+    for k, v in options.items():
+        Answer[k] = v
+    # Append defaults to the end
+    for k, vi in defaults.items():
+        if k not in Answer.keys():
+            Answer[k] = v
+    # Print to the output if provided
+    if fout is not None:
+        with open(fout, 'w') as f:
+            for k, v in Answer.items():
+                print >> f, "%s %s" % (k, str(v))
+    return Answer
 
-TCHome = "/home/leeping/src/terachem/production/build"
-Psi4exe = '/home/qyd/codes/python/bin/psi4'
+### Set up based on which quantum chemistry code we're using.
+
+if args.qchem:
+    if args.psi4: raise RuntimeError("Do not specify both --qchem and --psi4")
+    # The file from which we make the Molecule object
+    M = Molecule(args.input, radii={'Na':0.0})
+else:
+    if args.psi4:
+        Psi4exe = which('psi4')
+        if len(Psi4exe) == 0: raise RuntimeError("Please make sure psi4 executable is in your PATH")
+    else:
+        if 'TeraChem' not in os.environ:
+            raise RuntimeError('Please set TeraChem environment variable')
+        TCHome = os.environ['TeraChem']
+        os.environ['PATH'] = os.path.join(TCHome,'bin')+":"+os.environ['PATH']
+        os.environ['LD_LIBRARY_PATH'] = os.path.join(TCHome,'lib')+":"+os.environ['LD_LIBRARY_PATH']
+    tcdef = OrderedDict()
+    tcdef['convthre'] = "1.0e-6"
+    tcdef['threall'] = "1.0e-16"
+    tcdef['mixguess'] = "0.0"
+    tcdef['scf'] = "diis+a"
+    tcdef['maxit'] = "50"
+    tcdef['dftgrid'] = "1"
+    tcdef['precision'] = "mixed"
+    tcdef['threspdp'] = "1.0e-8"
+    tcin = edit_tcin(fin=args.input, options={'run':'gradient'}, defaults=tcdef)
+    M = Molecule(tcin['coordinates'], radii={'Na':0.0})
+    M.charge = tcin['charge']
+    M.mult = tcin.get('spinmult',1)
 
 prefix = args.prefix if args.prefix is not None else os.path.splitext(args.input)[0]
 
 dirname = prefix+".tmp"
-if os.path.exists(dirname):
-    raise RuntimeError("Please delete temporary folder %s before proceeding" % dirname)
-os.makedirs(dirname)
-
-os.environ['TeraChem'] = TCHome
-os.environ['PATH'] = os.path.join(TCHome,'bin')+":"+os.environ['PATH']
-os.environ['LD_LIBRARY_PATH'] = os.path.join(TCHome,'lib')+":"+os.environ['LD_LIBRARY_PATH']
-
-# For compactness, this script always reads in a Q-Chem input file and translates it
-# to the corresponding TeraChem input file.
-TeraTemp = """
-coordinates start.xyz
-run gradient
-basis {basis}
-method {ur}{method}
-charge {charge}
-spinmult {mult}
-precision {precision}
-convthre 1.0e-6
-threall 1.0e-16
-mixguess 0.0
-scf diis+a
-maxit 50
-threspdp 1e-8
-dftgrid 1
-{guess}
-{dftd}
-{gpus}
-"""
-
-eps = args.epsilon
-
-# Read in the molecule
-M = Molecule(args.input, radii={'Na':0.0})
-method = M.qcrems[0].get('method', M.qcrems[0]['exchange'])
+if not os.path.exists(dirname):
+    os.makedirs(dirname)
+else:
+    print "%s exists ; make sure nothing else is writing to the folder" % dirname
 
 ### Above this line: Global variables that should go into main()
 ### Below this line: function definitions
@@ -129,15 +162,12 @@ def calc_terachem(coords):
             shutil.copy2(os.path.join(dirname, 'scr', f), os.path.join(dirname, f))
             guesses.append(f)
             have_guess = True
-    with open("%s/run.in" % dirname, "w") as f:
-        print >> f, TeraTemp.format(basis = M.qcrems[0]['basis'],
-                                    ur = "u" if M.mult != 1 else "r",
-                                    method = method,
-                                    charge = str(M.charge), mult=str(M.mult),
-                                    precision = "double" if args.double else "mixed",
-                                    guess = ("guess " + ' '.join(guesses) + "\npurify no" if have_guess else "guess sad"),
-                                    dftd = ("dispersion yes" if args.dftd else ""),
-                                    gpus = ("gpus %i %s" % (args.gpus, ' '.join(["%i" % i for i in range(args.gpus)])) if args.gpus is not None else ""))
+    tcin['coordinates'] = 'start.xyz'
+    tcin['run'] = 'gradient'
+    if have_guess:
+        tcin['guess'] = ' '.join(guesses)
+        tcin['purify'] = 'no'
+    edit_tcin(fout="%s/run.in" % dirname, options=tcin)
     # Convert coordinates back to the xyz file
     M.xyzs[0] = coords.reshape(-1, 3) * 0.529177
     M[0].write(os.path.join(dirname, 'start.xyz'))
@@ -228,10 +258,10 @@ def calc_psi4(coords):
             for line in xyzinput:
                 geometrylines.append(line)
         print >>inputfile, Psi4Temp.format(geometry = ''.join(geometrylines),
-                                    charge = str(M.charge), mult=str(M.mult),
-                                    basis = M.qcrems[0]['basis'],
-                                    method = method,
-                                    dftd = ('-d' if args.dftd else ""))
+                                           charge = str(M.charge), mult=str(M.mult),
+                                           basis = tcin['basis'],
+                                           method = tcin['method'][1:],
+                                           dftd = ('-d' if tcin.get('dispersion', 'no').lower() != 'no' else ""))
     # Run Psi4
     subprocess.call(Psi4exe, cwd = dirname, shell=True)
     # Read energy and gradients from Psi4 output
@@ -261,12 +291,12 @@ calc_psi4.stored_calcs = OrderedDict()
 
 def calc(coords):
     """ Run the selected quantum chemistry code. """
-    if args.terachem:
-        e, g = calc_terachem(coords)
+    if args.qchem:
+        e, g = calc_qchem(coords)
     elif args.psi4:
         e, g = calc_psi4(coords)
     else:
-        e, g = calc_qchem(coords)
+        e, g = calc_terachem(coords)
     return e, g
 
 def RebuildHessian(IC, H0, coord_seq, grad_seq, trust=0.3):
@@ -317,8 +347,8 @@ def RebuildHessian(IC, H0, coord_seq, grad_seq, trust=0.3):
         Mat2 = ((H*Dy)*(H*Dy).T)/(Dy.T*H*Dy)[0,0]
         Hstor = H.copy()
         H += Mat1-Mat2
-    if np.min(np.linalg.eigh(H)[0]) < eps and args.reset:
-        print "Eigenvalues below %.4e (%.4e) - returning guess" % (eps,np.min(np.linalg.eigh(H)[0]))
+    if np.min(np.linalg.eigh(H)[0]) < args.epsilon and args.reset:
+        print "Eigenvalues below %.4e (%.4e) - returning guess" % (args.epsilon, np.min(np.linalg.eigh(H)[0]))
         return H0.copy()
     return H
 
@@ -1050,8 +1080,8 @@ def Optimize(coords, molecule, IC, xyzout):
         Emin = min(Eig).real
         if args.rfo:
             v0 = 1.0
-        elif Emin < eps:
-            v0 = eps-Emin
+        elif Emin < args.epsilon:
+            v0 = args.epsilon-Emin
         else:
             v0 = 0.0
         print "Hessian Eigenvalues: %.5e %.5e %.5e ... %.5e %.5e %.5e" % (Eig[0],Eig[1],Eig[2],Eig[-3],Eig[-2],Eig[-1])
@@ -1267,8 +1297,8 @@ def Optimize(coords, molecule, IC, xyzout):
             Eig1.sort()
             if args.verbose:
                 print "Eig-ratios: %.5e ... %.5e" % (np.min(Eig1)/np.min(Eig), np.max(Eig1)/np.max(Eig))
-            if np.min(Eig1) <= eps and args.reset:
-                print "Eigenvalues below %.4e (%.4e) - returning guess" % (eps, np.min(Eig1))
+            if np.min(Eig1) <= args.epsilon and args.reset:
+                print "Eigenvalues below %.4e (%.4e) - returning guess" % (args.epsilon, np.min(Eig1))
                 H = IC.guess_hessian(coords)
             # Then it's on to the next loop iteration!
     return X
@@ -1309,6 +1339,17 @@ def CalcInternalHess(coords, molecule, IC):
 def main():
     # Get initial coordinates in bohr
     coords = M.xyzs[0].flatten() / 0.529177
+    
+    # First item in tuple: The class to be initialized
+    # Second item in tuple: Whether to connect nonbonded fragments
+    # Third item in tuple: Whether to throw in all Cartesians (no effect if second item is True)
+    CoordSysDict = {'cart':(CartesianCoordinates, False, False),
+                    'prim':(PrimitiveInternalCoordinates, True, False),
+                    'dlc':(DelocalizedInternalCoordinates, True, False),
+                    'hdlc':(DelocalizedInternalCoordinates, False, True),
+                    'xdlc':(DelocalizedInternalCoordinates, False, False)}
+    CoordClass, connect, addcart = CoordSysDict[args.coordsys.lower()]
+    
     # Read in the constraints
     if args.constraints is not None:
         Cons, CVals = ParseConstraints(M, args.constraints)
