@@ -128,6 +128,16 @@ if not os.path.exists(dirname):
     os.makedirs(dirname)
 else:
     print "%s exists ; make sure nothing else is writing to the folder" % dirname
+    
+# First item in tuple: The class to be initialized
+# Second item in tuple: Whether to connect nonbonded fragments
+# Third item in tuple: Whether to throw in all Cartesians (no effect if second item is True)
+CoordSysDict = {'cart':(CartesianCoordinates, False, False),
+                'prim':(PrimitiveInternalCoordinates, True, False),
+                'dlc':(DelocalizedInternalCoordinates, True, False),
+                'hdlc':(DelocalizedInternalCoordinates, False, True),
+                'xdlc':(DelocalizedInternalCoordinates, False, False)}
+CoordClass, connect, addcart = CoordSysDict[args.coordsys.lower()]
 
 ### Above this line: Global variables that should go into main()
 ### Below this line: function definitions
@@ -1339,16 +1349,6 @@ def CalcInternalHess(coords, molecule, IC):
 def main():
     # Get initial coordinates in bohr
     coords = M.xyzs[0].flatten() / 0.529177
-    
-    # First item in tuple: The class to be initialized
-    # Second item in tuple: Whether to connect nonbonded fragments
-    # Third item in tuple: Whether to throw in all Cartesians (no effect if second item is True)
-    CoordSysDict = {'cart':(CartesianCoordinates, False, False),
-                    'prim':(PrimitiveInternalCoordinates, True, False),
-                    'dlc':(DelocalizedInternalCoordinates, True, False),
-                    'hdlc':(DelocalizedInternalCoordinates, False, True),
-                    'xdlc':(DelocalizedInternalCoordinates, False, False)}
-    CoordClass, connect, addcart = CoordSysDict[args.coordsys.lower()]
     
     # Read in the constraints
     if args.constraints is not None:
