@@ -1064,7 +1064,7 @@ def Optimize(coords, molecule, IC, xyzout):
     max_gradient = np.max(atomgrad)
     print "Step %4i :" % Iteration,
     print "Gradient = %.3e/%.3e (rms/max) Energy = % .10f" % (rms_gradient, max_gradient, E)
-    if IC.haveConstraints(): IC.printConstraints(X)
+    # if IC.haveConstraints(): IC.printConstraints(X)
     # Threshold for "low quality step" which decreases trust radius.
     ThreLQ = 0.25
     # Threshold for "high quality step" which increases trust radius.
@@ -1198,7 +1198,7 @@ def Optimize(coords, molecule, IC, xyzout):
         # print "Dy.G = %.3f" % Dot,
         print "E (change) = % .10f (%s%+.3e\x1b[0m) Quality = %s%.3f\x1b[0m" % (E, "\x1b[91m" if BadStep else ("\x1b[92m" if Converged_energy else "\x1b[0m"), E-Eprev, "\x1b[91m" if BadStep else "\x1b[0m", Quality)
         if IC is not None and IC.haveConstraints():
-            IC.printConstraints(X)
+            IC.printConstraints(X, thre=1e-3)
         if type(IC) is PrimitiveInternalCoordinates:
             idx = np.argmax(np.abs(dy))
             iunit = np.zeros_like(dy)

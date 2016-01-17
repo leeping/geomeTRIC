@@ -1,0 +1,7 @@
+#!/bin/bash
+InitE=$(awk '/Convergence/ {printf "% 16.10f\n", $2; exit}' $1)
+echo "#  Energy(kcal/mol)   Gradient(au/bohr) : Initial E = $InitE a.u."
+awk '/Convergence/ {p=$2; if (q==0) {q=p}} /Gradient  / {printf "    % 14.6f      %14.6f\n", 627.51*(p-q), $2}' $1
+
+
+

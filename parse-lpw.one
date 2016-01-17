@@ -1,0 +1,4 @@
+#!/bin/bash
+InitE=$(awk '/Energy/ {printf "% 16.10f\n", $NF; exit}' $1)
+echo "#  Energy(kcal/mol)   Gradient(au/bohr) : Initial E = $InitE a.u."
+paste <(awk '/Energy/ {p=$NF; printf "    % 14.6f\n", 0.0} /E / {printf "    % 14.6f\n", 627.51*($(NF-4)-p)}' $1) <(sed s/'\/'/' '/g $1  | awk -F '\r' '{print $NF}' | sed -r "s/\x1B\[([0-9]{1,2}(;[0-9]{1,2})?)*[m|K]//g" | awk '/Gradient/ {printf "%14.6f\n", $6} /Grad[ _]/ {printf "%14.6f\n", $16}')

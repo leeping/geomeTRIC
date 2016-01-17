@@ -1,0 +1,4 @@
+#!/bin/bash
+InitE=$(awk '/FINAL ENERGY:/ {printf "% 16.10f\n", $3; exit}' $1)
+echo "#  Energy(kcal/mol)   Gradient(au/bohr) : Initial E = $InitE a.u."
+awk '/FINAL ENERGY:/ {p=$3; if (q==0) {q=p}} /RMS grad/ {printf "    % 14.6f      %14.6f\n", 627.51*(p-q), $3; g=$3} /Rejecting/ {printf "    % 14.6f      %14.6f\n", 627.51*(p-q), g}' $1
