@@ -81,7 +81,7 @@ def edit_tcin(fin=None, fout=None, options={}, defaults={}):
     for k, v in options.items():
         Answer[k] = v
     # Append defaults to the end
-    for k, vi in defaults.items():
+    for k, v in defaults.items():
         if k not in Answer.keys():
             Answer[k] = v
     # Print to the output if provided
