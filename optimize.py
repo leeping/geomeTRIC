@@ -24,6 +24,7 @@ parser.add_argument('--qchem', action='store_true', help='Run optimization in Q-
 parser.add_argument('--psi4', action='store_true', help='Compute gradients in Psi4.')
 parser.add_argument('--prefix', type=str, default=None, help='Specify a prefix for output file and temporary directory.')
 parser.add_argument('--displace', action='store_true', help='Write out the displacements of the coordinates.')
+parser.add_argument('--enforce', action='store_true', help='Enforce exact constraints (activated when constraints are almost satisfied)')
 parser.add_argument('--epsilon', type=float, default=1e-5, help='Small eigenvalue threshold.')
 parser.add_argument('--check', type=int, default=0, help='Check coordinates every N steps to see whether it has changed.')
 parser.add_argument('--verbose', action='store_true', help='Write out the displacements.')
@@ -381,7 +382,10 @@ def getCartesianNorm(X, dy, IC):
         The RMSD between the updated and original Cartesian coordinates
     """
     # Displacement of each atom in Angstrom
-    Xnew = IC.newCartesian(X, dy, verbose=args.verbose)
+    if IC.haveConstraints() and args.enforce:
+        Xnew = IC.newCartesian_withConstraint(X, dy, verbose=args.verbose)
+    else:
+        Xnew = IC.newCartesian(X, dy, verbose=args.verbose)
     Xmat = np.matrix(Xnew.reshape(-1,3))
     U = get_rot(Xmat, X.reshape(-1,3))
     Xrot = np.array((U*Xmat.T).T).flatten()
@@ -1162,7 +1166,10 @@ def Optimize(coords, molecule, IC, xyzout):
         Eprev = E
         ### Update the Internal Coordinates ###
         Y += dy
-        X = IC.newCartesian(X, dy, verbose=args.verbose)
+        if IC.haveConstraints() and args.enforce:
+            X = IC.newCartesian_withConstraint(X, dy, verbose=args.verbose)
+        else:
+            X = IC.newCartesian(X, dy, verbose=args.verbose)
         ### Calculate Energy and Gradient ###
         E, gradx = calc(X)
         ### Check Convergence ###

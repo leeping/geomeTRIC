@@ -1117,7 +1117,7 @@ class InternalCoordinates(object):
             # Figure out the further change needed
             dQ1 = dQ1 - dQ_actual
             xyz1 = xyz2.copy()
-    
+            
 class PrimitiveInternalCoordinates(InternalCoordinates):
     def __init__(self, molecule, build=False, connect=False, addcart=False, constraints=None, cvals=None):
         self.Internals = []
@@ -1184,12 +1184,12 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                 # sel = coords.reshape(-1,3) / 0.529177
                 # sel -= np.mean(sel, axis=0)
                 # rg = np.sqrt(np.mean(np.sum(sel**2, axis=1)))
-                # self.addConstraint(TranslationX(alla, w=np.ones(na)/na), xyz=coords)
-                # self.addConstraint(TranslationY(alla, w=np.ones(na)/na), xyz=coords)
-                # self.addConstraint(TranslationZ(alla, w=np.ones(na)/na), xyz=coords)
-                # self.addConstraint(RotationA(alla, coords, self.Rotators, w=rg), xyz=coords)
-                # self.addConstraint(RotationB(alla, coords, self.Rotators, w=rg), xyz=coords)
-                # self.addConstraint(RotationC(alla, coords, self.Rotators, w=rg), xyz=coords)
+                # self.addConstraint(TranslationX(alla, w=np.ones(na)/na), xyz=sel)
+                # self.addConstraint(TranslationY(alla, w=np.ones(na)/na), xyz=sel)
+                # self.addConstraint(TranslationZ(alla, w=np.ones(na)/na), xyz=sel)
+                # self.addConstraint(RotationA(alla, coords, self.Rotators, w=rg), xyz=sel)
+                # self.addConstraint(RotationB(alla, coords, self.Rotators, w=rg), xyz=sel)
+                # self.addConstraint(RotationC(alla, coords, self.Rotators, w=rg), xyz=sel)
 
         # # Build a list of noncovalent distances
         # noncov = []
@@ -1293,26 +1293,28 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         # Find groups of atoms that are in straight lines
         atom_lines = [list(i) for i in molecule.topology.edges()]
         while True:
+            # For a line of two atoms (one bond):
+            # AB-AC
+            # AX-AY
+            # i.e. AB is the first one, AC is the second one
+            # AX is the second-to-last one, AY is the last one
+            # AB-AC-...-AX-AY
+            # AB-(AC, AX)-AY
             atom_lines0 = deepcopy(atom_lines)
             for aline in atom_lines:
                 # Imagine a line of atoms going like ab-ac-ax-ay.
                 # Our job is to extend the line until there are no more
                 ab = aline[0]
-                ac = aline[1]
-                ax = aline[-2]
                 ay = aline[-1]
                 for aa in molecule.topology.neighbors(ab):
                     if aa not in aline:
-                        # print [ac for ac in aline[:-1]], ab
+                        # If the angle that AA makes with AB and ALL other atoms AC in the line are linear:
+                        # Add AA to the front of the list
                         if all([np.abs(np.cos(Angle(aa, ab, ac).value(coords))) > LinThre for ac in aline[1:] if ac != ab]):
-                            # print "Prepending", aa, "to", aline
                             aline.insert(0, aa)
                 for az in molecule.topology.neighbors(ay):
                     if az not in aline:
-                        # print aline
-                        # print [ax for ax in aline[:-1]], ay
                         if all([np.abs(np.cos(Angle(ax, ay, az).value(coords))) > LinThre for ax in aline[:-1] if ax != ay]):
-                            # print "Appending", az, "to", aline
                             aline.append(az)
             if atom_lines == atom_lines0: break
         atom_lines_uniq = []
@@ -1325,11 +1327,14 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
 
         # Normal dihedral code
         for aline in atom_lines_uniq:
+            # Go over ALL pairs of atoms in a line
             for (b, c) in itertools.combinations(aline, 2):
                 if b > c: (b, c) = (c, b)
+                # Go over all neighbors of b
                 for a in molecule.topology.neighbors(b):
+                    # Go over all neighbors of c
                     for d in molecule.topology.neighbors(c):
-                        # Make sure the end-atoms are not in the line
+                        # Make sure the end-atoms are not in the line and not the same as each other
                         if a not in aline and d not in aline and a != d:
                             nnc = (min(a, b), max(a, b)) in noncov
                             nnc += (min(b, c), max(b, c)) in noncov
@@ -1341,10 +1346,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                             # (should be eliminated already)
                             if np.abs(np.cos(Ang1.value(coords))) > LinThre: continue
                             if np.abs(np.cos(Ang2.value(coords))) > LinThre: continue
-                            if b < c:
-                                self.add(Dihedral(a, b, c, d))
-                            else:
-                                self.add(Dihedral(d, c, b, a))
+                            self.add(Dihedral(a, b, c, d))
             
         # Add the list of constraints
         xyz = molecule.xyzs[0].flatten() / 0.529177
@@ -1568,13 +1570,15 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
             # If both are provided, then the coordinates are ignored.
             cVal = cPrim.value(xyz)
         if cPrim in self.cPrims:
-            print "Updating constraint value to %.4e" % (cVal)
             iPrim = self.cPrims.index(cPrim)
+            if np.abs(cVal - self.cVals[iPrim]) > 1e-6:
+                print "Updating constraint value to %.4e" % (cVal)
             self.cVals[iPrim] = cVal
-        if cPrim not in self.Internals:
-            self.Internals.append(cPrim)
-        self.cPrims.append(cPrim)
-        self.cVals.append(cVal)
+        else:
+            if cPrim not in self.Internals:
+                self.Internals.append(cPrim)
+            self.cPrims.append(cPrim)
+            self.cVals.append(cVal)
 
     def reorderPrimitives(self):
         # Reorder primitives to be in line with cc's code
@@ -1907,8 +1911,8 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
                         dQ[iDLC] = Plus2Pi
                     if np.abs(dQ[iDLC]) > np.abs(Minus2Pi):
                         dQ[iDLC] = Minus2Pi
-            print "applyConstraints calling newCartesian (%i), |dQ| = %.3e" % (niter, np.linalg.norm(dQ))
-            xyz2 = self.newCartesian(xyz1, dQ, verbose=True)
+            # print "applyConstraints calling newCartesian (%i), |dQ| = %.3e" % (niter, np.linalg.norm(dQ))
+            xyz2 = self.newCartesian(xyz1, dQ, verbose=False)
             if np.linalg.norm(dQ) < 1e-6:
                 return xyz2
             if niter > 1 and np.linalg.norm(dQ) > np.linalg.norm(dQ0):
@@ -1917,6 +1921,26 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
             xyz1 = xyz2.copy()
             niter += 1
             dQ0 = dQ.copy()
+            
+    def newCartesian_withConstraint(self, xyz, dQ, u=None, verbose=False):
+        xyz2 = self.newCartesian(xyz, dQ, u, verbose)
+        constraintSmall = len(self.Prims.cPrims) > 0
+        thre = 1e-2
+        for ic, c in enumerate(self.Prims.cPrims):
+            w = c.w if type(c) in [RotationA, RotationB, RotationC] else 1.0
+            current = c.value(xyz)/w
+            reference = self.Prims.cVals[ic]/w
+            diff = (current - reference)
+            if np.abs(diff-2*np.pi) < np.abs(diff):
+                diff -= 2*np.pi
+            if np.abs(diff+2*np.pi) < np.abs(diff):
+                diff += 2*np.pi
+            if np.abs(diff) > thre:
+                constraintSmall = False
+        if constraintSmall:
+            # print "Enforcing exact constraint!"
+            xyz2 = self.applyConstraints(xyz2)
+        return xyz2
     
     def calcGradProj(self, xyz, gradx):
         """
@@ -1970,6 +1994,13 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         # Perform singular value decomposition
         click()
         G = self.Prims.GMatrix(xyz)
+        # Manipulate G-Matrix to increase weight of constrained coordinates
+        if self.haveConstraints():
+            for ic, c in enumerate(self.Prims.cPrims):
+                iPrim = self.Prims.Internals.index(c)
+                G[:, iPrim] *= 1.0
+                G[iPrim, :] *= 1.0
+        # Water Dimer: 100.0, no check -> -151.1892668451
         time_G = click()
         L, Q = np.linalg.eigh(G)
         time_eig = click()
@@ -1981,12 +2012,8 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
             if np.abs(value) > 1e-6:
                 LargeVals += 1
                 LargeIdx.append(ival)
-        Expect = 3*self.na - 6
-        if self.na == 2:
-            Expect = 1
-        if self.na == 1:
-            Expect = 0
-        # print "%i atoms (expect %i coordinates); %i/%i singular values are > 1e-6" % (self.na, Expect, LargeVals, len(L))
+        Expect = 3*self.na
+        print "%i atoms (expect %i coordinates); %i/%i singular values are > 1e-6" % (self.na, Expect, LargeVals, len(L))
         # if LargeVals <= Expect:
         self.Vecs = Q[:, LargeIdx]
         self.Internals = ["DLC %i" % (i+1) for i in range(len(LargeIdx))]
@@ -2008,6 +2035,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
                 cProj = self.Vecs*np.matrix(cVec.T)
                 cProj /= np.linalg.norm(cProj)
                 V.append(np.array(cProj).flatten())
+                # print c, cProj[iPrim]
             # V contains the constraint vectors on the left, and the original DLCs on the right
             V = np.hstack((np.array(V).T, np.array(self.Vecs)))
             # Apply Gram-Schmidt to V, and produce U.
@@ -2028,7 +2056,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
                     thre *= 10
                 elif len(U) == self.Vecs.shape[1]:
                     break
-                elif len(U) < self.vecs.shape[1]:
+                elif len(U) < self.Vecs.shape[1]:
                     raise RuntimeError('Gram-Schmidt orthogonalization has failed (expect %i length %i)' % (self.Vecs.shape[1], len(U)))
             print "Gram-Schmidt completed with thre=%.0e" % thre
             self.Vecs = np.matrix(U).T
