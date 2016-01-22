@@ -5,7 +5,7 @@ import numpy as np
 from copy import deepcopy
 from collections import OrderedDict
 from internal import *
-from rotate import get_rot, sorted_eigh, calc_fac_dfac
+from rotate import get_rot, sorted_eigh, calc_fac_dfac, calc_rmsd
 from forcebalance.molecule import Molecule, Elements
 from forcebalance.nifty import row, col, flat, invert_svd, uncommadash, isint
 from scipy import optimize
@@ -363,6 +363,21 @@ def RebuildHessian(IC, H0, coord_seq, grad_seq, trust=0.3):
         return H0.copy()
     return H
 
+def calc_drms_dmax(Xnew, Xold):
+    # Shift to the origin
+    Xold = Xold.copy().reshape(-1, 3)
+    Xold -= np.mean(Xold, axis=0)
+    Xnew = Xnew.copy().reshape(-1, 3)
+    Xnew -= np.mean(Xnew, axis=0)
+    # Obtain the rotation
+    U = get_rot(Xnew, Xold)
+    Xrot = np.array((U*np.matrix(Xnew).T).T).flatten()
+    Xold = np.array(Xold).flatten()
+    displacement = np.sqrt(np.sum((((Xrot-Xold)*0.529177).reshape(-1,3))**2, axis=1))
+    rms_displacement = np.sqrt(np.mean(displacement**2))
+    max_displacement = np.max(displacement)
+    return rms_displacement, max_displacement
+
 def getCartesianNorm(X, dy, IC):
     """
     Get the norm of the optimization step in Cartesian coordinates.
@@ -386,12 +401,8 @@ def getCartesianNorm(X, dy, IC):
         Xnew = IC.newCartesian_withConstraint(X, dy, verbose=args.verbose)
     else:
         Xnew = IC.newCartesian(X, dy, verbose=args.verbose)
-    Xmat = np.matrix(Xnew.reshape(-1,3))
-    U = get_rot(Xmat, X.reshape(-1,3))
-    Xrot = np.array((U*Xmat.T).T).flatten()
-    displacement = np.sqrt(np.sum((((Xrot-X)*0.529177).reshape(-1,3))**2, axis=1))
-    rms_displacement = np.sqrt(np.mean(displacement**2))
-    return rms_displacement
+    rmsd, maxd = calc_drms_dmax(Xnew, X)
+    return rmsd
 
 def between(s, a, b):
     if a < b:
@@ -1173,11 +1184,8 @@ def Optimize(coords, molecule, IC, xyzout):
         ### Calculate Energy and Gradient ###
         E, gradx = calc(X)
         ### Check Convergence ###
-        Xmat = X.reshape(-1,3)
-        # The displacement is calculated after rotating structures into maximum overlap
-        U = get_rot(Xmat, Xprev.reshape(-1,3))
-        Xrot = np.array((U*Xmat.T).T).flatten()
-        displacement = np.sqrt(np.sum((((Xrot-Xprev)*0.529177).reshape(-1,3))**2, axis=1))
+        # Calculate RMS and Max displacement
+        rms_displacement, max_displacement = calc_drms_dmax(X, Xprev)
         # Add new Cartesian coordinates and gradients to history
         progress.xyzs.append(X.reshape(-1,3) * 0.529177)
         progress.comms.append('Iteration %i Energy % .8f' % (Iteration, E))
@@ -1185,9 +1193,7 @@ def Optimize(coords, molecule, IC, xyzout):
         # Project out the degrees of freedom that are constrained
         gradxc = IC.calcGradProj(X, gradx) if IC.haveConstraints() else gradx.copy()
         atomgrad = np.sqrt(np.sum((gradxc.reshape(-1,3))**2, axis=1))
-        rms_displacement = np.sqrt(np.mean(displacement**2))
         rms_gradient = np.sqrt(np.mean(atomgrad**2))
-        max_displacement = np.max(displacement)
         max_gradient = np.max(atomgrad)
         # The ratio of the actual energy change to the expected change
         Quality = (E-Eprev)/expect
