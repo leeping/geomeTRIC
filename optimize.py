@@ -5,7 +5,7 @@ import numpy as np
 from copy import deepcopy
 from collections import OrderedDict
 from internal import *
-from rotate import get_rot, sorted_eigh, calc_fac_dfac, calc_rmsd
+from rotate import get_rot, sorted_eigh, calc_fac_dfac
 from forcebalance.molecule import Molecule, Elements
 from forcebalance.nifty import row, col, flat, invert_svd, uncommadash, isint
 from scipy import optimize
@@ -450,6 +450,7 @@ def brent_wiki(f, a, b, rel, cvg=0.1, obj=None):
     mflag = True
     delta = 1e-6
     epsilon = min(0.01, 1e-2*np.abs(a-b))
+    if obj is not None: obj.brentFailed = False
     while True:
         if fa != fc and fb != fc:
             # Inverse quadratic interpolation
@@ -474,13 +475,17 @@ def brent_wiki(f, a, b, rel, cvg=0.1, obj=None):
         # Calculate f(s)
         fs = f(s)
         # print a, s, b, fs, rel, cvg
-        # Check convergence
+        # Successful convergence
         if np.abs(fs/rel) <= cvg:
             return s
+        # Convergence failure - interval becomes
+        # smaller than threshold
         if np.abs(b-a) < epsilon:
             if args.verbose: print "returning because interval is too small"
-            if obj is not None: obj.small_interval = True
+            if obj is not None: obj.brentFailed = True
             return s
+        # Exit before converging when
+        # the function value is positive
         if hasattr(obj, 'from_above'):
             if (obj is not None and obj.from_above) and fs > 0:
                 return s
@@ -933,9 +938,9 @@ class Froot(object):
         self.trust = trust
         self.target = trust
         self.above_flag = False
-        self.current_arg = None
-        self.current_val = None
-        self.small_interval = False
+        self.stored_arg = None
+        self.stored_val = None
+        self.brentFailed = False
         self.v0 = v0
         self.X = X
         self.G = G
@@ -973,9 +978,9 @@ class Froot(object):
                 self.counter += 1
             # Store the largest trial value with cnorm below the target
             if cnorm-self.target < 0:
-                if self.current_val is None or cnorm > self.current_val:
-                    self.current_arg = trial
-                    self.current_val = cnorm
+                if self.stored_val is None or cnorm > self.stored_val:
+                    self.stored_arg = trial
+                    self.stored_val = cnorm
             if args.verbose: print "dy(i): %.4f dy(c) -> target: %.4f -> %.4f%s" % (trial, cnorm, self.target, " (done)" if self.from_above else "")
             return cnorm-self.target    
 
@@ -1129,9 +1134,9 @@ def Optimize(coords, molecule, IC, xyzout):
             # Find the internal coordinate norm that matches the desired
             # Cartesian coordinate norm
             iopt = brent_wiki(froot.evaluate, 0.0, inorm, trust, cvg=0.1, obj=froot)
-
-            if froot.small_interval and froot.current_arg is not None:
-                iopt = froot.current_arg
+            if froot.brentFailed and froot.stored_arg is not None:
+                if args.verbose: print "\x1b[93mUsing stored solution at %.3e\x1b[0m" % froot.stored_val
+                iopt = froot.stored_arg
             elif IC.bork:
                 for i in range(3):
                     froot.target /= 2
@@ -1141,7 +1146,7 @@ def Optimize(coords, molecule, IC, xyzout):
                     if not IC.bork: break
             LastForce = ForceRebuild
             ForceRebuild = False
-            if IC.bork or iopt is None:
+            if IC.bork:
                 print "\x1b[91mInverse iteration for Cartesians failed\x1b[0m"
                 # This variable is added because IC.bork is unset later.
                 ForceRebuild = True
@@ -1165,6 +1170,7 @@ def Optimize(coords, molecule, IC, xyzout):
             ##### End Rebuild
             # Finally, take an internal coordinate step of the desired length.
             dy, expect = trust_step(iopt, v0, X, G, H, IC)
+            cnorm = getCartesianNorm(X, dy, IC)
         ### DONE OBTAINING THE STEP ###
         # Dot product of the gradient with the step direction
         Dot = -np.dot(dy/np.linalg.norm(dy), G/np.linalg.norm(G))
@@ -1184,8 +1190,6 @@ def Optimize(coords, molecule, IC, xyzout):
         ### Calculate Energy and Gradient ###
         E, gradx = calc(X)
         ### Check Convergence ###
-        # Calculate RMS and Max displacement
-        rms_displacement, max_displacement = calc_drms_dmax(X, Xprev)
         # Add new Cartesian coordinates and gradients to history
         progress.xyzs.append(X.reshape(-1,3) * 0.529177)
         progress.comms.append('Iteration %i Energy % .8f' % (Iteration, E))
@@ -1194,6 +1198,7 @@ def Optimize(coords, molecule, IC, xyzout):
         gradxc = IC.calcGradProj(X, gradx) if IC.haveConstraints() else gradx.copy()
         atomgrad = np.sqrt(np.sum((gradxc.reshape(-1,3))**2, axis=1))
         rms_gradient = np.sqrt(np.mean(atomgrad**2))
+        rms_displacement, max_displacement = calc_drms_dmax(X, Xprev)
         max_gradient = np.max(atomgrad)
         # The ratio of the actual energy change to the expected change
         Quality = (E-Eprev)/expect
@@ -1226,7 +1231,7 @@ def Optimize(coords, molecule, IC, xyzout):
         rejectOk = (trust > thre_rj and E > Eprev)
         if Quality <= ThreLQ:
             # For bad steps, the trust radius is reduced
-            trust = max(Convergence_drms, min(trust, cnorm)/2)
+            trust = max(Convergence_drms, trust/2)
             trustprint = "\x1b[91m-\x1b[0m"
         elif Quality >= ThreHQ and bump:
             if trust < args.tmax:
@@ -1239,6 +1244,7 @@ def Optimize(coords, molecule, IC, xyzout):
             trustprint = "="
         if Quality < -1 and rejectOk:
             # Reject the step and take a smaller one from the previous iteration
+            trust = max(Convergence_drms, min(trust, cnorm/2))
             trustprint = "\x1b[1;91mx\x1b[0m"
             Y = Yprev.copy()
             X = Xprev.copy()
