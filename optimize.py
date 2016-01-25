@@ -32,6 +32,7 @@ parser.add_argument('--reset', action='store_true', help='Reset Hessian when eig
 parser.add_argument('--rfo', action='store_true', help='Use rational function optimization (default is trust-radius Newton Raphson).')
 parser.add_argument('--trust', type=float, default=0.1, help='Starting trust radius.')
 parser.add_argument('--tmax', type=float, default=0.3, help='Maximum trust radius.')
+parser.add_argument('--radii', type=str, nargs="+", default=["Na","0.0"], help='List of atomic radii for coordinate system.')
 parser.add_argument('input', type=str, help='TeraChem or Q-Chem input file')
 parser.add_argument('constraints', type=str, nargs='?', help='Constraint input file (optional)')
 
@@ -92,12 +93,19 @@ def edit_tcin(fin=None, fout=None, options={}, defaults={}):
                 print >> f, "%s %s" % (k, str(v))
     return Answer
 
-### Set up based on which quantum chemistry code we're using.
+# Read radii from the command line.
+if (len(args.radii) % 2) != 0:
+    raise RuntimeError("Must have an even number of arguments for radii")
+nrad = int(len(args.radii) / 2)
+radii = {}
+for i in range(nrad):
+    radii[args.radii[2*i].capitalize()] = float(args.radii[2*i+1])
 
+### Set up based on which quantum chemistry code we're using.
 if args.qchem:
     if args.psi4: raise RuntimeError("Do not specify both --qchem and --psi4")
     # The file from which we make the Molecule object
-    M = Molecule(args.input, radii={'Na':0.0})
+    M = Molecule(args.input, radii=radii)
 else:
     if args.psi4:
         Psi4exe = which('psi4')
@@ -118,7 +126,7 @@ else:
     tcdef['precision'] = "mixed"
     tcdef['threspdp'] = "1.0e-8"
     tcin = edit_tcin(fin=args.input, options={'run':'gradient'}, defaults=tcdef)
-    M = Molecule(tcin['coordinates'], radii={'Na':0.0})
+    M = Molecule(tcin['coordinates'], radii=radii)
     M.charge = tcin['charge']
     M.mult = tcin.get('spinmult',1)
 
@@ -1233,7 +1241,7 @@ def Optimize(coords, molecule, IC, xyzout):
             # For bad steps, the trust radius is reduced
             trust = max(Convergence_drms, trust/2)
             trustprint = "\x1b[91m-\x1b[0m"
-        elif Quality >= ThreHQ and bump:
+        elif Quality >= ThreHQ: # and bump:
             if trust < args.tmax:
                 # For good steps, the trust radius is increased
                 trust = min(np.sqrt(2)*trust, args.tmax)

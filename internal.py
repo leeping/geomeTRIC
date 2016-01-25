@@ -1770,20 +1770,18 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
             elif type(ic) in [Dihedral, MultiDihedral]:
                 r = np.linalg.norm(xyzs[ic.b]-xyzs[ic.c])
                 rcov = Radii[Elements.index(self.elem[ic.b])-1] + Radii[Elements.index(self.elem[ic.c])-1]
-                Hdiag.append(0.1)
-                # print r, rcov
-                # Hdiag.append(0.0023 - 0.07*(r-rcov))
+                # Hdiag.append(0.1)
+                Hdiag.append(0.023)
             elif type(ic) is OutOfPlane:
                 r1 = xyzs[ic.b]-xyzs[ic.a]
                 r2 = xyzs[ic.c]-xyzs[ic.a]
                 r3 = xyzs[ic.d]-xyzs[ic.a]
                 d = 1 - np.abs(np.dot(r1,np.cross(r2,r3))/np.linalg.norm(r1)/np.linalg.norm(r2)/np.linalg.norm(r3))
-                Hdiag.append(0.1)
-                # These formulas appear to be useless
-                # if covalent(ic.a, ic.b) and covalent(ic.a, ic.c) and covalent(ic.a, ic.d):
-                #     Hdiag.append(0.045)
-                # else:
-                #     Hdiag.append(0.023)
+                # Hdiag.append(0.1)
+                if covalent(ic.a, ic.b) and covalent(ic.a, ic.c) and covalent(ic.a, ic.d):
+                    Hdiag.append(0.045)
+                else:
+                    Hdiag.append(0.023)
             elif type(ic) in [CartesianX, CartesianY, CartesianZ]:
                 Hdiag.append(0.05)
             elif type(ic) in [TranslationX, TranslationY, TranslationZ]:
