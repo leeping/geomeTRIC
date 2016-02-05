@@ -6,8 +6,9 @@ from copy import deepcopy
 from collections import OrderedDict
 from internal import *
 from rotate import get_rot, sorted_eigh, calc_fac_dfac
+from forcebalance.gmxio import GMX
 from forcebalance.molecule import Molecule, Elements
-from forcebalance.nifty import row, col, flat, invert_svd, uncommadash, isint
+from forcebalance.nifty import row, col, flat, invert_svd, uncommadash, isint, which, eqcgmx, fqcgmx
 from scipy import optimize
 import scipy
 import traceback
@@ -22,6 +23,7 @@ parser.add_argument('--coordsys', type=str, default='xdlc', help='Coordinate sys
                     'and rotations added to DLC (default).')
 parser.add_argument('--qchem', action='store_true', help='Run optimization in Q-Chem (pass Q-Chem input).')
 parser.add_argument('--psi4', action='store_true', help='Compute gradients in Psi4.')
+parser.add_argument('--gmx', action='store_true', help='Compute gradients in Gromacs (requires conf.gro, topol.top, shot.mdp).')
 parser.add_argument('--prefix', type=str, default=None, help='Specify a prefix for output file and temporary directory.')
 parser.add_argument('--displace', action='store_true', help='Write out the displacements of the coordinates.')
 parser.add_argument('--enforce', action='store_true', help='Enforce exact constraints (activated when constraints are almost satisfied)')
@@ -33,6 +35,9 @@ parser.add_argument('--rfo', action='store_true', help='Use rational function op
 parser.add_argument('--trust', type=float, default=0.1, help='Starting trust radius.')
 parser.add_argument('--tmax', type=float, default=0.3, help='Maximum trust radius.')
 parser.add_argument('--radii', type=str, nargs="+", default=["Na","0.0"], help='List of atomic radii for coordinate system.')
+parser.add_argument('--pdb', type=str, help='Provide a PDB file name with coordinates and resids to split the molecule.')
+parser.add_argument('--coords', type=str, help='Provide coordinates to override the TeraChem input file / PDB file.')
+parser.add_argument('--frag', action='store_true', help='Fragment the internal coordinate system by deleting bonds between residues.')
 parser.add_argument('input', type=str, help='TeraChem or Q-Chem input file')
 parser.add_argument('constraints', type=str, nargs='?', help='Constraint input file (optional)')
 
@@ -71,9 +76,9 @@ def edit_tcin(fin=None, fout=None, options={}, defaults={}):
             s = line.split(' ', 1)
             k = s[0].lower()
             v = s[1].strip()
-            if k == 'coordinates':
-                if not os.path.exists(v.strip()):
-                    raise RuntimeError("TeraChem coordinate file does not exist")
+            # if k == 'coordinates':
+            #     if not os.path.exists(v.strip()):
+            #         raise RuntimeError("TeraChem coordinate file does not exist")
             if k in intkeys:
                 v = int(v)
             if k in Answer:
@@ -105,7 +110,21 @@ for i in range(nrad):
 if args.qchem:
     if args.psi4: raise RuntimeError("Do not specify both --qchem and --psi4")
     # The file from which we make the Molecule object
-    M = Molecule(args.input, radii=radii)
+    if args.pdb is not None:
+        # If we pass the PDB, then read both the PDB and the Q-Chem input file,
+        # then copy the Q-Chem rem variables over to the PDB 
+        M = Molecule(args.pdb, radii=radii, fragment=args.frag)
+        M1 = Molecule(args.input, radii=radii)
+        for i in ['qctemplate', 'qcrems', 'elem', 'qm_ghost', 'charge', 'mult']:
+            if i in M1: M[i] = M1[i]
+    else:
+        M = Molecule(args.input, radii=radii)
+elif args.gmx:
+    M = Molecule(args.input, radii=radii, fragment=args.frag)
+    if args.pdb is not None:
+        M = Molecule(args.pdb, radii=radii, fragment=args.frag)
+    if 'boxes' in M.Data: 
+        del M.Data['boxes']
 else:
     if args.psi4:
         Psi4exe = which('psi4')
@@ -117,18 +136,27 @@ else:
         os.environ['PATH'] = os.path.join(TCHome,'bin')+":"+os.environ['PATH']
         os.environ['LD_LIBRARY_PATH'] = os.path.join(TCHome,'lib')+":"+os.environ['LD_LIBRARY_PATH']
     tcdef = OrderedDict()
-    tcdef['convthre'] = "1.0e-6"
-    tcdef['threall'] = "1.0e-16"
+    tcdef['convthre'] = "3.0e-6"
+    tcdef['threall'] = "1.0e-13"
     tcdef['mixguess'] = "0.0"
     tcdef['scf'] = "diis+a"
     tcdef['maxit'] = "50"
-    tcdef['dftgrid'] = "1"
-    tcdef['precision'] = "mixed"
-    tcdef['threspdp'] = "1.0e-8"
+    # tcdef['dftgrid'] = "1"
+    # tcdef['precision'] = "mixed"
+    # tcdef['threspdp'] = "1.0e-8"
     tcin = edit_tcin(fin=args.input, options={'run':'gradient'}, defaults=tcdef)
-    M = Molecule(tcin['coordinates'], radii=radii)
+    if args.pdb is not None:
+        M = Molecule(args.pdb, radii=radii, fragment=args.frag)
+    else:
+        if not os.path.exists(tcin['coordinates']):
+            raise RuntimeError("TeraChem coordinate file does not exist")
+        M = Molecule(tcin['coordinates'], radii=radii, fragment=args.frag)
     M.charge = tcin['charge']
     M.mult = tcin.get('spinmult',1)
+
+if args.coords is not None:
+    M1 = Molecule(args.coords)
+    M.xyzs = M1.xyzs
 
 prefix = args.prefix if args.prefix is not None else os.path.splitext(args.input)[0]
 
@@ -308,12 +336,29 @@ def calc_psi4(coords):
 calc_psi4.calcnum = 0
 calc_psi4.stored_calcs = OrderedDict()
 
+def calc_gmx(coords):
+    Gro = Molecule("conf.gro")
+    Gro.xyzs[0] = coords.reshape(-1,3) * 0.529
+    cwd = os.getcwd()
+    shutil.copy2("topol.top", dirname)
+    shutil.copy2("shot.mdp", dirname)
+    os.chdir(dirname)
+    Gro.write("coords.gro")
+    G = GMX(coords="coords.gro", gmx_top="topol.top", gmx_mdp="shot.mdp")
+    EF = G.energy_force()
+    Energy = EF[0, 0] / eqcgmx
+    Gradient = EF[0, 1:] / fqcgmx
+    os.chdir(cwd)
+    return Energy, Gradient
+
 def calc(coords):
     """ Run the selected quantum chemistry code. """
     if args.qchem:
         e, g = calc_qchem(coords)
     elif args.psi4:
         e, g = calc_psi4(coords)
+    elif args.gmx:
+        e, g = calc_gmx(coords)
     else:
         e, g = calc_terachem(coords)
     return e, g
@@ -1092,6 +1137,8 @@ def Optimize(coords, molecule, IC, xyzout):
     max_gradient = np.max(atomgrad)
     print "Step %4i :" % Iteration,
     print "Gradient = %.3e/%.3e (rms/max) Energy = % .10f" % (rms_gradient, max_gradient, E)
+    progress.xyzs = [coords.copy().reshape(-1, 3) * 0.529]
+    progress.comms = ['Iteration %i Energy % .8f' % (Iteration, E)]
     # if IC.haveConstraints(): IC.printConstraints(X)
     # Threshold for "low quality step" which decreases trust radius.
     ThreLQ = 0.25

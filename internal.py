@@ -1129,11 +1129,21 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
             raise RuntimeError('Only one frame allowed in molecule object')
         # Determine the atomic connectivity
         molecule.build_topology()
-        frags = [m.nodes() for m in molecule.molecules]
+        if 'resid' in molecule.Data.keys():
+            frags = []
+            current_resid = -1
+            for i in range(molecule.na):
+                if molecule.resid[i] != current_resid:
+                    frags.append([i])
+                    current_resid = molecule.resid[i]
+                else:
+                    frags[-1].append(i)
+        else:
+            frags = [m.nodes() for m in molecule.molecules]
         # coordinates in Angstrom
         coords = molecule.xyzs[0].flatten()
         # Make a distance matrix mapping atom pairs to interatomic distances
-        AtomIterator, dxij = molecule.distance_matrix()
+        AtomIterator, dxij = molecule.distance_matrix(pbc=False)
         D = {}
         for i, j in zip(AtomIterator, dxij[0]):
             assert i[0] < i[1]
@@ -1505,6 +1515,8 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
     def largeRots(self):
         for Internal in self.Internals:
             if type(Internal) in [RotationA, RotationB, RotationC]:
+                if Internal in self.cPrims:
+                    continue
                 if Internal.Rotator.stored_norm > 0.9*np.pi:
                     return True
         return False
