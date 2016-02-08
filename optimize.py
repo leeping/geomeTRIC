@@ -153,6 +153,10 @@ else:
         M = Molecule(tcin['coordinates'], radii=radii, fragment=args.frag)
     M.charge = tcin['charge']
     M.mult = tcin.get('spinmult',1)
+    if 'guess' in tcin:
+        for f in tcin['guess'].split():
+            if not os.path.exists(f):
+                raise RuntimeError("TeraChem input file specifies guess %s but it does not exist\nPlease include this file in the same folder as your input" % f)
 
 if args.coords is not None:
     M1 = Molecule(args.coords)
@@ -164,7 +168,11 @@ dirname = prefix+".tmp"
 if not os.path.exists(dirname):
     os.makedirs(dirname)
 else:
-    print "%s exists ; make sure nothing else is writing to the folder" % dirname
+    print "%s exists ; make sure nothing else is writing to the folder" % dirname    
+    # Remove existing scratch files in ./run.tmp/scr to avoid confusion
+    for f in ['c0', 'ca0', 'cb0']:
+        if os.path.exists(os.path.join(dirname, 'scr', f)):
+            os.remove(os.path.join(dirname, 'scr', f))
     
 # First item in tuple: The class to be initialized
 # Second item in tuple: Whether to connect nonbonded fragments
@@ -207,6 +215,11 @@ def calc_terachem(coords):
     for f in ['c0', 'ca0', 'cb0']:
         if os.path.exists(os.path.join(dirname, 'scr', f)):
             shutil.copy2(os.path.join(dirname, 'scr', f), os.path.join(dirname, f))
+            guesses.append(f)
+            have_guess = True
+    if not have_guess and 'guess' in tcin:
+        for f in tcin['guess'].split():
+            shutil.copy2(f, dirname)
             guesses.append(f)
             have_guess = True
     tcin['coordinates'] = 'start.xyz'
