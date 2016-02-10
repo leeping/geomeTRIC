@@ -20,12 +20,26 @@
 #    -or- an atomic symbol to select all atoms that match the symbol.
 # -> If in $set, provide the atom selection as above, 
 #    -and- 1-3 numbers for the values that the coordinates are set to.
-#    The centroid (i.e. average coordinate) of the atoms will be constrained.
+#    The coordinates of each atom in the selection will be set.
+#    Warning: Do not set all three coordinates of more than one atom.
 # -> If in $scan, provide the atom selection as above,
 #    -and- 1-3 for the starting (x,y,z) coordinates,
 #    -and- 1-3 for the ending (x,y,z) coordinates,
 #    -and- 1 number for the total number of steps including the endpoints.
-#    The centroid (i.e. average coordinate) of the atoms will be constrained.
+#    The coordinates of each atom in the selection will be scanned.
+# 
+# trans-x, trans-y, trans-z, trans-xy, trans-xz, trans-yz, trans-xyz : 
+#    The overall translation of the atom selection is constrained.
+# -> If in $freeze, provide 1 number for the index of the atom,
+#    -or- a range of atoms using commas and dashes but *no spaces*
+#         (i.e. 5-7,17,25 maps to 5,6,7,17,25),
+#    -or- an atomic symbol to select all atoms that match the symbol.
+# -> If in $set, provide the atom selection as above, 
+#    -and- 1-3 numbers for the values that the coordinates are set to.
+# -> If in $scan, provide the atom selection as above,
+#    -and- 1-3 for the starting (x,y,z) coordinates,
+#    -and- 1-3 for the ending (x,y,z) coordinates,
+#    -and- 1 number for the total number of steps including the endpoints.
 # 
 # distance : The indicated distance is constrained.
 #            Provide 2 numbers for the atomic indices.

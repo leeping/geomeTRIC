@@ -36,7 +36,7 @@ parser.add_argument('--trust', type=float, default=0.1, help='Starting trust rad
 parser.add_argument('--tmax', type=float, default=0.3, help='Maximum trust radius.')
 parser.add_argument('--radii', type=str, nargs="+", default=["Na","0.0"], help='List of atomic radii for coordinate system.')
 parser.add_argument('--pdb', type=str, help='Provide a PDB file name with coordinates and resids to split the molecule.')
-parser.add_argument('--coords', type=str, help='Provide coordinates to override the TeraChem input file / PDB file.')
+parser.add_argument('--coords', type=str, help='Provide coordinates to override the TeraChem input file / PDB file. The LAST frame will be used.')
 parser.add_argument('--frag', action='store_true', help='Fragment the internal coordinate system by deleting bonds between residues.')
 parser.add_argument('input', type=str, help='TeraChem or Q-Chem input file')
 parser.add_argument('constraints', type=str, nargs='?', help='Constraint input file (optional)')
@@ -160,6 +160,7 @@ else:
 
 if args.coords is not None:
     M1 = Molecule(args.coords)
+    M1 = M1[-1]
     M.xyzs = M1.xyzs
 
 prefix = args.prefix if args.prefix is not None else os.path.splitext(args.input)[0]
@@ -629,17 +630,17 @@ def ParseConstraints(molecule, cFile):
                  "xz":([CartesianX, CartesianZ], 1), 
                  "yz":([CartesianY, CartesianZ], 1), 
                  "xyz":([CartesianX, CartesianY, CartesianZ], 1),
+                 "trans-x":([TranslationX], 1), 
+                 "trans-y":([TranslationY], 1), 
+                 "trans-z":([TranslationZ], 1),
+                 "trans-xy":([TranslationX, TranslationY], 1), 
+                 "trans-xz":([TranslationX, TranslationZ], 1), 
+                 "trans-yz":([TranslationY, TranslationZ], 1), 
+                 "trans-xyz":([TranslationX, TranslationY, TranslationZ], 1),
                  "rotation":([RotationA, RotationB, RotationC], 1)
                  }
-    CDict_Trans = {"x":([TranslationX], 1), 
-                   "y":([TranslationY], 1), 
-                   "z":([TranslationZ], 1),
-                   "xy":([TranslationX, TranslationY], 1), 
-                   "xz":([TranslationX, TranslationZ], 1), 
-                   "yz":([TranslationY, TranslationZ], 1), 
-                   "xyz":([TranslationX, TranslationY, TranslationZ], 1)
-                   }
     AtomKeys = ["x", "y", "z", "xy", "yz", "xz", "xyz"]
+    TransKeys = ["trans-x", "trans-y", "trans-z", "trans-xy", "trans-yz", "trans-xz", "trans-xyz"]
     objs = []
     vals = []
     coords = molecule.xyzs[0].flatten() / 0.529177
@@ -658,6 +659,8 @@ def ParseConstraints(molecule, cFile):
             key = s[0]
             if ''.join(sorted(key)) in AtomKeys:
                 key = ''.join(sorted(key))
+            elif ''.join(sorted(key.replace('trans-',''))) in AtomKeys:
+                key = 'trans-'+''.join(sorted(key.replace('trans-','')))
             classes, n_atom = ClassDict[key]
             if mode == "freeze":
                 ntok = n_atom
@@ -673,9 +676,8 @@ def ParseConstraints(molecule, cFile):
                     ntok = n_atom + 2*len(classes) + 1
             if len(s) != (ntok+1):
                 raise RuntimeError("For this line:%s\nExpected %i tokens but got %i" % (line, ntok+1, len(s)))
-            if key in AtomKeys:
-                # Special code that works for atom position constraints.
-                # First figure out the range of atoms.
+            if key in AtomKeys or key in TransKeys:
+                # Special code that works for atom position and translation constraints.
                 if isint(s[1]):
                     atoms = [int(s[1])-1]
                 elif s[1] in [k.lower() for k in Elements]:
@@ -686,35 +688,50 @@ def ParseConstraints(molecule, cFile):
                     raise RuntimeError("Atom numbers must start from 1")
                 if any([i>=molecule.na for i in atoms]):
                     raise RuntimeError("Constraints refer to higher atom indices than the number of atoms")
-                if mode in ["set", "scan"]:
-                    # If there is more than one atom and the mode is "set" or "scan", then the
-                    # center of mass is constrained, so we pick the corresponding classes.
-                    if len(atoms) > 1:
-                        objs.append([cls(atoms, w=np.ones(len(atoms))/len(atoms)) for cls in CDict_Trans[key][0]])
-                        # for cls in CDict_Trans[key][0]:
-                        #     objs.append(cls(atoms, w=np.ones(len(atoms))/len(atoms)))
-                    else:
-                        objs.append([cls(atoms[0], w=1.0) for cls in classes])
-                        # for cls in classes:
-                        #     objs.append(cls(atoms[0], w=1.0))
+            if key in AtomKeys:
+                # The x-coordinate of all the atoms in a group is a
+                # list of constraints that is scanned in 1-D.
+                for cls in classes:
+                    objs.append([cls(a, w=1.0) for a in atoms])
+                if mode == "freeze":
+                    for cls in classes:
+                        vals.append([[None for a in atoms]])
+                elif mode == "set":
+                    x1 = [float(i)/0.529177 for i in s[2:2+len(classes)]]
+                    for icls, cls in enumerate(classes):
+                        vals.append([[x1[icls] for a in atoms]])
+                elif mode == "scan":
+                    # If we're scanning it, then we add the whole list of distances to the list-of-lists
+                    x1 = [float(i)/0.529177 for i in s[2:2+len(classes)]]
+                    x2 = [float(i)/0.529177 for i in s[2+len(classes):2+2*len(classes)]]
+                    nstep = int(s[2+2*len(classes)])
+                    valscan = OneDScan(x1, x2, nstep)
+                    for icls, cls in enumerate(classes):
+                        vals.append([[v[icls] for a in atoms] for v in valscan])
+            elif key in TransKeys:
+                # If there is more than one atom and the mode is "set" or "scan", then the
+                # center of mass is constrained, so we pick the corresponding classes.
+                if len(atoms) > 1:
+                    objs.append([cls(atoms, w=np.ones(len(atoms))/len(atoms)) for cls in classes])
+                else:
+                    objs.append([cls(atoms[0], w=1.0) for cls in classes])
+                if mode == "freeze":
+                    # LPW 2016-02-10: 
+                    # trans-x, trans-y, trans-z is a GROUP of constraints
+                    # Each group of constraints gets a [[None, None, None]] appended to vals
+                    vals.append([[None for cls in classes]])
+                elif mode == "set":
                     # Depending on how many coordinates are constrained, we read in the corresponding
                     # number of constraint values.
                     x1 = [float(i)/0.529177 for i in s[2:2+len(classes)]]
                     # If there's just one constraint value then we append it to the value list-of-lists
-                    if mode == "set":
-                        vals.append([x1])
-                    elif mode == "scan":
-                        # If we're scanning it, then we add the whole list of distances to the list-of-lists
-                        x2 = [float(i)/0.529177 for i in s[2+len(classes):2+2*len(classes)]]
-                        nstep = int(s[2+2*len(classes)])
-                        vals.append(OneDScan(x1, x2, nstep))
-                elif mode == "freeze":
-                    # Freezing atoms works a bit differently, we add one constraint for each
-                    # atom in the range and append None to the values.
-                    for a in atoms:
-                        for cls in classes:
-                            objs.append([cls(a, w=1.0)])
-                            vals.append([[None]])
+                    vals.append([x1])
+                elif mode == "scan":
+                    # If we're scanning it, then we add the whole list of distances to the list-of-lists
+                    x1 = [float(i)/0.529177 for i in s[2:2+len(classes)]]
+                    x2 = [float(i)/0.529177 for i in s[2+len(classes):2+2*len(classes)]]
+                    nstep = int(s[2+2*len(classes)])
+                    vals.append(OneDScan(x1, x2, nstep))
             elif key in ["distance", "angle", "dihedral"]:
                 if len(classes) != 1:
                     raise RuntimeError("Not OK!")

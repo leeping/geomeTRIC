@@ -1622,10 +1622,11 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
             current = c.value(xyz)/w
             reference = self.cVals[ic]/w
             diff = (current - reference)
-            if np.abs(diff-2*np.pi) < np.abs(diff):
-                diff -= 2*np.pi
-            if np.abs(diff+2*np.pi) < np.abs(diff):
-                diff += 2*np.pi
+            if c.isPeriodic:
+                if np.abs(diff-2*np.pi) < np.abs(diff):
+                    diff -= 2*np.pi
+                if np.abs(diff+2*np.pi) < np.abs(diff):
+                    diff += 2*np.pi
             if type(c) in [TranslationX, TranslationY, TranslationZ, CartesianX, CartesianY, CartesianZ, Distance]:
                 factor = 0.529177
             elif c.isAngular:
