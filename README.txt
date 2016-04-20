@@ -16,6 +16,7 @@ Contact Email: leeping@ucdavis.edu
 #==================#
 
 Package dependencies are:
+Python 2.7
 NumPy, Scipy, NetworkX, ForceBalance
 
 ForceBalance provides the molecule file format converter (molecule.py)
