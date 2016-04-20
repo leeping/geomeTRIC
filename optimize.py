@@ -18,9 +18,9 @@ import itertools
 import os, sys, shutil
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--coordsys', type=str, default='xdlc', help='Coordinate system: "cart" for Cartesian, "prim" for Primitive (a.k.a redundant), '
-                    '"dlc" for Delocalized Internal Coordinates, "hdlc" for Hybrid Delocalized Internal Coordinates, "xdlc" for explicit translations'
-                    'and rotations added to DLC (default).')
+parser.add_argument('--coordsys', type=str, default='tric', help='Coordinate system: "cart" for Cartesian, "prim" for Primitive (a.k.a redundant), '
+                    '"dlc" for Delocalized Internal Coordinates, "hdlc" for Hybrid Delocalized Internal Coordinates, "tric" for Translation-Rotation'
+                    'Internal Coordinates (default).')
 parser.add_argument('--qchem', action='store_true', help='Run optimization in Q-Chem (pass Q-Chem input).')
 parser.add_argument('--psi4', action='store_true', help='Compute gradients in Psi4.')
 parser.add_argument('--gmx', action='store_true', help='Compute gradients in Gromacs (requires conf.gro, topol.top, shot.mdp).')
@@ -182,7 +182,7 @@ CoordSysDict = {'cart':(CartesianCoordinates, False, False),
                 'prim':(PrimitiveInternalCoordinates, True, False),
                 'dlc':(DelocalizedInternalCoordinates, True, False),
                 'hdlc':(DelocalizedInternalCoordinates, False, True),
-                'xdlc':(DelocalizedInternalCoordinates, False, False)}
+                'tric':(DelocalizedInternalCoordinates, False, False)}
 CoordClass, connect, addcart = CoordSysDict[args.coordsys.lower()]
 
 ### Above this line: Global variables that should go into main()
