@@ -9,6 +9,8 @@ and Psi4 are supported.
 
 Authors: Lee-Ping Wang, Chenchen Song
 
+Contact Email: leeping@ucdavis.edu
+
 #==================#
 #|   Quick Help   |#
 #==================#
