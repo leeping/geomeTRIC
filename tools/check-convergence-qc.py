@@ -3,6 +3,9 @@
 from forcebalance.molecule import *
 import os, sys
 
+# This code checks to see whether a Q-Chem optimization has converged
+# to within the same criteria as GeomeTRIC.
+
 M = Molecule(sys.argv[1], build_topology=False)
 M.align(smooth=True)
 
