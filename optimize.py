@@ -1450,6 +1450,17 @@ def CalcInternalHess(coords, molecule, IC):
         fdiff = (EPlus+EMinus-2*E)/1e-6
         print "%s : % .6e" % (IC.Internals[i], fdiff)
 
+def print_msg():
+    print """
+    #==========================================================================#
+    #| If this code has benefited your research, please support us by citing: |#
+    #|                                                                        |#
+    #| Wang, L.-P.; Song, C.C. (2016) "Geometry optimization made simple with |#
+    #| translation and rotation coordinates", J. Chem, Phys. 144, 214108.     |#
+    #| http://dx.doi.org/10.1063/1.4952956                                    |#
+    #==========================================================================#
+    """
+
 def main():
     # Get initial coordinates in bohr
     coords = M.xyzs[0].flatten() / 0.529177
@@ -1525,6 +1536,7 @@ def main():
             # coords = IC.applyConstraints(coords)
             coords = Optimize(coords, M, IC, xyzout)
             print
+    print_msg()
     
 if __name__ == "__main__":
     main()
