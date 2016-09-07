@@ -4,6 +4,7 @@ from __future__ import division
 from forcebalance.nifty import invert_svd
 from forcebalance.molecule import *
 import numpy as np
+import sys
 
 """
 References
@@ -234,6 +235,20 @@ def calc_rmsd(x, y):
     rmsd = np.sqrt((np.sum(x**2) + np.sum(y**2) - 2*lmax)/N)
     return rmsd
 
+def is_linear(x, y):
+    """
+    Returns True if molecule is linear 
+    (largest eigenvalue almost equivalent to second largest)
+    """
+    x = x - np.mean(x,axis=0)
+    y = y - np.mean(y,axis=0)
+    N = x.shape[0]
+    L, Q = sorted_eigh(build_F(x, y))
+    if L[0]/L[1] < 1.01 and L[0]/L[1] > 0.0:
+        return True
+    else:
+        return False
+
 def get_quat(x, y, eig=False):
     """
     Calculate the quaternion that rotates x into maximal coincidence with y
@@ -430,8 +445,6 @@ def get_q_der(x, y):
     mat = np.eye(4)*l - F
     # pinv = np.matrix(np.linalg.pinv(np.eye(4)*l - F))
     pinv = invert_svd(np.eye(4)*l - F, thresh=1e-6)
-    # print l
-    # print pinv
     dq = np.zeros((x.shape[0], 3, 4), dtype=float)
     for u in range(x.shape[0]):
         for w in range(3):
@@ -559,14 +572,14 @@ def get_expmap_der(x,y):
     return dvdx
 
 def main():
-    M = Molecule("test.xyz")
+    M = Molecule(sys.argv[1])
     # The target structure
     Y = M.xyzs[0]
     # The structure being rotated
     X = M.xyzs[1]
     # Copy the structure being rotated
     Z = X.copy()
-    get_expmap_der(X, Z)
+    get_expmap_der(X, Y)
 
 if __name__ == "__main__":
     main()
