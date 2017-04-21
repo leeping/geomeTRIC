@@ -30,7 +30,7 @@ def edit_tcin(fin=None, fout=None, options={}, defaults={}):
         Dictionary of options to overrule TeraChem input file
     defaults : dict, optional
         Dictionary of options to add to the end
-    
+
     Returns
     -------
     dictionary
@@ -144,7 +144,7 @@ class Engine(object):
         raise NotImplementedError("Work Queue is not implemented for this class")
 
 class TeraChem(Engine):
-    """ 
+    """
     Run a TeraChem energy and gradient calculation.
     """
     def __init__(self, molecule, tcin):
@@ -182,73 +182,131 @@ class TeraChem(Engine):
         gradient = np.loadtxt(os.path.join(dirname,'grad.txt')).flatten()
         return energy, gradient
 
-Psi4Temp = """
-molecule {{
-{charge} {mult}
-{geometry}
-}}
-
-set basis {basis}
-
-gradient('{method}{dftd}')
-
-"""
-
 class Psi4(Engine):
-    """ 
-    Run a TeraChem energy and gradient calculation.
     """
-    def __init__(self, molecule, tcin):
-        self.tcin = tcin
-        super(TeraChem, self).__init__(molecule)
+    Run a Psi4 energy and gradient calculation.
+    """
+    def __init__(self, molecule=None):
+        # molecule.py can not parse psi4 input yet, so we use self.load_psi4_input() as a walk around
+        if molecule is None:
+            # create a fake molecule
+            molecule = Molecule()
+            molecule.elem = ['H']
+            molecule.xyzs = [[[0,0,0]]]
+        super(Psi4, self).__init__(molecule)
+
+    def load_psi4_input(self, psi4in):
+        """ Psi4 input file parser, only support xyz coordinates for now """
+        coords = []
+        elems = []
+        found_molecule = False
+        psi4_temp = [] # store a template of the input file for generating new ones
+        for line in open(psi4in):
+            if 'molecule' in line:
+                found_molecule = True
+                psi4_temp.append("molecule")
+            elif found_molecule is True:
+                if '}' in line:
+                    found_molecule = False
+                    line = line.replace("}","")
+                ls = line.split()
+                if len(ls) == 2:
+                    charge, mult = int(ls[0]), int(ls[1])
+                elif len(ls) == 4:
+                    # parse the xyz format
+                    elems.append(ls[0])
+                    coords.append(ls[1:4])
+            else:
+                psi4_temp.append(line)
+        self.M = Molecule()
+        self.M.elem = elems
+        self.M.charge = charge
+        self.M.mult = mult
+        self.M.xyzs = [np.array(coords, dtype=np.float64)]
+        self.psi4_temp = psi4_temp
 
     def calc_new(self, coords, dirname):
         if not os.path.exists(dirname): os.makedirs(dirname)
         # Convert coordinates back to the xyz file
-        self.M.xyzs[0] = coords.reshape(-1, 3) * 0.529177
-        self.M[0].write(os.path.join(dirname, 'start.xyz'))
+        self.M.xyzs[0] = coords.reshape(-1, 3) * bohr2ang
         # Write Psi4 input.dat
-        with open(os.path.join(dirname,'input.dat'),'w') as inputfile:
-            geometrylines = []
-            with open(os.path.join(dirname, 'start.xyz'),'r') as xyzinput:
-                xyzinput.readline()
-                xyzinput.readline()
-                for line in xyzinput:
-                    geometrylines.append(line)
-            print >>inputfile, Psi4Temp.format(geometry = ''.join(geometrylines),
-                                               charge = str(self.M.charge), mult=str(self.M.mult),
-                                               basis = self.tcin['basis'],
-                                               method = self.tcin['method'][1:],
-                                               dftd = ('-d' if self.tcin.get('dispersion', 'no').lower() != 'no' else ""))
+        with open(os.path.join(dirname, 'input.dat'), 'w') as outfile:
+            for line in self.psi4_temp:
+                if line == 'molecule':
+                    outfile.write('molecule {\n')
+                    outfile.write("%d %d\n" % (self.M.charge, self.M.mult))
+                    for e, c in zip(self.M.elem, self.M.xyzs[0]):
+                        outfile.write("%-7s %13.7f %13.7f %13.7f\n" % (e, c[0], c[1], c[2]))
+                    outfile.write("}")
+                else:
+                    outfile.write(line)
         # Run Psi4
-        subprocess.call(Psi4exe, cwd = dirname, shell=True)
+        subprocess.call('%s input.dat' % os.path.join(rootdir,'run_psi4'), cwd=dirname, shell=True)
         # Read energy and gradients from Psi4 output
-        energy = 0
-        gradient = []
-        with open(os.path.join(dirname,'output.dat'), 'r') as psi4output:
-            grad_block = False
-            with open(os.path.join(dirname,'grad.txt'), 'w') as gradoutput:
-                for line in psi4output:
-                    if '-Total Gradient:' in line:
-                        grad_block = True
-                    if grad_block:
-                        if len(line.split()) == 4 and line.split()[0].isdigit():
-                            gradoutput.write('   '.join(line.split()[1:]) + '\n')
-                        elif len(line.split()) == 0:
-                            grad_block = False
-                    if 'CURRENT ENERGY:' in line and len(line.split()) == 3:
-                        energy = float(line.split()[-1])
-            gradient = np.loadtxt(os.path.join(dirname,'grad.txt')).flatten()
+        energy, gradient = self.parse_psi4_output(os.path.join(dirname, 'output.dat'))
         return energy, gradient
-        
-    
+
+    def parse_psi4_output(self, psi4out):
+        """ read an output file from Psi4 """
+        energy, gradient = None, None
+        with open(psi4out) as outfile:
+            found_grad = False
+            found_num_grad = False
+            for line in outfile:
+                line_strip = line.strip()
+                if line_strip.startswith('*'):
+                    # this works for CCSD and CCSD(T) total energy
+                    ls = line_strip.split()
+                    if len(ls) > 4 and ls[2] == 'total' and ls[3] == 'energy':
+                        energy = float(ls[-1])
+                elif line_strip.startswith('Total Energy'):
+                    # this works for DF-MP2 total energy
+                    ls = line_strip.split()
+                    if ls[-1] == '[Eh]':
+                        energy = float(ls[-2])
+                    else:
+                        # this works for HF and DFT total energy
+                        try:
+                            energy = float(ls[-1])
+                        except:
+                            pass
+                elif line_strip == '-Total Gradient:' or line_strip == '-Total gradient:':
+                    # this works for most of the analytic gradients
+                    found_grad = True
+                    gradient = []
+                elif found_grad is True:
+                    ls = line_strip.split()
+                    if len(ls) == 4:
+                        if ls[0].isdigit():
+                            gradient.append([float(g) for g in ls[1:4]])
+                    else:
+                        found_grad = False
+                        found_num_grad = False
+                elif line_strip == 'Gradient written.':
+                    # this works for CCSD(T) gradients computed by numerical displacements
+                    found_num_grad = True
+                    print("found num grad")
+                elif found_num_grad is True and line_strip.startswith('------------------------------'):
+                    for _ in range(4):
+                        line = next(outfile)
+                    found_grad = True
+                    gradient = []
+        if energy is None:
+            raise RuntimeError("Psi4 energy is not found in %s, please check." % psi4out)
+        if gradient is None:
+            raise RuntimeError("Psi4 gradient is not found in %s, please check." % psi4out)
+        gradient = np.array(gradient, dtype=np.float64).ravel()
+        return energy, gradient
+
+
+
 class QChem(Engine):
     def __init__(self, molecule):
         super(QChem, self).__init__(molecule)
 
     def calc_new(self, coords, dirname):
         if not os.path.exists(dirname): os.makedirs(dirname)
-        # Convert coordinates back to the xyz file<
+        # Convert coordinates back to the xyz file
         self.M.xyzs[0] = coords.reshape(-1, 3) * bohr2ang
         self.M.edit_qcrems({'jobtype':'force'})
         self.M[0].write(os.path.join(dirname, 'run.in'))
