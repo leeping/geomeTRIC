@@ -20,7 +20,7 @@ import os, sys, shutil
 def RebuildHessian(IC, H0, coord_seq, grad_seq, params):
     """
     Rebuild the Hessian after making a change to the internal coordinate system.
-    
+
     Parameters
     ----------
     IC : InternalCoordinates
@@ -30,13 +30,13 @@ def RebuildHessian(IC, H0, coord_seq, grad_seq, params):
     coord_seq : list
         List of N_atom x 3 Cartesian coordinates in atomic units
     grad_seq : list
-        List of N_atom x 3 Cartesian gradients in atomic units 
+        List of N_atom x 3 Cartesian gradients in atomic units
     params : OptParams object
         Uses trust, epsilon, and reset
         trust : Only recover using previous geometries within the trust radius
         epsilon : Small eigenvalue threshold
         reset : Revert to the guess Hessian if eigenvalues smaller than threshold
-    
+
     Returns
     -------
     np.ndarray
@@ -109,7 +109,7 @@ def calc_drms_dmax(Xnew, Xold, align=True):
 def getCartesianNorm(X, dy, IC, enforce=False, verbose=False):
     """
     Get the norm of the optimization step in Cartesian coordinates.
-    
+
     Parameters
     ----------
     X : np.ndarray
@@ -147,7 +147,7 @@ def between(s, a, b):
 def brent_wiki(f, a, b, rel, cvg=0.1, obj=None, verbose=False):
     """
     Brent's method for finding the root of a function.
-    
+
     Parameters
     ----------
     f : function
@@ -164,7 +164,7 @@ def brent_wiki(f, a, b, rel, cvg=0.1, obj=None, verbose=False):
         Object associated with the function that we may communicate with if desired
     verbose : bool
         Print diagnostic messages
-    
+
     Returns
     -------
     float
@@ -233,14 +233,14 @@ def brent_wiki(f, a, b, rel, cvg=0.1, obj=None, verbose=False):
             # Swap if |f(a)| < |f(b)|
             a, b = b, a
             fa, fb = fb, fa
-        
+
 def ftest(x):
     answer = (x+3)*(x-1)**2
     print "(x, y) = ", x, answer
     return answer
 
 def OneDScan(init, final, steps):
-    """ 
+    """
     Return a list of N equally spaced values between initial and final.
     This method works with lists of numbers
 
@@ -274,7 +274,7 @@ def ParseConstraints(molecule, cFile):
         Molecule object
     cFile : str
         File containing the constraint specification.
-    
+
     Returns
     -------
     objs : list
@@ -287,22 +287,22 @@ def ParseConstraints(molecule, cFile):
     # The key in this dictionary is for looking up the following information:
     # 1) The classes for creating the primitive coordinates corresponding to the constraint
     # 2) The number of atomic indices that are required to specify the constraint
-    ClassDict = {"distance":([Distance], 2), 
-                 "angle":([Angle], 3), 
-                 "dihedral":([Dihedral], 4), 
-                 "x":([CartesianX], 1), 
-                 "y":([CartesianY], 1), 
+    ClassDict = {"distance":([Distance], 2),
+                 "angle":([Angle], 3),
+                 "dihedral":([Dihedral], 4),
+                 "x":([CartesianX], 1),
+                 "y":([CartesianY], 1),
                  "z":([CartesianZ], 1),
-                 "xy":([CartesianX, CartesianY], 1), 
-                 "xz":([CartesianX, CartesianZ], 1), 
-                 "yz":([CartesianY, CartesianZ], 1), 
+                 "xy":([CartesianX, CartesianY], 1),
+                 "xz":([CartesianX, CartesianZ], 1),
+                 "yz":([CartesianY, CartesianZ], 1),
                  "xyz":([CartesianX, CartesianY, CartesianZ], 1),
-                 "trans-x":([TranslationX], 1), 
-                 "trans-y":([TranslationY], 1), 
+                 "trans-x":([TranslationX], 1),
+                 "trans-y":([TranslationY], 1),
                  "trans-z":([TranslationZ], 1),
-                 "trans-xy":([TranslationX, TranslationY], 1), 
-                 "trans-xz":([TranslationX, TranslationZ], 1), 
-                 "trans-yz":([TranslationY, TranslationZ], 1), 
+                 "trans-xy":([TranslationX, TranslationY], 1),
+                 "trans-xz":([TranslationX, TranslationZ], 1),
+                 "trans-yz":([TranslationY, TranslationZ], 1),
                  "trans-xyz":([TranslationX, TranslationY, TranslationZ], 1),
                  "rotation":([RotationA, RotationB, RotationC], 1)
                  }
@@ -383,7 +383,7 @@ def ParseConstraints(molecule, cFile):
                 else:
                     objs.append([cls(atoms[0], w=1.0) for cls in classes])
                 if mode == "freeze":
-                    # LPW 2016-02-10: 
+                    # LPW 2016-02-10:
                     # trans-x, trans-y, trans-z is a GROUP of constraints
                     # Each group of constraints gets a [[None, None, None]] appended to vals
                     vals.append([[None for cls in classes]])
@@ -485,7 +485,7 @@ def get_delta_prime_trm(v, X, G, H, IC, verbose=False):
     Returns the Newton-Raphson step given a multiple of the diagonal
     added to the Hessian, the expected decrease in the energy, and
     the derivative of the step length w/r.t. v.
-    
+
     Parameters
     ----------
     v : float
@@ -547,7 +547,7 @@ def get_delta_prime_rfo(alpha, X, G, H, IC, verbose=False):
     with respect to alpha, which allows trust_step() to rapidly find
     the RS-RFO step that satisfies a desired step length.
 
-    Currently does not work with constraints, and gives equivalent performance 
+    Currently does not work with constraints, and gives equivalent performance
     to the trust radius method.
 
     Parameters
@@ -607,7 +607,7 @@ def get_delta_prime_rfo(alpha, X, G, H, IC, verbose=False):
 
 def get_delta_prime(v, X, G, H, IC, rfo, verbose=False):
     """
-    Return the internal coordinate step given a parameter "v". 
+    Return the internal coordinate step given a parameter "v".
     "v" refers to the multiple of the identity added to the Hessian
     in trust-radius Newton Raphson (TRM), and the multiple of the
     identity on the RHS matrix in rational function optimization (RFO).
@@ -714,7 +714,7 @@ class Froot(object):
     """
     Object describing a function of the internal coordinate step
     length, which returns the Cartesian coordinate step length minus
-    the trust radius.  
+    the trust radius.
 
     This is an object instead of a function mainly because we want the
     Brent root-finding method to read and write extra attributes of
@@ -749,7 +749,7 @@ class Froot(object):
         H = self.H
         IC = self.IC
         trust = self.trust
-        if trial == 0.0: 
+        if trial == 0.0:
             self.from_above = False
             return -trust
         else:
@@ -772,7 +772,7 @@ class Froot(object):
                     self.stored_arg = trial
                     self.stored_val = cnorm
             if self.params.verbose: print "dy(i): %.4f dy(c) -> target: %.4f -> %.4f%s" % (trial, cnorm, self.target, " (done)" if self.from_above else "")
-            return cnorm-self.target    
+            return cnorm-self.target
 
 def recover(molecule, IC, X, gradx, X_hist, Gx_hist, params):
     """
@@ -828,8 +828,8 @@ def recover(molecule, IC, X, gradx, X_hist, Gx_hist, params):
 
 class OptParams(object):
     """
-    Container for optimization parameters.  
-    The parameters used to be contained in the command-line "args", 
+    Container for optimization parameters.
+    The parameters used to be contained in the command-line "args",
     but this was dropped in order to call Optimize() from another script.
     """
     def __init__(self, **kwargs):
@@ -846,11 +846,11 @@ class OptParams(object):
         self.Convergence_gmax = 4.5e-4
         self.Convergence_drms = 1.2e-3
         self.Convergence_dmax = 1.8e-3
-        
+
 def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None):
     """
     Optimize the geometry of a molecule.
-    
+
     Parameters
     ----------
     coords : np.ndarray
@@ -1031,7 +1031,7 @@ def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None):
         # Print status
         print "Step %4i :" % Iteration,
         print "Displace = %s%.3e\x1b[0m/%s%.3e\x1b[0m (rms/max)" % ("\x1b[92m" if Converged_drms else "\x1b[0m", rms_displacement, "\x1b[92m" if Converged_dmax else "\x1b[0m", max_displacement),
-        print "Trust = %.3e (%s)" % (trust, trustprint), 
+        print "Trust = %.3e (%s)" % (trust, trustprint),
         print "Grad%s = %s%.3e\x1b[0m/%s%.3e\x1b[0m (rms/max)" % ("_T" if IC.haveConstraints() else "", "\x1b[92m" if Converged_grms else "\x1b[0m", rms_gradient, "\x1b[92m" if Converged_gmax else "\x1b[0m", max_gradient),
         # print "Dy.G = %.3f" % Dot,
         print "E (change) = % .10f (%s%+.3e\x1b[0m) Quality = %s%.3f\x1b[0m" % (E, "\x1b[91m" if BadStep else ("\x1b[92m" if Converged_energy else "\x1b[0m"), E-Eprev, "\x1b[91m" if BadStep else "\x1b[0m", Quality)
@@ -1137,7 +1137,7 @@ def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None):
             ndy = np.array(Dy).flatten()/np.linalg.norm(np.array(Dy))
             ndg = np.array(Dg).flatten()/np.linalg.norm(np.array(Dg))
             nhdy = np.array(H*Dy).flatten()/np.linalg.norm(np.array(H*Dy))
-            if params.verbose: 
+            if params.verbose:
                 print "Denoms: %.3e %.3e" % ((Dg.T*Dy)[0,0], (Dy.T*H*Dy)[0,0]),
                 print "Dots: %.3e %.3e" % (np.dot(ndg, ndy), np.dot(ndy, nhdy)),
             H1 = H.copy()
@@ -1171,8 +1171,8 @@ def CheckInternalGrad(coords, molecule, IC, engine, dirname, verbose=False):
         print "%s : % .6e % .6e % .6e" % (IC.Internals[i], Gq[i], fdiff, Gq[i]-fdiff)
 
 def CalcInternalHess(coords, molecule, IC, engine, dirname, verbose=False):
-    """ 
-    Calculate the internal coordinate Hessian using finite difference. 
+    """
+    Calculate the internal coordinate Hessian using finite difference.
     Don't remember when was the last time I used it.
     """
     # Initial energy and gradient
@@ -1269,7 +1269,7 @@ def get_molecule_engine(args):
         # The file from which we make the Molecule object
         if args.pdb is not None:
             # If we pass the PDB, then read both the PDB and the Q-Chem input file,
-            # then copy the Q-Chem rem variables over to the PDB 
+            # then copy the Q-Chem rem variables over to the PDB
             M = Molecule(args.pdb, radii=radii, fragment=args.frag)
             M1 = Molecule(args.input, radii=radii)
             for i in ['qctemplate', 'qcrems', 'elem', 'qm_ghost', 'charge', 'mult']:
@@ -1281,16 +1281,15 @@ def get_molecule_engine(args):
         M = Molecule(args.input, radii=radii, fragment=args.frag)
         if args.pdb is not None:
             M = Molecule(args.pdb, radii=radii, fragment=args.frag)
-        if 'boxes' in M.Data: 
+        if 'boxes' in M.Data:
             del M.Data['boxes']
         engine = Gromacs(M)
+    elif args.psi4:
+        engine = Psi4()
+        engine.load_psi4_input(args.input)
+        M = engine.M
     else:
-        # The Psi4 interface actually uses TeraChem input
-        if args.psi4:
-            Psi4exe = which('psi4')
-            if len(Psi4exe) == 0: raise RuntimeError("Please make sure psi4 executable is in your PATH")
-        else:
-            set_tcenv()
+        set_tcenv()
         tcin = load_tcin(args.input)
         if args.pdb is not None:
             M = Molecule(args.pdb, radii=radii, fragment=args.frag)
@@ -1304,16 +1303,13 @@ def get_molecule_engine(args):
             for f in tcin['guess'].split():
                 if not os.path.exists(f):
                     raise RuntimeError("TeraChem input file specifies guess %s but it does not exist\nPlease include this file in the same folder as your input" % f)
-        if args.psi4:
-            engine = Psi4(M)
-        else:
-            engine = TeraChem(M, tcin)
-    
+        engine = TeraChem(M, tcin)
+
     if args.coords is not None:
         M1 = Molecule(args.coords)
         M1 = M1[-1]
         M.xyzs = M1.xyzs
-    
+
     return M, engine
 
 def main():
@@ -1358,7 +1354,7 @@ def main():
     if not os.path.exists(dirname):
         os.makedirs(dirname)
     else:
-        print "%s exists ; make sure nothing else is writing to the folder" % dirname    
+        print "%s exists ; make sure nothing else is writing to the folder" % dirname
         # Remove existing scratch files in ./run.tmp/scr to avoid confusion
         for f in ['c0', 'ca0', 'cb0']:
             if os.path.exists(os.path.join(dirname, 'scr', f)):
@@ -1366,7 +1362,7 @@ def main():
 
     # Get initial coordinates in bohr
     coords = M.xyzs[0].flatten() / 0.529177
-    
+
     # Read in the constraints
     if args.constraints is not None:
         Cons, CVals = ParseConstraints(M, args.constraints)
@@ -1386,12 +1382,12 @@ def main():
                     'hdlc':(DelocalizedInternalCoordinates, False, True),
                     'tric':(DelocalizedInternalCoordinates, False, False)}
     CoordClass, connect, addcart = CoordSysDict[args.coordsys.lower()]
-    
+
     IC = CoordClass(M, build=True, connect=connect, addcart=addcart, constraints=Cons, cvals=CVals[0] if CVals is not None else None)
 
     # Auxiliary functions (will not do optimization)
     if args.displace:
-        WriteDisplacements(coords, M, IC, dirname, args.verbose)                
+        WriteDisplacements(coords, M, IC, dirname, args.verbose)
         sys.exit()
 
     if args.fdcheck:
@@ -1422,7 +1418,7 @@ def main():
                 print "---=== Scan %i/%i : Constrained Optimization ===---" % (ic+1, len(CVals))
             IC = CoordClass(M, build=True, connect=connect, addcart=addcart, constraints=Cons, cvals=CVal)
             IC.printConstraints(coords, thre=-1)
-            
+
             if len(CVals) > 1:
                 xyzout = prefix+"_scan-%03i.xyz" % ic
             elif prefix == os.path.splitext(args.input)[0]:
@@ -1432,7 +1428,6 @@ def main():
             coords = Optimize(coords, M, IC, engine, dirname, params, xyzout)
             print
     print_msg()
-    
+
 if __name__ == "__main__":
     main()
-
