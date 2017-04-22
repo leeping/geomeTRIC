@@ -922,6 +922,7 @@ def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None):
         Iteration += 1
         if (Iteration%5) == 0:
             engine.clearCalcs()
+            IC.clearCache()
         # At the start of the loop, the function value, gradient and Hessian are known.
         Eig = sorted(np.linalg.eigh(H)[0])
         Emin = min(Eig).real
