@@ -309,18 +309,6 @@ class TeraChem(Engine):
         gradient = np.loadtxt(os.path.join(dirname,'grad.txt')).flatten()
         return energy, gradient
 
-Psi4Temp = """
-molecule {{
-{charge} {mult}
-{geometry}
-}}
-
-set basis {basis}
-
-gradient('{method}{dftd}')
-
-"""
-
 class Psi4(Engine):
     """
     Run a Psi4 energy and gradient calculation.
@@ -333,6 +321,16 @@ class Psi4(Engine):
             molecule.elem = ['H']
             molecule.xyzs = [[[0,0,0]]]
         super(Psi4, self).__init__(molecule)
+        self.threads = None
+
+    def nt(self):
+        if self.threads is not None:
+            return " -n %i" % self.threads 
+        else:
+            return ""
+
+    def set_nt(self, threads):
+        self.threads = threads
 
     def load_psi4_input(self, psi4in):
         """ Psi4 input file parser, only support xyz coordinates for now """
@@ -380,7 +378,7 @@ class Psi4(Engine):
                 else:
                     outfile.write(line)
         # Run Psi4
-        subprocess.call('%s input.dat' % os.path.join(rootdir,'run_psi4'), cwd=dirname, shell=True)
+        subprocess.call('psi4%s input.dat' % self.nt(), cwd=dirname, shell=True)
         # Read energy and gradients from Psi4 output
         energy, gradient = self.parse_psi4_output(os.path.join(dirname, 'output.dat'))
         return energy, gradient

@@ -920,6 +920,8 @@ def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None):
         if np.isnan(H).any():
             raise RuntimeError("Hessian contains nan - check output and temp-files for possible errors")
         Iteration += 1
+        if (Iteration%5) == 0:
+            engine.clearCalcs()
         # At the start of the loop, the function value, gradient and Hessian are known.
         Eig = sorted(np.linalg.eigh(H)[0])
         Emin = min(Eig).real
@@ -1277,6 +1279,8 @@ def get_molecule_engine(args):
         else:
             M = Molecule(args.input, radii=radii)
         engine = QChem(M)
+        if args.nt is not None:
+            engine.set_nt(args.nt)
     elif args.gmx:
         M = Molecule(args.input, radii=radii, fragment=args.frag)
         if args.pdb is not None:
@@ -1284,10 +1288,14 @@ def get_molecule_engine(args):
         if 'boxes' in M.Data:
             del M.Data['boxes']
         engine = Gromacs(M)
+        if args.nt is not None:
+            raise RuntimeError("--nt not configured to work with --gmx yet")    
     elif args.psi4:
         engine = Psi4()
         engine.load_psi4_input(args.input)
         M = engine.M
+        if args.nt is not None:
+            engine.set_nt(args.nt)
     else:
         set_tcenv()
         tcin = load_tcin(args.input)
@@ -1304,6 +1312,8 @@ def get_molecule_engine(args):
                 if not os.path.exists(f):
                     raise RuntimeError("TeraChem input file specifies guess %s but it does not exist\nPlease include this file in the same folder as your input" % f)
         engine = TeraChem(M, tcin)
+        if args.nt is not None:
+            raise RuntimeError("--nt not configured to work with terachem yet")
 
     if args.coords is not None:
         M1 = Molecule(args.coords)
@@ -1338,6 +1348,8 @@ def main():
     parser.add_argument('--pdb', type=str, help='Provide a PDB file name with coordinates and resids to split the molecule.')
     parser.add_argument('--coords', type=str, help='Provide coordinates to override the TeraChem input file / PDB file. The LAST frame will be used.')
     parser.add_argument('--frag', action='store_true', help='Fragment the internal coordinate system by deleting bonds between residues.')
+    parser.add_argument('--qcdir', type=str, help='Provide an initial qchem scratch folder (e.g. supplied initial guess).')
+    parser.add_argument('--nt', type=int, help='Specify number of threads for running in parallel (for TeraChem this should be number of GPUs)')
     parser.add_argument('input', type=str, help='TeraChem or Q-Chem input file')
     parser.add_argument('constraints', type=str, nargs='?', help='Constraint input file (optional)')
     print ' '.join(sys.argv)
@@ -1359,6 +1371,16 @@ def main():
         for f in ['c0', 'ca0', 'cb0']:
             if os.path.exists(os.path.join(dirname, 'scr', f)):
                 os.remove(os.path.join(dirname, 'scr', f))
+    
+    # QC-specific scratch folder
+    if args.qcdir is not None:
+        if not args.qchem:
+            raise RuntimeError("--qcdir only valid if --qchem is specified")
+        if not os.path.exists(args.qcdir):
+            raise RuntimeError("--qcdir points to a folder that doesn't exist")
+        shutil.copytree(args.qcdir, os.path.join(dirname, "run.d"))
+        engine.M.edit_qcrems({'scf_guess':'read'})
+        engine.qcdir = True
 
     # Get initial coordinates in bohr
     coords = M.xyzs[0].flatten() / 0.529177
