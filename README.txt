@@ -11,10 +11,6 @@ Authors: Lee-Ping Wang, Chenchen Song
 
 Contact Email: leeping@ucdavis.edu
 
-#==================#
-#|    GeomeTRIC   |#
-#==================#
-
 If this code has benefited your research, please support us by citing:
 
 Wang, L.-P.; Song, C.C. (2016) "Geometry optimization made simple with translation and rotation coordinates", J. Chem, Phys. 144, 214108.
