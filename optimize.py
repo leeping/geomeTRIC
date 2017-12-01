@@ -841,13 +841,15 @@ class OptParams(object):
         self.rfo = kwargs.get('rfo', False)
         self.trust = kwargs.get('trust', 0.1)
         self.tmax = kwargs.get('tmax', 0.3)
+        self.maxiter = kwargs.get('maxiter', 300)
+        self.qccnv = kwargs.get('qccnv', False)
         self.Convergence_energy = 1e-6
         self.Convergence_grms = 3e-4
         self.Convergence_gmax = 4.5e-4
         self.Convergence_drms = 1.2e-3
         self.Convergence_dmax = 1.8e-3
 
-def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None):
+def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None, xyzout2=None):
     """
     Optimize the geometry of a molecule.
 
@@ -872,6 +874,7 @@ def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None):
         Nx3 array of optimized Cartesian coordinates in atomic units
     """
     progress = deepcopy(molecule)
+    progress2 = deepcopy(molecule)
     # Initial Hessian
     H0 = IC.guess_hessian(coords)
     H = H0.copy()
@@ -937,6 +940,8 @@ def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None):
             print "Hessian Eigenvalues: %.5e %.5e %.5e ... %.5e %.5e %.5e" % (Eig[0],Eig[1],Eig[2],Eig[-3],Eig[-2],Eig[-1])
         else:
             print "Hessian Eigenvalues:", ' '.join("%.5e" % i for i in Eig)
+        # Are we far from constraint satisfaction?
+        farConstraints = IC.haveConstraints() and IC.getConstraintViolation(X) > 1e-1
         ### OBTAIN AN OPTIMIZATION STEP ###
         # The trust radius is to be computed in Cartesian coordinates.
         # First take a full-size Newton Raphson step
@@ -1047,15 +1052,42 @@ def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None):
             print "Along %s %.3f" % (IC.Internals[idx], np.dot(dy/np.linalg.norm(dy), iunit))
         if Converged_energy and Converged_grms and Converged_drms and Converged_gmax and Converged_dmax:
             print "Converged! =D"
+            # _exec("touch energy.txt") #JS these two lines used to make a energy.txt file using the final energy
+            with open("energy.txt","w") as f: print >> f, "% .10f" % E
+            progress2.xyzs = [X.reshape(-1,3) * 0.529177] #JS these two lines used to make a opt.xyz file along with the if statement below.
+            progress2.comms = ['Iteration %i Energy % .8f' % (Iteration, E)]
+            if xyzout2 is not None:
+                progress2.write(xyzout2) #This contains the last frame of the trajectory.
+            break
+        if Iteration > params.maxiter:
+            print "Maximum iterations reached (%i); increase --maxiter for more" % params.maxiter
+            break
+        if params.qccnv and Converged_grms and (Converged_drms or Converged_energy):
+            print "Converged! (Q-Chem style criteria requires grms and either drms or energy)"
+            # _exec("touch energy.txt") #JS these two lines used to make a energy.txt file using the final energy
+            with open("energy.txt","w") as f: print >> f, "% .10f" % E
+            progress2.xyzs = [X.reshape(-1,3) * 0.529177] #JS these two lines used to make a opt.xyz file along with the if statement below. 
+            progress2.comms = ['Iteration %i Energy % .8f' % (Iteration, E)]
+            if xyzout2 is not None:
+                progress2.write(xyzout2) #This contains the last frame of the trajectory.
             break
 
         ### Adjust Trust Radius and/or Reject Step ###
         # If the trust radius is under thre_rj then do not reject.
-        rejectOk = (trust > thre_rj and E > Eprev)
+        # This code rejects steps / reduces trust radius only if we're close to satisfying constraints;
+        # it improved performance in some cases but worsened for others.
+        rejectOk = (trust > thre_rj and E > Eprev and (Quality < -10 or not farConstraints))
+        # This statement was added to prevent 
+        # some occasionally observed infinite loops
+        if farConstraints: rejectOk = False
+        # rejectOk = (trust > thre_rj and E > Eprev)
         if Quality <= ThreLQ:
             # For bad steps, the trust radius is reduced
-            trust = max(Convergence_drms, trust/2)
-            trustprint = "\x1b[91m-\x1b[0m"
+            if not farConstraints: 
+                trust = max(Convergence_drms, trust/2)
+                trustprint = "\x1b[91m-\x1b[0m"
+            else:
+                trustprint = "="
         elif Quality >= ThreHQ: # and bump:
             if trust < params.tmax:
                 # For good steps, the trust radius is increased
@@ -1081,6 +1113,7 @@ def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None):
         if Quality < -1:
             if trust < thre_rj: print "\x1b[93mNot rejecting step - trust below %.3e\x1b[0m" % thre_rj
             elif E < Eprev: print "\x1b[93mNot rejecting step - energy decreases\x1b[0m"
+            elif farConstraints: print "\x1b[93mNot rejecting step - far from constraint satisfaction\x1b[0m"
         # Append steps to history (for rebuilding Hessian)
         X_hist.append(X)
         Gx_hist.append(gradx)
@@ -1345,11 +1378,13 @@ def main():
     parser.add_argument('--rfo', action='store_true', help='Use rational function optimization (default is trust-radius Newton Raphson).')
     parser.add_argument('--trust', type=float, default=0.1, help='Starting trust radius.')
     parser.add_argument('--tmax', type=float, default=0.3, help='Maximum trust radius.')
+    parser.add_argument('--maxiter', type=int, default=300, help='Maximum number of optimization steps.')
     parser.add_argument('--radii', type=str, nargs="+", default=["Na","0.0"], help='List of atomic radii for coordinate system.')
     parser.add_argument('--pdb', type=str, help='Provide a PDB file name with coordinates and resids to split the molecule.')
     parser.add_argument('--coords', type=str, help='Provide coordinates to override the TeraChem input file / PDB file. The LAST frame will be used.')
     parser.add_argument('--frag', action='store_true', help='Fragment the internal coordinate system by deleting bonds between residues.')
     parser.add_argument('--qcdir', type=str, help='Provide an initial qchem scratch folder (e.g. supplied initial guess).')
+    parser.add_argument('--qccnv', action='store_true', help='Use Q-Chem style convergence criteria instead of the default.')
     parser.add_argument('--nt', type=int, help='Specify number of threads for running in parallel (for TeraChem this should be number of GPUs)')
     parser.add_argument('input', type=str, help='TeraChem or Q-Chem input file')
     parser.add_argument('constraints', type=str, nargs='?', help='Constraint input file (optional)')
@@ -1429,9 +1464,11 @@ def main():
         # Run a standard geometry optimization
         if prefix == os.path.splitext(args.input)[0]:
             xyzout = prefix+"_optim.xyz"
+            xyzout2="opt.xyz"
         else:
             xyzout = prefix+".xyz"
-        opt_coords = Optimize(coords, M, IC, engine, dirname, params, xyzout)
+            xyzout2="opt.xyz"
+        opt_coords = Optimize(coords, M, IC, engine, dirname, params, xyzout,xyzout2)
     else:
         # Run a constrained geometry optimization
         if type(IC) in [CartesianCoordinates, PrimitiveInternalCoordinates]:
@@ -1444,11 +1481,14 @@ def main():
 
             if len(CVals) > 1:
                 xyzout = prefix+"_scan-%03i.xyz" % ic
+                xyzout2="opt.xyz"
             elif prefix == os.path.splitext(args.input)[0]:
                 xyzout = prefix+"_optim.xyz"
+                xyzout2="opt.xyz"
             else:
                 xyzout = prefix+".xyz"
-            coords = Optimize(coords, M, IC, engine, dirname, params, xyzout)
+                xyzout2="opt.xyz"
+            coords = Optimize(coords, M, IC, engine, dirname, params, xyzout,xyzout2)
             print
     print_msg()
 

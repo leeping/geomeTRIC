@@ -2010,6 +2010,27 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
     def haveConstraints(self):
         return len(self.cPrims) > 0
 
+    def getConstraintViolation(self, xyz):
+        nc = len(self.cPrims)
+        maxdiff = 0.0
+        for ic, c in enumerate(self.cPrims):
+            w = c.w if type(c) in [RotationA, RotationB, RotationC] else 1.0
+            current = c.value(xyz)/w
+            reference = self.cVals[ic]/w
+            diff = (current - reference)
+            if c.isPeriodic:
+                if np.abs(diff-2*np.pi) < np.abs(diff):
+                    diff -= 2*np.pi
+                if np.abs(diff+2*np.pi) < np.abs(diff):
+                    diff += 2*np.pi
+            if type(c) in [TranslationX, TranslationY, TranslationZ, CartesianX, CartesianY, CartesianZ, Distance]:
+                factor = bohr2ang
+            elif c.isAngular:
+                factor = 180.0/np.pi
+            if np.abs(diff*factor) > maxdiff:
+                maxdiff = np.abs(diff*factor)
+        return maxdiff
+    
     def printConstraints(self, xyz, thre=1e-5):
         nc = len(self.cPrims)
         out_lines = []
@@ -2153,6 +2174,9 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         
     def haveConstraints(self):
         return len(self.Prims.cPrims) > 0
+
+    def getConstraintViolation(self, xyz):
+        return self.Prims.getConstraintViolation(xyz)
 
     def printConstraints(self, xyz, thre=1e-5):
         self.Prims.printConstraints(xyz, thre=thre)

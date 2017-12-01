@@ -233,7 +233,7 @@ class TeraChem(Engine):
         # Run TeraChem
         subprocess.call('terachem run.in > run.out', cwd=dirname, shell=True)
         # Extract energy and gradient
-        subprocess.call("awk '/FINAL ENERGY/ {print $3}' run.out > energy.txt", cwd=dirname, shell=True)
+        subprocess.call("awk '/FINAL ENERGY/ {p=$3} /Correlation Energy/ {p+=$5} END {printf \"%.10f\\n\", p}' run.out > energy.txt", cwd=dirname, shell=True)
         subprocess.call("awk '/Gradient units are Hartree/,/Net gradient/ {if ($1 ~ /^-?[0-9]/) {print}}' run.out > grad.txt", cwd=dirname, shell=True)
         energy = float(open(os.path.join(dirname,'energy.txt')).readlines()[0].strip())
         gradient = np.loadtxt(os.path.join(dirname,'grad.txt')).flatten()
@@ -303,7 +303,7 @@ class TeraChem(Engine):
 
     def read_wq_new(self, coords, dirname):
         # Extract energy and gradient
-        subprocess.call("awk '/FINAL ENERGY/ {print $3}' run.out > energy.txt", cwd=dirname, shell=True)
+        subprocess.call("awk '/FINAL ENERGY/ {p=$3} /Correlation Energy/ {p+=$5} END {printf \"%.10f\\n\", p}' run.out > energy.txt", cwd=dirname, shell=True)
         subprocess.call("awk '/Gradient units are Hartree/,/Net gradient/ {if ($1 ~ /^-?[0-9]/) {print}}' run.out > grad.txt", cwd=dirname, shell=True)
         energy = float(open(os.path.join(dirname,'energy.txt')).readlines()[0].strip())
         gradient = np.loadtxt(os.path.join(dirname,'grad.txt')).flatten()
@@ -337,6 +337,8 @@ class Psi4(Engine):
         coords = []
         elems = []
         found_molecule = False
+        foundcharge = False
+        endmol = False
         psi4_temp = [] # store a template of the input file for generating new ones
         for line in open(psi4in):
             if 'molecule' in line:
@@ -345,14 +347,16 @@ class Psi4(Engine):
             elif found_molecule is True:
                 if '}' in line:
                     found_molecule = False
-                    line = line.replace("}","")
                 ls = line.split()
-                if len(ls) == 2:
+                if len(ls) == 2 and foundcharge is False:
                     charge, mult = int(ls[0]), int(ls[1])
+                    foundcharge = True
                 elif len(ls) == 4:
                     # parse the xyz format
                     elems.append(ls[0])
                     coords.append(ls[1:4])
+                else:
+                    psi4_temp.append(line)
             else:
                 psi4_temp.append(line)
         self.M = Molecule()
@@ -374,7 +378,6 @@ class Psi4(Engine):
                     outfile.write("%d %d\n" % (self.M.charge, self.M.mult))
                     for e, c in zip(self.M.elem, self.M.xyzs[0]):
                         outfile.write("%-7s %13.7f %13.7f %13.7f\n" % (e, c[0], c[1], c[2]))
-                    outfile.write("}")
                 else:
                     outfile.write(line)
         # Run Psi4
