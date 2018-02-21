@@ -116,12 +116,12 @@ def printArray(mat, precision=3, fmt="f"):
     fmt="%% .%i%s" % (precision, fmt)
     if len(mat.shape) == 1:
         for i in range(mat.shape[0]):
-            print fmt % mat[i],
+            print(fmt % mat[i]),
         print
     elif len(mat.shape) == 2:
         for i in range(mat.shape[0]):
             for j in range(mat.shape[1]):
-                print fmt % mat[i,j],
+                print(fmt % mat[i,j]),
             print
     else:
         raise RuntimeError("One or two dimensional arrays only")
@@ -141,7 +141,7 @@ class CartesianX(object):
         if type(self) is not type(other): return False
         eq = self.a == other.a
         if eq and self.w != other.w:
-            print "Warning: CartesianX same atoms, different weights (%.4f %.4f)" % (self.w, other.w)
+            print("Warning: CartesianX same atoms, different weights (%.4f %.4f)" % (self.w, other.w))
         return eq
 
     def __ne__(self, other):
@@ -173,7 +173,7 @@ class CartesianY(object):
         if type(self) is not type(other): return False
         eq = self.a == other.a
         if eq and self.w != other.w:
-            print "Warning: CartesianY same atoms, different weights (%.4f %.4f)" % (self.w, other.w)
+            print("Warning: CartesianY same atoms, different weights (%.4f %.4f)" % (self.w, other.w))
         return eq
 
     def __ne__(self, other):
@@ -205,7 +205,7 @@ class CartesianZ(object):
         if type(self) is not type(other): return False
         eq = self.a == other.a
         if eq and self.w != other.w:
-            print "Warning: CartesianZ same atoms, different weights (%.4f %.4f)" % (self.w, other.w)
+            print("Warning: CartesianZ same atoms, different weights (%.4f %.4f)" % (self.w, other.w))
         return eq
 
     def __ne__(self, other):
@@ -238,7 +238,7 @@ class TranslationX(object):
         if type(self) is not type(other): return False
         eq = set(self.a) == set(other.a)
         if eq and np.sum((self.w-other.w)**2) > 1e-6:
-            print "Warning: TranslationX same atoms, different weights"
+            print("Warning: TranslationX same atoms, different weights")
             eq = False
         return eq
 
@@ -273,7 +273,7 @@ class TranslationY(object):
         if type(self) is not type(other): return False
         eq = set(self.a) == set(other.a)
         if eq and np.sum((self.w-other.w)**2) > 1e-6:
-            print "Warning: TranslationY same atoms, different weights"
+            print("Warning: TranslationY same atoms, different weights")
             eq = False
         return eq
 
@@ -308,7 +308,7 @@ class TranslationZ(object):
         if type(self) is not type(other): return False
         eq = set(self.a) == set(other.a)
         if eq and np.sum((self.w-other.w)**2) > 1e-6:
-            print "Warning: TranslationZ same atoms, different weights"
+            print("Warning: TranslationZ same atoms, different weights")
             eq = False
         return eq
 
@@ -363,7 +363,7 @@ class Rotator(object):
         if type(self) is not type(other): return False
         eq = set(self.a) == set(other.a)
         if eq and np.sum((self.x0-other.x0)**2) > 1e-6:
-            print "Warning: Rotator same atoms, different reference positions"
+            print("Warning: Rotator same atoms, different reference positions")
         return eq
 
     def __repr__(self):
@@ -1179,7 +1179,7 @@ class OutOfPlane(object):
         if self.a == other.a:
             if set([self.b, self.c, self.d]) == set([other.b, other.c, other.d]):
                 if [self.b, self.c, self.d] != [other.b, other.c, other.d]:
-                    print "Warning: OutOfPlane atoms are the same, ordering is different"
+                    print("Warning: OutOfPlane atoms are the same, ordering is different")
                 return True
         #     if self.b == other.b:
         #         if self.c == other.c:
@@ -1315,7 +1315,7 @@ class InternalCoordinates(object):
                 U, S, VT = np.linalg.svd(G)
                 time_svd = click()
             except np.linalg.LinAlgError:
-                print "\x1b[1;91m SVD fails, perturbing coordinates and trying again\x1b[0m"
+                print("\x1b[1;91m SVD fails, perturbing coordinates and trying again\x1b[0m")
                 xyz = xyz + 1e-2*np.random.random(xyz.shape)
                 loops += 1
                 if loops == 10:
@@ -1361,7 +1361,7 @@ class InternalCoordinates(object):
                 PMDiff = self.calcDiff(x1,x2)
                 FiniteDifference[:,i,j] = PMDiff/(2*h)
         for i in range(Analytical.shape[0]):
-            print "IC %i/%i : %s" % (i, Analytical.shape[0], self.Internals[i]), 
+            print("IC %i/%i : %s" % (i, Analytical.shape[0], self.Internals[i])),
             lines = [""]
             maxerr = 0.0
             for j in range(Analytical.shape[1]):
@@ -1376,10 +1376,10 @@ class InternalCoordinates(object):
                     if maxerr < np.abs(error):
                         maxerr = np.abs(error)
             if maxerr > 1e-5:
-                print '\n'.join(lines)
+                print('\n'.join(lines))
             else:
-                print "Max Error = %.5e" % maxerr
-        print "Finite-difference Finished"
+                print("Max Error = %.5e" % maxerr)
+        print("Finite-difference Finished")
 
     def calcGrad(self, xyz, gradx):
         q0 = self.calculate(xyz)
@@ -1424,14 +1424,14 @@ class InternalCoordinates(object):
         # Function to exit from loop
         def finish(microiter, rmsdt, ndqt, xyzsave, xyz_iter1):
             if ndqt > 1e-1:
-                if verbose: print "Failed to obtain coordinates after %i microiterations (rmsd = %.3e |dQ| = %.3e)" % (microiter, rmsdt, ndqt)
+                if verbose: print("Failed to obtain coordinates after %i microiterations (rmsd = %.3e |dQ| = %.3e)" % (microiter, rmsdt, ndqt))
                 self.bork = True
                 self.writeCache(xyz, dQ, xyz_iter1)
                 return xyz_iter1.flatten()
             elif ndqt > 1e-3:
-                if verbose: print "Approximate coordinates obtained after %i microiterations (rmsd = %.3e |dQ| = %.3e)" % (microiter, rmsdt, ndqt)
+                if verbose: print("Approximate coordinates obtained after %i microiterations (rmsd = %.3e |dQ| = %.3e)" % (microiter, rmsdt, ndqt))
             else:
-                if verbose: print "Cartesian coordinates obtained after %i microiterations (rmsd = %.3e |dQ| = %.3e)" % (microiter, rmsdt, ndqt)
+                if verbose: print("Cartesian coordinates obtained after %i microiterations (rmsd = %.3e |dQ| = %.3e)" % (microiter, rmsdt, ndqt))
             self.writeCache(xyz, dQ, xyzsave)
             return xyzsave.flatten()
         fail_counter = 0
@@ -1451,19 +1451,19 @@ class InternalCoordinates(object):
             ndq = np.linalg.norm(dQ1-dQ_actual)
             if len(ndqs) > 0:
                 if ndq > ndqt:
-                    if verbose: print "Iter: %i Err-dQ (Best) = %.5e (%.5e) RMSD: %.5e Damp: %.5e (Bad)" % (microiter, ndq, ndqt, rmsd, damp)
+                    if verbose: print("Iter: %i Err-dQ (Best) = %.5e (%.5e) RMSD: %.5e Damp: %.5e (Bad)" % (microiter, ndq, ndqt, rmsd, damp))
                     damp /= 2
                     fail_counter += 1
                     # xyz2 = xyz1.copy()
                 else:
-                    if verbose: print "Iter: %i Err-dQ (Best) = %.5e (%.5e) RMSD: %.5e Damp: %.5e (Good)" % (microiter, ndq, ndqt, rmsd, damp)
+                    if verbose: print("Iter: %i Err-dQ (Best) = %.5e (%.5e) RMSD: %.5e Damp: %.5e (Good)" % (microiter, ndq, ndqt, rmsd, damp))
                     fail_counter = 0
                     damp = min(damp*1.2, 1.0)
                     rmsdt = rmsd
                     ndqt = ndq
                     xyzsave = xyz2.copy()
             else:
-                if verbose: print "Iter: %i Err-dQ = %.5e RMSD: %.5e Damp: %.5e" % (microiter, ndq, rmsd, damp)
+                if verbose: print("Iter: %i Err-dQ = %.5e RMSD: %.5e Damp: %.5e" % (microiter, ndq, rmsd, damp))
                 rmsdt = rmsd
                 ndqt = ndq
             ndqs.append(ndq)
@@ -1831,14 +1831,14 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                 else:
                     i.inactive = 0
                 if i.inactive == 1:
-                    print "Deleting:", i
+                    print("Deleting:", i)
                     self.Internals.remove(i)
                     Changed = True
             else:
                 i.inactive = 0
         for i in other.Internals:
             if i not in self.Internals:
-                print "Adding:  ", i
+                print("Adding:  ", i)
                 self.Internals.append(i)
                 Changed = True
         return Changed
@@ -1847,7 +1847,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         Changed = False
         for i in other.Internals:
             if i not in self.Internals:
-                print "Adding:  ", i
+                print("Adding:  ", i)
                 self.Internals.append(i)
                 Changed = True
         return Changed
@@ -1924,13 +1924,13 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
     def printRotations(self, xyz):
         rotNorms = self.getRotatorNorms()
         if len(rotNorms) > 0:
-            print "Rotator Norms: ", " ".join(["% .4f" % i for i in rotNorms])
+            print("Rotator Norms: ", " ".join(["% .4f" % i for i in rotNorms]))
         rotDots = self.getRotatorDots()
         if len(rotDots) > 0 and np.max(rotDots) > 1e-5:
-            print "Rotator Dots : ", " ".join(["% .4f" % i for i in rotDots])
+            print("Rotator Dots : ", " ".join(["% .4f" % i for i in rotDots]))
         linAngs = [ic.value(xyz) for ic in self.Internals if type(ic) is LinearAngle]
         if len(linAngs) > 0:
-            print "Linear Angles: ", " ".join(["% .4f" % i for i in linAngs])
+            print("Linear Angles: ", " ".join(["% .4f" % i for i in linAngs]))
 
     def derivatives(self, xyz):
         self.calculate(xyz)
@@ -1981,7 +1981,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         if cPrim in self.cPrims:
             iPrim = self.cPrims.index(cPrim)
             if np.abs(cVal - self.cVals[iPrim]) > 1e-6:
-                print "Updating constraint value to %.4e" % (cVal)
+                print("Updating constraint value to %.4e" % (cVal))
             self.cVals[iPrim] = cVal
         else:
             if cPrim not in self.Internals:
@@ -2052,8 +2052,8 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
             if np.abs(diff*factor) > thre:
                 out_lines.append("%-30s  % 10.5f  % 10.5f  % 10.5f" % (str(c), current*factor, reference*factor, diff*factor))
         if len(out_lines) > 0:
-            print header
-            print '\n'.join(out_lines)
+            print(header)
+            print('\n'.join(out_lines))
             # if type(c) in [RotationA, RotationB, RotationC]:
             #     print c, c.value(xyz)
             #     printArray(c.x0)
@@ -2274,7 +2274,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
             if np.linalg.norm(dQ) < 1e-6:
                 return xyz2
             if niter > 1 and np.linalg.norm(dQ) > np.linalg.norm(dQ0):
-                print "\x1b[1;93mWarning: Failed to apply Constraint\x1b[0m"
+                print("\x1b[1;93mWarning: Failed to apply Constraint\x1b[0m")
                 return xyz1
             xyz1 = xyz2.copy()
             niter += 1
