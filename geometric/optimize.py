@@ -4,9 +4,9 @@ from __future__ import division
 import numpy as np
 from copy import deepcopy
 from collections import OrderedDict
-from internal import *
-from engine import set_tcenv, load_tcin, TeraChem, Psi4, QChem, Gromacs
-from rotate import get_rot, sorted_eigh, calc_fac_dfac
+from geometric.internal import *
+from geometric.engine import set_tcenv, load_tcin, TeraChem, Psi4, QChem, Gromacs
+from geometric.rotate import get_rot, sorted_eigh, calc_fac_dfac
 from forcebalance.gmxio import GMX
 from forcebalance.molecule import Molecule, Elements
 from forcebalance.nifty import row, col, flat, invert_svd, uncommadash, isint, which, eqcgmx, fqcgmx
@@ -1276,12 +1276,13 @@ def WriteDisplacements(coords, M, IC, dirname, verbose):
         M.xyzs = x
         M.write("%s/ic_%03i.xyz" % (dirname, i))
 
-def get_molecule_engine(args):
+def get_molecule_engine(**kwargs):
     """
     Parameters
     ----------
     args : namespace
         Command line arguments from argparse
+    Changed to
 
     Returns
     -------
@@ -1291,54 +1292,64 @@ def get_molecule_engine(args):
         Engine object containing methods for calculating energy and gradient
     """
     ## Read radii from the command line.
-    if (len(args.radii) % 2) != 0:
+    arg_radii = kwargs.get('radii', ["Na","0.0"])
+    print(arg_radii)
+    if (len(arg_radii) % 2) != 0:
         raise RuntimeError("Must have an even number of arguments for radii")
-    nrad = int(len(args.radii) / 2)
+    nrad = int(len(arg_radii) / 2)
     radii = {}
     for i in range(nrad):
-        radii[args.radii[2*i].capitalize()] = float(args.radii[2*i+1])
+        radii[arg_radii[2*i].capitalize()] = float(arg_radii[2*i+1])
 
     ### Set up based on which quantum chemistry code we're using.
-    if sum([args.qchem, args.psi4, args.gmx]) > 1:
+    qchem = kwargs.get('qchem', False)
+    psi4 = kwargs.get('psi4', False)
+    gmx = kwargs.get('gmx', False)
+    pdb = kwargs.get('pdb', None)
+    frag = kwargs.get('frag', False)
+    inputf = kwargs.get('input')
+    nt = kwargs.get('nt', None)
+
+    if sum([qchem, psi4, gmx]) > 1:
         raise RuntimeError("Do not specify more than one of --qchem, --psi4, --gmx")
-    if args.qchem:
+    if qchem:
         # The file from which we make the Molecule object
         if args.pdb is not None:
             # If we pass the PDB, then read both the PDB and the Q-Chem input file,
             # then copy the Q-Chem rem variables over to the PDB
-            M = Molecule(args.pdb, radii=radii, fragment=args.frag)
-            M1 = Molecule(args.input, radii=radii)
+            M = Molecule(pdb, radii=radii, fragment=frag)
+            M1 = Molecule(inputf, radii=radii)
             for i in ['qctemplate', 'qcrems', 'elem', 'qm_ghost', 'charge', 'mult']:
                 if i in M1: M[i] = M1[i]
         else:
-            M = Molecule(args.input, radii=radii)
+            M = Molecule(inputf, radii=radii)
         engine = QChem(M)
         if args.nt is not None:
             engine.set_nt(args.nt)
-    elif args.gmx:
-        M = Molecule(args.input, radii=radii, fragment=args.frag)
+    elif gmx:
+        M = Molecule(inputf, radii=radii, fragment=frag)
         if args.pdb is not None:
-            M = Molecule(args.pdb, radii=radii, fragment=args.frag)
+            M = Molecule(pdb, radii=radii, fragment=frag)
         if 'boxes' in M.Data:
             del M.Data['boxes']
         engine = Gromacs(M)
         if args.nt is not None:
             raise RuntimeError("--nt not configured to work with --gmx yet")    
-    elif args.psi4:
+    elif psi4:
         engine = Psi4()
-        engine.load_psi4_input(args.input)
+        engine.load_psi4_input(inputf)
         M = engine.M
-        if args.nt is not None:
-            engine.set_nt(args.nt)
+        if nt is not None:
+            engine.set_nt(nt)
     else:
         set_tcenv()
-        tcin = load_tcin(args.input)
+        tcin = load_tcin(inputf)
         if args.pdb is not None:
-            M = Molecule(args.pdb, radii=radii, fragment=args.frag)
+            M = Molecule(pdb, radii=radii, fragment=frag)
         else:
             if not os.path.exists(tcin['coordinates']):
                 raise RuntimeError("TeraChem coordinate file does not exist")
-            M = Molecule(tcin['coordinates'], radii=radii, fragment=args.frag)
+            M = Molecule(tcin['coordinates'], radii=radii, fragment=frag)
         M.charge = tcin['charge']
         M.mult = tcin.get('spinmult',1)
         if 'guess' in tcin:
@@ -1346,58 +1357,29 @@ def get_molecule_engine(args):
                 if not os.path.exists(f):
                     raise RuntimeError("TeraChem input file specifies guess %s but it does not exist\nPlease include this file in the same folder as your input" % f)
         engine = TeraChem(M, tcin)
-        if args.nt is not None:
+        if nt is not None:
             raise RuntimeError("--nt not configured to work with terachem yet")
 
-    if args.coords is not None:
-        M1 = Molecule(args.coords)
+    arg_coords = kwargs.get('coords', None)
+    if arg_coords is not None:
+        M1 = Molecule(arg_coords)
         M1 = M1[-1]
         M.xyzs = M1.xyzs
 
     return M, engine
 
-def main():
-    #===================#
-    #| Read user input |#
-    #===================#
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--coordsys', type=str, default='tric', help='Coordinate system: "cart" for Cartesian, "prim" for Primitive (a.k.a redundant), '
-                        '"dlc" for Delocalized Internal Coordinates, "hdlc" for Hybrid Delocalized Internal Coordinates, "tric" for Translation-Rotation'
-                        'Internal Coordinates (default).')
-    parser.add_argument('--qchem', action='store_true', help='Run optimization in Q-Chem (pass Q-Chem input).')
-    parser.add_argument('--psi4', action='store_true', help='Compute gradients in Psi4.')
-    parser.add_argument('--gmx', action='store_true', help='Compute gradients in Gromacs (requires conf.gro, topol.top, shot.mdp).')
-    parser.add_argument('--prefix', type=str, default=None, help='Specify a prefix for output file and temporary directory.')
-    parser.add_argument('--displace', action='store_true', help='Write out the displacements of the coordinates.')
-    parser.add_argument('--fdcheck', action='store_true', help='Check internal coordinate gradients using finite difference..')
-    parser.add_argument('--enforce', action='store_true', help='Enforce exact constraints (activated when constraints are almost satisfied)')
-    parser.add_argument('--epsilon', type=float, default=1e-5, help='Small eigenvalue threshold.')
-    parser.add_argument('--check', type=int, default=0, help='Check coordinates every N steps to see whether it has changed.')
-    parser.add_argument('--verbose', action='store_true', help='Write out the displacements.')
-    parser.add_argument('--reset', action='store_true', help='Reset Hessian when eigenvalues are under epsilon.')
-    parser.add_argument('--rfo', action='store_true', help='Use rational function optimization (default is trust-radius Newton Raphson).')
-    parser.add_argument('--trust', type=float, default=0.1, help='Starting trust radius.')
-    parser.add_argument('--tmax', type=float, default=0.3, help='Maximum trust radius.')
-    parser.add_argument('--maxiter', type=int, default=300, help='Maximum number of optimization steps.')
-    parser.add_argument('--radii', type=str, nargs="+", default=["Na","0.0"], help='List of atomic radii for coordinate system.')
-    parser.add_argument('--pdb', type=str, help='Provide a PDB file name with coordinates and resids to split the molecule.')
-    parser.add_argument('--coords', type=str, help='Provide coordinates to override the TeraChem input file / PDB file. The LAST frame will be used.')
-    parser.add_argument('--frag', action='store_true', help='Fragment the internal coordinate system by deleting bonds between residues.')
-    parser.add_argument('--qcdir', type=str, help='Provide an initial qchem scratch folder (e.g. supplied initial guess).')
-    parser.add_argument('--qccnv', action='store_true', help='Use Q-Chem style convergence criteria instead of the default.')
-    parser.add_argument('--nt', type=int, help='Specify number of threads for running in parallel (for TeraChem this should be number of GPUs)')
-    parser.add_argument('input', type=str, help='TeraChem or Q-Chem input file')
-    parser.add_argument('constraints', type=str, nargs='?', help='Constraint input file (optional)')
-    print(' '.join(sys.argv))
-    args = parser.parse_args(sys.argv[1:])
 
-    params = OptParams(**vars(args))
+def run_optimizer(**kwargs):
+
+    params = OptParams(**kwargs)
 
     # Get the Molecule and engine objects needed for optimization
-    M, engine = get_molecule_engine(args)
+    M, engine = get_molecule_engine(**kwargs)
 
     # Get calculation prefix and temporary directory name
-    prefix = args.prefix if args.prefix is not None else os.path.splitext(args.input)[0]
+    arg_prefix = kwargs.get('prefix', None)
+    inputf = kwargs.get('input')
+    prefix = arg_prefix if arg_prefix is not None else os.path.splitext(inputf)[0]
     dirname = prefix+".tmp"
     if not os.path.exists(dirname):
         os.makedirs(dirname)
@@ -1409,12 +1391,14 @@ def main():
                 os.remove(os.path.join(dirname, 'scr', f))
     
     # QC-specific scratch folder
-    if args.qcdir is not None:
-        if not args.qchem:
+    qcdir = kwargs.get('qdir', None)
+    qchem = kwargs.get('qchem', False)
+    if qcdir is not None:
+        if not qchem:
             raise RuntimeError("--qcdir only valid if --qchem is specified")
-        if not os.path.exists(args.qcdir):
+        if not os.path.exists(qcdir):
             raise RuntimeError("--qcdir points to a folder that doesn't exist")
-        shutil.copytree(args.qcdir, os.path.join(dirname, "run.d"))
+        shutil.copytree(qcdir, os.path.join(dirname, "run.d"))
         engine.M.edit_qcrems({'scf_guess':'read'})
         engine.qcdir = True
 
@@ -1422,8 +1406,9 @@ def main():
     coords = M.xyzs[0].flatten() / 0.529177
 
     # Read in the constraints
-    if args.constraints is not None:
-        Cons, CVals = ParseConstraints(M, args.constraints)
+    constraints = kwargs.get('constraints', None)
+    if constraints is not None:
+        Cons, CVals = ParseConstraints(M, constraints)
     else:
         Cons = None
         CVals = None
@@ -1439,18 +1424,22 @@ def main():
                     'dlc':(DelocalizedInternalCoordinates, True, False),
                     'hdlc':(DelocalizedInternalCoordinates, False, True),
                     'tric':(DelocalizedInternalCoordinates, False, False)}
-    CoordClass, connect, addcart = CoordSysDict[args.coordsys.lower()]
+    coordsys = kwargs.get('coordsys', 'tric')
+    CoordClass, connect, addcart = CoordSysDict[coordsys.lower()]
 
     IC = CoordClass(M, build=True, connect=connect, addcart=addcart, constraints=Cons, cvals=CVals[0] if CVals is not None else None)
 
     # Auxiliary functions (will not do optimization)
-    if args.displace:
-        WriteDisplacements(coords, M, IC, dirname, args.verbose)
+    displace = kwargs.get('discplace', False)
+    verbose = kwargs.get('verbose', False)
+    if displace:
+        WriteDisplacements(coords, M, IC, dirname, verbose)
         sys.exit()
 
-    if args.fdcheck:
+    fdcheck = kwargs.get('fdcheck', False)
+    if fdcheck:
         IC.Prims.checkFiniteDifference(coords)
-        CheckInternalGrad(coords, M, IC.Prims, engine, dirname, args.verbose)
+        CheckInternalGrad(coords, M, IC.Prims, engine, dirname, verbose)
         sys.exit()
 
     # Print out information about the coordinate system
@@ -1462,7 +1451,7 @@ def main():
 
     if Cons is None:
         # Run a standard geometry optimization
-        if prefix == os.path.splitext(args.input)[0]:
+        if prefix == os.path.splitext(inputf)[0]:
             xyzout = prefix+"_optim.xyz"
             xyzout2="opt.xyz"
         else:
@@ -1493,4 +1482,37 @@ def main():
     print_msg()
 
 if __name__ == "__main__":
-    main()
+    "Read user's input"
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--coordsys', type=str, default='tric', help='Coordinate system: "cart" for Cartesian, "prim" for Primitive (a.k.a redundant), '
+                        '"dlc" for Delocalized Internal Coordinates, "hdlc" for Hybrid Delocalized Internal Coordinates, "tric" for Translation-Rotation'
+                        'Internal Coordinates (default).')
+    parser.add_argument('--qchem', action='store_true', help='Run optimization in Q-Chem (pass Q-Chem input).')
+    parser.add_argument('--psi4', action='store_true', help='Compute gradients in Psi4.')
+    parser.add_argument('--gmx', action='store_true', help='Compute gradients in Gromacs (requires conf.gro, topol.top, shot.mdp).')
+    parser.add_argument('--prefix', type=str, default=None, help='Specify a prefix for output file and temporary directory.')
+    parser.add_argument('--displace', action='store_true', help='Write out the displacements of the coordinates.')
+    parser.add_argument('--fdcheck', action='store_true', help='Check internal coordinate gradients using finite difference..')
+    parser.add_argument('--enforce', action='store_true', help='Enforce exact constraints (activated when constraints are almost satisfied)')
+    parser.add_argument('--epsilon', type=float, default=1e-5, help='Small eigenvalue threshold.')
+    parser.add_argument('--check', type=int, default=0, help='Check coordinates every N steps to see whether it has changed.')
+    parser.add_argument('--verbose', action='store_true', help='Write out the displacements.')
+    parser.add_argument('--reset', action='store_true', help='Reset Hessian when eigenvalues are under epsilon.')
+    parser.add_argument('--rfo', action='store_true', help='Use rational function optimization (default is trust-radius Newton Raphson).')
+    parser.add_argument('--trust', type=float, default=0.1, help='Starting trust radius.')
+    parser.add_argument('--tmax', type=float, default=0.3, help='Maximum trust radius.')
+    parser.add_argument('--maxiter', type=int, default=300, help='Maximum number of optimization steps.')
+    parser.add_argument('--radii', type=str, nargs="+", default=["Na","0.0"], help='List of atomic radii for coordinate system.')
+    parser.add_argument('--pdb', type=str, help='Provide a PDB file name with coordinates and resids to split the molecule.')
+    parser.add_argument('--coords', type=str, help='Provide coordinates to override the TeraChem input file / PDB file. The LAST frame will be used.')
+    parser.add_argument('--frag', action='store_true', help='Fragment the internal coordinate system by deleting bonds between residues.')
+    parser.add_argument('--qcdir', type=str, help='Provide an initial qchem scratch folder (e.g. supplied initial guess).')
+    parser.add_argument('--qccnv', action='store_true', help='Use Q-Chem style convergence criteria instead of the default.')
+    parser.add_argument('--nt', type=int, help='Specify number of threads for running in parallel (for TeraChem this should be number of GPUs)')
+    parser.add_argument('input', type=str, help='TeraChem or Q-Chem input file')
+    parser.add_argument('constraints', type=str, nargs='?', help='Constraint input file (optional)')
+    #print(' '.join(sys.argv))
+    args = parser.parse_args(sys.argv[1:])
+
+    run_optimizer(**vars(args))
