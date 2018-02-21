@@ -6,13 +6,13 @@ import networkx as nx
 import itertools
 import sys
 import time
-from global_vars import *
+from geometric.global_vars import *
 from copy import deepcopy
 from forcebalance.nifty import click, invert_svd, commadash, row, col, flat, pmat2d
 from forcebalance.molecule import Molecule, Elements, Radii
 from collections import OrderedDict, defaultdict
 from scipy import optimize
-from rotate import get_expmap, get_expmap_der, is_linear
+from geometric.rotate import get_expmap, get_expmap_der, is_linear
 
 ## Some vector calculus functions
 def unit_vector(a):
