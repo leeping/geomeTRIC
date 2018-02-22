@@ -28,10 +28,12 @@ ForceBalance provides the molecule file format converter (molecule.py)
 and some other helpful functions.  You don't need to install any of the 
 optional dependencies of Forcebalance, such as lxml and Work Queue.
 
-There is no installer and the optimize.py script may be called directly.
-The script needs to be in the same folder as internal.py and rotate.py.
-You need a .xyz file for the coordinates and one of the supported 
-quantum chemistry software packages.  
+To install the code, run "python setup.py install".
+To execute the geometry optimizer, run "geometric-optimize".
+
+You will need a .xyz file for the coordinates and one of the supported 
+quantum chemistry software packages.  The supported packages are:
+TeraChem, Q-Chem, and Psi4.  You can also call Gromacs for MM forces.
 
 Please refer to the example calculations for how to run the code.  
 The commands to execute the code are contained in "command.sh".
