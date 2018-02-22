@@ -1,1 +1,1 @@
-../../optimize.py --psi4 water6.psi4in
+geometric-optimize --psi4 water6.psi4in

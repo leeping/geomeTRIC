@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-from __future__ import division
+from __future__ import print_function, division
 import numpy as np
 from copy import deepcopy
 from collections import OrderedDict
@@ -898,7 +898,7 @@ def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None, xyzout2
     atomgrad = np.sqrt(np.sum((gradxc.reshape(-1,3))**2, axis=1))
     rms_gradient = np.sqrt(np.mean(atomgrad**2))
     max_gradient = np.max(atomgrad)
-    print("Step %4i :" % Iteration),
+    print("Step %4i :" % Iteration, end=' '),
     print("Gradient = %.3e/%.3e (rms/max) Energy = % .10f" % (rms_gradient, max_gradient, E))
     progress.xyzs = [coords.copy().reshape(-1, 3) * 0.529]
     progress.comms = ['Iteration %i Energy % .8f' % (Iteration, E)]
@@ -1037,10 +1037,10 @@ def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None, xyzout2
         Converged_dmax = max_displacement < Convergence_dmax
         BadStep = Quality < 0
         # Print status
-        print("Step %4i :" % Iteration),
-        print("Displace = %s%.3e\x1b[0m/%s%.3e\x1b[0m (rms/max)" % ("\x1b[92m" if Converged_drms else "\x1b[0m", rms_displacement, "\x1b[92m" if Converged_dmax else "\x1b[0m", max_displacement)),
-        print("Trust = %.3e (%s)" % (trust, trustprint)),
-        print("Grad%s = %s%.3e\x1b[0m/%s%.3e\x1b[0m (rms/max)" % ("_T" if IC.haveConstraints() else "", "\x1b[92m" if Converged_grms else "\x1b[0m", rms_gradient, "\x1b[92m" if Converged_gmax else "\x1b[0m", max_gradient)),
+        print("Step %4i :" % Iteration, end=' '),
+        print("Displace = %s%.3e\x1b[0m/%s%.3e\x1b[0m (rms/max)" % ("\x1b[92m" if Converged_drms else "\x1b[0m", rms_displacement, "\x1b[92m" if Converged_dmax else "\x1b[0m", max_displacement), end=' '),
+        print("Trust = %.3e (%s)" % (trust, trustprint), end=' '),
+        print("Grad%s = %s%.3e\x1b[0m/%s%.3e\x1b[0m (rms/max)" % ("_T" if IC.haveConstraints() else "", "\x1b[92m" if Converged_grms else "\x1b[0m", rms_gradient, "\x1b[92m" if Converged_gmax else "\x1b[0m", max_gradient), end=' '),
         # print "Dy.G = %.3f" % Dot,
         print("E (change) = % .10f (%s%+.3e\x1b[0m) Quality = %s%.3f\x1b[0m" % (E, "\x1b[91m" if BadStep else ("\x1b[92m" if Converged_energy else "\x1b[0m"), E-Eprev, "\x1b[91m" if BadStep else "\x1b[0m", Quality))
         if IC is not None and IC.haveConstraints():
@@ -1053,7 +1053,8 @@ def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None, xyzout2
         if Converged_energy and Converged_grms and Converged_drms and Converged_gmax and Converged_dmax:
             print("Converged! =D")
             # _exec("touch energy.txt") #JS these two lines used to make a energy.txt file using the final energy
-            with open("energy.txt","w") as f: print(f, "% .10f" % E)
+            with open("energy.txt","w") as f:
+                print("% .10f" % E, file=f)
             progress2.xyzs = [X.reshape(-1,3) * 0.529177] #JS these two lines used to make a opt.xyz file along with the if statement below.
             progress2.comms = ['Iteration %i Energy % .8f' % (Iteration, E)]
             if xyzout2 is not None:
@@ -1065,7 +1066,8 @@ def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None, xyzout2
         if params.qccnv and Converged_grms and (Converged_drms or Converged_energy):
             print("Converged! (Q-Chem style criteria requires grms and either drms or energy)")
             # _exec("touch energy.txt") #JS these two lines used to make a energy.txt file using the final energy
-            with open("energy.txt","w") as f: print(f, "% .10f" % E)
+            with open("energy.txt","w") as f:
+                print("% .10f" % E, file=f)
             progress2.xyzs = [X.reshape(-1,3) * 0.529177] #JS these two lines used to make a opt.xyz file along with the if statement below. 
             progress2.comms = ['Iteration %i Energy % .8f' % (Iteration, E)]
             if xyzout2 is not None:
@@ -1174,8 +1176,8 @@ def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None, xyzout2
             ndg = np.array(Dg).flatten()/np.linalg.norm(np.array(Dg))
             nhdy = np.array(H*Dy).flatten()/np.linalg.norm(np.array(H*Dy))
             if params.verbose:
-                print("Denoms: %.3e %.3e" % ((Dg.T*Dy)[0,0], (Dy.T*H*Dy)[0,0])),
-                print("Dots: %.3e %.3e" % (np.dot(ndg, ndy), np.dot(ndy, nhdy))),
+                print("Denoms: %.3e %.3e" % ((Dg.T*Dy)[0,0], (Dy.T*H*Dy)[0,0]), end=''),
+                print("Dots: %.3e %.3e" % (np.dot(ndg, ndy), np.dot(ndy, nhdy)), end=''),
             H1 = H.copy()
             H += Mat1-Mat2
             Eig1 = np.linalg.eigh(H)[0]
@@ -1292,8 +1294,9 @@ def get_molecule_engine(**kwargs):
         Engine object containing methods for calculating energy and gradient
     """
     ## Read radii from the command line.
-    arg_radii = kwargs.get('radii', ["Na","0.0"])
-    print(arg_radii)
+    # Ions should have radii of zero.
+    arg_radii = kwargs.get('radii', ["Na","0.0","Cl","0.0","K","0.0"])
+    # print(arg_radii)
     if (len(arg_radii) % 2) != 0:
         raise RuntimeError("Must have an even number of arguments for radii")
     nrad = int(len(arg_radii) / 2)
@@ -1314,7 +1317,7 @@ def get_molecule_engine(**kwargs):
         raise RuntimeError("Do not specify more than one of --qchem, --psi4, --gmx")
     if qchem:
         # The file from which we make the Molecule object
-        if args.pdb is not None:
+        if pdb is not None:
             # If we pass the PDB, then read both the PDB and the Q-Chem input file,
             # then copy the Q-Chem rem variables over to the PDB
             M = Molecule(pdb, radii=radii, fragment=frag)
@@ -1324,16 +1327,16 @@ def get_molecule_engine(**kwargs):
         else:
             M = Molecule(inputf, radii=radii)
         engine = QChem(M)
-        if args.nt is not None:
-            engine.set_nt(args.nt)
+        if nt is not None:
+            engine.set_nt(nt)
     elif gmx:
         M = Molecule(inputf, radii=radii, fragment=frag)
-        if args.pdb is not None:
+        if pdb is not None:
             M = Molecule(pdb, radii=radii, fragment=frag)
         if 'boxes' in M.Data:
             del M.Data['boxes']
         engine = Gromacs(M)
-        if args.nt is not None:
+        if nt is not None:
             raise RuntimeError("--nt not configured to work with --gmx yet")    
     elif psi4:
         engine = Psi4()
@@ -1344,7 +1347,7 @@ def get_molecule_engine(**kwargs):
     else:
         set_tcenv()
         tcin = load_tcin(inputf)
-        if args.pdb is not None:
+        if pdb is not None:
             M = Molecule(pdb, radii=radii, fragment=frag)
         else:
             if not os.path.exists(tcin['coordinates']):
@@ -1471,7 +1474,7 @@ def run_optimizer(**kwargs):
             if len(CVals) > 1:
                 xyzout = prefix+"_scan-%03i.xyz" % ic
                 xyzout2="opt.xyz"
-            elif prefix == os.path.splitext(args.input)[0]:
+            elif prefix == os.path.splitext(kwargs['input'])[0]:
                 xyzout = prefix+"_optim.xyz"
                 xyzout2="opt.xyz"
             else:
@@ -1481,7 +1484,7 @@ def run_optimizer(**kwargs):
             print
     print_msg()
 
-if __name__ == "__main__":
+def main():
     "Read user's input"
 
     parser = argparse.ArgumentParser()
@@ -1514,5 +1517,8 @@ if __name__ == "__main__":
     parser.add_argument('constraints', type=str, nargs='?', help='Constraint input file (optional)')
     #print(' '.join(sys.argv))
     args = parser.parse_args(sys.argv[1:])
-
+    # Run the optimizer.
     run_optimizer(**vars(args))
+
+if __name__ == "__main__":
+    main()
