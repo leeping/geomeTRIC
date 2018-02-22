@@ -8,7 +8,7 @@ from collections import OrderedDict
 from forcebalance.gmxio import GMX
 from forcebalance.molecule import Molecule
 from forcebalance.nifty import eqcgmx, fqcgmx, getWorkQueue, queue_up_src_dest
-from global_vars import *
+from geometric.global_vars import *
 from copy import copy
 import subprocess
 
