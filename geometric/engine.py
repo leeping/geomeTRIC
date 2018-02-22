@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-from __future__ import division
+from __future__ import print_function, division
 import os, sys, shutil
 import numpy as np
 from copy import deepcopy
@@ -91,10 +91,10 @@ def edit_tcin(fin=None, fout=None, options={}, defaults={}):
                             line_out = line.replace('\n', '')
                     else:
                         line_out = line.replace('\n', '')
-                    print >> f, line_out
+                    print(line_out, file=f)
             for k, v in Answer.items():
                 if k not in havekeys:
-                    print >> f, "%-15s %s" % (k, str(v))
+                    print("%-15s %s" % (k, str(v)), file=f)
     return Answer
 
 def set_tcenv():

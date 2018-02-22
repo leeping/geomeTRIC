@@ -1,1 +1,1 @@
-../../optimize.py --psi4 water3_ccsd.psi4in
+geometric-optimize --psi4 water3_ccsd.psi4in

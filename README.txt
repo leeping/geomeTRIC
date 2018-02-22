@@ -21,7 +21,7 @@ http://dx.doi.org/10.1063/1.4952956
 #==================#
 
 Package dependencies are:
-Python 2.7
+Python 2.7, 3.6+
 NumPy, Scipy, NetworkX, ForceBalance
 
 ForceBalance provides the molecule file format converter (molecule.py)

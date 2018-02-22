@@ -1,1 +1,1 @@
-../../optimize.py --qchem ethane.in constraints.txt
+geometric-optimize --qchem ethane.in constraints.txt
