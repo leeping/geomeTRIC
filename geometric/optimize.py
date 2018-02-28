@@ -1,12 +1,12 @@
 #!/usr/bin/env python
 
-from __future__ import division
+from __future__ import print_function, division
 import numpy as np
 from copy import deepcopy
 from collections import OrderedDict
-from internal import *
-from engine import set_tcenv, load_tcin, TeraChem, Psi4, QChem, Gromacs
-from rotate import get_rot, sorted_eigh, calc_fac_dfac
+from geometric.internal import *
+from geometric.engine import set_tcenv, load_tcin, TeraChem, Psi4, QChem, Gromacs
+from geometric.rotate import get_rot, sorted_eigh, calc_fac_dfac
 from forcebalance.gmxio import GMX
 from forcebalance.molecule import Molecule, Elements
 from forcebalance.nifty import row, col, flat, invert_svd, uncommadash, isint, which, eqcgmx, fqcgmx
@@ -51,7 +51,7 @@ def RebuildHessian(IC, H0, coord_seq, grad_seq, params):
         history += 1
     if history < 1:
         return H0.copy()
-    print "Rebuilding Hessian using %i gradients" % history
+    print("Rebuilding Hessian using %i gradients" % history)
     y_seq = [IC.calculate(i) for i in coord_seq[-history-1:]]
     g_seq = [IC.calcGrad(i, j) for i, j in zip(coord_seq[-history-1:],grad_seq[-history-1:])]
     Yprev = y_seq[0]
@@ -69,7 +69,7 @@ def RebuildHessian(IC, H0, coord_seq, grad_seq, params):
         Hstor = H.copy()
         H += Mat1-Mat2
     if np.min(np.linalg.eigh(H)[0]) < params.epsilon and params.reset:
-        print "Eigenvalues below %.4e (%.4e) - returning guess" % (params.epsilon, np.min(np.linalg.eigh(H)[0]))
+        print("Eigenvalues below %.4e (%.4e) - returning guess" % (params.epsilon, np.min(np.linalg.eigh(H)[0])))
         return H0.copy()
     return H
 
@@ -215,7 +215,7 @@ def brent_wiki(f, a, b, rel, cvg=0.1, obj=None, verbose=False):
         # Convergence failure - interval becomes
         # smaller than threshold
         if np.abs(b-a) < epsilon:
-            if verbose: print "returning because interval is too small"
+            if verbose: print("returning because interval is too small")
             if obj is not None: obj.brentFailed = True
             return s
         # Exit before converging when
@@ -236,7 +236,7 @@ def brent_wiki(f, a, b, rel, cvg=0.1, obj=None, verbose=False):
 
 def ftest(x):
     answer = (x+3)*(x-1)**2
-    print "(x, y) = ", x, answer
+    print("(x, y) = ", x, answer)
     return answer
 
 def OneDScan(init, final, steps):
@@ -316,7 +316,7 @@ def ParseConstraints(molecule, cFile):
         # This is a list-of-lists. The intention is to create a multidimensional grid
         # of constraint values if necessary.
         if len(line) == 0: continue
-        print line
+        print(line)
         if line.startswith("$"):
             mode = line.replace("$","")
         else:
@@ -444,7 +444,7 @@ def ParseConstraints(molecule, cFile):
                     # Get the angle
                     theta1 = float(s[5]) * np.pi / 180
                     if np.abs(theta1) > np.pi * 0.9:
-                        print "Large rotation: Your constraint may not work"
+                        print("Large rotation: Your constraint may not work")
                     if mode == "set":
                         c = np.cos(theta1/2.0)
                         s = np.sin(theta1/2.0)
@@ -457,7 +457,7 @@ def ParseConstraints(molecule, cFile):
                     elif mode == "scan":
                         theta2 = float(s[6]) * np.pi / 180
                         if np.abs(theta2) > np.pi * 0.9:
-                            print "Large rotation: Your constraint may not work"
+                            print("Large rotation: Your constraint may not work")
                         steps = int(s[7])
                         # To alleviate future confusion:
                         # There is one group of three constraints that we are going to scan over in one dimension.
@@ -520,11 +520,11 @@ def get_delta_prime_trm(v, X, G, H, IC, verbose=False):
         HT[i, i] = 0.0
     if verbose:
         seig = sorted(np.linalg.eig(HT)[0])
-        print "sorted(eig) : % .5e % .5e % .5e ... % .5e % .5e % .5e" % (seig[0], seig[1], seig[2], seig[-3], seig[-2], seig[-1])
+        print("sorted(eig) : % .5e % .5e % .5e ... % .5e % .5e % .5e" % (seig[0], seig[1], seig[2], seig[-3], seig[-2], seig[-1]))
     try:
         Hi = invert_svd(np.matrix(HT))
     except:
-        print "\x1b[1;91mSVD Error - increasing v by 0.001 and trying again\x1b[0m"
+        print ("\x1b[1;91mSVD Error - increasing v by 0.001 and trying again\x1b[0m")
         return get_delta_prime_trm(v+0.001, X, G, H, IC)
     dyc = flat(-1 * Hi * col(GC))
     dy = dyc[:len(G)]
@@ -690,7 +690,7 @@ def trust_step(target, v0, X, G, H, IC, rfo, verbose=False):
         v += (1-ndy/target)*(ndy/dy_prime)
         dy, sol, dy_prime, = get_delta_prime(v, X, G, H, IC, rfo, verbose)
         ndy = np.linalg.norm(dy)
-        if verbose: print "v = %.5f dy -> target = %.5f -> %.5f" % (v, ndy, target)
+        if verbose: print("v = %.5f dy -> target = %.5f -> %.5f" % (v, ndy, target))
         if np.abs((ndy-target)/target) < 0.001:
             return dy, sol
         # With Lagrange multipliers it may be impossible to go under a target step size
@@ -704,10 +704,10 @@ def trust_step(target, v0, X, G, H, IC, rfo, verbose=False):
             m_sol = sol
         # Break out of infinite oscillation loops
         if niter%100 == 99:
-            print "trust_step hit niter = 100, randomizing"
+            print("trust_step hit niter = 100, randomizing")
             v += np.random.random() * niter / 100
         if niter%1000 == 999:
-            print "trust_step hit niter = 1000, giving up"
+            print ("trust_step hit niter = 1000, giving up")
             return m_dy, m_sol
 
 class Froot(object):
@@ -771,7 +771,7 @@ class Froot(object):
                 if self.stored_val is None or cnorm > self.stored_val:
                     self.stored_arg = trial
                     self.stored_val = cnorm
-            if self.params.verbose: print "dy(i): %.4f dy(c) -> target: %.4f -> %.4f%s" % (trial, cnorm, self.target, " (done)" if self.from_above else "")
+            if self.params.verbose: print("dy(i): %.4f dy(c) -> target: %.4f -> %.4f%s" % (trial, cnorm, self.target, " (done)" if self.from_above else ""))
             return cnorm-self.target
 
 def recover(molecule, IC, X, gradx, X_hist, Gx_hist, params):
@@ -810,9 +810,9 @@ def recover(molecule, IC, X, gradx, X_hist, Gx_hist, params):
     IC1 = IC.__class__(newmol, connect=IC.connect, addcart=IC.addcart, build=False)
     if IC.haveConstraints(): IC1.getConstraints_from(IC)
     if IC1 != IC:
-        print "\x1b[1;94mInternal coordinate system may have changed\x1b[0m"
+        print("\x1b[1;94mInternal coordinate system may have changed\x1b[0m")
         if IC.repr_diff(IC1) != "":
-            print IC.repr_diff(IC1)
+            print(IC.repr_diff(IC1))
     IC = IC1
     IC.resetRotations(X)
     if type(IC) is DelocalizedInternalCoordinates:
@@ -841,13 +841,15 @@ class OptParams(object):
         self.rfo = kwargs.get('rfo', False)
         self.trust = kwargs.get('trust', 0.1)
         self.tmax = kwargs.get('tmax', 0.3)
+        self.maxiter = kwargs.get('maxiter', 300)
+        self.qccnv = kwargs.get('qccnv', False)
         self.Convergence_energy = 1e-6
         self.Convergence_grms = 3e-4
         self.Convergence_gmax = 4.5e-4
         self.Convergence_drms = 1.2e-3
         self.Convergence_dmax = 1.8e-3
 
-def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None):
+def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None, xyzout2=None):
     """
     Optimize the geometry of a molecule.
 
@@ -872,6 +874,7 @@ def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None):
         Nx3 array of optimized Cartesian coordinates in atomic units
     """
     progress = deepcopy(molecule)
+    progress2 = deepcopy(molecule)
     # Initial Hessian
     H0 = IC.guess_hessian(coords)
     H = H0.copy()
@@ -895,8 +898,8 @@ def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None):
     atomgrad = np.sqrt(np.sum((gradxc.reshape(-1,3))**2, axis=1))
     rms_gradient = np.sqrt(np.mean(atomgrad**2))
     max_gradient = np.max(atomgrad)
-    print "Step %4i :" % Iteration,
-    print "Gradient = %.3e/%.3e (rms/max) Energy = % .10f" % (rms_gradient, max_gradient, E)
+    print("Step %4i :" % Iteration, end=' '),
+    print("Gradient = %.3e/%.3e (rms/max) Energy = % .10f" % (rms_gradient, max_gradient, E))
     progress.xyzs = [coords.copy().reshape(-1, 3) * 0.529]
     progress.comms = ['Iteration %i Energy % .8f' % (Iteration, E)]
     # if IC.haveConstraints(): IC.printConstraints(X)
@@ -920,6 +923,9 @@ def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None):
         if np.isnan(H).any():
             raise RuntimeError("Hessian contains nan - check output and temp-files for possible errors")
         Iteration += 1
+        if (Iteration%5) == 0:
+            engine.clearCalcs()
+            IC.clearCache()
         # At the start of the loop, the function value, gradient and Hessian are known.
         Eig = sorted(np.linalg.eigh(H)[0])
         Emin = min(Eig).real
@@ -931,9 +937,11 @@ def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None):
             v0 = 0.0
         if params.verbose: IC.Prims.printRotations()
         if len(Eig) >= 6:
-            print "Hessian Eigenvalues: %.5e %.5e %.5e ... %.5e %.5e %.5e" % (Eig[0],Eig[1],Eig[2],Eig[-3],Eig[-2],Eig[-1])
+            print("Hessian Eigenvalues: %.5e %.5e %.5e ... %.5e %.5e %.5e" % (Eig[0],Eig[1],Eig[2],Eig[-3],Eig[-2],Eig[-1]))
         else:
-            print "Hessian Eigenvalues:", ' '.join("%.5e" % i for i in Eig)
+            print("Hessian Eigenvalues:", ' '.join("%.5e" % i for i in Eig))
+        # Are we far from constraint satisfaction?
+        farConstraints = IC.haveConstraints() and IC.getConstraintViolation(X) > 1e-1
         ### OBTAIN AN OPTIMIZATION STEP ###
         # The trust radius is to be computed in Cartesian coordinates.
         # First take a full-size Newton Raphson step
@@ -942,7 +950,7 @@ def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None):
         inorm = np.linalg.norm(dy)
         # Cartesian coordinate step size
         cnorm = getCartesianNorm(X, dy, IC, params.enforce, params.verbose)
-        if params.verbose: print "dy(i): %.4f dy(c) -> target: %.4f -> %.4f" % (inorm, cnorm, trust)
+        if params.verbose: print("dy(i): %.4f dy(c) -> target: %.4f -> %.4f" % (inorm, cnorm, trust))
         # If the step is above the trust radius in Cartesian coordinates, then
         # do the following to reduce the step length:
         if cnorm > 1.1 * trust:
@@ -954,36 +962,36 @@ def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None):
             # Cartesian coordinate norm
             iopt = brent_wiki(froot.evaluate, 0.0, inorm, trust, cvg=0.1, obj=froot, verbose=params.verbose)
             if froot.brentFailed and froot.stored_arg is not None:
-                if params.verbose: print "\x1b[93mUsing stored solution at %.3e\x1b[0m" % froot.stored_val
+                if params.verbose: print ("\x1b[93mUsing stored solution at %.3e\x1b[0m" % froot.stored_val)
                 iopt = froot.stored_arg
             elif IC.bork:
                 for i in range(3):
                     froot.target /= 2
-                    if params.verbose: print "\x1b[93mReducing target to %.3e\x1b[0m" % froot.target
+                    if params.verbose: print ("\x1b[93mReducing target to %.3e\x1b[0m" % froot.target)
                     froot.above_flag = True
                     iopt = brent_wiki(froot.evaluate, 0.0, iopt, froot.target, cvg=0.1, verbose=params.verbose)
                     if not IC.bork: break
             LastForce = ForceRebuild
             ForceRebuild = False
             if IC.bork:
-                print "\x1b[91mInverse iteration for Cartesians failed\x1b[0m"
+                print("\x1b[91mInverse iteration for Cartesians failed\x1b[0m")
                 # This variable is added because IC.bork is unset later.
                 ForceRebuild = True
             else:
-                if params.verbose: print "\x1b[93mBrent algorithm requires %i evaluations\x1b[0m" % froot.counter
+                if params.verbose: print("\x1b[93mBrent algorithm requires %i evaluations\x1b[0m" % froot.counter)
             ##### Force a rebuild of the coordinate system
             if ForceRebuild:
                 if LastForce:
-                    print "\x1b[1;91mFailed twice in a row to rebuild the coordinate system\x1b[0m"
+                    print("\x1b[1;91mFailed twice in a row to rebuild the coordinate system\x1b[0m")
                     if IC.haveConstraints():
-                        print "Cannot continue a constrained optimization; please implement constrained optimization in Cartesian coordinates"
+                        print("Cannot continue a constrained optimization; please implement constrained optimization in Cartesian coordinates")
                         sys.exit()
                     else:
-                        print "\x1b[93mContinuing in Cartesian coordinates\x1b[0m"
+                        print("\x1b[93mContinuing in Cartesian coordinates\x1b[0m")
                         IC = CartesianCoordinates(newmol)
                 CoordCounter = 0
                 Y, G, H, IC = recover(molecule, IC, X, gradx, X_hist, Gx_hist, params)
-                print "\x1b[1;93mSkipping optimization step\x1b[0m"
+                print("\x1b[1;93mSkipping optimization step\x1b[0m")
                 Iteration -= 1
                 continue
             ##### End Rebuild
@@ -1029,30 +1037,59 @@ def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None):
         Converged_dmax = max_displacement < Convergence_dmax
         BadStep = Quality < 0
         # Print status
-        print "Step %4i :" % Iteration,
-        print "Displace = %s%.3e\x1b[0m/%s%.3e\x1b[0m (rms/max)" % ("\x1b[92m" if Converged_drms else "\x1b[0m", rms_displacement, "\x1b[92m" if Converged_dmax else "\x1b[0m", max_displacement),
-        print "Trust = %.3e (%s)" % (trust, trustprint),
-        print "Grad%s = %s%.3e\x1b[0m/%s%.3e\x1b[0m (rms/max)" % ("_T" if IC.haveConstraints() else "", "\x1b[92m" if Converged_grms else "\x1b[0m", rms_gradient, "\x1b[92m" if Converged_gmax else "\x1b[0m", max_gradient),
+        print("Step %4i :" % Iteration, end=' '),
+        print("Displace = %s%.3e\x1b[0m/%s%.3e\x1b[0m (rms/max)" % ("\x1b[92m" if Converged_drms else "\x1b[0m", rms_displacement, "\x1b[92m" if Converged_dmax else "\x1b[0m", max_displacement), end=' '),
+        print("Trust = %.3e (%s)" % (trust, trustprint), end=' '),
+        print("Grad%s = %s%.3e\x1b[0m/%s%.3e\x1b[0m (rms/max)" % ("_T" if IC.haveConstraints() else "", "\x1b[92m" if Converged_grms else "\x1b[0m", rms_gradient, "\x1b[92m" if Converged_gmax else "\x1b[0m", max_gradient), end=' '),
         # print "Dy.G = %.3f" % Dot,
-        print "E (change) = % .10f (%s%+.3e\x1b[0m) Quality = %s%.3f\x1b[0m" % (E, "\x1b[91m" if BadStep else ("\x1b[92m" if Converged_energy else "\x1b[0m"), E-Eprev, "\x1b[91m" if BadStep else "\x1b[0m", Quality)
+        print("E (change) = % .10f (%s%+.3e\x1b[0m) Quality = %s%.3f\x1b[0m" % (E, "\x1b[91m" if BadStep else ("\x1b[92m" if Converged_energy else "\x1b[0m"), E-Eprev, "\x1b[91m" if BadStep else "\x1b[0m", Quality))
         if IC is not None and IC.haveConstraints():
             IC.printConstraints(X, thre=1e-3)
         if type(IC) is PrimitiveInternalCoordinates:
             idx = np.argmax(np.abs(dy))
             iunit = np.zeros_like(dy)
             iunit[idx] = 1.0
-            print "Along %s %.3f" % (IC.Internals[idx], np.dot(dy/np.linalg.norm(dy), iunit))
+            print("Along %s %.3f" % (IC.Internals[idx], np.dot(dy/np.linalg.norm(dy), iunit)))
         if Converged_energy and Converged_grms and Converged_drms and Converged_gmax and Converged_dmax:
-            print "Converged! =D"
+            print("Converged! =D")
+            # _exec("touch energy.txt") #JS these two lines used to make a energy.txt file using the final energy
+            with open("energy.txt","w") as f:
+                print("% .10f" % E, file=f)
+            progress2.xyzs = [X.reshape(-1,3) * 0.529177] #JS these two lines used to make a opt.xyz file along with the if statement below.
+            progress2.comms = ['Iteration %i Energy % .8f' % (Iteration, E)]
+            if xyzout2 is not None:
+                progress2.write(xyzout2) #This contains the last frame of the trajectory.
+            break
+        if Iteration > params.maxiter:
+            print("Maximum iterations reached (%i); increase --maxiter for more" % params.maxiter)
+            break
+        if params.qccnv and Converged_grms and (Converged_drms or Converged_energy):
+            print("Converged! (Q-Chem style criteria requires grms and either drms or energy)")
+            # _exec("touch energy.txt") #JS these two lines used to make a energy.txt file using the final energy
+            with open("energy.txt","w") as f:
+                print("% .10f" % E, file=f)
+            progress2.xyzs = [X.reshape(-1,3) * 0.529177] #JS these two lines used to make a opt.xyz file along with the if statement below. 
+            progress2.comms = ['Iteration %i Energy % .8f' % (Iteration, E)]
+            if xyzout2 is not None:
+                progress2.write(xyzout2) #This contains the last frame of the trajectory.
             break
 
         ### Adjust Trust Radius and/or Reject Step ###
         # If the trust radius is under thre_rj then do not reject.
-        rejectOk = (trust > thre_rj and E > Eprev)
+        # This code rejects steps / reduces trust radius only if we're close to satisfying constraints;
+        # it improved performance in some cases but worsened for others.
+        rejectOk = (trust > thre_rj and E > Eprev and (Quality < -10 or not farConstraints))
+        # This statement was added to prevent 
+        # some occasionally observed infinite loops
+        if farConstraints: rejectOk = False
+        # rejectOk = (trust > thre_rj and E > Eprev)
         if Quality <= ThreLQ:
             # For bad steps, the trust radius is reduced
-            trust = max(Convergence_drms, trust/2)
-            trustprint = "\x1b[91m-\x1b[0m"
+            if not farConstraints: 
+                trust = max(Convergence_drms, trust/2)
+                trustprint = "\x1b[91m-\x1b[0m"
+            else:
+                trustprint = "="
         elif Quality >= ThreHQ: # and bump:
             if trust < params.tmax:
                 # For good steps, the trust radius is increased
@@ -1076,8 +1113,9 @@ def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None):
         # This is because some systems (e.g. formate) have discontinuities on the
         # potential surface that can cause an infinite loop
         if Quality < -1:
-            if trust < thre_rj: print "\x1b[93mNot rejecting step - trust below %.3e\x1b[0m" % thre_rj
-            elif E < Eprev: print "\x1b[93mNot rejecting step - energy decreases\x1b[0m"
+            if trust < thre_rj: print("\x1b[93mNot rejecting step - trust below %.3e\x1b[0m" % thre_rj)
+            elif E < Eprev: print("\x1b[93mNot rejecting step - energy decreases\x1b[0m")
+            elif farConstraints: print("\x1b[93mNot rejecting step - far from constraint satisfaction\x1b[0m")
         # Append steps to history (for rebuilding Hessian)
         X_hist.append(X)
         Gx_hist.append(gradx)
@@ -1087,10 +1125,10 @@ def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None):
         # Reinitialize certain variables (i.e. DLC and rotations)
         reinit = False
         if IC.largeRots():
-            print "Large rotations - reinitializing coordinates"
+            print("Large rotations - reinitializing coordinates")
             reinit = True
         if IC.bork:
-            print "Failed inverse iteration - reinitializing coordinates"
+            print("Failed inverse iteration - reinitializing coordinates")
             check = True
             reinit = True
         # Check the coordinate system every (N) steps
@@ -1101,9 +1139,9 @@ def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None):
             IC1 = IC.__class__(newmol, build=False, connect=IC.connect, addcart=IC.addcart)
             if IC.haveConstraints(): IC1.getConstraints_from(IC)
             if IC1 != IC:
-                print "\x1b[1;94mInternal coordinate system may have changed\x1b[0m"
+                print("\x1b[1;94mInternal coordinate system may have changed\x1b[0m")
                 if IC.repr_diff(IC1) != "":
-                    print IC.repr_diff(IC1)
+                    print(IC.repr_diff(IC1))
                 reinit = True
                 IC = IC1
             CoordCounter = 0
@@ -1138,16 +1176,16 @@ def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None):
             ndg = np.array(Dg).flatten()/np.linalg.norm(np.array(Dg))
             nhdy = np.array(H*Dy).flatten()/np.linalg.norm(np.array(H*Dy))
             if params.verbose:
-                print "Denoms: %.3e %.3e" % ((Dg.T*Dy)[0,0], (Dy.T*H*Dy)[0,0]),
-                print "Dots: %.3e %.3e" % (np.dot(ndg, ndy), np.dot(ndy, nhdy)),
+                print("Denoms: %.3e %.3e" % ((Dg.T*Dy)[0,0], (Dy.T*H*Dy)[0,0]), end=''),
+                print("Dots: %.3e %.3e" % (np.dot(ndg, ndy), np.dot(ndy, nhdy)), end=''),
             H1 = H.copy()
             H += Mat1-Mat2
             Eig1 = np.linalg.eigh(H)[0]
             Eig1.sort()
             if params.verbose:
-                print "Eig-ratios: %.5e ... %.5e" % (np.min(Eig1)/np.min(Eig), np.max(Eig1)/np.max(Eig))
+                print("Eig-ratios: %.5e ... %.5e" % (np.min(Eig1)/np.min(Eig), np.max(Eig1)/np.max(Eig)))
             if np.min(Eig1) <= params.epsilon and params.reset:
-                print "Eigenvalues below %.4e (%.4e) - returning guess" % (params.epsilon, np.min(Eig1))
+                print("Eigenvalues below %.4e (%.4e) - returning guess" % (params.epsilon, np.min(Eig1)))
                 H = IC.guess_hessian(coords)
             # Then it's on to the next loop iteration!
     return X
@@ -1168,7 +1206,7 @@ def CheckInternalGrad(coords, molecule, IC, engine, dirname, verbose=False):
         x1 = IC.newCartesian(coords, dq, verbose)
         EMinus, _ = engine.calc(x1, dirname)
         fdiff = (EPlus-EMinus)/2e-4
-        print "%s : % .6e % .6e % .6e" % (IC.Internals[i], Gq[i], fdiff, Gq[i]-fdiff)
+        print("%s : % .6e % .6e % .6e" % (IC.Internals[i], Gq[i], fdiff, Gq[i]-fdiff))
 
 def CalcInternalHess(coords, molecule, IC, engine, dirname, verbose=False):
     """
@@ -1188,10 +1226,10 @@ def CalcInternalHess(coords, molecule, IC, engine, dirname, verbose=False):
         x1 = IC.newCartesian(coords, dq, verbose)
         EMinus, _ = engine.calc(x1, dirname)
         fdiff = (EPlus+EMinus-2*E)/1e-6
-        print "%s : % .6e" % (IC.Internals[i], fdiff)
+        print("%s : % .6e" % (IC.Internals[i], fdiff))
 
 def print_msg():
-    print """
+    print("""
     #==========================================================================#
     #| If this code has benefited your research, please support us by citing: |#
     #|                                                                        |#
@@ -1199,7 +1237,7 @@ def print_msg():
     #| translation and rotation coordinates", J. Chem, Phys. 144, 214108.     |#
     #| http://dx.doi.org/10.1063/1.4952956                                    |#
     #==========================================================================#
-    """
+    """)
 
 def WriteDisplacements(coords, M, IC, dirname, verbose):
     """
@@ -1236,16 +1274,17 @@ def WriteDisplacements(coords, M, IC, dirname, verbose):
             else:
                 dx = 0.0
             x.append((coords+dx).reshape(-1,3) * 0.529177)
-            print i, j, "Displacement (rms/max) = %.5f / %.5f" % (rms_displacement, max_displacement), "(Bork)" if IC.bork else "(Good)"
+            print(i, j, "Displacement (rms/max) = %.5f / %.5f" % (rms_displacement, max_displacement), "(Bork)" if IC.bork else "(Good)")
         M.xyzs = x
         M.write("%s/ic_%03i.xyz" % (dirname, i))
 
-def get_molecule_engine(args):
+def get_molecule_engine(**kwargs):
     """
     Parameters
     ----------
     args : namespace
         Command line arguments from argparse
+    Changed to
 
     Returns
     -------
@@ -1255,48 +1294,65 @@ def get_molecule_engine(args):
         Engine object containing methods for calculating energy and gradient
     """
     ## Read radii from the command line.
-    if (len(args.radii) % 2) != 0:
+    # Ions should have radii of zero.
+    arg_radii = kwargs.get('radii', ["Na","0.0","Cl","0.0","K","0.0"])
+    # print(arg_radii)
+    if (len(arg_radii) % 2) != 0:
         raise RuntimeError("Must have an even number of arguments for radii")
-    nrad = int(len(args.radii) / 2)
+    nrad = int(len(arg_radii) / 2)
     radii = {}
     for i in range(nrad):
-        radii[args.radii[2*i].capitalize()] = float(args.radii[2*i+1])
+        radii[arg_radii[2*i].capitalize()] = float(arg_radii[2*i+1])
 
     ### Set up based on which quantum chemistry code we're using.
-    if sum([args.qchem, args.psi4, args.gmx]) > 1:
+    qchem = kwargs.get('qchem', False)
+    psi4 = kwargs.get('psi4', False)
+    gmx = kwargs.get('gmx', False)
+    pdb = kwargs.get('pdb', None)
+    frag = kwargs.get('frag', False)
+    inputf = kwargs.get('input')
+    nt = kwargs.get('nt', None)
+
+    if sum([qchem, psi4, gmx]) > 1:
         raise RuntimeError("Do not specify more than one of --qchem, --psi4, --gmx")
-    if args.qchem:
+    if qchem:
         # The file from which we make the Molecule object
-        if args.pdb is not None:
+        if pdb is not None:
             # If we pass the PDB, then read both the PDB and the Q-Chem input file,
             # then copy the Q-Chem rem variables over to the PDB
-            M = Molecule(args.pdb, radii=radii, fragment=args.frag)
-            M1 = Molecule(args.input, radii=radii)
+            M = Molecule(pdb, radii=radii, fragment=frag)
+            M1 = Molecule(inputf, radii=radii)
             for i in ['qctemplate', 'qcrems', 'elem', 'qm_ghost', 'charge', 'mult']:
                 if i in M1: M[i] = M1[i]
         else:
-            M = Molecule(args.input, radii=radii)
+            M = Molecule(inputf, radii=radii)
         engine = QChem(M)
-    elif args.gmx:
-        M = Molecule(args.input, radii=radii, fragment=args.frag)
-        if args.pdb is not None:
-            M = Molecule(args.pdb, radii=radii, fragment=args.frag)
+        if nt is not None:
+            engine.set_nt(nt)
+    elif gmx:
+        M = Molecule(inputf, radii=radii, fragment=frag)
+        if pdb is not None:
+            M = Molecule(pdb, radii=radii, fragment=frag)
         if 'boxes' in M.Data:
             del M.Data['boxes']
         engine = Gromacs(M)
-    elif args.psi4:
+        if nt is not None:
+            raise RuntimeError("--nt not configured to work with --gmx yet")    
+    elif psi4:
         engine = Psi4()
-        engine.load_psi4_input(args.input)
+        engine.load_psi4_input(inputf)
         M = engine.M
+        if nt is not None:
+            engine.set_nt(nt)
     else:
         set_tcenv()
-        tcin = load_tcin(args.input)
-        if args.pdb is not None:
-            M = Molecule(args.pdb, radii=radii, fragment=args.frag)
+        tcin = load_tcin(inputf)
+        if pdb is not None:
+            M = Molecule(pdb, radii=radii, fragment=frag)
         else:
             if not os.path.exists(tcin['coordinates']):
                 raise RuntimeError("TeraChem coordinate file does not exist")
-            M = Molecule(tcin['coordinates'], radii=radii, fragment=args.frag)
+            M = Molecule(tcin['coordinates'], radii=radii, fragment=frag)
         M.charge = tcin['charge']
         M.mult = tcin.get('spinmult',1)
         if 'guess' in tcin:
@@ -1304,18 +1360,133 @@ def get_molecule_engine(args):
                 if not os.path.exists(f):
                     raise RuntimeError("TeraChem input file specifies guess %s but it does not exist\nPlease include this file in the same folder as your input" % f)
         engine = TeraChem(M, tcin)
+        if nt is not None:
+            raise RuntimeError("--nt not configured to work with terachem yet")
 
-    if args.coords is not None:
-        M1 = Molecule(args.coords)
+    arg_coords = kwargs.get('coords', None)
+    if arg_coords is not None:
+        M1 = Molecule(arg_coords)
         M1 = M1[-1]
         M.xyzs = M1.xyzs
 
     return M, engine
 
+
+def run_optimizer(**kwargs):
+
+    params = OptParams(**kwargs)
+
+    # Get the Molecule and engine objects needed for optimization
+    M, engine = get_molecule_engine(**kwargs)
+
+    # Get calculation prefix and temporary directory name
+    arg_prefix = kwargs.get('prefix', None)
+    inputf = kwargs.get('input')
+    prefix = arg_prefix if arg_prefix is not None else os.path.splitext(inputf)[0]
+    dirname = prefix+".tmp"
+    if not os.path.exists(dirname):
+        os.makedirs(dirname)
+    else:
+        print("%s exists ; make sure nothing else is writing to the folder" % dirname)
+        # Remove existing scratch files in ./run.tmp/scr to avoid confusion
+        for f in ['c0', 'ca0', 'cb0']:
+            if os.path.exists(os.path.join(dirname, 'scr', f)):
+                os.remove(os.path.join(dirname, 'scr', f))
+    
+    # QC-specific scratch folder
+    qcdir = kwargs.get('qdir', None)
+    qchem = kwargs.get('qchem', False)
+    if qcdir is not None:
+        if not qchem:
+            raise RuntimeError("--qcdir only valid if --qchem is specified")
+        if not os.path.exists(qcdir):
+            raise RuntimeError("--qcdir points to a folder that doesn't exist")
+        shutil.copytree(qcdir, os.path.join(dirname, "run.d"))
+        engine.M.edit_qcrems({'scf_guess':'read'})
+        engine.qcdir = True
+
+    # Get initial coordinates in bohr
+    coords = M.xyzs[0].flatten() / 0.529177
+
+    # Read in the constraints
+    constraints = kwargs.get('constraints', None)
+    if constraints is not None:
+        Cons, CVals = ParseConstraints(M, constraints)
+    else:
+        Cons = None
+        CVals = None
+
+    #=========================================#
+    #| Set up the internal coordinate system |#
+    #=========================================#
+    # First item in tuple: The class to be initialized
+    # Second item in tuple: Whether to connect nonbonded fragments
+    # Third item in tuple: Whether to throw in all Cartesians (no effect if second item is True)
+    CoordSysDict = {'cart':(CartesianCoordinates, False, False),
+                    'prim':(PrimitiveInternalCoordinates, True, False),
+                    'dlc':(DelocalizedInternalCoordinates, True, False),
+                    'hdlc':(DelocalizedInternalCoordinates, False, True),
+                    'tric':(DelocalizedInternalCoordinates, False, False)}
+    coordsys = kwargs.get('coordsys', 'tric')
+    CoordClass, connect, addcart = CoordSysDict[coordsys.lower()]
+
+    IC = CoordClass(M, build=True, connect=connect, addcart=addcart, constraints=Cons, cvals=CVals[0] if CVals is not None else None)
+
+    # Auxiliary functions (will not do optimization)
+    displace = kwargs.get('discplace', False)
+    verbose = kwargs.get('verbose', False)
+    if displace:
+        WriteDisplacements(coords, M, IC, dirname, verbose)
+        sys.exit()
+
+    fdcheck = kwargs.get('fdcheck', False)
+    if fdcheck:
+        IC.Prims.checkFiniteDifference(coords)
+        CheckInternalGrad(coords, M, IC.Prims, engine, dirname, verbose)
+        sys.exit()
+
+    # Print out information about the coordinate system
+    if type(IC) is CartesianCoordinates:
+        print("%i Cartesian coordinates being used" % (3*M.na))
+    else:
+        print("%i internal coordinates being used (instead of %i Cartesians)" % (len(IC.Internals), 3*M.na))
+    print(IC)
+
+    if Cons is None:
+        # Run a standard geometry optimization
+        if prefix == os.path.splitext(inputf)[0]:
+            xyzout = prefix+"_optim.xyz"
+            xyzout2="opt.xyz"
+        else:
+            xyzout = prefix+".xyz"
+            xyzout2="opt.xyz"
+        opt_coords = Optimize(coords, M, IC, engine, dirname, params, xyzout,xyzout2)
+    else:
+        # Run a constrained geometry optimization
+        if type(IC) in [CartesianCoordinates, PrimitiveInternalCoordinates]:
+            raise RuntimeError("Constraints only work with delocalized internal coordinates")
+        for ic, CVal in enumerate(CVals):
+            if len(CVals) > 1:
+                print("---=== Scan %i/%i : Constrained Optimization ===---" % (ic+1, len(CVals)))
+            IC = CoordClass(M, build=True, connect=connect, addcart=addcart, constraints=Cons, cvals=CVal)
+            IC.printConstraints(coords, thre=-1)
+
+            if len(CVals) > 1:
+                xyzout = prefix+"_scan-%03i.xyz" % ic
+                xyzout2="opt.xyz"
+            elif prefix == os.path.splitext(kwargs['input'])[0]:
+                xyzout = prefix+"_optim.xyz"
+                xyzout2="opt.xyz"
+            else:
+                xyzout = prefix+".xyz"
+                xyzout2="opt.xyz"
+            coords = Optimize(coords, M, IC, engine, dirname, params, xyzout,xyzout2)
+            print
+    print_msg()
+
 def main():
-    #===================#
-    #| Read user input |#
-    #===================#
+    "Read user's input"
+
     parser = argparse.ArgumentParser()
     parser.add_argument('--coordsys', type=str, default='tric', help='Coordinate system: "cart" for Cartesian, "prim" for Primitive (a.k.a redundant), '
                         '"dlc" for Delocalized Internal Coordinates, "hdlc" for Hybrid Delocalized Internal Coordinates, "tric" for Translation-Rotation'
@@ -1334,100 +1505,20 @@ def main():
     parser.add_argument('--rfo', action='store_true', help='Use rational function optimization (default is trust-radius Newton Raphson).')
     parser.add_argument('--trust', type=float, default=0.1, help='Starting trust radius.')
     parser.add_argument('--tmax', type=float, default=0.3, help='Maximum trust radius.')
+    parser.add_argument('--maxiter', type=int, default=300, help='Maximum number of optimization steps.')
     parser.add_argument('--radii', type=str, nargs="+", default=["Na","0.0"], help='List of atomic radii for coordinate system.')
     parser.add_argument('--pdb', type=str, help='Provide a PDB file name with coordinates and resids to split the molecule.')
     parser.add_argument('--coords', type=str, help='Provide coordinates to override the TeraChem input file / PDB file. The LAST frame will be used.')
     parser.add_argument('--frag', action='store_true', help='Fragment the internal coordinate system by deleting bonds between residues.')
+    parser.add_argument('--qcdir', type=str, help='Provide an initial qchem scratch folder (e.g. supplied initial guess).')
+    parser.add_argument('--qccnv', action='store_true', help='Use Q-Chem style convergence criteria instead of the default.')
+    parser.add_argument('--nt', type=int, help='Specify number of threads for running in parallel (for TeraChem this should be number of GPUs)')
     parser.add_argument('input', type=str, help='TeraChem or Q-Chem input file')
     parser.add_argument('constraints', type=str, nargs='?', help='Constraint input file (optional)')
-    print ' '.join(sys.argv)
+    #print(' '.join(sys.argv))
     args = parser.parse_args(sys.argv[1:])
-
-    params = OptParams(**vars(args))
-
-    # Get the Molecule and engine objects needed for optimization
-    M, engine = get_molecule_engine(args)
-
-    # Get calculation prefix and temporary directory name
-    prefix = args.prefix if args.prefix is not None else os.path.splitext(args.input)[0]
-    dirname = prefix+".tmp"
-    if not os.path.exists(dirname):
-        os.makedirs(dirname)
-    else:
-        print "%s exists ; make sure nothing else is writing to the folder" % dirname
-        # Remove existing scratch files in ./run.tmp/scr to avoid confusion
-        for f in ['c0', 'ca0', 'cb0']:
-            if os.path.exists(os.path.join(dirname, 'scr', f)):
-                os.remove(os.path.join(dirname, 'scr', f))
-
-    # Get initial coordinates in bohr
-    coords = M.xyzs[0].flatten() / 0.529177
-
-    # Read in the constraints
-    if args.constraints is not None:
-        Cons, CVals = ParseConstraints(M, args.constraints)
-    else:
-        Cons = None
-        CVals = None
-
-    #=========================================#
-    #| Set up the internal coordinate system |#
-    #=========================================#
-    # First item in tuple: The class to be initialized
-    # Second item in tuple: Whether to connect nonbonded fragments
-    # Third item in tuple: Whether to throw in all Cartesians (no effect if second item is True)
-    CoordSysDict = {'cart':(CartesianCoordinates, False, False),
-                    'prim':(PrimitiveInternalCoordinates, True, False),
-                    'dlc':(DelocalizedInternalCoordinates, True, False),
-                    'hdlc':(DelocalizedInternalCoordinates, False, True),
-                    'tric':(DelocalizedInternalCoordinates, False, False)}
-    CoordClass, connect, addcart = CoordSysDict[args.coordsys.lower()]
-
-    IC = CoordClass(M, build=True, connect=connect, addcart=addcart, constraints=Cons, cvals=CVals[0] if CVals is not None else None)
-
-    # Auxiliary functions (will not do optimization)
-    if args.displace:
-        WriteDisplacements(coords, M, IC, dirname, args.verbose)
-        sys.exit()
-
-    if args.fdcheck:
-        IC.Prims.checkFiniteDifference(coords)
-        CheckInternalGrad(coords, M, IC.Prims, engine, dirname, args.verbose)
-        sys.exit()
-
-    # Print out information about the coordinate system
-    if type(IC) is CartesianCoordinates:
-        print "%i Cartesian coordinates being used" % (3*M.na)
-    else:
-        print "%i internal coordinates being used (instead of %i Cartesians)" % (len(IC.Internals), 3*M.na)
-    print IC
-
-    if Cons is None:
-        # Run a standard geometry optimization
-        if prefix == os.path.splitext(args.input)[0]:
-            xyzout = prefix+"_optim.xyz"
-        else:
-            xyzout = prefix+".xyz"
-        opt_coords = Optimize(coords, M, IC, engine, dirname, params, xyzout)
-    else:
-        # Run a constrained geometry optimization
-        if type(IC) in [CartesianCoordinates, PrimitiveInternalCoordinates]:
-            raise RuntimeError("Constraints only work with delocalized internal coordinates")
-        for ic, CVal in enumerate(CVals):
-            if len(CVals) > 1:
-                print "---=== Scan %i/%i : Constrained Optimization ===---" % (ic+1, len(CVals))
-            IC = CoordClass(M, build=True, connect=connect, addcart=addcart, constraints=Cons, cvals=CVal)
-            IC.printConstraints(coords, thre=-1)
-
-            if len(CVals) > 1:
-                xyzout = prefix+"_scan-%03i.xyz" % ic
-            elif prefix == os.path.splitext(args.input)[0]:
-                xyzout = prefix+"_optim.xyz"
-            else:
-                xyzout = prefix+".xyz"
-            coords = Optimize(coords, M, IC, engine, dirname, params, xyzout)
-            print
-    print_msg()
+    # Run the optimizer.
+    run_optimizer(**vars(args))
 
 if __name__ == "__main__":
     main()
