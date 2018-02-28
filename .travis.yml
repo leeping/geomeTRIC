@@ -8,11 +8,6 @@ addons:
     sources:
     - ubuntu-toolchain-r-test
 
-branches:
-  only:
-  - master
-  - conda
-
 before_install:
   - source devtools/travis-ci/install.sh
   - export PYTHONUNBUFFERED=true
@@ -49,6 +44,6 @@ env:
     # The architecture to download for the OpenEye toolkits
     - OE_ARCH="linux-x64"
 
-after_success:
-  - echo "after_success"
-  - source devtools/travis-ci/after_success.sh
+#after_success:
+#  - echo "after_success"
+#  - source devtools/travis-ci/after_success.sh
