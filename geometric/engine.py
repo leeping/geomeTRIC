@@ -78,7 +78,7 @@ def edit_tcin(fin=None, fout=None, options={}, defaults={}):
                     uncomm = line.split("#", 1)[0].strip()
                     # Don't keep anything past the 'end' keyword
                     if uncomm.lower() == 'end': break
-                    if len(uncomm) > 0: 
+                    if len(uncomm) > 0:
                         haveKey = True
                         comm = line.split("#", 1)[1].replace('\n','') if len(line.split("#", 1)) == 2 else ''
                         s = line.split(' ', 1)
@@ -181,7 +181,7 @@ class Engine(object):
         return
 
 class Blank(Engine):
-    """ 
+    """
     Always return zero energy and gradient.
     """
     def __init__(self, molecule):
@@ -193,7 +193,7 @@ class Blank(Engine):
         return energy, gradient
 
 class TeraChem(Engine):
-    """ 
+    """
     Run a TeraChem energy and gradient calculation.
     """
     def __init__(self, molecule, tcin):
@@ -209,7 +209,7 @@ class TeraChem(Engine):
                 guesses.append(f)
                 have_guess = True
         # This is for when we start geometry optimizations
-        # and we have a guess prepped and ready to go. 
+        # and we have a guess prepped and ready to go.
         if not have_guess and 'guess' in self.tcin:
             for f in self.tcin['guess'].split():
                 if os.path.exists(f):
@@ -263,7 +263,7 @@ class TeraChem(Engine):
         # and moved to "dirname"
         have_guess = (guesses == guessfnms)
         # This is for when we start geometry optimizations
-        # and we have a guess prepped and ready to go. 
+        # and we have a guess prepped and ready to go.
         if not have_guess and 'guess' in self.tcin:
             for f in self.tcin['guess'].split():
                 if os.path.exists(f):
@@ -325,7 +325,7 @@ class Psi4(Engine):
 
     def nt(self):
         if self.threads is not None:
-            return " -n %i" % self.threads 
+            return " -n %i" % self.threads
         else:
             return ""
 
@@ -336,33 +336,33 @@ class Psi4(Engine):
         """ Psi4 input file parser, only support xyz coordinates for now """
         coords = []
         elems = []
-        found_molecule = False
-        foundcharge = False
-        endmol = False
+        found_molecule, found_geo, found_gradient = False, False, False
         psi4_temp = [] # store a template of the input file for generating new ones
         for line in open(psi4in):
             if 'molecule' in line:
                 found_molecule = True
-                psi4_temp.append("molecule")
+                psi4_temp.append(line)
             elif found_molecule is True:
-                if '}' in line:
-                    found_molecule = False
                 ls = line.split()
-                if len(ls) == 2 and foundcharge is False:
-                    charge, mult = int(ls[0]), int(ls[1])
-                    foundcharge = True
-                elif len(ls) == 4:
+                if len(ls) == 4:
+                    if found_geo == False:
+                        found_geo = True
+                        psi4_temp.append("$!geometry@here")
                     # parse the xyz format
                     elems.append(ls[0])
                     coords.append(ls[1:4])
                 else:
                     psi4_temp.append(line)
+                    if '}' in line:
+                        found_molecule = False
             else:
                 psi4_temp.append(line)
+            if "gradient(" in line:
+                found_gradient = True
+        if found_gradient == False:
+            raise RuntimeError("Psi4 inputfile %s should have gradient() command." % psi4in)
         self.M = Molecule()
         self.M.elem = elems
-        self.M.charge = charge
-        self.M.mult = mult
         self.M.xyzs = [np.array(coords, dtype=np.float64)]
         self.psi4_temp = psi4_temp
 
@@ -373,9 +373,7 @@ class Psi4(Engine):
         # Write Psi4 input.dat
         with open(os.path.join(dirname, 'input.dat'), 'w') as outfile:
             for line in self.psi4_temp:
-                if line == 'molecule':
-                    outfile.write('molecule {\n')
-                    outfile.write("%d %d\n" % (self.M.charge, self.M.mult))
+                if line == '$!geometry@here':
                     for e, c in zip(self.M.elem, self.M.xyzs[0]):
                         outfile.write("%-7s %13.7f %13.7f %13.7f\n" % (e, c[0], c[1], c[2]))
                 else:
@@ -448,7 +446,7 @@ class QChem(Engine):
 
     def nt(self):
         if self.threads is not None:
-            return " -nt %i" % self.threads 
+            return " -nt %i" % self.threads
         else:
             return ""
 
