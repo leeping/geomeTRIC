@@ -1,0 +1,38 @@
+package:
+  name: geometric-dev
+  version: 0.0.0
+
+source:
+  path: ../../
+
+requirements:
+  build:
+    - python
+    - numpy
+    - scipy
+    - setuptools
+    - networkx
+    - forcebalance
+
+  run:
+    - python
+    - numpy
+    - scipy
+    - setuptools
+    - networkx
+    - forcebalance
+
+#test:
+#  requires:
+#    - nose
+#    - nose-timer
+#  imports:
+#    - geometric
+#  commands:
+#    - nosetests -vv --nocapture --with-time geometric
+
+about:
+  home: https://github.com/leeping/geomeTRIC
+  licence: MIT License
+  summary: Geometry optimization for quantum chemistry
+
