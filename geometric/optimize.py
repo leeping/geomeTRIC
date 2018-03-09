@@ -942,6 +942,7 @@ def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None, xyzout2
             print("Hessian Eigenvalues:", ' '.join("%.5e" % i for i in Eig))
         # Are we far from constraint satisfaction?
         farConstraints = IC.haveConstraints() and IC.getConstraintViolation(X) > 1e-1
+        conSatisfied = not IC.haveConstraints() or IC.getConstraintViolation(X) < 1e-2
         ### OBTAIN AN OPTIMIZATION STEP ###
         # The trust radius is to be computed in Cartesian coordinates.
         # First take a full-size Newton Raphson step
@@ -1050,7 +1051,7 @@ def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None, xyzout2
             iunit = np.zeros_like(dy)
             iunit[idx] = 1.0
             print("Along %s %.3f" % (IC.Internals[idx], np.dot(dy/np.linalg.norm(dy), iunit)))
-        if Converged_energy and Converged_grms and Converged_drms and Converged_gmax and Converged_dmax and (not farConstraints):
+        if Converged_energy and Converged_grms and Converged_drms and Converged_gmax and Converged_dmax and conSatisfied:
             print("Converged! =D")
             # _exec("touch energy.txt") #JS these two lines used to make a energy.txt file using the final energy
             with open("energy.txt","w") as f:
@@ -1063,7 +1064,7 @@ def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None, xyzout2
         if Iteration > params.maxiter:
             print("Maximum iterations reached (%i); increase --maxiter for more" % params.maxiter)
             break
-        if params.qccnv and Converged_grms and (Converged_drms or Converged_energy) and (not farConstraints):
+        if params.qccnv and Converged_grms and (Converged_drms or Converged_energy) and conSatisfied:
             print("Converged! (Q-Chem style criteria requires grms and either drms or energy)")
             # _exec("touch energy.txt") #JS these two lines used to make a energy.txt file using the final energy
             with open("energy.txt","w") as f:
