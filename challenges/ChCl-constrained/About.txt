@@ -1,0 +1,2 @@
+This optimization was one that failed out of several thousand constrained optimizations.
+The "fix" is to force a Hessian reset whenever an eigenvalue becomes negative.

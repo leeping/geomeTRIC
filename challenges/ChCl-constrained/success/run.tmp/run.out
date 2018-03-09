@@ -1,0 +1,205 @@
+Startfile from command line: run.in
+
+
+       ***********************************************************
+       *                    TeraChem v1.5K                       *
+       *                 Hg Version: ccdev                       *
+       *                   Development Version                   *
+       *                Compiled without textures                *
+       *           Chemistry at the Speed of Graphics!           *
+       ***********************************************************
+       * This program may only be used in connection with        *
+       * a valid license from PetaChem, LLC. Use of this program *
+       * or results thereof indicates acceptance of all terms    *
+       * and conditions stated in the license and that a valid   *
+       * license agreement between the user and PetaChem, LLC    *
+       * exists. PetaChem, LLC does not warrant the correctness  *
+       * of results or their suitability for any purpose.        *
+       * Please email bugs, suggestions, and comments to         *
+       *                  help@petachem.com                      *
+       *                                                         *
+       ***********************************************************
+
+
+       ***********************************************************
+       *  Compiled by leeping      Mon Jan 29 09:57:35 PST 2018  *
+       *  Supported architectures: sm_50 sm_60                   *
+       *  Cuda compilation tools, release 8.0, V8.0.44           *
+       ***********************************************************
+
+
+ Job started   Fri Mar  9 13:34:31 2018
+ On g5-2 (available memory: 110685 MB)
+
+######################################### RUNTIME INFO ##########################################
+terachem run.in 
+
+NVRM version: NVIDIA UNIX x86_64 Kernel Module  384.81  Sat Sep  2 02:43:11 PDT 2017
+GCC version:  gcc version 4.8.5 20150623 (Red Hat 4.8.5-16) (GCC) 
+
+	linux-vdso.so.1 =>  (0x00007ffc23b75000)
+	libintbox.so.1 => /home/leeping/opt/terachem/current/lib/libintbox.so.1 (0x00002ba88a77f000)
+	libthcbox.so.1 => /home/leeping/opt/terachem/current/lib/libthcbox.so.1 (0x00002ba898c94000)
+	libgridbox.so.1 => /home/leeping/opt/terachem/current/lib/libgridbox.so.1 (0x00002ba8999ea000)
+	libdftbox.so.1 => /home/leeping/opt/terachem/current/lib/libdftbox.so.1 (0x00002ba899d9d000)
+	libcuda.so.1 => /lib64/libcuda.so.1 (0x00002ba89a090000)
+	libcudart.so.8.0 => /home/leeping/opt/terachem/current/lib/libcudart.so.8.0 (0x00002ba89af0d000)
+	libcublas.so.8.0 => /home/leeping/opt/terachem/current/lib/libcublas.so.8.0 (0x00002ba89b173000)
+	libcufft.so.8.0 => /home/leeping/opt/terachem/current/lib/libcufft.so.8.0 (0x00002ba89db24000)
+	libm.so.6 => /lib64/libm.so.6 (0x00002ba8a6972000)
+	libcilkrts.so.5 => /home/leeping/opt/terachem/current/lib/libcilkrts.so.5 (0x00002ba8a6c74000)
+	libstdc++.so.6 => /lib64/libstdc++.so.6 (0x00002ba8a6eb6000)
+	libgcc_s.so.1 => /lib64/libgcc_s.so.1 (0x00002ba8a71be000)
+	libpthread.so.0 => /lib64/libpthread.so.0 (0x00002ba8a73d4000)
+	libc.so.6 => /lib64/libc.so.6 (0x00002ba8a75f1000)
+	/lib64/ld-linux-x86-64.so.2 (0x000055ba701f6000)
+	libdl.so.2 => /lib64/libdl.so.2 (0x00002ba8a79b4000)
+	librt.so.1 => /lib64/librt.so.1 (0x00002ba8a7bb9000)
+	libnvidia-fatbinaryloader.so.384.81 => /lib64/libnvidia-fatbinaryloader.so.384.81 (0x00002ba8a7dc1000)
+#################################################################################################
+
+  _________________________________
+ |         DFTD3 V3.0 Rev 2        |
+ | S.Grimme, University Bonn       |
+ |           Aug  2013             |
+  _________________________________
+ 
+ Please cite DFT-D3 work done with this code as:
+ S. Grimme, J. Antony, S. Ehrlich and H. Krieg,
+ J. Chem. Phys. 132 (2010), 154104
+ If used with BJ-damping cite also
+ S. Grimme, S. Ehrlich and L. Goerigk,
+ J. Comput. Chem. 32 (2011), 1456-1465
+ For DFT-D2 the reference is
+ S. Grimme, J. Comput. Chem., 27 (2006), 1787-1799
+ 
+Scratch directory: ./scr
+Random number seed: 2058092170
+
+XYZ coordinates start.xyz
+Molden File Output: ./scr/start.molden
+Using basis set: tzvp
+Orbitals will be written to ./scr/start.molden every 999999999 time step
+Spin multiplicity: 1
+DIIS will use up to 10 vectors.
+WF convergence threshold: 3.00e-06
+------------------ DIIS+A (DIIS with ADIIS backup) enabled. ------------------
+The following steps will be taken if SCF does not converge within 50 cycles:
+1) ADIIS activated until DIIS-error drops below auxiliary threshold = 1.0e-03
+2) DIIS activated for 200 steps with original convergence threshold = 3.0e-06
+3) Tighten ADIIS auxiliary threshold by 10x
+Above steps will repeat until convergence or 100000 total steps is reached.
+------------------------------------------------------------------------------
+Incremental fock with rebuild every 8 iterations
+Will switch to conventional Fock if diffuse functions are detected
+X-matrix tolerance: 1.00e-08
+PRECISION: MIXED
+Single/Double precision threshold: 1.00e-04
+Density matrix purification turned off
+DFT Functional requested: b97d
+Method: B97D
+  B97 exchange/correlation functional:   1.0 
+Wavefunction: RESTRICTED
+DFT grid type: 3
+Using a single DFT grid.
+Initial guess will be loaded from c0
+
+********************************************
+**** SINGLE POINT GRADIENT CALCULATIONS ****
+********************************************
+SCF:   Initial guess is taken from previous step
+*************WARNING***************
+Unrecognized or unnecessary keywords:
+These are being ignored.
+   mixguess 0.0
+***********************************
+
+using 2 out of 2 CUDA devices
+   Device 0:   GeForce GTX 980 Ti,  6078MB, CC 5.2 -- CPU THREAD 0
+   Device 1:   GeForce GTX 980 Ti,  6078MB, CC 5.2 -- CPU THREAD 1
+-------------------------------------------------------------------
+Compiled with MAGMA support.  MAGMA parameters:
+    Matrices larger than 5000 square will be treated with MAGMA
+       (Change by setting the MagmaMinN environment variable)
+    Magma will use 1 out of 2 GPUs
+       (Change by setting the MagmaNGPUs environment variable)
+-------------------------------------------------------------------
+ CPU Memory Available: 16083.38 MegaWords 
+ GPU Memory Available: 503.79 MegaWords 
+ Maximum recommended basis set size: 8100 basis functions
+ (limited by GPU memory)
+-------------------------------------------------------------------
+Using d-functions. Configuring GPUs accordingly. 
+0: CUBLAS initialized, available GPU memory: 3565MB
+1: CUBLAS initialized, available GPU memory: 3565MB
+
+
+Basis set:       tzvp
+Total atoms:     22
+Total charge:    0
+Total electrons: 76 (38-alpha, 38-beta)
+Number electrons modeled by ECPs: 0
+Total orbitals:  247
+Total AO shells: 129 (82 S-shells; 39 P-shells; 8 D-shells; 0 F-shells; 0 G-shells)
+Spin multiplicity: 1
+Nuclear repulsion energy (QM atoms): 501.808739449511 a.u.
+
+DFTD Energy:    -0.0617170 hartree
+Setting up the DFT grid...
+time to set the grid = 0.13 s
+DFT grid points: 263889 (11994 points/atom)
+
+                      *** Start SCF Iterations ***
+
+ Iter     DIIS Error       Energy change      Electrons        XC Energy           Energy        Time(s)
+----------------------------------------------------------------------------------------------------------
+Skip purify step
+   1     0.0001834216    -789.0613566893    75.9999450259   -75.9568478725    -789.0613566893     1.75  
+   2     0.0000168249      -0.0000069088    75.9999981137   -75.9568715502    -789.0613635981     1.63  
+   3     0.0000117032      -0.0000000004    75.9999981130   -75.9568627127    -789.0613635986     1.68  
+   4     0.0000037075      -0.0000000030    75.9999981134   -75.9568670721    -789.0613636016     1.68  
+   5     0.0000011362      -0.0000000001    75.9999981145   -75.9568630299    -789.0613636017     1.65  
+----------------------------------------------------------------------------------------------------------
+FINAL ENERGY: -789.0613636017 a.u.
+DFTD Dispersion Correction: -0.0617170090 a.u.
+CENTER OF MASS: {0.157778, -0.014174, -0.268950} ANGS
+DIPOLE MOMENT: {-12.672416, 0.657195, 0.227444} (|D| = 12.691484) DEBYE
+
+Running Mulliken population analysis...
+
+GPU Memory: 3457 Mb
+GPU Memory: 3457 Mb
+
+Gradient units are Hartree/Bohr
+---------------------------------------------------
+        dE/dX            dE/dY            dE/dZ
+    0.0000133377     0.0000141025     0.0000017128
+   -0.0007433237    -0.0016646663    -0.0018415863
+    0.0060423477    -0.0001284345     0.0066933942
+   -0.0000044502    -0.0000091756     0.0000006854
+    0.0000141592    -0.0000049283     0.0000018193
+    0.0000044503    -0.0000005406    -0.0000011220
+   -0.0096111355    -0.0011294997    -0.0115743170
+    0.0056964913     0.0057353204     0.0097761437
+   -0.0000019579     0.0000011216     0.0000017551
+    0.0000004643     0.0000015872     0.0000018664
+    0.0000033213     0.0000005514     0.0000009174
+    0.0000011671     0.0000013473     0.0000028381
+   -0.0000057215    -0.0000042829    -0.0000023531
+   -0.0000080686     0.0000073266    -0.0000055003
+   -0.0000010771     0.0000040483    -0.0000025387
+    0.0000002598    -0.0000004448     0.0000085529
+   -0.0000011096    -0.0000060585    -0.0000016537
+    0.0000205986     0.0000544207     0.0000022077
+   -0.0001395964    -0.0000543691     0.0000450181
+   -0.0001287717    -0.0000259022     0.0000787345
+    0.0001004986     0.0000079304    -0.0000452502
+   -0.0012518837    -0.0027994537    -0.0031413242
+---------------------------------------------------
+Net gradient:  1.825682e-10  9.157104e-11  8.130472e-11
+Net torque:   -1.035445e-04  4.194481e-05  1.346479e-04
+
+Total processing time: 10.30 sec 
+
+ Job finished: Fri Mar  9 13:34:51 2018
+

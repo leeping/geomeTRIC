@@ -1,0 +1,13 @@
+coordinates start.xyz
+run gradient
+method b97d
+charge 0
+spinmult 1
+basis tzvp
+dftgrid 3
+dispersion yes
+threall 1e-18
+precision mixed
+threspdp 1e-4
+xtol 1e-8
+orbitalswrtfrq 999999999
