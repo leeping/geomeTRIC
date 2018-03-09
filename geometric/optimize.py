@@ -1515,7 +1515,8 @@ def main():
     parser.add_argument('--nt', type=int, help='Specify number of threads for running in parallel (for TeraChem this should be number of GPUs)')
     parser.add_argument('input', type=str, help='TeraChem or Q-Chem input file')
     parser.add_argument('constraints', type=str, nargs='?', help='Constraint input file (optional)')
-    #print(' '.join(sys.argv))
+    print('geometric-optimize called with the following command line:')
+    print(' '.join(sys.argv))
     args = parser.parse_args(sys.argv[1:])
     # Run the optimizer.
     run_optimizer(**vars(args))
