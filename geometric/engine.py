@@ -461,9 +461,9 @@ class QChem(Engine):
         self.M[0].write(os.path.join(dirname, 'run.in'))
         # Run Qchem
         if self.qcdir:
-            subprocess.call('qchem%s run.in run.out run.d &> run.log' % self.nt(), cwd=dirname, shell=True)
+            subprocess.call('qchem%s run.in run.out run.d > run.log 2>&1' % self.nt(), cwd=dirname, shell=True)
         else:
-            subprocess.call('qchem%s run.in run.out run.d &> run.log' % self.nt(), cwd=dirname, shell=True)
+            subprocess.call('qchem%s run.in run.out run.d > run.log 2>&1' % self.nt(), cwd=dirname, shell=True)
             # Assume reading the SCF guess is desirable
             self.qcdir = True
             self.M.edit_qcrems({'scf_guess':'read'})
