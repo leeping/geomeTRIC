@@ -7,10 +7,8 @@ from collections import OrderedDict
 from geometric.internal import *
 from geometric.engine import set_tcenv, load_tcin, TeraChem, Psi4, QChem, Gromacs
 from geometric.rotate import get_rot, sorted_eigh, calc_fac_dfac
-from forcebalance.gmxio import GMX
-from forcebalance.molecule import Molecule, Elements
-from forcebalance.nifty import row, col, flat, invert_svd, uncommadash, isint, which, eqcgmx, fqcgmx
-import scipy
+from geometric.molecule import Molecule, Elements
+from geometric.nifty import row, col, flat, invert_svd, uncommadash, isint, which, eqcgmx, fqcgmx
 import traceback
 import argparse
 import subprocess
@@ -574,6 +572,10 @@ def get_delta_prime_rfo(alpha, X, G, H, IC, verbose=False):
     dy_prime : float
         Derivative of the internal coordinate step size w/r.t. v
     """
+    try:
+        import scipy
+    except ImportError:
+        raise ImportError("RFO optimization requires scipy package. If this becomes important in the future, scipy will become a required dependency.")
     if IC.haveConstraints():
         raise RuntimeError("Still need to implement RFO with constraints")
     S = alpha*np.matrix(np.eye(len(H)))

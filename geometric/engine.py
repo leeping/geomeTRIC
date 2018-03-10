@@ -5,9 +5,8 @@ import os, sys, shutil
 import numpy as np
 from copy import deepcopy
 from collections import OrderedDict
-from forcebalance.gmxio import GMX
-from forcebalance.molecule import Molecule
-from forcebalance.nifty import eqcgmx, fqcgmx, getWorkQueue, queue_up_src_dest
+from geometric.molecule import Molecule
+from geometric.nifty import eqcgmx, fqcgmx, getWorkQueue, queue_up_src_dest
 from geometric.global_vars import *
 from copy import copy
 import subprocess
@@ -501,6 +500,10 @@ class Gromacs(Engine):
         super(Gromacs, self).__init__(molecule)
 
     def calc_new(self, coords, dirname):
+        try:
+            from forcebalance.gmxio import GMX
+        except ImportError:
+            raise ImportError("ForceBalance is needed to compute energies and gradients using Gromacs.")
         if not os.path.exists(dirname): os.makedirs(dirname)
         Gro = Molecule("conf.gro")
         Gro.xyzs[0] = coords.reshape(-1,3) * 0.529
