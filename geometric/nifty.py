@@ -1,4 +1,5 @@
-"""@package geometric.nifty Nifty functions, intended to be imported by any module within ForceBalance.
+"""@package geometric.nifty Nifty functions, originally intended to be imported by any module within ForceBalance.
+This file was copied over from ForceBalance to geomeTRIC in order to lighten the dependencies of the latter.
 
 Table of Contents:
 - I/O formatting
@@ -9,8 +10,6 @@ Table of Contents:
 - Development stuff (not commonly used)
 
 Named after the mighty Sniffy Handy Nifty (King Sniffy)
-This file was copied over from ForceBalance to geomeTRIC
-in order to lighten the dependencies of the latter.
 
 @author Lee-Ping Wang
 @date 2018-03-10
