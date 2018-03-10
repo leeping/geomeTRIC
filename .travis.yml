@@ -36,7 +36,7 @@ install:
     fi
 
   - source activate p4env
-  - conda install scipy six netowrkx
+  - conda install scipy six networkx
   - conda install pytest pytest-cov codecov -c conda-forge
   - conda list
   - pip install -e .
