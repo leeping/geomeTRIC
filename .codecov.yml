@@ -1,0 +1,13 @@
+coverage:
+  ignore:
+    - geometric/tests/.*
+    - setup.py
+  status:
+    patch: false
+comment:
+  layout: "header"
+  require_changes: false
+  branches: null
+  behavior: default
+  flags: null
+  paths: null
