@@ -22,7 +22,7 @@ from pkg_resources import parse_version
 # For Python 3 compatibility
 try:
     from itertools import zip_longest as zip_longest
-except:
+except ImportError:
     from itertools import izip_longest as zip_longest
 
 from builtins import input
@@ -185,7 +185,7 @@ AllVariableNames = QuantumVariableNames | AtomVariableNames | MetaVariableNames 
 #================================#
 try:
     from .output import *
-except:
+except ImportError:
     from logging import *
     class RawStreamHandler(StreamHandler):
         """Exactly like output.StreamHandler except it does no extra formatting
@@ -275,15 +275,17 @@ if "forcebalance" in __name__:
     #============================#
     #| PDB read/write functions |#
     #============================#
-    try: from .PDB import *
-    except:
+    try:
+        from .PDB import *
+    except ImportError:
         warn('The pdb module cannot be imported (Cannot read/write PDB files)')
 
     #=============================#
     #| Mol2 read/write functions |#
     #=============================#
-    try: from . import Mol2
-    except:
+    try:
+        from . import Mol2
+    except ImportError:
         warn('The Mol2 module cannot be imported (Cannot read/write Mol2 files)')
 
     #==============================#
@@ -293,7 +295,7 @@ if "forcebalance" in __name__:
         from simtk.unit import *
         from simtk.openmm import *
         from simtk.openmm.app import *
-    except:
+    except ImportError:
         warn('The OpenMM modules cannot be imported (Cannot interface with OpenMM)')
 
 #===========================#
@@ -436,7 +438,7 @@ try:
             """ Get a list of the coordinates. """
             coors = nx.get_node_attributes(self,'x')
             return np.array([coors[i] for i in self.L()])
-except:
+except ImportError:
     warn("NetworkX cannot be imported (topology tools won't work).  Most functionality should still work though.")
 
 def TopEqual(mol1, mol2):
@@ -1024,6 +1026,149 @@ class Molecule(object):
 
     """
 
+    def __init__(self, fnm = None, ftype = None, top = None, ttype = None, **kwargs):
+        """
+        Create a Molecule object.
+
+        Parameters
+        ----------
+        fnm : str, optional
+            File name to create the Molecule object from.  If provided,
+            the file will be parsed and used to fill in the fields such as
+            elem (elements), xyzs (coordinates) and so on.  If ftype is not
+            provided, will automatically try to determine file type from file
+            extension.  If not provided, will create an empty object.
+        ftype : str, optional
+            File type, corresponding to an entry in the internal table of known
+            file types.  Provide this if you have a nonstandard file extension
+            or if you wish to force to invoke a particular parser.
+        top : str, optional
+            "Topology" file name.  If provided, will build the Molecule
+            using this file name, then "fnm" will load frames instead.
+        ttype : str, optional
+            "Typology" file type.
+        build_topology : bool, optional
+            Build the molecular topology consisting of: topology (overall connectivity graph),
+            molecules (list of connected subgraphs), bonds (if not explicitly read in), default True
+        toppbc : bool, optional
+            Use periodic boundary conditions when building the molecular topology, default False
+            The build_topology code will attempt to determine this intelligently.
+        topframe : int, optional
+            Provide a frame number for building the molecular topology, default first frame
+        Fac : float, optional
+            Multiplicative factor to covalent radii criterion for deciding whether two atoms are bonded
+            Default value of 1.2 is reasonable, 1.4 will produce lots of bonds
+        positive_resid : bool, optional
+            If provided, enforce all positive resIDs.
+        """
+        # If we passed in a "topology" file, read it in first, and then load the frames
+        if top is not None:
+            load_fnm = fnm
+            load_type = ftype
+            fnm = top
+            ftype = ttype
+        else:
+            load_fnm = None
+            load_type = None
+        #=========================================#
+        #|           File type tables            |#
+        #|    Feel free to edit these as more    |#
+        #|      readers / writers are added      |#
+        #=========================================#
+        ## The table of file readers
+        self.Read_Tab = {'gaussian' : self.read_com,
+                         'gromacs'  : self.read_gro,
+                         'charmm'   : self.read_charmm,
+                         'dcd'      : self.read_dcd,
+                         'mdcrd'    : self.read_mdcrd,
+                         'inpcrd'   : self.read_inpcrd,
+                         'pdb'      : self.read_pdb,
+                         'xyz'      : self.read_xyz,
+                         'mol2'     : self.read_mol2,
+                         'qcin'     : self.read_qcin,
+                         'qcout'    : self.read_qcout,
+                         'qcesp'    : self.read_qcesp,
+                         'qdata'    : self.read_qdata,
+                         'tinker'   : self.read_arc}
+        ## The table of file writers
+        self.Write_Tab = {'gromacs' : self.write_gro,
+                          'xyz'     : self.write_xyz,
+                          'lammps'  : self.write_lammps_data,
+                          'molproq' : self.write_molproq,
+                          'dcd'     : self.write_dcd,
+                          'inpcrd'  : self.write_inpcrd,
+                          'mdcrd'   : self.write_mdcrd,
+                          'pdb'     : self.write_pdb,
+                          'qcin'    : self.write_qcin,
+                          'qdata'   : self.write_qdata,
+                          'tinker'  : self.write_arc}
+        ## A funnel dictionary that takes redundant file types
+        ## and maps them down to a few.
+        self.Funnel    = {'gromos'  : 'gromacs',
+                          'gro'     : 'gromacs',
+                          'g96'     : 'gromacs',
+                          'gmx'     : 'gromacs',
+                          'in'      : 'qcin',
+                          'qcin'    : 'qcin',
+                          'com'     : 'gaussian',
+                          'rst'     : 'inpcrd',
+                          'out'     : 'qcout',
+                          'esp'     : 'qcesp',
+                          'txt'     : 'qdata',
+                          'crd'     : 'charmm',
+                          'cor'     : 'charmm',
+                          'arc'     : 'tinker'}
+        ## Creates entries like 'gromacs' : 'gromacs' and 'xyz' : 'xyz'
+        ## in the Funnel
+        self.positive_resid = kwargs.get('positive_resid', 0)
+        self.built_bonds = False
+        ## Topology settings
+        self.top_settings = {'toppbc' : kwargs.get('toppbc', False),
+                             'topframe' : kwargs.get('topframe', 0),
+                             'Fac' : kwargs.get('Fac', 1.2),
+                             'read_bonds' : False,
+                             'fragment' : kwargs.get('fragment', False),
+                             'radii' : kwargs.get('radii', {})}
+
+        for i in set(list(self.Read_Tab.keys()) + list(self.Write_Tab.keys())):
+            self.Funnel[i] = i
+        # Data container.  All of the data is stored in here.
+        self.Data = {}
+        ## Read in stuff if we passed in a file name, otherwise return an empty instance.
+        if fnm is not None:
+            self.Data['fnm'] = fnm
+            if ftype is None:
+                ## Try to determine from the file name using the extension.
+                ftype = os.path.splitext(fnm)[1][1:]
+            if not os.path.exists(fnm):
+                logger.error('Tried to create Molecule object from a file that does not exist: %s\n' % fnm)
+                raise IOError
+            self.Data['ftype'] = ftype
+            ## Actually read the file.
+            Parsed = self.Read_Tab[self.Funnel[ftype.lower()]](fnm, **kwargs)
+            ## Set member variables.
+            for key, val in Parsed.items():
+                self.Data[key] = val
+            ## Create a list of comment lines if we don't already have them from reading the file.
+            if 'comms' not in self.Data:
+                self.comms = ['From %s: Frame %i / %i' % (fnm, i+1, self.ns) for i in range(self.ns)]
+                if 'qm_energies' in self.Data:
+                    for i in range(self.ns):
+                        self.comms[i] += ', Energy= % 18.10f' % self.qm_energies[i]
+            else:
+                self.comms = [i.expandtabs() for i in self.comms]
+            ## Build the topology.
+            if kwargs.get('build_topology', True) and hasattr(self, 'elem') and self.na > 0:
+                self.build_topology(force_bonds=False)
+        if load_fnm is not None:
+            self.load_frames(load_fnm, ftype=load_type, **kwargs)
+
+    #=====================================#
+    #|     Core read/write functions     |#
+    #| Hopefully we won't have to change |#
+    #|         these very often!         |#
+    #=====================================#
+
     def __len__(self):
         """ Return the number of frames in the trajectory. """
         L = -1
@@ -1332,148 +1477,6 @@ class Molecule(object):
     def append(self,other):
         self += other
 
-    def __init__(self, fnm = None, ftype = None, top = None, ttype = None, **kwargs):
-        """
-        Create a Molecule object.
-
-        Parameters
-        ----------
-        fnm : str, optional
-            File name to create the Molecule object from.  If provided,
-            the file will be parsed and used to fill in the fields such as
-            elem (elements), xyzs (coordinates) and so on.  If ftype is not
-            provided, will automatically try to determine file type from file
-            extension.  If not provided, will create an empty object.
-        ftype : str, optional
-            File type, corresponding to an entry in the internal table of known
-            file types.  Provide this if you have a nonstandard file extension
-            or if you wish to force to invoke a particular parser.
-        top : str, optional
-            "Topology" file name.  If provided, will build the Molecule
-            using this file name, then "fnm" will load frames instead.
-        ttype : str, optional
-            "Typology" file type.
-        build_topology : bool, optional
-            Build the molecular topology consisting of: topology (overall connectivity graph),
-            molecules (list of connected subgraphs), bonds (if not explicitly read in), default True
-        toppbc : bool, optional
-            Use periodic boundary conditions when building the molecular topology, default False
-            The build_topology code will attempt to determine this intelligently.
-        topframe : int, optional
-            Provide a frame number for building the molecular topology, default first frame
-        Fac : float, optional
-            Multiplicative factor to covalent radii criterion for deciding whether two atoms are bonded
-            Default value of 1.2 is reasonable, 1.4 will produce lots of bonds
-        positive_resid : bool, optional
-            If provided, enforce all positive resIDs.
-        """
-        # If we passed in a "topology" file, read it in first, and then load the frames
-        if top is not None:
-            load_fnm = fnm
-            load_type = ftype
-            fnm = top
-            ftype = ttype
-        else:
-            load_fnm = None
-            load_type = None
-        #=========================================#
-        #|           File type tables            |#
-        #|    Feel free to edit these as more    |#
-        #|      readers / writers are added      |#
-        #=========================================#
-        ## The table of file readers
-        self.Read_Tab = {'gaussian' : self.read_com,
-                         'gromacs'  : self.read_gro,
-                         'charmm'   : self.read_charmm,
-                         'dcd'      : self.read_dcd,
-                         'mdcrd'    : self.read_mdcrd,
-                         'inpcrd'   : self.read_inpcrd,
-                         'pdb'      : self.read_pdb,
-                         'xyz'      : self.read_xyz,
-                         'mol2'     : self.read_mol2,
-                         'qcin'     : self.read_qcin,
-                         'qcout'    : self.read_qcout,
-                         'qcesp'    : self.read_qcesp,
-                         'qdata'    : self.read_qdata,
-                         'tinker'   : self.read_arc}
-        ## The table of file writers
-        self.Write_Tab = {'gromacs' : self.write_gro,
-                          'xyz'     : self.write_xyz,
-                          'lammps'  : self.write_lammps_data,
-                          'molproq' : self.write_molproq,
-                          'dcd'     : self.write_dcd,
-                          'inpcrd'  : self.write_inpcrd,
-                          'mdcrd'   : self.write_mdcrd,
-                          'pdb'     : self.write_pdb,
-                          'qcin'    : self.write_qcin,
-                          'qdata'   : self.write_qdata,
-                          'tinker'  : self.write_arc}
-        ## A funnel dictionary that takes redundant file types
-        ## and maps them down to a few.
-        self.Funnel    = {'gromos'  : 'gromacs',
-                          'gro'     : 'gromacs',
-                          'g96'     : 'gromacs',
-                          'gmx'     : 'gromacs',
-                          'in'      : 'qcin',
-                          'qcin'    : 'qcin',
-                          'com'     : 'gaussian',
-                          'rst'     : 'inpcrd',
-                          'out'     : 'qcout',
-                          'esp'     : 'qcesp',
-                          'txt'     : 'qdata',
-                          'crd'     : 'charmm',
-                          'cor'     : 'charmm',
-                          'arc'     : 'tinker'}
-        ## Creates entries like 'gromacs' : 'gromacs' and 'xyz' : 'xyz'
-        ## in the Funnel
-        self.positive_resid = kwargs.get('positive_resid', 0)
-        self.built_bonds = False
-        ## Topology settings
-        self.top_settings = {'toppbc' : kwargs.get('toppbc', False),
-                             'topframe' : kwargs.get('topframe', 0),
-                             'Fac' : kwargs.get('Fac', 1.2),
-                             'read_bonds' : False,
-                             'fragment' : kwargs.get('fragment', False),
-                             'radii' : kwargs.get('radii', {})}
-
-        for i in set(list(self.Read_Tab.keys()) + list(self.Write_Tab.keys())):
-            self.Funnel[i] = i
-        # Data container.  All of the data is stored in here.
-        self.Data = {}
-        ## Read in stuff if we passed in a file name, otherwise return an empty instance.
-        if fnm is not None:
-            self.Data['fnm'] = fnm
-            if ftype is None:
-                ## Try to determine from the file name using the extension.
-                ftype = os.path.splitext(fnm)[1][1:]
-            if not os.path.exists(fnm):
-                logger.error('Tried to create Molecule object from a file that does not exist: %s\n' % fnm)
-                raise IOError
-            self.Data['ftype'] = ftype
-            ## Actually read the file.
-            Parsed = self.Read_Tab[self.Funnel[ftype.lower()]](fnm, **kwargs)
-            ## Set member variables.
-            for key, val in Parsed.items():
-                self.Data[key] = val
-            ## Create a list of comment lines if we don't already have them from reading the file.
-            if 'comms' not in self.Data:
-                self.comms = ['From %s: Frame %i / %i' % (fnm, i+1, self.ns) for i in range(self.ns)]
-                if 'qm_energies' in self.Data:
-                    for i in range(self.ns):
-                        self.comms[i] += ', Energy= % 18.10f' % self.qm_energies[i]
-            else:
-                self.comms = [i.expandtabs() for i in self.comms]
-            ## Build the topology.
-            if kwargs.get('build_topology', True) and hasattr(self, 'elem') and self.na > 0:
-                self.build_topology(force_bonds=False)
-        if load_fnm is not None:
-            self.load_frames(load_fnm, ftype=load_type, **kwargs)
-
-    #=====================================#
-    #|     Core read/write functions     |#
-    #| Hopefully we won't have to change |#
-    #|         these very often!         |#
-    #=====================================#
 
     def require(self, *args):
         for arg in args:

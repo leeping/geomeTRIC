@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 from __future__ import print_function, division
 
 import argparse
@@ -1073,7 +1071,7 @@ def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None, xyzout2
             # _exec("touch energy.txt") #JS these two lines used to make a energy.txt file using the final energy
             with open("energy.txt","w") as f:
                 print("% .10f" % E, file=f)
-            progress2.xyzs = [X.reshape(-1,3) * 0.529177] #JS these two lines used to make a opt.xyz file along with the if statement below. 
+            progress2.xyzs = [X.reshape(-1,3) * 0.529177] #JS these two lines used to make a opt.xyz file along with the if statement below.
             progress2.comms = ['Iteration %i Energy % .8f' % (Iteration, E)]
             if xyzout2 is not None:
                 progress2.write(xyzout2) #This contains the last frame of the trajectory.
@@ -1084,13 +1082,13 @@ def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None, xyzout2
         # This code rejects steps / reduces trust radius only if we're close to satisfying constraints;
         # it improved performance in some cases but worsened for others.
         rejectOk = (trust > thre_rj and E > Eprev and (Quality < -10 or not farConstraints))
-        # This statement was added to prevent 
+        # This statement was added to prevent
         # some occasionally observed infinite loops
         if farConstraints: rejectOk = False
         # rejectOk = (trust > thre_rj and E > Eprev)
         if Quality <= ThreLQ:
             # For bad steps, the trust radius is reduced
-            if not farConstraints: 
+            if not farConstraints:
                 trust = max(Convergence_drms, trust/2)
                 trustprint = "\x1b[91m-\x1b[0m"
             else:
@@ -1342,7 +1340,7 @@ def get_molecule_engine(**kwargs):
             del M.Data['boxes']
         engine = Gromacs(M)
         if nt is not None:
-            raise RuntimeError("--nt not configured to work with --gmx yet")    
+            raise RuntimeError("--nt not configured to work with --gmx yet")
     elif psi4:
         engine = Psi4()
         engine.load_psi4_input(inputf)
@@ -1397,7 +1395,7 @@ def run_optimizer(**kwargs):
         for f in ['c0', 'ca0', 'cb0']:
             if os.path.exists(os.path.join(dirname, 'scr', f)):
                 os.remove(os.path.join(dirname, 'scr', f))
-    
+
     # QC-specific scratch folder
     qcdir = kwargs.get('qdir', None)
     qchem = kwargs.get('qchem', False)

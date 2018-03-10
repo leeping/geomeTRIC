@@ -35,7 +35,7 @@ import numpy as np
 # For Python 3 compatibility
 try:
     from itertools import zip_longest as zip_longest
-except:
+except ImportError:
     from itertools import izip_longest as zip_longest
 import threading
 from pickle import Pickler, Unpickler
@@ -52,7 +52,7 @@ from collections import OrderedDict, defaultdict
 #================================#
 try:
     from .output import *
-except:
+except ImportError:
     from logging import *
     class RawStreamHandler(StreamHandler):
         """Exactly like output.StreamHandler except it does no extra formatting
@@ -73,14 +73,14 @@ except:
 try:
     import bz2
     HaveBZ2 = True
-except:
+except ImportError:
     logger.warning("bz2 module import failed (used in compressing or decompressing pickle files)\n")
     HaveBZ2 = False
 
 try:
     import gzip
     HaveGZ = True
-except:
+except ImportError:
     logger.warning("gzip module import failed (used in compressing or decompressing pickle files)\n")
     HaveGZ = False
 
@@ -313,9 +313,11 @@ def isint(word):
     @return answer Boolean which specifies whether the string is an integer (only +/- sign followed by digits)
 
     """
-    try: word = str(word)
-    except: return False
-    return re.match('^[-+]?[0-9]+$',word)
+    try:
+        word = str(word)
+    except:
+        return False
+    return re.match('^[-+]?[0-9]+$', word)
 
 def isfloat(word):
     """Matches ANY number; it can be a decimal, scientific notation, what have you
