@@ -1,49 +1,59 @@
-os:
-  - linux
+# After changing this file, check it on:
+#   http://lint.travis-ci.org/
 
-language: c
+language: python
+
+# Run jobs on container-based infrastructure, can be overridden per job
 sudo: false
-addons:
-  apt:
-    sources:
-    - ubuntu-toolchain-r-test
+
+matrix:
+  include:
+
+  - env:
+    - PYTHON_VER='2.7'
+
+  - env:
+    - PYTHON_VER='3.6'
 
 before_install:
-  - source devtools/travis-ci/install.sh
-  - export PYTHONUNBUFFERED=true
-  - export CC=gcc
-  - export CXX=g++
+  - uname -a
+  - free -m
+  - df -h
+  - ulimit -a
 
 install:
+  - wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh
+  - bash miniconda.sh -b -p $HOME/miniconda
+  - export PATH="$HOME/miniconda/bin:$PATH"
+  - hash -r
+  - conda config --set always_yes yes --set changeps1 no
+  - conda update -q conda
+  - conda info -a
+  - if [[ "$PYTHON_VER" == "2.7" ]]; then
+        conda create -q -n p4env python=$PYTHON_VER psi4 numpy=1.12 -c psi4;
+    else
+        conda create -q -n p4env python=$PYTHON_VER psi4 numpy=1.13 -c psi4/label/dev -c psi4;
+    fi
+
+  - source activate p4env
+  - conda install scipy six netowrkx
+  - conda install pytest pytest-cov codecov -c conda-forge
+  - conda list
+
+before_script:
+  - python -V
 
 script:
-  # Create a test environment
-  - conda create --yes -n test python=$python
-  # Activate the test environment
-  - source activate test
-  - conda config --add channels ${ORGNAME} --add channels conda-forge
-  # Add omnia dev channels
-  - conda config --add channels https://conda.anaconda.org/omnia/label/dev
-  # Build and install geometric
-  - conda build devtools/conda-recipe
-  - conda install --yes --use-local ${PACKAGENAME}-dev
-  # Install testing dependencies
-  - conda install --yes --quiet nose nose-timer
-  # Test the package
-  - cd devtools && nosetests $PACKAGENAME --nocapture --verbosity=2 --with-timer -a '!slow' && cd ..
+    # Run geometric/tests/*
+  - py.test -v --cov=./
 
-env:
-  matrix:
-    - python=2.7  CONDA_PY=27
-    - python=3.5  CONDA_PY=35
-    - python=3.6  CONDA_PY=36
+    # Hacky way to run examples
+  - cd examples/water2_psi4
+  - coverage run `which geometric-optimize` --psi4 water2.psi4in
 
-  global:
-    - PACKAGENAME="geometric"
-    - ORGNAME="omnia"
-    # The architecture to download for the OpenEye toolkits
-    - OE_ARCH="linux-x64"
+after_success:
+  - codecov
 
-#after_success:
-#  - echo "after_success"
-#  - source devtools/travis-ci/after_success.sh
+notifications:
+  email: false
+
