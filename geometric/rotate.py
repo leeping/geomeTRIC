@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 
 from __future__ import division
-from forcebalance.nifty import invert_svd
-from forcebalance.molecule import *
+from geometric.nifty import invert_svd
+from geometric.molecule import *
 import numpy as np
 import sys
 
