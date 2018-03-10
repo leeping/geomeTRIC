@@ -2,6 +2,7 @@
 #|    GeomeTRIC   |#
 #==================#
 [![Build Status](https://travis-ci.org/leeping/geomeTRIC.svg?branch=master)](https://travis-ci.org/leeping/geomeTRIC)
+[![codecov](https://codecov.io/gh/leeping/geometric/branch/master/graph/badge.svg)](https://codecov.io/gh/leeping/geometric)
 
 This is an open-source geometry optimization code for quantum
 chemistry.  The code works by calling external software for the energy

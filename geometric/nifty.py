@@ -24,10 +24,6 @@ import os
 import re
 import shutil
 import sys
-from builtins import object
-from builtins import range
-from builtins import str
-from builtins import zip
 from select import select
 
 import numpy as np
