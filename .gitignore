@@ -59,3 +59,10 @@ docs/_build/
 
 # PyBuilder
 target/
+
+# geomeTRIC output
+*.tmp/
+*_optim.xyz
+output.*/
+opt.xyz
+energy.txt

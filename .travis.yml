@@ -39,6 +39,7 @@ install:
   - conda install scipy six netowrkx
   - conda install pytest pytest-cov codecov -c conda-forge
   - conda list
+  - pip install -e .
 
 before_script:
   - python -V
@@ -47,7 +48,7 @@ script:
     # Run geometric/tests/*
   - py.test -v --cov=./
 
-    # Hacky way to run examples
+    # Hacky way to run examples (fixme)
   - cd examples/water2_psi4
   - coverage run `which geometric-optimize` --psi4 water2.psi4in
 
