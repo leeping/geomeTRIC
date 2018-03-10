@@ -1,19 +1,21 @@
 #!/usr/bin/env python
 
 from __future__ import print_function, division
-import numpy as np
-from copy import deepcopy
-from collections import OrderedDict
-from geometric.internal import *
-from geometric.engine import set_tcenv, load_tcin, TeraChem, Psi4, QChem, Gromacs
-from geometric.rotate import get_rot, sorted_eigh, calc_fac_dfac
-from geometric.molecule import Molecule, Elements
-from geometric.nifty import row, col, flat, invert_svd, uncommadash, isint, which, eqcgmx, fqcgmx
-import traceback
+
 import argparse
-import subprocess
 import itertools
-import os, sys, shutil
+import os
+import shutil
+import sys
+
+import numpy as np
+
+from geometric.engine import set_tcenv, load_tcin, TeraChem, Psi4, QChem, Gromacs
+from geometric.internal import *
+from geometric.molecule import Molecule, Elements
+from geometric.nifty import row, col, flat, invert_svd, uncommadash, isint
+from geometric.rotate import get_rot, sorted_eigh, calc_fac_dfac
+
 
 def RebuildHessian(IC, H0, coord_seq, grad_seq, params):
     """
@@ -1488,7 +1490,7 @@ def run_optimizer(**kwargs):
     print_msg()
 
 def main():
-    "Read user's input"
+    """Read user's input"""
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--coordsys', type=str, default='tric', help='Coordinate system: "cart" for Cartesian, "prim" for Primitive (a.k.a redundant), '

@@ -1,108 +1,48 @@
+from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
-from __future__ import absolute_import
-#======================================================================#
-#|                                                                    |#
-#|              Chemical file format conversion module                |#
-#|                                                                    |#
-#|                Lee-Ping Wang (leeping@ucdavis.edu)                 |#
-#|                   Last updated March 10, 2018                      |#
-#|                                                                    |#
-#|   This code is part of geomeTRIC and is covered under the          |#
-#|   geomeTRIC copyright notice and MIT license.                      |#
-#|   Please see https://github.com/leeping/geomeTRIC for details.     |#
-#|                                                                    |#
-#|   Special note:                                                    |#
-#|   This file was copied over from ForceBalance to geomeTRIC         |#
-#|   in order to lighten the dependencies of the latter.              |#
-#|   Please make sure this file is up-to-date in                      |#
-#|   both the 'geomeTRIC' and 'forcebalance' modules.                 |#
-#|                                                                    |#
-#|   Feedback and suggestions are encouraged.                         |#
-#|                                                                    |#
-#|   What this is for:                                                |#
-#|   Converting a molecule between file formats                       |#
-#|   Loading and processing of trajectories                           |#
-#|   (list of geometries for the same set of atoms)                   |#
-#|   Concatenating or slicing trajectories                            |#
-#|   Combining molecule metadata (charge, Q-Chem rem variables)       |#
-#|                                                                    |#
-#|   Supported file formats:                                          |#
-#|   See the __init__ method in the Molecule class.                   |#
-#|                                                                    |#
-#|   Note to self / developers:                                       |#
-#|   Please make this file as standalone as possible                  |#
-#|   (i.e. don't introduce dependencies).  If we load an external     |#
-#|   library to parse a file, do so with 'try / except' so that       |#
-#|   the module is still usable even if certain parts are missing.    |#
-#|   It's better to be like a Millennium Falcon. :P                   |#
-#|                                                                    |#
-#|   At present, when I perform operations like adding two objects,   |#
-#|   the sum is created from deep copies of data members in the       |#
-#|   originals. This is because copying by reference is confusing;    |#
-#|   suppose if I do B += A and modify something in B; it should not  |#
-#|   change in A.                                                     |#
-#|                                                                    |#
-#|   A consequence of this is that data members should not be too     |#
-#|   complicated; they should be things like lists or dicts, and NOT  |#
-#|   contain references to themselves.                                |#
-#|                                                                    |#
-#|   To-do list: Handling of comments is still not very good.         |#
-#|   Comments from previous files should be 'passed on' better.       |#
-#|                                                                    |#
-#|              Contents of this file:                                |#
-#|              0) Names of data variables                            |#
-#|              1) Imports                                            |#
-#|              2) Subroutines                                        |#
-#|              3) Molecule class                                     |#
-#|                a) Class customizations (add, getitem)              |#
-#|                b) Instantiation                                    |#
-#|                c) Core functionality (read, write)                 |#
-#|                d) Reading functions                                |#
-#|                e) Writing functions                                |#
-#|                f) Extra stuff                                      |#
-#|              4) "main" function (if executed)                      |#
-#|                                                                    |#
-#|                   Required: Python 2.7 or 3.6                      |#
-#|                             (2.6, 3.5 and earlier untested)        |#
-#|                             NumPy 1.6                              |#
-#|                   Optional: Mol2, PDB, DCD readers                 |#
-#|                    (can be found in ForceBalance)                  |#
-#|                    NetworkX package (for topologies)               |#
-#|                                                                    |#
-#|             Thanks: Todd Dolinsky, Yong Huang,                     |#
-#|                     Kyle Beauchamp (PDB)                           |#
-#|                     John Stone (DCD Plugin)                        |#
-#|                     Pierre Tuffery (Mol2 Plugin)                   |#
-#|                     #python IRC chat on FreeNode                   |#
-#|                                                                    |#
-#|             Contributors: Leah Isseroff Bendavid                   |#
-#|                           Yudong Qiu                               |#
-#|                                                                    |#
-#|             Instructions:                                          |#
-#|                                                                    |#
-#|               To import:                                           |#
-#|                 from molecule import Molecule                      |#
-#|               To create a Molecule object:                         |#
-#|                 MyMol = Molecule(fnm)                              |#
-#|               To convert to a new file format:                     |#
-#|                 MyMol.write('newfnm.format')                       |#
-#|               To concatenate geometries:                           |#
-#|                 MyMol += MyMolB                                    |#
-#|                                                                    |#
-#======================================================================#
 
-#=========================================#
-#|     DECLARE VARIABLE NAMES HERE       |#
-#|                                       |#
-#|  Any member variable in the Molecule  |#
-#| class must be declared here otherwise |#
-#| the Molecule class won't recognize it |#
-#=========================================#
-#| Data attributes in FrameVariableNames |#
-#| must be a list along the frame axis,  |#
-#| and they must have the same length.   |#
-#=========================================#
+# OrderedDict requires Python 2.7 or higher
+import copy
+import imp
+import itertools
+import os
+import re
+import sys
+import sysconfig
+from collections import OrderedDict, namedtuple, Counter
+from ctypes import *
+from datetime import date
+from warnings import warn
+
+import numpy as np
+from numpy import sin, cos, arccos
+from pkg_resources import parse_version
+
+# For Python 3 compatibility
+try:
+    from itertools import zip_longest as zip_longest
+except:
+    from itertools import izip_longest as zip_longest
+
+from builtins import input
+from builtins import object
+from builtins import range
+from builtins import str
+from builtins import zip
+
+
+# =========================================#
+# |     DECLARE VARIABLE NAMES HERE       |#
+# |                                       |#
+# |  Any member variable in the Molecule  |#
+# | class must be declared here otherwise |#
+# | the Molecule class won't recognize it |#
+# =========================================#
+# | Data attributes in FrameVariableNames |#
+# | must be a list along the frame axis,  |#
+# | and they must have the same length.   |#
+# =========================================#
 # xyzs       = List of arrays of atomic xyz coordinates
 # comms      = List of comment strings
 # boxes      = List of 3-element or 9-element arrays for periodic boxes
@@ -112,11 +52,97 @@ from __future__ import absolute_import
 # qm_zpe     = Zero point energy, kcal/mol (from a qchem freq calculation)
 # qm_entropy = Entropy contribution at STP, cal/mol.K (from a qchem freq calculation)
 # qm_enthalpy= Enthalpic contribution at STP, excluding electronic energy and ZPE, kcal/mol (from a qchem freq calculation)
-from builtins import input
-from builtins import zip
-from builtins import str
-from builtins import range
-from builtins import object
+
+# ======================================================================#
+# |                                                                    |#
+# |              Chemical file format conversion module                |#
+# |                                                                    |#
+# |                Lee-Ping Wang (leeping@ucdavis.edu)                 |#
+# |                   Last updated March 10, 2018                      |#
+# |                                                                    |#
+# |   This code is part of geomeTRIC and is covered under the          |#
+# |   geomeTRIC copyright notice and MIT license.                      |#
+# |   Please see https://github.com/leeping/geomeTRIC for details.     |#
+# |                                                                    |#
+# |   Special note:                                                    |#
+# |   This file was copied over from ForceBalance to geomeTRIC         |#
+# |   in order to lighten the dependencies of the latter.              |#
+# |   Please make sure this file is up-to-date in                      |#
+# |   both the 'geomeTRIC' and 'forcebalance' modules.                 |#
+# |                                                                    |#
+# |   Feedback and suggestions are encouraged.                         |#
+# |                                                                    |#
+# |   What this is for:                                                |#
+# |   Converting a molecule between file formats                       |#
+# |   Loading and processing of trajectories                           |#
+# |   (list of geometries for the same set of atoms)                   |#
+# |   Concatenating or slicing trajectories                            |#
+# |   Combining molecule metadata (charge, Q-Chem rem variables)       |#
+# |                                                                    |#
+# |   Supported file formats:                                          |#
+# |   See the __init__ method in the Molecule class.                   |#
+# |                                                                    |#
+# |   Note to self / developers:                                       |#
+# |   Please make this file as standalone as possible                  |#
+# |   (i.e. don't introduce dependencies).  If we load an external     |#
+# |   library to parse a file, do so with 'try / except' so that       |#
+# |   the module is still usable even if certain parts are missing.    |#
+# |   It's better to be like a Millennium Falcon. :P                   |#
+# |                                                                    |#
+# |   At present, when I perform operations like adding two objects,   |#
+# |   the sum is created from deep copies of data members in the       |#
+# |   originals. This is because copying by reference is confusing;    |#
+# |   suppose if I do B += A and modify something in B; it should not  |#
+# |   change in A.                                                     |#
+# |                                                                    |#
+# |   A consequence of this is that data members should not be too     |#
+# |   complicated; they should be things like lists or dicts, and NOT  |#
+# |   contain references to themselves.                                |#
+# |                                                                    |#
+# |   To-do list: Handling of comments is still not very good.         |#
+# |   Comments from previous files should be 'passed on' better.       |#
+# |                                                                    |#
+# |              Contents of this file:                                |#
+# |              0) Names of data variables                            |#
+# |              1) Imports                                            |#
+# |              2) Subroutines                                        |#
+# |              3) Molecule class                                     |#
+# |                a) Class customizations (add, getitem)              |#
+# |                b) Instantiation                                    |#
+# |                c) Core functionality (read, write)                 |#
+# |                d) Reading functions                                |#
+# |                e) Writing functions                                |#
+# |                f) Extra stuff                                      |#
+# |              4) "main" function (if executed)                      |#
+# |                                                                    |#
+# |                   Required: Python 2.7 or 3.6                      |#
+# |                             (2.6, 3.5 and earlier untested)        |#
+# |                             NumPy 1.6                              |#
+# |                   Optional: Mol2, PDB, DCD readers                 |#
+# |                    (can be found in ForceBalance)                  |#
+# |                    NetworkX package (for topologies)               |#
+# |                                                                    |#
+# |             Thanks: Todd Dolinsky, Yong Huang,                     |#
+# |                     Kyle Beauchamp (PDB)                           |#
+# |                     John Stone (DCD Plugin)                        |#
+# |                     Pierre Tuffery (Mol2 Plugin)                   |#
+# |                     #python IRC chat on FreeNode                   |#
+# |                                                                    |#
+# |             Contributors: Leah Isseroff Bendavid                   |#
+# |                           Yudong Qiu                               |#
+# |                                                                    |#
+# |             Instructions:                                          |#
+# |                                                                    |#
+# |               To import:                                           |#
+# |                 from molecule import Molecule                      |#
+# |               To create a Molecule object:                         |#
+# |                 MyMol = Molecule(fnm)                              |#
+# |               To convert to a new file format:                     |#
+# |                 MyMol.write('newfnm.format')                       |#
+# |               To concatenate geometries:                           |#
+# |                 MyMol += MyMolB                                    |#
+# |                                                                    |#
+# ======================================================================#
 FrameVariableNames = set(['xyzs', 'comms', 'boxes', 'qm_hessians', 'qm_grads', 'qm_energies', 'qm_interaction',
                           'qm_espxyzs', 'qm_espvals', 'qm_extchgs', 'qm_mulliken_charges', 'qm_mulliken_spins',
                           'qm_zpe', 'qm_entropy', 'qm_enthalpy', 'qm_bondorder'])
@@ -152,23 +178,7 @@ QuantumVariableNames = set(['qcrems', 'qctemplate', 'charge', 'mult', 'qcsuf', '
 # Superset of all variable names.
 AllVariableNames = QuantumVariableNames | AtomVariableNames | MetaVariableNames | FrameVariableNames
 
-# OrderedDict requires Python 2.7 or higher
-import os, sys, re, copy
-from datetime import date
-import numpy as np
-from numpy import sin, cos, arcsin, arccos
-import imp
-import itertools
-from collections import OrderedDict, namedtuple, Counter
-from ctypes import *
-from warnings import warn
-import sysconfig
-from pkg_resources import parse_version
-# For Python 3 compatibility
-try:
-    from itertools import zip_longest as zip_longest
-except:
-    from itertools import izip_longest as zip_longest
+
 
 #================================#
 #       Set up the logger        #
@@ -406,24 +416,24 @@ try:
                 return False
             return nx.is_isomorphic(self,other,node_match=nodematch)
         def __hash__(self):
-            ''' The hash function is something we can use to discard two things that are obviously not equal.  Here we neglect the hash. '''
+            """ The hash function is something we can use to discard two things that are obviously not equal.  Here we neglect the hash. """
             return 1
         def L(self):
-            ''' Return a list of the sorted atom numbers in this graph. '''
+            """ Return a list of the sorted atom numbers in this graph. """
             return sorted(list(self.nodes()))
         def AStr(self):
-            ''' Return a string of atoms, which serves as a rudimentary 'fingerprint' : '99,100,103,151' . '''
+            """ Return a string of atoms, which serves as a rudimentary 'fingerprint' : '99,100,103,151' . """
             return ','.join(['%i' % i for i in self.L()])
         def e(self):
-            ''' Return an array of the elements.  For instance ['H' 'C' 'C' 'H']. '''
+            """ Return an array of the elements.  For instance ['H' 'C' 'C' 'H']. """
             elems = nx.get_node_attributes(self,'e')
             return [elems[i] for i in self.L()]
         def ef(self):
-            ''' Create an Empirical Formula '''
+            """ Create an Empirical Formula """
             Formula = list(self.e())
             return ''.join([('%s%i' % (k, Formula.count(k)) if Formula.count(k) > 1 else '%s' % k) for k in sorted(set(Formula))])
         def x(self):
-            ''' Get a list of the coordinates. '''
+            """ Get a list of the coordinates. """
             coors = nx.get_node_attributes(self,'x')
             return np.array([coors[i] for i in self.L()])
 except:
@@ -915,7 +925,7 @@ def EqualSpacing(Mol, frames=0, dx=0, RMSD=True, align=True):
 def AtomContact(xyz, pairs, box=None, displace=False):
     """
     Compute distances between pairs of atoms.
-    
+
     Parameters
     ----------
     xyz : np.ndarray
@@ -1946,7 +1956,7 @@ class Molecule(object):
             # Create a list of 2-tuples corresponding to combinations of atomic indices.
             # This is much faster than using itertools.combinations.
             AtomIterator = np.ascontiguousarray(np.vstack((np.fromiter(itertools.chain(*[[i]*(self.na-i-1) for i in range(self.na)]),dtype=np.int32), np.fromiter(itertools.chain(*[range(i+1,self.na) for i in range(self.na)]),dtype=np.int32))).T)
-        
+
         # Create a list of thresholds for determining whether a certain interatomic distance is considered to be a bond.
         BT0 = R[AtomIterator[:,0]]
         BT1 = R[AtomIterator[:,1]]
@@ -1984,7 +1994,7 @@ class Molecule(object):
         self.built_bonds = True
 
     def build_topology(self, force_bonds=True, **kwargs):
-        '''
+        """
 
         Create self.topology and self.molecules; these are graph
         representations of the individual molecules (fragments)
@@ -2003,7 +2013,7 @@ class Molecule(object):
             not provided, this will be taken from the top_settings
             field.  If provided, this will take priority and write
             the value into top_settings.
-        '''
+        """
         sn = kwargs.get('topframe', self.top_settings['topframe'])
         self.top_settings['topframe'] = sn
         if self.na > 100000:
@@ -2033,7 +2043,7 @@ class Molecule(object):
         self.molecules = list(nx.connected_component_subgraphs(G))
 
     def distance_matrix(self, pbc=True):
-        ''' Obtain distance matrix between all pairs of atoms. '''
+        """ Obtain distance matrix between all pairs of atoms. """
         AtomIterator = np.ascontiguousarray(np.vstack((np.fromiter(itertools.chain(*[[i]*(self.na-i-1) for i in range(self.na)]),dtype=np.int32), np.fromiter(itertools.chain(*[range(i+1,self.na) for i in range(self.na)]),dtype=np.int32))).T)
         drij = []
         for sn in range(len(self)):
@@ -2044,7 +2054,7 @@ class Molecule(object):
         return AtomIterator, drij
 
     def distance_displacement(self):
-        ''' Obtain distance matrix and displacement vectors between all pairs of atoms. '''
+        """ Obtain distance matrix and displacement vectors between all pairs of atoms. """
         AtomIterator = np.ascontiguousarray(np.vstack((np.fromiter(itertools.chain(*[[i]*(self.na-i-1) for i in range(self.na)]),dtype=np.int32), np.fromiter(itertools.chain(*[range(i+1,self.na) for i in range(self.na)]),dtype=np.int32))).T)
         drij = []
         dxij = []
@@ -3229,7 +3239,7 @@ class Molecule(object):
                   }
         return Answer
 
-    def read_qcout(self, fnm, errok = [], **kwargs):
+    def read_qcout(self, fnm, errok=None, **kwargs):
         """ Q-Chem output file reader, adapted for our parser.
 
         Q-Chem output files are very flexible and there's no way I can account for all of them.  Here's what
@@ -3248,6 +3258,8 @@ class Molecule(object):
 
         """
 
+        if errok is None:
+            errok = []
         Answer   = {}
         xyzs     = []
         xyz      = []
@@ -3956,7 +3968,7 @@ class Molecule(object):
                 records.append("ATOM  ")
             else:
                 records.append("HETATM")
-                
+
         out = []
         # Create the PDB header.
         out.append("REMARK   1 CREATED WITH FORCEBALANCE %s" % (str(date.today())))
@@ -4017,7 +4029,7 @@ class Molecule(object):
                 atomBonds[index2] = []
             atomBonds[index1].append(index2)
             atomBonds[index2].append(index1)
-            
+
         for index1 in sorted(atomBonds):
             bonded = atomBonds[index1]
             while len(bonded) > 4:
@@ -4028,7 +4040,7 @@ class Molecule(object):
                 line = "%s%5d" % (line, index2)
             out.append(line)
         return(out)
-                    
+
     def write_qdata(self, selection, **kwargs):
         """ Text quantum data format. """
         #self.require('xyzs','qm_energies','qm_grads')

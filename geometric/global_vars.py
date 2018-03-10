@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 from __future__ import division
+
 import os
 
 # The directory that this file lives in

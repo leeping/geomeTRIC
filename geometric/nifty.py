@@ -14,21 +14,24 @@ Named after the mighty Sniffy Handy Nifty (King Sniffy)
 @author Lee-Ping Wang
 @date 2018-03-10
 """
+from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
-from __future__ import absolute_import
 
-from builtins import zip
-from builtins import input
-from builtins import str
-from builtins import range
-from builtins import object
-import traceback
-from select import select
-import os, sys, re, shutil, errno
-import numpy as np
 import filecmp
 import itertools
+import os
+import re
+import shutil
+import sys
+from builtins import object
+from builtins import range
+from builtins import str
+from builtins import zip
+from select import select
+
+import numpy as np
+
 # For Python 3 compatibility
 try:
     from itertools import zip_longest as zip_longest
@@ -41,8 +44,7 @@ import time
 import subprocess
 import math
 import six # For six.string_types
-from shutil import copyfileobj
-from subprocess import PIPE, STDOUT
+from subprocess import PIPE
 from collections import OrderedDict, defaultdict
 
 #================================#
@@ -148,7 +150,7 @@ def pmat2d(mat2d, precision=1, format="e", loglevel=INFO):
         logger.log(loglevel, '\n')
 
 def grouper(iterable, n):
-    "Collect data into fixed-length chunks or blocks"
+    """Collect data into fixed-length chunks or blocks"""
     # grouper('ABCDEFG', 3, 'x') --> ABC DEF Gxx
     args = [iter(iterable)] * n
     lzip = [[j for j in i if j is not None] for i in list(zip_longest(*args))]
@@ -1022,7 +1024,7 @@ def onefile(fnm=None, ext=None, err=False):
                     logger.info("\x1b[93monefile() will copy %s to %s\x1b[0m\n" % (os.path.abspath(fnm), os.getcwd()))
                     shutil.copy2(fsrc, fdest)
             return os.path.basename(fnm)
-        elif (err==True or ext==None):
+        elif (err==True or ext is None):
             logger.error("File specified by %s does not exist!" % fnm)
             raise RuntimeError
         elif ext is not None:

@@ -1,17 +1,20 @@
 #!/usr/bin/env python
 
 from __future__ import division
-import numpy as np
-import networkx as nx
+
 import itertools
-import sys
 import time
-from geometric.global_vars import *
-from copy import deepcopy
-from geometric.nifty import click, invert_svd, commadash, row, col, flat, pmat2d
-from geometric.molecule import Molecule, Elements, Radii
 from collections import OrderedDict, defaultdict
+from copy import deepcopy
+
+import networkx as nx
+import numpy as np
+
+from geometric.global_vars import *
+from geometric.molecule import Elements, Radii
+from geometric.nifty import click, commadash
 from geometric.rotate import get_expmap, get_expmap_der, is_linear
+
 
 ## Some vector calculus functions
 def unit_vector(a):
@@ -637,7 +640,7 @@ class Angle(object):
         self.c = c
         self.isAngular = True
         self.isPeriodic = False
-        if len(set([a, b, c])) != 3:
+        if len({a, b, c}) != 3:
             raise RuntimeError('a, b, and c must be different')
 
     def __repr__(self):
@@ -738,7 +741,7 @@ class LinearAngle(object):
         self.axis = axis
         self.isAngular = False
         self.isPeriodic = False
-        if len(set([a, b, c])) != 3:
+        if len({a, b, c}) != 3:
             raise RuntimeError('a, b, and c must be different')
         self.e0 = None
         self.stored_dot2 = 0.0
@@ -874,7 +877,7 @@ class MultiAngle(object):
         self.c = tuple(c)
         self.isAngular = True
         self.isPeriodic = False
-        if len(set([a, b, c])) != 3:
+        if len({a, b, c}) != 3:
             raise RuntimeError('a, b, and c must be different')
 
     def __repr__(self):
@@ -981,7 +984,7 @@ class Dihedral(object):
         self.d = d
         self.isAngular = True
         self.isPeriodic = True
-        if len(set([a, b, c, d])) != 4:
+        if len({a, b, c, d}) != 4:
             raise RuntimeError('a, b, c and d must be different')
 
     def __repr__(self):
@@ -1071,7 +1074,7 @@ class MultiDihedral(object):
         self.d = tuple(d)
         self.isAngular = True
         self.isPeriodic = True
-        if len(set([a, b, c, d])) != 4:
+        if len({a, b, c, d}) != 4:
             raise RuntimeError('a, b, c and d must be different')
 
     def __repr__(self):
@@ -1167,7 +1170,7 @@ class OutOfPlane(object):
         self.d = d
         self.isAngular = True
         self.isPeriodic = True
-        if len(set([a, b, c, d])) != 4:
+        if len({a, b, c, d}) != 4:
             raise RuntimeError('a, b, c and d must be different')
 
     def __repr__(self):
@@ -1176,7 +1179,7 @@ class OutOfPlane(object):
     def __eq__(self, other):
         if type(self) is not type(other): return False
         if self.a == other.a:
-            if set([self.b, self.c, self.d]) == set([other.b, other.c, other.d]):
+            if {self.b, self.c, self.d} == {other.b, other.c, other.d}:
                 if [self.b, self.c, self.d] != [other.b, other.c, other.d]:
                     print("Warning: OutOfPlane atoms are the same, ordering is different")
                 return True

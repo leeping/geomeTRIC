@@ -1,21 +1,24 @@
 #!/usr/bin/env python
 
 from __future__ import print_function, division
-import os, sys, shutil
-import numpy as np
-from copy import deepcopy
+
+import shutil
+import subprocess
 from collections import OrderedDict
+from copy import deepcopy
+
+import numpy as np
+
+from geometric.global_vars import *
 from geometric.molecule import Molecule
 from geometric.nifty import eqcgmx, fqcgmx, getWorkQueue, queue_up_src_dest
-from geometric.global_vars import *
-from copy import copy
-import subprocess
+
 
 #=============================#
 #| Useful TeraChem functions |#
 #=============================#
 
-def edit_tcin(fin=None, fout=None, options={}, defaults={}):
+def edit_tcin(fin=None, fout=None, options=None, defaults=None):
     """
     Parse, modify, and/or create a TeraChem input file.
 
@@ -36,6 +39,10 @@ def edit_tcin(fin=None, fout=None, options={}, defaults={}):
         Keys mapped to values as strings.  Certain keys will be changed to integers (e.g. charge, spinmult).
         Keys are standardized to lowercase.
     """
+    if defaults is None:
+        defaults = {}
+    if options is None:
+        options = {}
     intkeys = ['charge', 'spinmult']
     Answer = OrderedDict()
     # Read from the input if provided
