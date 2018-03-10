@@ -8,9 +8,9 @@ from __future__ import absolute_import
 #|                Lee-Ping Wang (leeping@ucdavis.edu)                 |#
 #|                   Last updated March 10, 2018                      |#
 #|                                                                    |#
-#|   This code is part of ForceBalance and is covered under the       |#
-#|   ForceBalance copyright notice and BSD 3-clause license.          |#
-#|   Please see https://github.com/leeping/forcebalance for details.  |#
+#|   This code is part of geomeTRIC and is covered under the          |#
+#|   geomeTRIC copyright notice and MIT license.                      |#
+#|   Please see https://github.com/leeping/geomeTRIC for details.     |#
 #|                                                                    |#
 #|   Special note:                                                    |#
 #|   This file was copied over from ForceBalance to geomeTRIC         |#
