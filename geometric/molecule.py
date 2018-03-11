@@ -2,7 +2,6 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-# OrderedDict requires Python 2.7 or higher
 import copy
 import imp
 import itertools
@@ -24,28 +23,6 @@ try:
     from itertools import zip_longest as zip_longest
 except ImportError:
     from itertools import izip_longest as zip_longest
-
-
-# =========================================#
-# |     DECLARE VARIABLE NAMES HERE       |#
-# |                                       |#
-# |  Any member variable in the Molecule  |#
-# | class must be declared here otherwise |#
-# | the Molecule class won't recognize it |#
-# =========================================#
-# | Data attributes in FrameVariableNames |#
-# | must be a list along the frame axis,  |#
-# | and they must have the same length.   |#
-# =========================================#
-# xyzs       = List of arrays of atomic xyz coordinates
-# comms      = List of comment strings
-# boxes      = List of 3-element or 9-element arrays for periodic boxes
-# qm_grads   = List of arrays of gradients (i.e. negative of the atomistic forces) from QM calculations
-# qm_espxyzs = List of arrays of xyz coordinates for ESP evaluation
-# qm_espvals = List of arrays of ESP values
-# qm_zpe     = Zero point energy, kcal/mol (from a qchem freq calculation)
-# qm_entropy = Entropy contribution at STP, cal/mol.K (from a qchem freq calculation)
-# qm_enthalpy= Enthalpic contribution at STP, excluding electronic energy and ZPE, kcal/mol (from a qchem freq calculation)
 
 # ======================================================================#
 # |                                                                    |#
@@ -137,6 +114,28 @@ except ImportError:
 # |                 MyMol += MyMolB                                    |#
 # |                                                                    |#
 # ======================================================================#
+
+# =========================================#
+# |     DECLARE VARIABLE NAMES HERE       |#
+# |                                       |#
+# |  Any member variable in the Molecule  |#
+# | class must be declared here otherwise |#
+# | the Molecule class won't recognize it |#
+# =========================================#
+# | Data attributes in FrameVariableNames |#
+# | must be a list along the frame axis,  |#
+# | and they must have the same length.   |#
+# =========================================#
+# xyzs       = List of arrays of atomic xyz coordinates
+# comms      = List of comment strings
+# boxes      = List of 3-element or 9-element arrays for periodic boxes
+# qm_grads   = List of arrays of gradients (i.e. negative of the atomistic forces) from QM calculations
+# qm_espxyzs = List of arrays of xyz coordinates for ESP evaluation
+# qm_espvals = List of arrays of ESP values
+# qm_zpe     = Zero point energy, kcal/mol (from a qchem freq calculation)
+# qm_entropy = Entropy contribution at STP, cal/mol.K (from a qchem freq calculation)
+# qm_enthalpy= Enthalpic contribution at STP, excluding electronic energy and ZPE, kcal/mol (from a qchem freq calculation)
+
 FrameVariableNames = set(['xyzs', 'comms', 'boxes', 'qm_hessians', 'qm_grads', 'qm_energies', 'qm_interaction',
                           'qm_espxyzs', 'qm_espvals', 'qm_extchgs', 'qm_mulliken_charges', 'qm_mulliken_spins',
                           'qm_zpe', 'qm_entropy', 'qm_enthalpy', 'qm_bondorder'])
