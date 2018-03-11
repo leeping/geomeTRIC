@@ -1,108 +1,42 @@
+from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
-from __future__ import absolute_import
-#======================================================================#
-#|                                                                    |#
-#|              Chemical file format conversion module                |#
-#|                                                                    |#
-#|                Lee-Ping Wang (leeping@ucdavis.edu)                 |#
-#|                   Last updated March 10, 2018                      |#
-#|                                                                    |#
-#|   This code is part of geomeTRIC and is covered under the          |#
-#|   geomeTRIC copyright notice and MIT license.                      |#
-#|   Please see https://github.com/leeping/geomeTRIC for details.     |#
-#|                                                                    |#
-#|   Special note:                                                    |#
-#|   This file was copied over from ForceBalance to geomeTRIC         |#
-#|   in order to lighten the dependencies of the latter.              |#
-#|   Please make sure this file is up-to-date in                      |#
-#|   both the 'geomeTRIC' and 'forcebalance' modules.                 |#
-#|                                                                    |#
-#|   Feedback and suggestions are encouraged.                         |#
-#|                                                                    |#
-#|   What this is for:                                                |#
-#|   Converting a molecule between file formats                       |#
-#|   Loading and processing of trajectories                           |#
-#|   (list of geometries for the same set of atoms)                   |#
-#|   Concatenating or slicing trajectories                            |#
-#|   Combining molecule metadata (charge, Q-Chem rem variables)       |#
-#|                                                                    |#
-#|   Supported file formats:                                          |#
-#|   See the __init__ method in the Molecule class.                   |#
-#|                                                                    |#
-#|   Note to self / developers:                                       |#
-#|   Please make this file as standalone as possible                  |#
-#|   (i.e. don't introduce dependencies).  If we load an external     |#
-#|   library to parse a file, do so with 'try / except' so that       |#
-#|   the module is still usable even if certain parts are missing.    |#
-#|   It's better to be like a Millennium Falcon. :P                   |#
-#|                                                                    |#
-#|   At present, when I perform operations like adding two objects,   |#
-#|   the sum is created from deep copies of data members in the       |#
-#|   originals. This is because copying by reference is confusing;    |#
-#|   suppose if I do B += A and modify something in B; it should not  |#
-#|   change in A.                                                     |#
-#|                                                                    |#
-#|   A consequence of this is that data members should not be too     |#
-#|   complicated; they should be things like lists or dicts, and NOT  |#
-#|   contain references to themselves.                                |#
-#|                                                                    |#
-#|   To-do list: Handling of comments is still not very good.         |#
-#|   Comments from previous files should be 'passed on' better.       |#
-#|                                                                    |#
-#|              Contents of this file:                                |#
-#|              0) Names of data variables                            |#
-#|              1) Imports                                            |#
-#|              2) Subroutines                                        |#
-#|              3) Molecule class                                     |#
-#|                a) Class customizations (add, getitem)              |#
-#|                b) Instantiation                                    |#
-#|                c) Core functionality (read, write)                 |#
-#|                d) Reading functions                                |#
-#|                e) Writing functions                                |#
-#|                f) Extra stuff                                      |#
-#|              4) "main" function (if executed)                      |#
-#|                                                                    |#
-#|                   Required: Python 2.7 or 3.6                      |#
-#|                             (2.6, 3.5 and earlier untested)        |#
-#|                             NumPy 1.6                              |#
-#|                   Optional: Mol2, PDB, DCD readers                 |#
-#|                    (can be found in ForceBalance)                  |#
-#|                    NetworkX package (for topologies)               |#
-#|                                                                    |#
-#|             Thanks: Todd Dolinsky, Yong Huang,                     |#
-#|                     Kyle Beauchamp (PDB)                           |#
-#|                     John Stone (DCD Plugin)                        |#
-#|                     Pierre Tuffery (Mol2 Plugin)                   |#
-#|                     #python IRC chat on FreeNode                   |#
-#|                                                                    |#
-#|             Contributors: Leah Isseroff Bendavid                   |#
-#|                           Yudong Qiu                               |#
-#|                                                                    |#
-#|             Instructions:                                          |#
-#|                                                                    |#
-#|               To import:                                           |#
-#|                 from molecule import Molecule                      |#
-#|               To create a Molecule object:                         |#
-#|                 MyMol = Molecule(fnm)                              |#
-#|               To convert to a new file format:                     |#
-#|                 MyMol.write('newfnm.format')                       |#
-#|               To concatenate geometries:                           |#
-#|                 MyMol += MyMolB                                    |#
-#|                                                                    |#
-#======================================================================#
 
-#=========================================#
-#|     DECLARE VARIABLE NAMES HERE       |#
-#|                                       |#
-#|  Any member variable in the Molecule  |#
-#| class must be declared here otherwise |#
-#| the Molecule class won't recognize it |#
-#=========================================#
-#| Data attributes in FrameVariableNames |#
-#| must be a list along the frame axis,  |#
-#| and they must have the same length.   |#
-#=========================================#
+# OrderedDict requires Python 2.7 or higher
+import copy
+import imp
+import itertools
+import os
+import re
+import sys
+import sysconfig
+from collections import OrderedDict, namedtuple, Counter
+from ctypes import *
+from datetime import date
+from warnings import warn
+
+import numpy as np
+from numpy import sin, cos, arccos
+from pkg_resources import parse_version
+
+# For Python 3 compatibility
+try:
+    from itertools import zip_longest as zip_longest
+except ImportError:
+    from itertools import izip_longest as zip_longest
+
+
+# =========================================#
+# |     DECLARE VARIABLE NAMES HERE       |#
+# |                                       |#
+# |  Any member variable in the Molecule  |#
+# | class must be declared here otherwise |#
+# | the Molecule class won't recognize it |#
+# =========================================#
+# | Data attributes in FrameVariableNames |#
+# | must be a list along the frame axis,  |#
+# | and they must have the same length.   |#
+# =========================================#
 # xyzs       = List of arrays of atomic xyz coordinates
 # comms      = List of comment strings
 # boxes      = List of 3-element or 9-element arrays for periodic boxes
@@ -112,11 +46,97 @@ from __future__ import absolute_import
 # qm_zpe     = Zero point energy, kcal/mol (from a qchem freq calculation)
 # qm_entropy = Entropy contribution at STP, cal/mol.K (from a qchem freq calculation)
 # qm_enthalpy= Enthalpic contribution at STP, excluding electronic energy and ZPE, kcal/mol (from a qchem freq calculation)
-from builtins import input
-from builtins import zip
-from builtins import str
-from builtins import range
-from builtins import object
+
+# ======================================================================#
+# |                                                                    |#
+# |              Chemical file format conversion module                |#
+# |                                                                    |#
+# |                Lee-Ping Wang (leeping@ucdavis.edu)                 |#
+# |                   Last updated March 10, 2018                      |#
+# |                                                                    |#
+# |   This code is part of geomeTRIC and is covered under the          |#
+# |   geomeTRIC copyright notice and MIT license.                      |#
+# |   Please see https://github.com/leeping/geomeTRIC for details.     |#
+# |                                                                    |#
+# |   Special note:                                                    |#
+# |   This file was copied over from ForceBalance to geomeTRIC         |#
+# |   in order to lighten the dependencies of the latter.              |#
+# |   Please make sure this file is up-to-date in                      |#
+# |   both the 'geomeTRIC' and 'forcebalance' modules.                 |#
+# |                                                                    |#
+# |   Feedback and suggestions are encouraged.                         |#
+# |                                                                    |#
+# |   What this is for:                                                |#
+# |   Converting a molecule between file formats                       |#
+# |   Loading and processing of trajectories                           |#
+# |   (list of geometries for the same set of atoms)                   |#
+# |   Concatenating or slicing trajectories                            |#
+# |   Combining molecule metadata (charge, Q-Chem rem variables)       |#
+# |                                                                    |#
+# |   Supported file formats:                                          |#
+# |   See the __init__ method in the Molecule class.                   |#
+# |                                                                    |#
+# |   Note to self / developers:                                       |#
+# |   Please make this file as standalone as possible                  |#
+# |   (i.e. don't introduce dependencies).  If we load an external     |#
+# |   library to parse a file, do so with 'try / except' so that       |#
+# |   the module is still usable even if certain parts are missing.    |#
+# |   It's better to be like a Millennium Falcon. :P                   |#
+# |                                                                    |#
+# |   At present, when I perform operations like adding two objects,   |#
+# |   the sum is created from deep copies of data members in the       |#
+# |   originals. This is because copying by reference is confusing;    |#
+# |   suppose if I do B += A and modify something in B; it should not  |#
+# |   change in A.                                                     |#
+# |                                                                    |#
+# |   A consequence of this is that data members should not be too     |#
+# |   complicated; they should be things like lists or dicts, and NOT  |#
+# |   contain references to themselves.                                |#
+# |                                                                    |#
+# |   To-do list: Handling of comments is still not very good.         |#
+# |   Comments from previous files should be 'passed on' better.       |#
+# |                                                                    |#
+# |              Contents of this file:                                |#
+# |              0) Names of data variables                            |#
+# |              1) Imports                                            |#
+# |              2) Subroutines                                        |#
+# |              3) Molecule class                                     |#
+# |                a) Class customizations (add, getitem)              |#
+# |                b) Instantiation                                    |#
+# |                c) Core functionality (read, write)                 |#
+# |                d) Reading functions                                |#
+# |                e) Writing functions                                |#
+# |                f) Extra stuff                                      |#
+# |              4) "main" function (if executed)                      |#
+# |                                                                    |#
+# |                   Required: Python 2.7 or 3.6                      |#
+# |                             (2.6, 3.5 and earlier untested)        |#
+# |                             NumPy 1.6                              |#
+# |                   Optional: Mol2, PDB, DCD readers                 |#
+# |                    (can be found in ForceBalance)                  |#
+# |                    NetworkX package (for topologies)               |#
+# |                                                                    |#
+# |             Thanks: Todd Dolinsky, Yong Huang,                     |#
+# |                     Kyle Beauchamp (PDB)                           |#
+# |                     John Stone (DCD Plugin)                        |#
+# |                     Pierre Tuffery (Mol2 Plugin)                   |#
+# |                     #python IRC chat on FreeNode                   |#
+# |                                                                    |#
+# |             Contributors: Leah Isseroff Bendavid                   |#
+# |                           Yudong Qiu                               |#
+# |                                                                    |#
+# |             Instructions:                                          |#
+# |                                                                    |#
+# |               To import:                                           |#
+# |                 from molecule import Molecule                      |#
+# |               To create a Molecule object:                         |#
+# |                 MyMol = Molecule(fnm)                              |#
+# |               To convert to a new file format:                     |#
+# |                 MyMol.write('newfnm.format')                       |#
+# |               To concatenate geometries:                           |#
+# |                 MyMol += MyMolB                                    |#
+# |                                                                    |#
+# ======================================================================#
 FrameVariableNames = set(['xyzs', 'comms', 'boxes', 'qm_hessians', 'qm_grads', 'qm_energies', 'qm_interaction',
                           'qm_espxyzs', 'qm_espvals', 'qm_extchgs', 'qm_mulliken_charges', 'qm_mulliken_spins',
                           'qm_zpe', 'qm_entropy', 'qm_enthalpy', 'qm_bondorder'])
@@ -152,30 +172,14 @@ QuantumVariableNames = set(['qcrems', 'qctemplate', 'charge', 'mult', 'qcsuf', '
 # Superset of all variable names.
 AllVariableNames = QuantumVariableNames | AtomVariableNames | MetaVariableNames | FrameVariableNames
 
-# OrderedDict requires Python 2.7 or higher
-import os, sys, re, copy
-from datetime import date
-import numpy as np
-from numpy import sin, cos, arcsin, arccos
-import imp
-import itertools
-from collections import OrderedDict, namedtuple, Counter
-from ctypes import *
-from warnings import warn
-import sysconfig
-from pkg_resources import parse_version
-# For Python 3 compatibility
-try:
-    from itertools import zip_longest as zip_longest
-except:
-    from itertools import izip_longest as zip_longest
+
 
 #================================#
 #       Set up the logger        #
 #================================#
 try:
     from .output import *
-except:
+except ImportError:
     from logging import *
     class RawStreamHandler(StreamHandler):
         """Exactly like output.StreamHandler except it does no extra formatting
@@ -265,15 +269,17 @@ if "forcebalance" in __name__:
     #============================#
     #| PDB read/write functions |#
     #============================#
-    try: from .PDB import *
-    except:
+    try:
+        from .PDB import *
+    except ImportError:
         warn('The pdb module cannot be imported (Cannot read/write PDB files)')
 
     #=============================#
     #| Mol2 read/write functions |#
     #=============================#
-    try: from . import Mol2
-    except:
+    try:
+        from . import Mol2
+    except ImportError:
         warn('The Mol2 module cannot be imported (Cannot read/write Mol2 files)')
 
     #==============================#
@@ -283,7 +289,7 @@ if "forcebalance" in __name__:
         from simtk.unit import *
         from simtk.openmm import *
         from simtk.openmm.app import *
-    except:
+    except ImportError:
         warn('The OpenMM modules cannot be imported (Cannot interface with OpenMM)')
 
 #===========================#
@@ -406,27 +412,27 @@ try:
                 return False
             return nx.is_isomorphic(self,other,node_match=nodematch)
         def __hash__(self):
-            ''' The hash function is something we can use to discard two things that are obviously not equal.  Here we neglect the hash. '''
+            """ The hash function is something we can use to discard two things that are obviously not equal.  Here we neglect the hash. """
             return 1
         def L(self):
-            ''' Return a list of the sorted atom numbers in this graph. '''
+            """ Return a list of the sorted atom numbers in this graph. """
             return sorted(list(self.nodes()))
         def AStr(self):
-            ''' Return a string of atoms, which serves as a rudimentary 'fingerprint' : '99,100,103,151' . '''
+            """ Return a string of atoms, which serves as a rudimentary 'fingerprint' : '99,100,103,151' . """
             return ','.join(['%i' % i for i in self.L()])
         def e(self):
-            ''' Return an array of the elements.  For instance ['H' 'C' 'C' 'H']. '''
+            """ Return an array of the elements.  For instance ['H' 'C' 'C' 'H']. """
             elems = nx.get_node_attributes(self,'e')
             return [elems[i] for i in self.L()]
         def ef(self):
-            ''' Create an Empirical Formula '''
+            """ Create an Empirical Formula """
             Formula = list(self.e())
             return ''.join([('%s%i' % (k, Formula.count(k)) if Formula.count(k) > 1 else '%s' % k) for k in sorted(set(Formula))])
         def x(self):
-            ''' Get a list of the coordinates. '''
+            """ Get a list of the coordinates. """
             coors = nx.get_node_attributes(self,'x')
             return np.array([coors[i] for i in self.L()])
-except:
+except ImportError:
     warn("NetworkX cannot be imported (topology tools won't work).  Most functionality should still work though.")
 
 def TopEqual(mol1, mol2):
@@ -915,7 +921,7 @@ def EqualSpacing(Mol, frames=0, dx=0, RMSD=True, align=True):
 def AtomContact(xyz, pairs, box=None, displace=False):
     """
     Compute distances between pairs of atoms.
-    
+
     Parameters
     ----------
     xyz : np.ndarray
@@ -1014,6 +1020,149 @@ class Molecule(object):
 
     """
 
+    def __init__(self, fnm = None, ftype = None, top = None, ttype = None, **kwargs):
+        """
+        Create a Molecule object.
+
+        Parameters
+        ----------
+        fnm : str, optional
+            File name to create the Molecule object from.  If provided,
+            the file will be parsed and used to fill in the fields such as
+            elem (elements), xyzs (coordinates) and so on.  If ftype is not
+            provided, will automatically try to determine file type from file
+            extension.  If not provided, will create an empty object.
+        ftype : str, optional
+            File type, corresponding to an entry in the internal table of known
+            file types.  Provide this if you have a nonstandard file extension
+            or if you wish to force to invoke a particular parser.
+        top : str, optional
+            "Topology" file name.  If provided, will build the Molecule
+            using this file name, then "fnm" will load frames instead.
+        ttype : str, optional
+            "Typology" file type.
+        build_topology : bool, optional
+            Build the molecular topology consisting of: topology (overall connectivity graph),
+            molecules (list of connected subgraphs), bonds (if not explicitly read in), default True
+        toppbc : bool, optional
+            Use periodic boundary conditions when building the molecular topology, default False
+            The build_topology code will attempt to determine this intelligently.
+        topframe : int, optional
+            Provide a frame number for building the molecular topology, default first frame
+        Fac : float, optional
+            Multiplicative factor to covalent radii criterion for deciding whether two atoms are bonded
+            Default value of 1.2 is reasonable, 1.4 will produce lots of bonds
+        positive_resid : bool, optional
+            If provided, enforce all positive resIDs.
+        """
+        # If we passed in a "topology" file, read it in first, and then load the frames
+        if top is not None:
+            load_fnm = fnm
+            load_type = ftype
+            fnm = top
+            ftype = ttype
+        else:
+            load_fnm = None
+            load_type = None
+        #=========================================#
+        #|           File type tables            |#
+        #|    Feel free to edit these as more    |#
+        #|      readers / writers are added      |#
+        #=========================================#
+        ## The table of file readers
+        self.Read_Tab = {'gaussian' : self.read_com,
+                         'gromacs'  : self.read_gro,
+                         'charmm'   : self.read_charmm,
+                         'dcd'      : self.read_dcd,
+                         'mdcrd'    : self.read_mdcrd,
+                         'inpcrd'   : self.read_inpcrd,
+                         'pdb'      : self.read_pdb,
+                         'xyz'      : self.read_xyz,
+                         'mol2'     : self.read_mol2,
+                         'qcin'     : self.read_qcin,
+                         'qcout'    : self.read_qcout,
+                         'qcesp'    : self.read_qcesp,
+                         'qdata'    : self.read_qdata,
+                         'tinker'   : self.read_arc}
+        ## The table of file writers
+        self.Write_Tab = {'gromacs' : self.write_gro,
+                          'xyz'     : self.write_xyz,
+                          'lammps'  : self.write_lammps_data,
+                          'molproq' : self.write_molproq,
+                          'dcd'     : self.write_dcd,
+                          'inpcrd'  : self.write_inpcrd,
+                          'mdcrd'   : self.write_mdcrd,
+                          'pdb'     : self.write_pdb,
+                          'qcin'    : self.write_qcin,
+                          'qdata'   : self.write_qdata,
+                          'tinker'  : self.write_arc}
+        ## A funnel dictionary that takes redundant file types
+        ## and maps them down to a few.
+        self.Funnel    = {'gromos'  : 'gromacs',
+                          'gro'     : 'gromacs',
+                          'g96'     : 'gromacs',
+                          'gmx'     : 'gromacs',
+                          'in'      : 'qcin',
+                          'qcin'    : 'qcin',
+                          'com'     : 'gaussian',
+                          'rst'     : 'inpcrd',
+                          'out'     : 'qcout',
+                          'esp'     : 'qcesp',
+                          'txt'     : 'qdata',
+                          'crd'     : 'charmm',
+                          'cor'     : 'charmm',
+                          'arc'     : 'tinker'}
+        ## Creates entries like 'gromacs' : 'gromacs' and 'xyz' : 'xyz'
+        ## in the Funnel
+        self.positive_resid = kwargs.get('positive_resid', 0)
+        self.built_bonds = False
+        ## Topology settings
+        self.top_settings = {'toppbc' : kwargs.get('toppbc', False),
+                             'topframe' : kwargs.get('topframe', 0),
+                             'Fac' : kwargs.get('Fac', 1.2),
+                             'read_bonds' : False,
+                             'fragment' : kwargs.get('fragment', False),
+                             'radii' : kwargs.get('radii', {})}
+
+        for i in set(list(self.Read_Tab.keys()) + list(self.Write_Tab.keys())):
+            self.Funnel[i] = i
+        # Data container.  All of the data is stored in here.
+        self.Data = {}
+        ## Read in stuff if we passed in a file name, otherwise return an empty instance.
+        if fnm is not None:
+            self.Data['fnm'] = fnm
+            if ftype is None:
+                ## Try to determine from the file name using the extension.
+                ftype = os.path.splitext(fnm)[1][1:]
+            if not os.path.exists(fnm):
+                logger.error('Tried to create Molecule object from a file that does not exist: %s\n' % fnm)
+                raise IOError
+            self.Data['ftype'] = ftype
+            ## Actually read the file.
+            Parsed = self.Read_Tab[self.Funnel[ftype.lower()]](fnm, **kwargs)
+            ## Set member variables.
+            for key, val in Parsed.items():
+                self.Data[key] = val
+            ## Create a list of comment lines if we don't already have them from reading the file.
+            if 'comms' not in self.Data:
+                self.comms = ['From %s: Frame %i / %i' % (fnm, i+1, self.ns) for i in range(self.ns)]
+                if 'qm_energies' in self.Data:
+                    for i in range(self.ns):
+                        self.comms[i] += ', Energy= % 18.10f' % self.qm_energies[i]
+            else:
+                self.comms = [i.expandtabs() for i in self.comms]
+            ## Build the topology.
+            if kwargs.get('build_topology', True) and hasattr(self, 'elem') and self.na > 0:
+                self.build_topology(force_bonds=False)
+        if load_fnm is not None:
+            self.load_frames(load_fnm, ftype=load_type, **kwargs)
+
+    #=====================================#
+    #|     Core read/write functions     |#
+    #| Hopefully we won't have to change |#
+    #|         these very often!         |#
+    #=====================================#
+
     def __len__(self):
         """ Return the number of frames in the trajectory. """
         L = -1
@@ -1092,7 +1241,7 @@ class Molecule(object):
                 # explicitly defined copy() methods.
                 New.Data[key] = []
                 for i in range(len(self.Data[key])):
-                    New.Data[key].append(self.Data[key][i].copy())
+                    New.Data[key].append(copy.deepcopy(self.Data[key][i]))
             elif key in ['topology']:
                 # These are NetworkX graph objects or other variables with explicitly defined copy() methods.
                 New.Data[key] = self.Data[key].copy()
@@ -1322,148 +1471,6 @@ class Molecule(object):
     def append(self,other):
         self += other
 
-    def __init__(self, fnm = None, ftype = None, top = None, ttype = None, **kwargs):
-        """
-        Create a Molecule object.
-
-        Parameters
-        ----------
-        fnm : str, optional
-            File name to create the Molecule object from.  If provided,
-            the file will be parsed and used to fill in the fields such as
-            elem (elements), xyzs (coordinates) and so on.  If ftype is not
-            provided, will automatically try to determine file type from file
-            extension.  If not provided, will create an empty object.
-        ftype : str, optional
-            File type, corresponding to an entry in the internal table of known
-            file types.  Provide this if you have a nonstandard file extension
-            or if you wish to force to invoke a particular parser.
-        top : str, optional
-            "Topology" file name.  If provided, will build the Molecule
-            using this file name, then "fnm" will load frames instead.
-        ttype : str, optional
-            "Typology" file type.
-        build_topology : bool, optional
-            Build the molecular topology consisting of: topology (overall connectivity graph),
-            molecules (list of connected subgraphs), bonds (if not explicitly read in), default True
-        toppbc : bool, optional
-            Use periodic boundary conditions when building the molecular topology, default False
-            The build_topology code will attempt to determine this intelligently.
-        topframe : int, optional
-            Provide a frame number for building the molecular topology, default first frame
-        Fac : float, optional
-            Multiplicative factor to covalent radii criterion for deciding whether two atoms are bonded
-            Default value of 1.2 is reasonable, 1.4 will produce lots of bonds
-        positive_resid : bool, optional
-            If provided, enforce all positive resIDs.
-        """
-        # If we passed in a "topology" file, read it in first, and then load the frames
-        if top is not None:
-            load_fnm = fnm
-            load_type = ftype
-            fnm = top
-            ftype = ttype
-        else:
-            load_fnm = None
-            load_type = None
-        #=========================================#
-        #|           File type tables            |#
-        #|    Feel free to edit these as more    |#
-        #|      readers / writers are added      |#
-        #=========================================#
-        ## The table of file readers
-        self.Read_Tab = {'gaussian' : self.read_com,
-                         'gromacs'  : self.read_gro,
-                         'charmm'   : self.read_charmm,
-                         'dcd'      : self.read_dcd,
-                         'mdcrd'    : self.read_mdcrd,
-                         'inpcrd'   : self.read_inpcrd,
-                         'pdb'      : self.read_pdb,
-                         'xyz'      : self.read_xyz,
-                         'mol2'     : self.read_mol2,
-                         'qcin'     : self.read_qcin,
-                         'qcout'    : self.read_qcout,
-                         'qcesp'    : self.read_qcesp,
-                         'qdata'    : self.read_qdata,
-                         'tinker'   : self.read_arc}
-        ## The table of file writers
-        self.Write_Tab = {'gromacs' : self.write_gro,
-                          'xyz'     : self.write_xyz,
-                          'lammps'  : self.write_lammps_data,
-                          'molproq' : self.write_molproq,
-                          'dcd'     : self.write_dcd,
-                          'inpcrd'  : self.write_inpcrd,
-                          'mdcrd'   : self.write_mdcrd,
-                          'pdb'     : self.write_pdb,
-                          'qcin'    : self.write_qcin,
-                          'qdata'   : self.write_qdata,
-                          'tinker'  : self.write_arc}
-        ## A funnel dictionary that takes redundant file types
-        ## and maps them down to a few.
-        self.Funnel    = {'gromos'  : 'gromacs',
-                          'gro'     : 'gromacs',
-                          'g96'     : 'gromacs',
-                          'gmx'     : 'gromacs',
-                          'in'      : 'qcin',
-                          'qcin'    : 'qcin',
-                          'com'     : 'gaussian',
-                          'rst'     : 'inpcrd',
-                          'out'     : 'qcout',
-                          'esp'     : 'qcesp',
-                          'txt'     : 'qdata',
-                          'crd'     : 'charmm',
-                          'cor'     : 'charmm',
-                          'arc'     : 'tinker'}
-        ## Creates entries like 'gromacs' : 'gromacs' and 'xyz' : 'xyz'
-        ## in the Funnel
-        self.positive_resid = kwargs.get('positive_resid', 0)
-        self.built_bonds = False
-        ## Topology settings
-        self.top_settings = {'toppbc' : kwargs.get('toppbc', False),
-                             'topframe' : kwargs.get('topframe', 0),
-                             'Fac' : kwargs.get('Fac', 1.2),
-                             'read_bonds' : False,
-                             'fragment' : kwargs.get('fragment', False),
-                             'radii' : kwargs.get('radii', {})}
-
-        for i in set(list(self.Read_Tab.keys()) + list(self.Write_Tab.keys())):
-            self.Funnel[i] = i
-        # Data container.  All of the data is stored in here.
-        self.Data = {}
-        ## Read in stuff if we passed in a file name, otherwise return an empty instance.
-        if fnm is not None:
-            self.Data['fnm'] = fnm
-            if ftype is None:
-                ## Try to determine from the file name using the extension.
-                ftype = os.path.splitext(fnm)[1][1:]
-            if not os.path.exists(fnm):
-                logger.error('Tried to create Molecule object from a file that does not exist: %s\n' % fnm)
-                raise IOError
-            self.Data['ftype'] = ftype
-            ## Actually read the file.
-            Parsed = self.Read_Tab[self.Funnel[ftype.lower()]](fnm, **kwargs)
-            ## Set member variables.
-            for key, val in Parsed.items():
-                self.Data[key] = val
-            ## Create a list of comment lines if we don't already have them from reading the file.
-            if 'comms' not in self.Data:
-                self.comms = ['From %s: Frame %i / %i' % (fnm, i+1, self.ns) for i in range(self.ns)]
-                if 'qm_energies' in self.Data:
-                    for i in range(self.ns):
-                        self.comms[i] += ', Energy= % 18.10f' % self.qm_energies[i]
-            else:
-                self.comms = [i.expandtabs() for i in self.comms]
-            ## Build the topology.
-            if kwargs.get('build_topology', True) and hasattr(self, 'elem') and self.na > 0:
-                self.build_topology(force_bonds=False)
-        if load_fnm is not None:
-            self.load_frames(load_fnm, ftype=load_type, **kwargs)
-
-    #=====================================#
-    #|     Core read/write functions     |#
-    #| Hopefully we won't have to change |#
-    #|         these very often!         |#
-    #=====================================#
 
     def require(self, *args):
         for arg in args:
@@ -1946,7 +1953,7 @@ class Molecule(object):
             # Create a list of 2-tuples corresponding to combinations of atomic indices.
             # This is much faster than using itertools.combinations.
             AtomIterator = np.ascontiguousarray(np.vstack((np.fromiter(itertools.chain(*[[i]*(self.na-i-1) for i in range(self.na)]),dtype=np.int32), np.fromiter(itertools.chain(*[range(i+1,self.na) for i in range(self.na)]),dtype=np.int32))).T)
-        
+
         # Create a list of thresholds for determining whether a certain interatomic distance is considered to be a bond.
         BT0 = R[AtomIterator[:,0]]
         BT1 = R[AtomIterator[:,1]]
@@ -1984,7 +1991,7 @@ class Molecule(object):
         self.built_bonds = True
 
     def build_topology(self, force_bonds=True, **kwargs):
-        '''
+        """
 
         Create self.topology and self.molecules; these are graph
         representations of the individual molecules (fragments)
@@ -2003,7 +2010,7 @@ class Molecule(object):
             not provided, this will be taken from the top_settings
             field.  If provided, this will take priority and write
             the value into top_settings.
-        '''
+        """
         sn = kwargs.get('topframe', self.top_settings['topframe'])
         self.top_settings['topframe'] = sn
         if self.na > 100000:
@@ -2033,7 +2040,7 @@ class Molecule(object):
         self.molecules = list(nx.connected_component_subgraphs(G))
 
     def distance_matrix(self, pbc=True):
-        ''' Obtain distance matrix between all pairs of atoms. '''
+        """ Obtain distance matrix between all pairs of atoms. """
         AtomIterator = np.ascontiguousarray(np.vstack((np.fromiter(itertools.chain(*[[i]*(self.na-i-1) for i in range(self.na)]),dtype=np.int32), np.fromiter(itertools.chain(*[range(i+1,self.na) for i in range(self.na)]),dtype=np.int32))).T)
         drij = []
         for sn in range(len(self)):
@@ -2044,7 +2051,7 @@ class Molecule(object):
         return AtomIterator, drij
 
     def distance_displacement(self):
-        ''' Obtain distance matrix and displacement vectors between all pairs of atoms. '''
+        """ Obtain distance matrix and displacement vectors between all pairs of atoms. """
         AtomIterator = np.ascontiguousarray(np.vstack((np.fromiter(itertools.chain(*[[i]*(self.na-i-1) for i in range(self.na)]),dtype=np.int32), np.fromiter(itertools.chain(*[range(i+1,self.na) for i in range(self.na)]),dtype=np.int32))).T)
         drij = []
         dxij = []
@@ -3229,7 +3236,7 @@ class Molecule(object):
                   }
         return Answer
 
-    def read_qcout(self, fnm, errok = [], **kwargs):
+    def read_qcout(self, fnm, errok=None, **kwargs):
         """ Q-Chem output file reader, adapted for our parser.
 
         Q-Chem output files are very flexible and there's no way I can account for all of them.  Here's what
@@ -3248,6 +3255,8 @@ class Molecule(object):
 
         """
 
+        if errok is None:
+            errok = []
         Answer   = {}
         xyzs     = []
         xyz      = []
@@ -3956,7 +3965,7 @@ class Molecule(object):
                 records.append("ATOM  ")
             else:
                 records.append("HETATM")
-                
+
         out = []
         # Create the PDB header.
         out.append("REMARK   1 CREATED WITH FORCEBALANCE %s" % (str(date.today())))
@@ -4017,7 +4026,7 @@ class Molecule(object):
                 atomBonds[index2] = []
             atomBonds[index1].append(index2)
             atomBonds[index2].append(index1)
-            
+
         for index1 in sorted(atomBonds):
             bonded = atomBonds[index1]
             while len(bonded) > 4:
@@ -4028,7 +4037,7 @@ class Molecule(object):
                 line = "%s%5d" % (line, index2)
             out.append(line)
         return(out)
-                    
+
     def write_qdata(self, selection, **kwargs):
         """ Text quantum data format. """
         #self.require('xyzs','qm_energies','qm_grads')

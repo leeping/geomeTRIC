@@ -1,10 +1,11 @@
-#!/usr/bin/env python
-
 from __future__ import division
-from geometric.nifty import invert_svd
-from geometric.molecule import *
-import numpy as np
+
 import sys
+
+import numpy as np
+
+from geometric.molecule import *
+from geometric.nifty import invert_svd
 
 """
 References
