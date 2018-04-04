@@ -1,60 +1,44 @@
-# After changing this file, check it on:
-#   http://lint.travis-ci.org/
-
 language: python
-
-# Run jobs on container-based infrastructure, can be overridden per job
 sudo: false
-
 matrix:
   include:
-
   - env:
     - PYTHON_VER='2.7'
-
   - env:
     - PYTHON_VER='3.6'
-
 before_install:
-  - uname -a
-  - free -m
-  - df -h
-  - ulimit -a
-
+- uname -a
+- free -m
+- df -h
+- ulimit -a
 install:
-  - wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh
-  - bash miniconda.sh -b -p $HOME/miniconda
-  - export PATH="$HOME/miniconda/bin:$PATH"
-  - hash -r
-  - conda config --set always_yes yes --set changeps1 no
-  - conda update -q conda
-  - conda info -a
-  - if [[ "$PYTHON_VER" == "2.7" ]]; then
-        conda create -q -n p4env python=$PYTHON_VER psi4 numpy=1.12 -c psi4;
-    else
-        conda create -q -n p4env python=$PYTHON_VER psi4 numpy=1.13 -c psi4/label/dev -c psi4;
-    fi
-
-  - source activate p4env
-  - conda install scipy six networkx
-  - conda install pytest pytest-cov codecov -c conda-forge
-  - conda list
-  - pip install -e .
-
+- wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh
+- bash miniconda.sh -b -p $HOME/miniconda
+- export PATH="$HOME/miniconda/bin:$PATH"
+- hash -r
+- conda config --set always_yes yes --set changeps1 no
+- conda update -q conda
+- conda info -a
+- if [[ "$PYTHON_VER" == "2.7" ]]; then conda create -q -n p4env python=$PYTHON_VER
+  psi4 numpy=1.12 -c psi4; else conda create -q -n p4env python=$PYTHON_VER psi4 numpy=1.13
+  -c psi4/label/dev -c psi4; fi
+- source activate p4env
+- conda install scipy six networkx
+- conda install pytest pytest-cov codecov -c conda-forge
+- conda list
+- pip install -e .
 before_script:
-  - python -V
-
+- python -V
 script:
-    # Run geometric/tests/*
-  - py.test -v --cov=./
-
-    # Hacky way to run examples (fixme)
-  - cd examples/water2_psi4
-  - coverage run `which geometric-optimize` --psi4 water2.psi4in
-
+- py.test -v --cov=./
+- cd examples/water2_psi4
+- coverage run `which geometric-optimize` --psi4 water2.psi4in
 after_success:
-  - codecov
-
+- codecov
 notifications:
   email: false
-
+deploy:
+  provider: pypi
+  user: leeping
+  password:
+    secure: jfybbMD6ZVhuEmCHkAcW66M48zka2uSuJc+PzvAN1LgU1scqo6Ze+PZfvZtoci8x/oh8Iw3OB3/YaCqcf2sZaf9bOhf3CCFLzKF3hLds3Eiyrq53AX2naETuctbYqbPv+PIImjTMphb9QoaIqRCxNHHxGhnw098AbVv32PQ2oUQG6zS4gGjzyr5AFCZtHWJkBoFBpI8CXHmEZ/UkPHCBX1panpKh1CcNnkivmtbsV4enDL+ozvxBzSwlZ38+qddo8mspmOA++u5HfzyVfkhxFfogZbl2CB5mxqPgWIfoM++7qb+YLiWT1fPQCdzgp02RnWdB/qzd86BwYsSYZCigEswxiTlB0bhPGJxS2hEN74BFKvaCQkRq2emajSjGJxF8yEiBVs5ImzslJN0u55af3ANuO0Ev8BtL3pmHjuLzOr1/SXyhUh6HVWzH/Gk6iVvhbyxwLQq+dH9QHz60adABnhA84eMgVjawd/+Qzm8id5UU2i5RlA36xbmMTJm5RoybCD5LZ8y6knGwVCtm+mv8q/pJJMn1jkiCAMeS9PC2f1HoT0/02NXzim92ynTBNnRPu+uOo2r6Y9aaxfc8dh1VCRZpW9SzhQ0oz4HlB3VBzkbPlyAl4fkXPVJc+vd37qJvmI0/Cx/mNhRvf+AXDje/Mm8cw4QoY0dekjrRT4L0Cp8=
