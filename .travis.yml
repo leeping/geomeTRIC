@@ -33,6 +33,7 @@ script:
 - py.test -v --cov=./
 - cd examples/water2_psi4
 - coverage run `which geometric-optimize` --psi4 water2.psi4in
+- cd ../..
 after_success:
 - codecov
 notifications:
