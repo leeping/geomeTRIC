@@ -1,3 +1,4 @@
+import versioneer
 from setuptools import setup
 
 setup(
@@ -13,4 +14,6 @@ setup(
         'numpy>=1.11',
         'networkx',
         'six',
-    ])
+    ],
+    version=versioneer.get_version(),
+    cmdclass=versioneer.get_cmdclass())
