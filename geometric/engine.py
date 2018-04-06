@@ -8,6 +8,7 @@ from collections import OrderedDict
 from copy import deepcopy
 
 import numpy as np
+import re
 
 from geometric.global_vars import *
 from geometric.molecule import Molecule
