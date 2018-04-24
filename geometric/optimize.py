@@ -8,7 +8,7 @@ import sys
 
 import numpy as np
 
-from geometric.engine import set_tcenv, load_tcin, TeraChem, Psi4, QChem, Gromacs
+from geometric.engine import set_tcenv, load_tcin, TeraChem, Psi4, QChem, Gromacs, Molpro
 from geometric.internal import *
 from geometric.molecule import Molecule, Elements
 from geometric.nifty import row, col, flat, invert_svd, uncommadash, isint
@@ -1311,13 +1311,15 @@ def get_molecule_engine(**kwargs):
     qchem = kwargs.get('qchem', False)
     psi4 = kwargs.get('psi4', False)
     gmx = kwargs.get('gmx', False)
+    molpro = kwargs.get('molpro', False)
+    molproexe = kwargs.get('molproexe', None)
     pdb = kwargs.get('pdb', None)
     frag = kwargs.get('frag', False)
     inputf = kwargs.get('input')
     nt = kwargs.get('nt', None)
 
-    if sum([qchem, psi4, gmx]) > 1:
-        raise RuntimeError("Do not specify more than one of --qchem, --psi4, --gmx")
+    if sum([qchem, psi4, gmx, molpro]) > 1:
+        raise RuntimeError("Do not specify more than one of --qchem, --psi4, --gmx, --molpro")
     if qchem:
         # The file from which we make the Molecule object
         if pdb is not None:
@@ -1347,6 +1349,14 @@ def get_molecule_engine(**kwargs):
         M = engine.M
         if nt is not None:
             engine.set_nt(nt)
+    elif molpro:
+        engine = Molpro()
+        engine.load_molpro_input(inputf)
+        M = engine.M
+        if nt is not None:
+            engine.set_nt(nt)
+        if molproexe is not None:
+            engine.set_molproexe(molproexe)
     else:
         set_tcenv()
         tcin = load_tcin(inputf)
@@ -1497,6 +1507,8 @@ def main():
     parser.add_argument('--qchem', action='store_true', help='Run optimization in Q-Chem (pass Q-Chem input).')
     parser.add_argument('--psi4', action='store_true', help='Compute gradients in Psi4.')
     parser.add_argument('--gmx', action='store_true', help='Compute gradients in Gromacs (requires conf.gro, topol.top, shot.mdp).')
+    parser.add_argument('--molpro', action='store_true', help='Compute gradients in Molpro.')
+    parser.add_argument('--molproexe', type=str, default=None, help='Specify absolute path of Molpro executable.')
     parser.add_argument('--prefix', type=str, default=None, help='Specify a prefix for output file and temporary directory.')
     parser.add_argument('--displace', action='store_true', help='Write out the displacements of the coordinates.')
     parser.add_argument('--fdcheck', action='store_true', help='Check internal coordinate gradients using finite difference..')

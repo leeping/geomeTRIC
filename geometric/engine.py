@@ -8,6 +8,7 @@ from collections import OrderedDict
 from copy import deepcopy
 
 import numpy as np
+import re
 
 from geometric.global_vars import *
 from geometric.molecule import Molecule
@@ -525,3 +526,136 @@ class Gromacs(Engine):
         Gradient = EF[0, 1:] / fqcgmx
         os.chdir(cwd)
         return Energy, Gradient
+
+
+class Molpro(Engine):
+    """
+    Run a Molpro energy and gradient calculation.
+    """
+    def __init__(self, molecule=None):
+        # molecule.py can not parse molpro input yet, so we use self.load_molpro_input() as a walk around
+        if molecule is None:
+            # create a fake molecule
+            molecule = Molecule()
+            molecule.elem = ['H']
+            molecule.xyzs = [[[0,0,0]]]
+        super(Molpro, self).__init__(molecule)
+        self.threads = None
+        self.molproExePath = None
+
+    def molproExe(self):
+        if self.molproExePath is not None:
+            return self.molproExePath
+        else:
+            return "molpro"
+
+    def set_molproexe(self, molproExePath):
+        self.molproExePath = molproExePath
+
+    def nt(self):
+        if self.threads is not None:
+            return " -n %i" % self.threads
+        else:
+            return ""
+
+    def set_nt(self, threads):
+        self.threads = threads
+
+    def load_molpro_input(self, molproin):
+        """ Molpro input file parser, only support xyz coordinates for now """
+        coords = []
+        elems = []
+        labels = []
+        found_molecule, found_geo, found_gradient = False, False, False
+        molpro_temp = [] # store a template of the input file for generating new ones
+        for line in open(molproin):
+            if 'geometry' in line:
+                found_molecule = True
+                molpro_temp.append(line)
+            elif found_molecule is True:
+                ls = line.split()
+                if len(ls) == 4:
+                    if found_geo == False:
+                        found_geo = True
+                        molpro_temp.append("$!geometry@here")
+                    # parse the xyz format
+                    elem = re.search('[A-Z][a-z]*',ls[0]).group(0)
+                    elems.append( elem ) # grabs the element
+                    labels.append( ls[0].split(elem)[-1] ) # grabs label after element specification
+                    coords.append(ls[1:4]) # grabs the coordinates
+                else:
+                    molpro_temp.append(line)
+                    if '}' in line:
+                        found_molecule = False
+            else:
+                molpro_temp.append(line)
+            if "force" in line:
+                found_gradient = True
+        if found_gradient == False:
+            raise RuntimeError("Molpro inputfile %s should have force command." % molproin)
+        self.M = Molecule()
+        self.M.elem = elems
+        self.M.xyzs = [np.array(coords, dtype=np.float64)]
+        self.labels = labels
+        self.molpro_temp = molpro_temp
+
+    def calc_new(self, coords, dirname):
+        if not os.path.exists(dirname): os.makedirs(dirname)
+        # Convert coordinates back to the xyz file
+        self.M.xyzs[0] = coords.reshape(-1, 3) * bohr2ang
+        # Write Molpro run.mol
+        with open(os.path.join(dirname, 'run.mol'), 'w') as outfile:
+            for line in self.molpro_temp:
+                if line == '$!geometry@here':
+                    for e, lab, c in zip(self.M.elem, self.labels, self.M.xyzs[0]):
+                        outfile.write("%s%-7s %13.7f %13.7f %13.7f\n" % (e, lab, c[0], c[1], c[2]))
+                else:
+                    outfile.write(line)
+        # Run Molpro
+        subprocess.call('%s%s run.mol' % (self.molproExe(), self.nt()), cwd=dirname, shell=True)
+        # Read energy and gradients from Molpro output
+        energy, gradient = self.parse_molpro_output(os.path.join(dirname, 'run.out'))
+        return energy, gradient
+
+    def number_output(self, dirname, calcNum):
+        if not os.path.exists(os.path.join(dirname, 'run.out')):
+            raise RuntimeError('run.out does not exist')
+        shutil.copy2(os.path.join(dirname,'run.out'), os.path.join(dirname,'run_%03i.out' % calcNum))
+
+    def parse_molpro_output(self, molpro_out):
+        """ read an output file from Molpro"""
+        energy, gradient = None, None
+        with open(molpro_out) as outfile:
+            found_grad = False
+            for line in outfile:
+                line_strip = line.strip()
+                fields = line_strip.split()
+                if line_strip.startswith('!'):
+                    # This works for RHF and RKS
+                    if len(fields) == 5 and fields[-2] == 'Energy':
+                        energy = float(fields[-1])
+                    # This works for MP2, CCSD and CCSD(T) total energy
+                    elif len(fields) == 4 and fields[1] == 'total' and fields[2] == 'energy:':
+                        energy = float(fields[-1])
+                elif len(fields) > 4 and fields[-4] == 'GRADIENT' and fields[-3] == 'FOR' and fields[-2] == 'STATE':
+                    # this works for most of the analytic gradients
+                    found_grad = True
+                    gradient = []
+                    # Skip three lines of header
+                    next(outfile)
+                    next(outfile)
+                    next(outfile)
+                elif found_grad is True:
+                    if len(fields) == 4:
+                        if fields[0].isdigit():
+                            gradient.append([float(g) for g in fields[1:4]])
+                    elif "Nuclear force contribution to virial" in line:
+                        found_grad = False
+                    else:
+                        continue
+        if energy is None:
+            raise RuntimeError("Molpro energy is not found in %s, please check." % molpro_out)
+        if gradient is None:
+            raise RuntimeError("Molpro gradient is not found in %s, please check." % molpro_out)
+        gradient = np.array(gradient, dtype=np.float64).ravel()
+        return energy, gradient
