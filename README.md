@@ -9,6 +9,12 @@ and Psi4 are supported.
 
 Authors: Lee-Ping Wang, Chenchen Song
 
+Contributors:
+Yudong Qiu (Psi4 engine)
+Daniel G. A. Smith (Testing framework)
+Sebastian Lee (Molpro engine)
+Chaya Stern (Travis, Conda)
+
 Contact Email: leeping@ucdavis.edu
 
 If this code has benefited your research, please support us by citing:
