@@ -672,7 +672,6 @@ class QCEngine(Engine):
         # Geometry in (-1, 3) array in angstroms
         geom = np.array(schema["molecule"]["geometry"], dtype=np.float64).reshape(-1, 3) * bohr2ang
         self.M.xyzs = [geom]
-        print("    ", np.linalg.norm(geom[0] - geom[1]), np.linalg.norm(geom[0] - geom[2]) , np.linalg.norm(geom[1] - geom[2]))
 
         # Use or build connectivity
         if "connectivity" in schema["molecule"]:
@@ -691,10 +690,6 @@ class QCEngine(Engine):
         import qcengine
         new_schema = deepcopy(self.schema)
         new_schema["molecule"]["geometry"] = (coords).tolist()
-        # print(coords)
-        geom = coords.reshape(-1, 3)
-        print("    ", np.linalg.norm(geom[0] - geom[1]), np.linalg.norm(geom[0] - geom[2]) , np.linalg.norm(geom[1] - geom[2]))
-        # new_schema["molecule"]["geometry"] = (coords * ang2bohr).tolist()
 
         ret = qcengine.compute(new_schema, self.program)
         energy = ret["properties"]["scf_total_energy"]

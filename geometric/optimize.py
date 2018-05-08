@@ -1138,6 +1138,7 @@ def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None, xyzout2
         if (CoordCounter == (params.check - 1)) or check:
             newmol = deepcopy(molecule)
             newmol.xyzs[0] = X.reshape(-1,3)*0.529177
+
             newmol.build_topology()
             IC1 = IC.__class__(newmol, build=False, connect=IC.connect, addcart=IC.addcart)
             if IC.haveConstraints(): IC1.getConstraints_from(IC)
@@ -1504,6 +1505,7 @@ def run_optimizer(**kwargs):
             coords = Optimize(coords, M, IC, engine, dirname, params, xyzout,xyzout2)
             print
     print_msg()
+    return M
 
 def main():
     """Read user's input"""
