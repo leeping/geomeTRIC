@@ -14,7 +14,6 @@ from geometric.global_vars import *
 from geometric.molecule import Molecule
 from geometric.nifty import eqcgmx, fqcgmx, getWorkQueue, queue_up_src_dest
 
-
 #=============================#
 #| Useful TeraChem functions |#
 #=============================#
@@ -658,4 +657,47 @@ class Molpro(Engine):
         if gradient is None:
             raise RuntimeError("Molpro gradient is not found in %s, please check." % molpro_out)
         gradient = np.array(gradient, dtype=np.float64).ravel()
+        return energy, gradient
+
+class QCEngine(Engine):
+    def __init__(self, schema):
+
+        self.schema = schema
+        self.schema["driver"] = "gradient"
+        self.program = schema["program"]
+
+        self.M = Molecule()
+        self.M.elem = schema["molecule"]["symbols"]
+
+        # Geometry in (-1, 3) array in angstroms
+        geom = np.array(schema["molecule"]["geometry"], dtype=np.float64).reshape(-1, 3) * bohr2ang
+        self.M.xyzs = [geom]
+        print("    ", np.linalg.norm(geom[0] - geom[1]), np.linalg.norm(geom[0] - geom[2]) , np.linalg.norm(geom[1] - geom[2]))
+
+        # Use or build connectivity
+        if "connectivity" in schema["molecule"]:
+            self.M.Data["bonds"] = [(x[0], x[1]) for x in schema["molecule"]["connectivity"]]
+            self.M.build_bonds = True
+        else:
+            self.M.build_bonds()
+
+        try:
+            import qcengine
+        except ImportError:
+            raise ImportError("QCEngine computation object requires the 'qcengine' package. Please pip or conda install 'qcengine'.")
+
+    def calc_new(self, coords, dirname):
+
+        import qcengine
+        new_schema = deepcopy(self.schema)
+        new_schema["molecule"]["geometry"] = (coords).tolist()
+        # print(coords)
+        geom = coords.reshape(-1, 3)
+        print("    ", np.linalg.norm(geom[0] - geom[1]), np.linalg.norm(geom[0] - geom[2]) , np.linalg.norm(geom[1] - geom[2]))
+        # new_schema["molecule"]["geometry"] = (coords * ang2bohr).tolist()
+
+        ret = qcengine.compute(new_schema, self.program)
+        energy = ret["properties"]["scf_total_energy"]
+        gradient = np.array(ret["return_value"])
+
         return energy, gradient

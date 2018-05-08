@@ -8,7 +8,7 @@ import sys
 
 import numpy as np
 
-from geometric.engine import set_tcenv, load_tcin, TeraChem, Psi4, QChem, Gromacs, Molpro
+from geometric.engine import set_tcenv, load_tcin, TeraChem, Psi4, QChem, Gromacs, Molpro, QCEngine
 from geometric.internal import *
 from geometric.molecule import Molecule, Elements
 from geometric.nifty import row, col, flat, invert_svd, uncommadash, isint
@@ -1312,14 +1312,15 @@ def get_molecule_engine(**kwargs):
     psi4 = kwargs.get('psi4', False)
     gmx = kwargs.get('gmx', False)
     molpro = kwargs.get('molpro', False)
+    qcengine = kwargs.get('qcengine', False)
     molproexe = kwargs.get('molproexe', None)
     pdb = kwargs.get('pdb', None)
     frag = kwargs.get('frag', False)
     inputf = kwargs.get('input')
     nt = kwargs.get('nt', None)
 
-    if sum([qchem, psi4, gmx, molpro]) > 1:
-        raise RuntimeError("Do not specify more than one of --qchem, --psi4, --gmx, --molpro")
+    if sum([qchem, psi4, gmx, molpro, qcengine]) > 1:
+        raise RuntimeError("Do not specify more than one of --qchem, --psi4, --gmx, --molpro, --qcengine")
     if qchem:
         # The file from which we make the Molecule object
         if pdb is not None:
@@ -1357,6 +1358,13 @@ def get_molecule_engine(**kwargs):
             engine.set_nt(nt)
         if molproexe is not None:
             engine.set_molproexe(molproexe)
+    elif qcengine:
+        schema = kwargs.get('qcschema', False)
+        if schema is False:
+            raise RuntimeError("QCEngine option requires a QCSchema")
+
+        engine = QCEngine(schema)
+        M = engine.M
     else:
         set_tcenv()
         tcin = load_tcin(inputf)

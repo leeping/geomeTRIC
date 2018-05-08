@@ -9,6 +9,7 @@ import os
 import re
 import sys
 import sysconfig
+import json
 from collections import OrderedDict, namedtuple, Counter
 from ctypes import *
 from datetime import date
@@ -1077,6 +1078,7 @@ class Molecule(object):
                          'inpcrd'   : self.read_inpcrd,
                          'pdb'      : self.read_pdb,
                          'xyz'      : self.read_xyz,
+                         'qcschema' : self.read_qcschema,
                          'mol2'     : self.read_mol2,
                          'qcin'     : self.read_qcin,
                          'qcout'    : self.read_qcout,
@@ -2465,6 +2467,23 @@ class Molecule(object):
     #=====================================#
     #|         Reading functions         |#
     #=====================================#
+    def read_qcschema(self, schema, **kwargs):
+
+        # Already read in
+        if isinstance(schema, dict):
+            pass
+
+        # Try to read file
+        elif isinstance(schema, str):
+            with open(schema, "r") as handle:
+                schema = json.loads(handle)
+        else:
+            raise TypeError("Schema type not understood '{}'".format(type(schema)))
+        ret = {"elem": schema["symbols"],
+               "xyzs": [np.array(schema["geometry"])],
+               "comments": []}
+        return ret
+
     def read_xyz(self, fnm, **kwargs):
         """ .xyz files can be TINKER formatted which is why we have the try/except here. """
         try:
