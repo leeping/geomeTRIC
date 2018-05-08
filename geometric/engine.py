@@ -690,7 +690,7 @@ class QCEngine(Engine):
 
         import qcengine
         new_schema = deepcopy(self.schema)
-        new_schema["molecule"]["geometry"] = (coords).tolist()
+        new_schema["molecule"]["geometry"] = coords.tolist()
 
         ret = qcengine.compute(new_schema, self.program)
         energy = ret["properties"]["scf_total_energy"]

@@ -818,7 +818,7 @@ def recover(molecule, IC, X, gradx, X_hist, Gx_hist, params):
             print(IC.repr_diff(IC1))
     IC = IC1
     IC.resetRotations(X)
-    if type(IC) is DelocalizedInternalCoordinates:
+    if isinstance(IC, DelocalizedInternalCoordinates):
         IC.build_dlc(X)
     H0 = IC.guess_hessian(X)
     if params.reset:
@@ -1049,7 +1049,7 @@ def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None, xyzout2
         print("E (change) = % .10f (%s%+.3e\x1b[0m) Quality = %s%.3f\x1b[0m" % (E, "\x1b[91m" if BadStep else ("\x1b[92m" if Converged_energy else "\x1b[0m"), E-Eprev, "\x1b[91m" if BadStep else "\x1b[0m", Quality))
         if IC is not None and IC.haveConstraints():
             IC.printConstraints(X, thre=1e-3)
-        if type(IC) is PrimitiveInternalCoordinates:
+        if isinstance(IC, PrimitiveInternalCoordinates):
             idx = np.argmax(np.abs(dy))
             iunit = np.zeros_like(dy)
             iunit[idx] = 1.0
@@ -1156,7 +1156,7 @@ def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None, xyzout2
         UpdateHessian = True
         if reinit:
             IC.resetRotations(X)
-            if type(IC) is DelocalizedInternalCoordinates:
+            if isinstance(IC, DelocalizedInternalCoordinates):
                 IC.build_dlc(X)
             H0 = IC.guess_hessian(coords)
             H = RebuildHessian(IC, H0, X_hist, Gx_hist, params)
@@ -1469,7 +1469,7 @@ def run_optimizer(**kwargs):
         sys.exit()
 
     # Print out information about the coordinate system
-    if type(IC) is CartesianCoordinates:
+    if isinstance(IC, CartesianCoordinates):
         print("%i Cartesian coordinates being used" % (3*M.na))
     else:
         print("%i internal coordinates being used (instead of %i Cartesians)" % (len(IC.Internals), 3*M.na))
@@ -1486,7 +1486,7 @@ def run_optimizer(**kwargs):
         opt_coords = Optimize(coords, M, IC, engine, dirname, params, xyzout,xyzout2)
     else:
         # Run a constrained geometry optimization
-        if type(IC) in [CartesianCoordinates, PrimitiveInternalCoordinates]:
+        if isinstance(IC, (CartesianCoordinates, PrimitiveInternalCoordinates)):
             raise RuntimeError("Constraints only work with delocalized internal coordinates")
         for ic, CVal in enumerate(CVals):
             if len(CVals) > 1:

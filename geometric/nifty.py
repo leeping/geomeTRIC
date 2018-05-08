@@ -131,7 +131,7 @@ def pvec1d(vec1d, precision=1, format="e", loglevel=INFO):
 
 def astr(vec1d, precision=4):
     """ Write an array to a string so we can use it to key a dictionary. """
-    return ' '.join([("%% .%ie " % (precision) % i) for i in vec1d])
+    return ' '.join([("%% .%ie " % precision % i) for i in vec1d])
 
 def pmat2d(mat2d, precision=1, format="e", loglevel=INFO):
     """Printout of a 2-D matrix.
@@ -653,7 +653,7 @@ def statisticalInefficiency(A_n, B_n=None, fast=False, mintime=3, warn=True):
     # Get the length of the timeseries.
     N = A_n.shape[0]
     # Be sure A_n and B_n have the same dimensions.
-    if(A_n.shape != B_n.shape):
+    if A_n.shape != B_n.shape:
         logger.error('A_n and B_n must have same dimensions.\n')
         raise ParameterError
     # Initialize statistical inefficiency estimate with uncorrelated value.
@@ -667,7 +667,7 @@ def statisticalInefficiency(A_n, B_n=None, fast=False, mintime=3, warn=True):
     # Compute estimator of covariance of (A,B) using estimator that will ensure C(0) = 1.
     sigma2_AB = (dA_n * dB_n).mean() # standard estimator to ensure C(0) = 1
     # Trap the case where this covariance is zero, and we cannot proceed.
-    if(sigma2_AB == 0):
+    if sigma2_AB == 0:
         if warn:
             logger.warning('Sample covariance sigma_AB^2 = 0 -- cannot compute statistical inefficiency\n')
         return 1.0
@@ -677,7 +677,7 @@ def statisticalInefficiency(A_n, B_n=None, fast=False, mintime=3, warn=True):
     # is dominated by noise and indistinguishable from zero.
     t = 1
     increment = 1
-    while (t < N-1):
+    while t < N-1:
         # compute normalized fluctuation correlation function at time t
         C = sum( dA_n[0:(N-t)]*dB_n[t:N] + dB_n[0:(N-t)]*dA_n[t:N] ) / (2.0 * float(N-t) * sigma2_AB)
         # Terminate if the correlation function has crossed zero and we've computed the correlation
@@ -691,7 +691,7 @@ def statisticalInefficiency(A_n, B_n=None, fast=False, mintime=3, warn=True):
         # Increase the interval if "fast mode" is on.
         if fast: increment += 1
     # g must be at least unity
-    if (g < 1.0): g = 1.0
+    if g < 1.0: g = 1.0
     # Return the computed statistical inefficiency.
     return g
 
@@ -1021,7 +1021,7 @@ def onefile(fnm=None, ext=None, err=False):
                     logger.info("\x1b[93monefile() will copy %s to %s\x1b[0m\n" % (os.path.abspath(fnm), os.getcwd()))
                     shutil.copy2(fsrc, fdest)
             return os.path.basename(fnm)
-        elif (err==True or ext is None):
+        elif err==True or ext is None:
             logger.error("File specified by %s does not exist!" % fnm)
             raise RuntimeError
         elif ext is not None:
