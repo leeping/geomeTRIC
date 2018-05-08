@@ -19,6 +19,8 @@ import numpy as np
 from numpy import sin, cos, arccos
 from pkg_resources import parse_version
 
+from . import global_vars
+
 # For Python 3 compatibility
 try:
     from itertools import zip_longest as zip_longest
@@ -295,9 +297,6 @@ if "forcebalance" in __name__:
 #===========================#
 #| Convenience subroutines |#
 #===========================#
-
-## One bohr equals this many angstroms
-bohrang = 0.529177249
 
 def unmangle(M1, M2):
     """
@@ -3251,7 +3250,7 @@ class Molecule(object):
             if len(sline) == 4 and all([isfloat(sline[i]) for i in range(4)]):
                 espxyz.append([float(sline[i]) for i in range(3)])
                 espval.append(float(sline[3]))
-        Answer = {'qm_espxyzs' : [np.array(espxyz) * bohrang],
+        Answer = {'qm_espxyzs' : [np.array(espxyz) * global_vars.bohr2ang],
                   'qm_espvals'  : [np.array(espval)]
                   }
         return Answer

@@ -43,6 +43,8 @@ import six # For six.string_types
 from subprocess import PIPE
 from collections import OrderedDict, defaultdict
 
+from . import global_vars
+
 #================================#
 #       Set up the logger        #
 #================================#
@@ -81,14 +83,11 @@ except ImportError:
     HaveGZ = False
 
 
-## Boltzmann constant
-kb = 0.0083144100163
 ## Q-Chem to GMX unit conversion for energy
 eqcgmx = 2625.5002
 ## Q-Chem to GMX unit conversion for force
 fqcgmx = -49621.9
-## One bohr equals this many angstroms
-bohrang = 0.529177249
+
 
 #=========================#
 #     I/O formatting      #
