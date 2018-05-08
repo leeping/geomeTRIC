@@ -1,43 +1,56 @@
 language: python
-sudo: false
+
+# Run jobs on container-based infrastructure, can be overridden per job
+dist: trusty
+
 matrix:
   include:
-  - env:
-    - PYTHON_VER='2.7'
-  - env:
-    - PYTHON_VER='3.6'
+    - os: linux
+      python: 2.7
+      env: PYTHON_VER=2.7
+    - os: linux
+      python: 3.5
+      env: PYTHON_VER=3.5
+    - os: linux
+      python: 3.6
+      env: PYTHON_VER=3.6
+
 before_install:
-- uname -a
-- free -m
-- df -h
-- ulimit -a
+    # Additional info about the build
+  - uname -a
+  - df -h
+  - ulimit -a
+
+    # Install the Python environemt
+  - source devtools/travis-ci/before_install.sh
+  - python -V
+
 install:
-- wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh
-- bash miniconda.sh -b -p $HOME/miniconda
-- export PATH="$HOME/miniconda/bin:$PATH"
-- hash -r
-- conda config --set always_yes yes --set changeps1 no
-- conda update -q conda
-- conda info -a
-- if [[ "$PYTHON_VER" == "2.7" ]]; then conda create -q -n p4env python=$PYTHON_VER
-  psi4 numpy=1.12 -c psi4; else conda create -q -n p4env python=$PYTHON_VER psi4 numpy=1.13
-  -c psi4/label/dev -c psi4; fi
-- source activate p4env
-- conda install scipy six networkx
-- conda install pytest pytest-cov codecov -c conda-forge
-- conda list
-- pip install -e .
-before_script:
-- python -V
+
+    # Create test environment for package
+  - conda create -n test python=$PYTHON_VER pip pytest pyyaml pytest-cov py-cpuinfo psi4 rdkit -c psi4 -c rdkit
+  - source activate test
+
+    # Install pip only modules
+  - pip install codecov
+
+    # Build and install package
+  - conda build --python=$PYTHON_VER devtools/conda-recipe
+  - conda install --use-local geomeTRIC
+
+
 script:
-- py.test -v --cov=./
-- cd examples/water2_psi4
-- coverage run `which geometric-optimize` --psi4 water2.psi4in
-- cd ../..
-after_success:
-- codecov
+  - pytest -v --cov=geomeTRIC geomeTRIC/tests/
+  - cd examples/water2_psi4
+  - coverage run `which geometric-optimize` --psi4 water2.psi4in
+  - cd ../..
+
 notifications:
-  email: false
+    email: false
+
+after_success:
+  - codecov
+
 deploy:
   provider: pypi
   user: leeping
@@ -46,4 +59,3 @@ deploy:
   on:
     tags: true
     all_branches : true
-    
