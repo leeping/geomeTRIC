@@ -850,6 +850,8 @@ class OptParams(object):
         self.Convergence_gmax = 4.5e-4
         self.Convergence_drms = 1.2e-3
         self.Convergence_dmax = 1.8e-3
+        self.qc_convergence_gmax = 3e-4
+        self.qc_convergence_dmax = 1.2e-3
 
 def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None, xyzout2=None):
     """
@@ -915,6 +917,9 @@ def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None, xyzout2
     Convergence_gmax = params.Convergence_gmax
     Convergence_drms = params.Convergence_drms
     Convergence_dmax = params.Convergence_dmax
+    # Q-chem convergence criteria
+    qc_convergence_gmax = params.qc_convergence_gmax
+    qc_convergence_dmax = params.qc_convergence_dmax
     X_hist = [X]
     Gx_hist = [gradx]
     trustprint = "="
@@ -1039,6 +1044,9 @@ def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None, xyzout2
         Converged_drms = rms_displacement < Convergence_drms
         Converged_dmax = max_displacement < Convergence_dmax
         BadStep = Quality < 0
+        # Qchem defaults for convergence
+        qc_converged_gmax = max_gradient < qc_convergence_gmax
+        qc_converged_dmax = max_displacement < qc_convergence_dmax
         # Print status
         print("Step %4i :" % Iteration, end=' '),
         print("Displace = %s%.3e\x1b[0m/%s%.3e\x1b[0m (rms/max)" % ("\x1b[92m" if Converged_drms else "\x1b[0m", rms_displacement, "\x1b[92m" if Converged_dmax else "\x1b[0m", max_displacement), end=' '),
@@ -1066,8 +1074,8 @@ def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None, xyzout2
         if Iteration > params.maxiter:
             print("Maximum iterations reached (%i); increase --maxiter for more" % params.maxiter)
             break
-        if params.qccnv and Converged_grms and (Converged_drms or Converged_energy) and conSatisfied:
-            print("Converged! (Q-Chem style criteria requires grms and either drms or energy)")
+        if params.qccnv and qc_converged_gmax and (qc_converged_dmax or Converged_energy) and conSatisfied:
+            print("Converged! (Q-Chem style criteria requires gmax and either dmax or energy)")
             # _exec("touch energy.txt") #JS these two lines used to make a energy.txt file using the final energy
             with open("energy.txt","w") as f:
                 print("% .10f" % E, file=f)
