@@ -10,9 +10,8 @@ from copy import deepcopy
 import networkx as nx
 import numpy as np
 
-from geometric.global_vars import *
 from geometric.molecule import Elements, Radii
-from geometric.nifty import click, commadash
+from geometric.nifty import click, commadash, ang2bohr, bohr2ang
 from geometric.rotate import get_expmap, get_expmap_der, is_linear
 
 
