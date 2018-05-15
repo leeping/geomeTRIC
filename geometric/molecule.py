@@ -29,7 +29,7 @@ except ImportError:
 # |              Chemical file format conversion module                |#
 # |                                                                    |#
 # |                Lee-Ping Wang (leeping@ucdavis.edu)                 |#
-# |                   Last updated March 10, 2018                      |#
+# |                   Last updated April 19, 2018                      |#
 # |                                                                    |#
 # |   This code is part of geomeTRIC and is covered under the          |#
 # |   geomeTRIC copyright notice and MIT license.                      |#
@@ -178,7 +178,7 @@ AllVariableNames = QuantumVariableNames | AtomVariableNames | MetaVariableNames 
 #================================#
 try:
     from .output import *
-except ImportError:
+except (ImportError, ValueError):
     from logging import *
     class RawStreamHandler(StreamHandler):
         """Exactly like output.StreamHandler except it does no extra formatting
@@ -2036,7 +2036,9 @@ class Molecule(object):
         # The Topology is simply the NetworkX graph object.
         self.topology = G
         # LPW: Molecule.molecules is a funny misnomer... it should be fragments or substructures or something
-        self.molecules = list(nx.connected_component_subgraphs(G))
+        self.molecules = [G.subgraph(c).copy() for c in nx.connected_components(G)]
+        # Deprecated in networkx 2.2
+        # self.molecules = list(nx.connected_component_subgraphs(G))
 
     def distance_matrix(self, pbc=True):
         """ Obtain distance matrix between all pairs of atoms. """

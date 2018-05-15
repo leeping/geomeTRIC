@@ -9,6 +9,8 @@ and Psi4 are supported.
 
 Authors: Lee-Ping Wang, Chenchen Song
 
+Contributors: Yudong Qiu (Psi4 engine); Sebastian Lee (Molpro engine); Daniel G. A. Smith (Testing framework); Chaya Stern (Travis, Conda)
+
 Contact Email: leeping@ucdavis.edu
 
 If this code has benefited your research, please support us by citing:
@@ -31,3 +33,4 @@ TeraChem, Q-Chem, and Psi4.  You can also call Gromacs for MM forces.
 
 Please refer to the example calculations for how to run the code.  
 The commands to execute the code are contained in "command.sh".
+
