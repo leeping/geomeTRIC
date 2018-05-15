@@ -660,7 +660,7 @@ class Molpro(Engine):
         gradient = np.array(gradient, dtype=np.float64).ravel()
         return energy, gradient
 
-class QCEngine(Engine):
+class QCEngineAPI(Engine):
     def __init__(self, schema):
 
         self.schema = schema
@@ -693,7 +693,7 @@ class QCEngine(Engine):
         new_schema["molecule"]["geometry"] = coords.tolist()
 
         ret = qcengine.compute(new_schema, self.program)
-        energy = ret["properties"]["scf_total_energy"]
+        energy = ret["properties"]["return_energy"]
         gradient = np.array(ret["return_value"])
 
         return energy, gradient

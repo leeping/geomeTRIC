@@ -9,7 +9,7 @@ import sys
 import numpy as np
 
 from . import global_vars
-from .engine import set_tcenv, load_tcin, TeraChem, Psi4, QChem, Gromacs, Molpro, QCEngine
+from .engine import set_tcenv, load_tcin, TeraChem, Psi4, QChem, Gromacs, Molpro, QCEngineAPI
 from .internal import *
 from .molecule import Molecule, Elements
 from .nifty import row, col, flat, invert_svd, uncommadash, isint
@@ -1363,9 +1363,9 @@ def get_molecule_engine(**kwargs):
     elif qcengine:
         schema = kwargs.get('qcschema', False)
         if schema is False:
-            raise RuntimeError("QCEngine option requires a QCSchema")
+            raise RuntimeError("QCEngineAPI option requires a QCSchema")
 
-        engine = QCEngine(schema)
+        engine = QCEngineAPI(schema)
         M = engine.M
     else:
         set_tcenv()
