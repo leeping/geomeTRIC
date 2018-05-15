@@ -8,11 +8,12 @@ import sys
 
 import numpy as np
 
-from geometric.engine import set_tcenv, load_tcin, TeraChem, Psi4, QChem, Gromacs, Molpro
-from geometric.internal import *
-from geometric.molecule import Molecule, Elements
-from geometric.nifty import row, col, flat, invert_svd, uncommadash, isint
-from geometric.rotate import get_rot, sorted_eigh, calc_fac_dfac
+from . import global_vars
+from .engine import set_tcenv, load_tcin, TeraChem, Psi4, QChem, Gromacs, Molpro, QCEngineAPI
+from .internal import *
+from .molecule import Molecule, Elements
+from .nifty import row, col, flat, invert_svd, uncommadash, isint
+from .rotate import get_rot, sorted_eigh, calc_fac_dfac
 
 
 def RebuildHessian(IC, H0, coord_seq, grad_seq, params):
@@ -43,7 +44,7 @@ def RebuildHessian(IC, H0, coord_seq, grad_seq, params):
     Na = len(coord_seq[0])/3
     history = 0
     for i in range(2, len(coord_seq)+1):
-        disp = 0.529177*(coord_seq[-i]-coord_seq[-1])
+        disp = global_vars.bohr2ang*(coord_seq[-i]-coord_seq[-1])
         rmsd = np.sqrt(np.sum(disp**2)/Na)
         if rmsd > params.trust: break
         history += 1
@@ -97,9 +98,9 @@ def calc_drms_dmax(Xnew, Xold, align=True):
         U = get_rot(Xnew, Xold)
         Xrot = np.array((U*np.matrix(Xnew).T).T).flatten()
         Xold = np.array(Xold).flatten()
-        displacement = np.sqrt(np.sum((((Xrot-Xold)*0.529177).reshape(-1,3))**2, axis=1))
+        displacement = np.sqrt(np.sum((((Xrot-Xold)*global_vars.bohr2ang).reshape(-1,3))**2, axis=1))
     else:
-        displacement = np.sqrt(np.sum((((Xnew-Xold)*0.529177).reshape(-1,3))**2, axis=1))
+        displacement = np.sqrt(np.sum((((Xnew-Xold)*global_vars.bohr2ang).reshape(-1,3))**2, axis=1))
     rms_displacement = np.sqrt(np.mean(displacement**2))
     max_displacement = np.max(displacement)
     return rms_displacement, max_displacement
@@ -308,7 +309,7 @@ def ParseConstraints(molecule, cFile):
     TransKeys = ["trans-x", "trans-y", "trans-z", "trans-xy", "trans-yz", "trans-xz", "trans-xyz"]
     objs = []
     vals = []
-    coords = molecule.xyzs[0].flatten() / 0.529177
+    coords = molecule.xyzs[0].flatten() / global_vars.ang2bohr
     for line in open(cFile).readlines():
         line = line.split("#")[0].strip().lower()
         # This is a list-of-lists. The intention is to create a multidimensional grid
@@ -362,13 +363,13 @@ def ParseConstraints(molecule, cFile):
                     for cls in classes:
                         vals.append([[None for a in atoms]])
                 elif mode == "set":
-                    x1 = [float(i)/0.529177 for i in s[2:2+len(classes)]]
+                    x1 = [float(i) * global_vars.ang2bohr for i in s[2:2+len(classes)]]
                     for icls, cls in enumerate(classes):
                         vals.append([[x1[icls] for a in atoms]])
                 elif mode == "scan":
                     # If we're scanning it, then we add the whole list of distances to the list-of-lists
-                    x1 = [float(i)/0.529177 for i in s[2:2+len(classes)]]
-                    x2 = [float(i)/0.529177 for i in s[2+len(classes):2+2*len(classes)]]
+                    x1 = [float(i) * global_vars.ang2bohr for i in s[2:2+len(classes)]]
+                    x2 = [float(i) * global_vars.ang2bohr for i in s[2+len(classes):2+2*len(classes)]]
                     nstep = int(s[2+2*len(classes)])
                     valscan = OneDScan(x1, x2, nstep)
                     for icls, cls in enumerate(classes):
@@ -388,13 +389,13 @@ def ParseConstraints(molecule, cFile):
                 elif mode == "set":
                     # Depending on how many coordinates are constrained, we read in the corresponding
                     # number of constraint values.
-                    x1 = [float(i)/0.529177 for i in s[2:2+len(classes)]]
+                    x1 = [float(i) * global_vars.ang2bohr for i in s[2:2+len(classes)]]
                     # If there's just one constraint value then we append it to the value list-of-lists
                     vals.append([x1])
                 elif mode == "scan":
                     # If we're scanning it, then we add the whole list of distances to the list-of-lists
-                    x1 = [float(i)/0.529177 for i in s[2:2+len(classes)]]
-                    x2 = [float(i)/0.529177 for i in s[2+len(classes):2+2*len(classes)]]
+                    x1 = [float(i) * global_vars.ang2bohr for i in s[2:2+len(classes)]]
+                    x2 = [float(i) * global_vars.ang2bohr for i in s[2+len(classes):2+2*len(classes)]]
                     nstep = int(s[2+2*len(classes)])
                     vals.append(OneDScan(x1, x2, nstep))
             elif key in ["distance", "angle", "dihedral"]:
@@ -415,19 +416,19 @@ def ParseConstraints(molecule, cFile):
                 if mode == "freeze":
                     vals.append([[None]])
                 elif mode in ["set", "scan"]:
-                    if key == "distance": x1 = float(s[1+n_atom])/0.529177
+                    if key == "distance": x1 = float(s[1+n_atom]) * global_vars.ang2bohr
                     else: x1 = float(s[1+n_atom])*np.pi/180.0
                     if mode == "set":
                         vals.append([[x1]])
                     else:
-                        if key == "distance": x2 = float(s[2+n_atom])/0.529177
+                        if key == "distance": x2 = float(s[2+n_atom]) * global_vars.ang2bohr
                         else: x2 = float(s[2+n_atom])*np.pi/180.0
                         nstep = int(s[3+n_atom])
                         vals.append([[i] for i in list(np.linspace(x1,x2,nstep))])
             elif key in ["rotation"]:
                 # User can only specify ranges of atoms
                 atoms = uncommadash(s[1])
-                sel = coords.reshape(-1,3)[atoms,:] / 0.529177
+                sel = coords.reshape(-1,3)[atoms,:]  * global_vars.ang2bohr
                 sel -= np.mean(sel, axis=0)
                 rg = np.sqrt(np.mean(np.sum(sel**2, axis=1)))
                 if mode == "freeze":
@@ -807,7 +808,7 @@ def recover(molecule, IC, X, gradx, X_hist, Gx_hist, params):
         New internal Hessian
     """
     newmol = deepcopy(molecule)
-    newmol.xyzs[0] = X.reshape(-1,3)*0.529177
+    newmol.xyzs[0] = X.reshape(-1,3) * global_vars.bohr2ang
     newmol.build_topology()
     IC1 = IC.__class__(newmol, connect=IC.connect, addcart=IC.addcart, build=False)
     if IC.haveConstraints(): IC1.getConstraints_from(IC)
@@ -817,7 +818,7 @@ def recover(molecule, IC, X, gradx, X_hist, Gx_hist, params):
             print(IC.repr_diff(IC1))
     IC = IC1
     IC.resetRotations(X)
-    if type(IC) is DelocalizedInternalCoordinates:
+    if isinstance(IC, DelocalizedInternalCoordinates):
         IC.build_dlc(X)
     H0 = IC.guess_hessian(X)
     if params.reset:
@@ -902,7 +903,7 @@ def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None, xyzout2
     max_gradient = np.max(atomgrad)
     print("Step %4i :" % Iteration, end=' '),
     print("Gradient = %.3e/%.3e (rms/max) Energy = % .10f" % (rms_gradient, max_gradient, E))
-    progress.xyzs = [coords.copy().reshape(-1, 3) * 0.529]
+    progress.xyzs = [coords.copy().reshape(-1, 3) * global_vars.bohr2ang]
     progress.comms = ['Iteration %i Energy % .8f' % (Iteration, E)]
     # if IC.haveConstraints(): IC.printConstraints(X)
     # Threshold for "low quality step" which decreases trust radius.
@@ -1021,7 +1022,7 @@ def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None, xyzout2
         E, gradx = engine.calc(X, dirname    )
         ### Check Convergence ###
         # Add new Cartesian coordinates and gradients to history
-        progress.xyzs.append(X.reshape(-1,3) * 0.529177)
+        progress.xyzs.append(X.reshape(-1,3) * global_vars.bohr2ang)
         progress.comms.append('Iteration %i Energy % .8f' % (Iteration, E))
         if xyzout is not None:
             progress.write(xyzout)
@@ -1048,7 +1049,7 @@ def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None, xyzout2
         print("E (change) = % .10f (%s%+.3e\x1b[0m) Quality = %s%.3f\x1b[0m" % (E, "\x1b[91m" if BadStep else ("\x1b[92m" if Converged_energy else "\x1b[0m"), E-Eprev, "\x1b[91m" if BadStep else "\x1b[0m", Quality))
         if IC is not None and IC.haveConstraints():
             IC.printConstraints(X, thre=1e-3)
-        if type(IC) is PrimitiveInternalCoordinates:
+        if isinstance(IC, PrimitiveInternalCoordinates):
             idx = np.argmax(np.abs(dy))
             iunit = np.zeros_like(dy)
             iunit[idx] = 1.0
@@ -1058,7 +1059,7 @@ def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None, xyzout2
             # _exec("touch energy.txt") #JS these two lines used to make a energy.txt file using the final energy
             with open("energy.txt","w") as f:
                 print("% .10f" % E, file=f)
-            progress2.xyzs = [X.reshape(-1,3) * 0.529177] #JS these two lines used to make a opt.xyz file along with the if statement below.
+            progress2.xyzs = [X.reshape(-1,3) * global_vars.bohr2ang] #JS these two lines used to make a opt.xyz file along with the if statement below.
             progress2.comms = ['Iteration %i Energy % .8f' % (Iteration, E)]
             if xyzout2 is not None:
                 progress2.write(xyzout2) #This contains the last frame of the trajectory.
@@ -1071,7 +1072,7 @@ def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None, xyzout2
             # _exec("touch energy.txt") #JS these two lines used to make a energy.txt file using the final energy
             with open("energy.txt","w") as f:
                 print("% .10f" % E, file=f)
-            progress2.xyzs = [X.reshape(-1,3) * 0.529177] #JS these two lines used to make a opt.xyz file along with the if statement below.
+            progress2.xyzs = [X.reshape(-1,3) * global_vars.bohr2ang] #JS these two lines used to make a opt.xyz file along with the if statement below.
             progress2.comms = ['Iteration %i Energy % .8f' % (Iteration, E)]
             if xyzout2 is not None:
                 progress2.write(xyzout2) #This contains the last frame of the trajectory.
@@ -1137,7 +1138,8 @@ def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None, xyzout2
         # Check the coordinate system every (N) steps
         if (CoordCounter == (params.check - 1)) or check:
             newmol = deepcopy(molecule)
-            newmol.xyzs[0] = X.reshape(-1,3)*0.529177
+            newmol.xyzs[0] = X.reshape(-1,3) * global_vars.bohr2ang
+
             newmol.build_topology()
             IC1 = IC.__class__(newmol, build=False, connect=IC.connect, addcart=IC.addcart)
             if IC.haveConstraints(): IC1.getConstraints_from(IC)
@@ -1154,7 +1156,7 @@ def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None, xyzout2
         UpdateHessian = True
         if reinit:
             IC.resetRotations(X)
-            if type(IC) is DelocalizedInternalCoordinates:
+            if isinstance(IC, DelocalizedInternalCoordinates):
                 IC.build_dlc(X)
             H0 = IC.guess_hessian(coords)
             H = RebuildHessian(IC, H0, X_hist, Gx_hist, params)
@@ -1269,14 +1271,14 @@ def WriteDisplacements(coords, M, IC, dirname, verbose):
                 x1 = IC.newCartesian(coords, dq, verbose=verbose)
             else:
                 x1 = coords.copy()
-            displacement = np.sqrt(np.sum((((x1-coords)*0.529177).reshape(-1,3))**2, axis=1))
+            displacement = np.sqrt(np.sum((((x1-coords) * global_vars.bohr2ang).reshape(-1,3))**2, axis=1))
             rms_displacement = np.sqrt(np.mean(displacement**2))
             max_displacement = np.max(displacement)
             if j != 0:
                 dx = (x1-coords)*np.abs(j)*2/max_displacement
             else:
                 dx = 0.0
-            x.append((coords+dx).reshape(-1,3) * 0.529177)
+            x.append((coords+dx).reshape(-1,3) * global_vars.bohr2ang)
             print(i, j, "Displacement (rms/max) = %.5f / %.5f" % (rms_displacement, max_displacement), "(Bork)" if IC.bork else "(Good)")
         M.xyzs = x
         M.write("%s/ic_%03i.xyz" % (dirname, i))
@@ -1312,14 +1314,15 @@ def get_molecule_engine(**kwargs):
     psi4 = kwargs.get('psi4', False)
     gmx = kwargs.get('gmx', False)
     molpro = kwargs.get('molpro', False)
+    qcengine = kwargs.get('qcengine', False)
     molproexe = kwargs.get('molproexe', None)
     pdb = kwargs.get('pdb', None)
     frag = kwargs.get('frag', False)
     inputf = kwargs.get('input')
     nt = kwargs.get('nt', None)
 
-    if sum([qchem, psi4, gmx, molpro]) > 1:
-        raise RuntimeError("Do not specify more than one of --qchem, --psi4, --gmx, --molpro")
+    if sum([qchem, psi4, gmx, molpro, qcengine]) > 1:
+        raise RuntimeError("Do not specify more than one of --qchem, --psi4, --gmx, --molpro, --qcengine")
     if qchem:
         # The file from which we make the Molecule object
         if pdb is not None:
@@ -1357,6 +1360,13 @@ def get_molecule_engine(**kwargs):
             engine.set_nt(nt)
         if molproexe is not None:
             engine.set_molproexe(molproexe)
+    elif qcengine:
+        schema = kwargs.get('qcschema', False)
+        if schema is False:
+            raise RuntimeError("QCEngineAPI option requires a QCSchema")
+
+        engine = QCEngineAPI(schema)
+        M = engine.M
     else:
         set_tcenv()
         tcin = load_tcin(inputf)
@@ -1419,7 +1429,7 @@ def run_optimizer(**kwargs):
         engine.qcdir = True
 
     # Get initial coordinates in bohr
-    coords = M.xyzs[0].flatten() / 0.529177
+    coords = M.xyzs[0].flatten() * global_vars.ang2bohr
 
     # Read in the constraints
     constraints = kwargs.get('constraints', None)
@@ -1459,7 +1469,7 @@ def run_optimizer(**kwargs):
         sys.exit()
 
     # Print out information about the coordinate system
-    if type(IC) is CartesianCoordinates:
+    if isinstance(IC, CartesianCoordinates):
         print("%i Cartesian coordinates being used" % (3*M.na))
     else:
         print("%i internal coordinates being used (instead of %i Cartesians)" % (len(IC.Internals), 3*M.na))
@@ -1476,7 +1486,7 @@ def run_optimizer(**kwargs):
         opt_coords = Optimize(coords, M, IC, engine, dirname, params, xyzout,xyzout2)
     else:
         # Run a constrained geometry optimization
-        if type(IC) in [CartesianCoordinates, PrimitiveInternalCoordinates]:
+        if isinstance(IC, (CartesianCoordinates, PrimitiveInternalCoordinates)):
             raise RuntimeError("Constraints only work with delocalized internal coordinates")
         for ic, CVal in enumerate(CVals):
             if len(CVals) > 1:
@@ -1496,6 +1506,7 @@ def run_optimizer(**kwargs):
             coords = Optimize(coords, M, IC, engine, dirname, params, xyzout,xyzout2)
             print
     print_msg()
+    return M
 
 def main():
     """Read user's input"""

@@ -1442,7 +1442,7 @@ class InternalCoordinates(object):
             Bmat = np.matrix(self.wilsonB(xyz1))
             Ginv = self.GInverse(xyz1)
             # Get new Cartesian coordinates
-            dxyz = damp*Bmat.T*Ginv*(np.matrix(dQ1).T)
+            dxyz = damp*Bmat.T*Ginv * np.matrix(dQ1).T
             xyz2 = xyz1 + np.array(dxyz).flatten()
             if microiter == 1:
                 xyzsave = xyz2.copy()
@@ -1631,7 +1631,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                         if np.abs(np.cos(Ang.value(coords))) < LinThre:
                             self.add(Angle(a, b, c))
                             AngDict[b].append(Ang)
-                        elif (connect or not addcart):
+                        elif connect or not addcart:
                             # Add linear angle IC's
                             self.add(LinearAngle(a, b, c, 0))
                             self.add(LinearAngle(a, b, c, 1))
@@ -1983,7 +1983,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         if cPrim in self.cPrims:
             iPrim = self.cPrims.index(cPrim)
             if np.abs(cVal - self.cVals[iPrim]) > 1e-6:
-                print("Updating constraint value to %.4e" % (cVal))
+                print("Updating constraint value to %.4e" % cVal)
             self.cVals[iPrim] = cVal
         else:
             if cPrim not in self.Internals:
@@ -2502,7 +2502,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         for i in range(len(self.Internals)):
             dQ = np.zeros(len(self.Internals), dtype=float)
             dQ[i] = eps
-            dxyz = Bmat.T*Ginv*(np.matrix(dQ).T)
+            dxyz = Bmat.T*Ginv * np.matrix(dQ).T
             rmsd = np.sqrt(np.mean(np.sum(np.array(dxyz).reshape(-1,3)**2, axis=1)))
             dxdq[i] = rmsd/eps
         dxdq /= np.max(dxdq)
