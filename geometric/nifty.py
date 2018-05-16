@@ -81,6 +81,8 @@ except ImportError:
     HaveGZ = False
 
 
+## Boltzmann constant
+kb = 0.0083144100163
 ## Q-Chem to GMX unit conversion for energy
 eqcgmx = 2625.5002
 ## Q-Chem to GMX unit conversion for force
