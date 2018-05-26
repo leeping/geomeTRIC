@@ -8,10 +8,10 @@ def get_qc_schema_traj(qc_schema_input, progress):
 
     return qc_schema_traj
 
-def parse_json_input(in_json):
+def parse_input_json_dict(in_json_dict):
     """
-    Parse an input json file into options, example:
-    {
+    Parse an input json dictionary into options, example:
+    in_json_dict = {
         "schema_name": "qc_schema_optimization_input",
         "schema_version", 1,
         "geometric_options": {
@@ -20,7 +20,6 @@ def parse_json_input(in_json):
         }
         "input_specification": qc_schema_input,
     }
-
     qc_schema_input = {
         "schema_version": "v0.1",
         "molecule": {
@@ -41,32 +40,33 @@ def parse_json_input(in_json):
         "program": "rdkit"
     }
     """
-    d = json.load(open(in_json))
-    input_opts = d['geometric_options']
+    input_opts = in_json_dict['geometric_options'].copy()
+    input_specification = in_json_dict['input_specification'].copy()
     # insert `fix_orientation` and `fix_com`
-    d['input_specification']['molecule'].update({
+    input_specification['molecule'].update({
         'fix_orientation': True,
         'fix_com': True
     })
     # Here we force the use of qcengine because other engines don't support qc schema
     input_opts.update({
         'qcengine': True,
-        'qcschema': d['input_specification']
+        'qcschema': input_specification
     })
     return input_opts
 
-def write_json_output(in_json, schema_traj, out_json):
+def get_output_json_dict(in_json_dict, schema_traj):
     # copy the input json data
-    out_json_data = json.load(open(in_json))
-    out_json_data.update({
+    out_json_dict = in_json_dict.copy()
+    out_json_dict.update({
         "trajectory": schema_traj,
         "energies": [s['properties']['return_energy'] for s in schema_traj],
         "final_molecule": schema_traj[-1]
     })
-    json.dump(out_json_data, open(out_json, 'w'), indent=2)
+    return out_json_dict
 
-def geometric_run_json(in_json, out_json):
-    input_opts = parse_json_input(in_json)
+def geometric_run_json(in_json_dict):
+    """ Take a input dictionary loaded from json, and return an output dictionary for json """
+    input_opts = parse_input_json_dict(in_json_dict)
     M, engine = geometric.optimize.get_molecule_engine(**input_opts)
     # Get initial coordinates in bohr
     coords = M.xyzs[0].flatten() * geometric.nifty.ang2bohr
@@ -110,7 +110,8 @@ def geometric_run_json(in_json, out_json):
             IC.printConstraints(coords, thre=-1)
             geometric.optimize.Optimize(coords, M, IC, engine, dirname, params)
 
-    write_json_output(in_json, engine.schema_traj, out_json)
+    out_json_dict = get_output_json_dict(in_json_dict, engine.schema_traj)
+    return out_json_dict
 
 def main():
     import sys, argparse
@@ -119,7 +120,12 @@ def main():
     parser.add_argument('-o', '--out_json', default='out.json', help='Output Json file name')
     args = parser.parse_args()
     print(' '.join(sys.argv))
-    geometric_run_json(args.in_json, args.out_json)
+
+    in_json_dict = json.load(open(args.in_json))
+    out_json_dict = geometric_run_json(in_json_dict)
+    with open(args.out_json, 'w') as outfile:
+        json.dump(out_json_dict, outfile, indent=2)
+
 
 if __name__ == '__main__':
     main()

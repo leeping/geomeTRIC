@@ -31,8 +31,7 @@ def test_run_json():
         "keywords": {},
         "program": "rdkit"
     }
-
-    test_input = {
+    in_json_dict = {
         "schema_name": "qc_schema_optimization_input",
         "schema_version": 1,
         "geometric_options": {
@@ -43,8 +42,8 @@ def test_run_json():
     }
     os.mkdir('run_json.tmp')
     os.chdir('run_json.tmp')
-    json.dump(test_input, open('in.json','w'), indent=2)
-    geometric.run_json.geometric_run_json('in.json', 'out.json')
+    json.dump(in_json_dict, open('in.json','w'), indent=2)
+    out_json_dict = geometric.run_json.geometric_run_json(in_json_dict)
+    json.dump(out_json_dict, open('out.json','w'), indent=2)
     os.chdir('..')
     #shutil.rmtree('run_json.tmp')
-
