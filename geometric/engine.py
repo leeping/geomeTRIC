@@ -687,6 +687,7 @@ class QCEngineAPI(Engine):
         self.schema_traj = []
 
     def calc_new(self, coords, dirname):
+        import qcengine
         new_schema = deepcopy(self.schema)
         new_schema["molecule"]["geometry"] = coords.tolist()
         ret = qcengine.compute(new_schema, self.program)
