@@ -66,3 +66,6 @@ target/
 output.*/
 opt.xyz
 energy.txt
+
+# pytest
+.pytest_cache/
