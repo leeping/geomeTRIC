@@ -16,9 +16,9 @@ def test_run_json():
         "schema_version": "v0.1",
         "molecule": {
             "geometry": [
-                0.0, 0.0, -0.1294769411935893, 0.0,
-               -1.494187339479985, 1.0274465079245698,
-                0.0, 1.494187339479985, 1.0274465079245698
+                0.0,  0.0,              -0.1294769411935893, 
+                0.0, -1.494187339479985, 1.0274465079245698,
+                0.0,  1.494187339479985, 1.0274465079245698
             ],
             "symbols": ["O", "H", "H"],
             "connectivity": [[0, 1, 1], [0, 2, 1]]
@@ -36,7 +36,7 @@ def test_run_json():
         "schema_version": 1,
         "geometric_options": {
             "coordsys": "tric",
-            "conv": 1.e-7
+            "maxiter": 100
         },
         "input_specification": qc_schema_input
     }
@@ -45,5 +45,12 @@ def test_run_json():
     json.dump(in_json_dict, open('in.json','w'), indent=2)
     out_json_dict = geometric.run_json.geometric_run_json(in_json_dict)
     json.dump(out_json_dict, open('out.json','w'), indent=2)
+
+    result_geo = out_json_dict['final_molecule']['molecule']['geometry']
+
+    # The results here are in Bohr
+    ref = np.array([0., 0., -0.1218737, 0., -1.47972457, 1.0236449059, 0., 1.47972457, 1.023644906])
+    assert np.allclose(ref, result_geo, atol=1.e-5)
+
     os.chdir('..')
     #shutil.rmtree('run_json.tmp')
