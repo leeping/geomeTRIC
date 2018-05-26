@@ -44,7 +44,7 @@ def parse_json_input(in_json):
     d = json.load(open(in_json))
     input_opts = d['geometric_options']
     # insert `fix_orientation` and `fix_com`
-    d['input_specification'].update({
+    d['input_specification']['molecule'].update({
         'fix_orientation': True,
         'fix_com': True
     })
