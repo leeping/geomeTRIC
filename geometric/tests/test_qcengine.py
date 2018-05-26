@@ -36,5 +36,5 @@ def test_rdkit_simple():
     ret = geometric.optimize.run_optimizer(**opts)
 
     # Currently in angstrom
-    ref = np.array([0., 0., -0.06851625, 0., -0.79068989, 0.54370128, 0., 0.79068989, 0.54370128])
-    assert np.allclose(ref, ret.xyzs[0].ravel(), atol=1.e-5)
+    ref = np.array([0., 0., -0.0644928042, 0., -0.7830365196, 0.5416895554, 0., 0.7830365196, 0.5416895554])
+    assert np.allclose(ref, ret.xyzs[-1].ravel(), atol=1.e-5)
