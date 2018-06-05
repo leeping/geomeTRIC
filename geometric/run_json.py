@@ -2,6 +2,7 @@
 
 import json
 import geometric
+import copy
 
 def get_qc_schema_traj(qc_schema_input, progress):
     qc_schema_traj = []
@@ -14,14 +15,14 @@ def parse_input_json_dict(in_json_dict):
     in_json_dict = {
         "schema_name": "qc_schema_optimization_input",
         "schema_version", 1,
-        "geometric_options": {
+        "keywords": {
             "coordsys": "tric",
             "conv": 1.e-7
         }
         "input_specification": qc_schema_input,
     }
     qc_schema_input = {
-        "schema_version": "v0.1",
+        "schema_version": 1,
         "molecule": {
             "geometry": [
                 0.0, 0.0, -0.1294769411935893, 0.0,
@@ -40,7 +41,7 @@ def parse_input_json_dict(in_json_dict):
         "program": "rdkit"
     }
     """
-    input_opts = in_json_dict['geometric_options'].copy()
+    input_opts = in_json_dict['keywords'].copy()
     input_specification = in_json_dict['input_specification'].copy()
     # insert `fix_orientation` and `fix_com`
     input_specification['molecule'].update({
@@ -66,7 +67,7 @@ def get_output_json_dict(in_json_dict, schema_traj):
 
 def geometric_run_json(in_json_dict):
     """ Take a input dictionary loaded from json, and return an output dictionary for json """
-    input_opts = parse_input_json_dict(in_json_dict)
+    input_opts = parse_input_json_dict(copy.deepcopy(in_json_dict))
     M, engine = geometric.optimize.get_molecule_engine(**input_opts)
     # Get initial coordinates in bohr
     coords = M.xyzs[0].flatten() * geometric.nifty.ang2bohr

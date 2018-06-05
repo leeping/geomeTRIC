@@ -12,11 +12,11 @@ import geometric
 def test_run_json():
     # create a test input json file
     qc_schema_input = {
-        "schema_name": "UFF gradient",
-        "schema_version": "v0.1",
+        "schema_name": "qc_schema_input",
+        "schema_version": 1,
         "molecule": {
             "geometry": [
-                0.0,  0.0,              -0.1294769411935893, 
+                0.0,  0.0,              -0.1294769411935893,
                 0.0, -1.494187339479985, 1.0274465079245698,
                 0.0,  1.494187339479985, 1.0274465079245698
             ],
@@ -34,7 +34,7 @@ def test_run_json():
     in_json_dict = {
         "schema_name": "qc_schema_optimization_input",
         "schema_version": 1,
-        "geometric_options": {
+        "keywords": {
             "coordsys": "tric",
             "maxiter": 100
         },
