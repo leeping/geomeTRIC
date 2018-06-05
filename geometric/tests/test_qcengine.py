@@ -11,10 +11,10 @@ import geometric
 @addons.using_rdkit
 def test_rdkit_simple():
     schema = {
-        "schema_version": "v0.1",
+        "schema_version": 1,
         "molecule": {
             "geometry": [
-                0.0,  0.0,              -0.1294769411935893, 
+                0.0,  0.0,              -0.1294769411935893,
                 0.0, -1.494187339479985, 1.0274465079245698,
                 0.0,  1.494187339479985, 1.0274465079245698
             ],
