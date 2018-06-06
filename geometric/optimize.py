@@ -872,8 +872,8 @@ def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None, xyzout2
 
     Returns
     -------
-    np.ndarray
-        Nx3 array of optimized Cartesian coordinates in atomic units
+    progress: Molecule
+        A molecule object for opt trajectory and energies
     """
     progress = deepcopy(molecule)
     progress2 = deepcopy(molecule)
@@ -884,6 +884,7 @@ def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None, xyzout2
     X = coords.copy()
     # Initial energy and gradient
     E, gradx = engine.calc(coords, dirname)
+    progress.qm_energies = [E]
     # Initial internal coordinates
     q0 = IC.calculate(coords)
     Gq = IC.calcGrad(X, gradx)
@@ -1022,6 +1023,7 @@ def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None, xyzout2
         ### Check Convergence ###
         # Add new Cartesian coordinates and gradients to history
         progress.xyzs.append(X.reshape(-1,3) * bohr2ang)
+        progress.qm_energies.append(E)
         progress.comms.append('Iteration %i Energy % .8f' % (Iteration, E))
         if xyzout is not None:
             progress.write(xyzout)
@@ -1192,7 +1194,7 @@ def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None, xyzout2
                 print("Eigenvalues below %.4e (%.4e) - returning guess" % (params.epsilon, np.min(Eig1)))
                 H = IC.guess_hessian(coords)
             # Then it's on to the next loop iteration!
-    return X
+    return progress
 
 def CheckInternalGrad(coords, molecule, IC, engine, dirname, verbose=False):
     """ Check the internal coordinate gradient using finite difference. """
@@ -1363,7 +1365,6 @@ def get_molecule_engine(**kwargs):
         schema = kwargs.get('qcschema', False)
         if schema is False:
             raise RuntimeError("QCEngineAPI option requires a QCSchema")
-
         engine = QCEngineAPI(schema)
         M = engine.M
     else:
@@ -1482,7 +1483,7 @@ def run_optimizer(**kwargs):
         else:
             xyzout = prefix+".xyz"
             xyzout2="opt.xyz"
-        opt_coords = Optimize(coords, M, IC, engine, dirname, params, xyzout,xyzout2)
+        progress = Optimize(coords, M, IC, engine, dirname, params, xyzout,xyzout2)
     else:
         # Run a constrained geometry optimization
         if isinstance(IC, (CartesianCoordinates, PrimitiveInternalCoordinates)):
@@ -1502,10 +1503,10 @@ def run_optimizer(**kwargs):
             else:
                 xyzout = prefix+".xyz"
                 xyzout2="opt.xyz"
-            coords = Optimize(coords, M, IC, engine, dirname, params, xyzout,xyzout2)
+            progress = Optimize(coords, M, IC, engine, dirname, params, xyzout,xyzout2)
             print
     print_msg()
-    return M
+    return progress
 
 def main():
     """Read user's input"""

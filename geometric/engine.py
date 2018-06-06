@@ -661,6 +661,10 @@ class Molpro(Engine):
 
 class QCEngineAPI(Engine):
     def __init__(self, schema):
+        try:
+            import qcengine
+        except ImportError:
+            raise ImportError("QCEngine computation object requires the 'qcengine' package. Please pip or conda install 'qcengine'.")
 
         self.schema = schema
         self.schema["driver"] = "gradient"
@@ -675,24 +679,25 @@ class QCEngineAPI(Engine):
 
         # Use or build connectivity
         if "connectivity" in schema["molecule"]:
-            self.M.Data["bonds"] = [(x[0], x[1]) for x in schema["molecule"]["connectivity"]]
-            self.M.build_bonds = True
+            self.M.Data["bonds"] = sorted((x[0], x[1]) for x in schema["molecule"]["connectivity"])
+            self.M.built_bonds = True
         else:
             self.M.build_bonds()
-
-        try:
-            import qcengine
-        except ImportError:
-            raise ImportError("QCEngine computation object requires the 'qcengine' package. Please pip or conda install 'qcengine'.")
+        # one additional attribute to store each schema on the opt trajectory
+        self.schema_traj = []
 
     def calc_new(self, coords, dirname):
-
         import qcengine
         new_schema = deepcopy(self.schema)
         new_schema["molecule"]["geometry"] = coords.tolist()
-
         ret = qcengine.compute(new_schema, self.program)
+        # store the schema_traj for run_json to pick up
+        self.schema_traj.append(ret)
         energy = ret["properties"]["return_energy"]
         gradient = np.array(ret["return_value"])
-
         return energy, gradient
+
+    def calc(self, coords, dirname):
+        # overwrites the calc method of base class to skip caching and creating folders
+        return self.calc_new(coords, dirname)
+
