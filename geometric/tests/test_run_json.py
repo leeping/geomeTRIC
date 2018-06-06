@@ -7,6 +7,7 @@ import json, os, shutil
 from . import addons
 import geometric
 
+@addons.in_folder
 @addons.using_qcengine
 @addons.using_rdkit
 def test_run_json():
@@ -40,8 +41,7 @@ def test_run_json():
         },
         "input_specification": qc_schema_input
     }
-    os.mkdir('run_json.tmp')
-    os.chdir('run_json.tmp')
+
     json.dump(in_json_dict, open('in.json','w'), indent=2)
     out_json_dict = geometric.run_json.geometric_run_json(in_json_dict)
     json.dump(out_json_dict, open('out.json','w'), indent=2)
@@ -51,6 +51,3 @@ def test_run_json():
     # The results here are in Bohr
     ref = np.array([0., 0., -0.1218737, 0., -1.47972457, 1.0236449059, 0., 1.47972457, 1.023644906])
     assert np.allclose(ref, result_geo, atol=1.e-5)
-
-    os.chdir('..')
-    #shutil.rmtree('run_json.tmp')

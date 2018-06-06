@@ -3,10 +3,11 @@ A set of tests for using the QCEngine project
 """
 
 import numpy as np
-
+import os
 from . import addons
 import geometric
 
+@addons.in_folder
 @addons.using_qcengine
 @addons.using_rdkit
 def test_rdkit_simple():
@@ -29,7 +30,6 @@ def test_rdkit_simple():
         "keywords": {},
         "program": "rdkit"
     }
-
 
     opts = {"qcengine": True, "qcschema": schema, "input": "tmp_data"}
 
