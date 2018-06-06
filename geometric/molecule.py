@@ -20,11 +20,16 @@ from numpy import sin, cos, arccos
 from pkg_resources import parse_version
 
 # For Python 3 compatibility
-from builtins import input
 try:
     from itertools import zip_longest as zip_longest
 except ImportError:
     from itertools import izip_longest as zip_longest
+
+# For Python 2 backwards-compatibility
+try:
+    input = raw_input
+except NameError:
+    pass
 
 # ======================================================================#
 # |                                                                    |#

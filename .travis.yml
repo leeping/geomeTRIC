@@ -28,7 +28,7 @@ before_install:
 install:
 
     # Create test environment for package
-  - conda create -n test python=$PYTHON_VER builtins numpy nomkl networkx pip pytest pyyaml pytest-cov py-cpuinfo qcengine rdkit -c rdkit -c conda-forge -c molssi
+  - conda create -n test python=$PYTHON_VER numpy nomkl networkx pip pytest pyyaml pytest-cov py-cpuinfo qcengine rdkit -c rdkit -c conda-forge -c molssi
   - source activate test
 
     # Install pip only modules
