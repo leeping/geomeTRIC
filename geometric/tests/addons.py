@@ -38,10 +38,14 @@ using_qcengine = pytest.mark.skipif(
 # make tests run in their own folder
 def in_folder(func):
     def new_func(*args, **kwargs):
-        name = func.__name__
-        if not os.path.exists(name):
-            os.mkdir(name)
-        os.chdir(name)
+        test_parent_folder = 'test_generated_files'
+        if not os.path.exists(test_parent_folder):
+            os.mkdir(test_parent_folder)
+        os.chdir(test_parent_folder)
+        test_name = func.__name__
+        if not os.path.exists(test_name):
+            os.mkdir(test_name)
+        os.chdir(test_name)
         func(*args, **kwargs)
-        os.chdir('..')
+        os.chdir('../..')
     return new_func

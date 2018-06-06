@@ -69,3 +69,5 @@ energy.txt
 
 # pytest
 .pytest_cache/
+test_generated_files/
+
