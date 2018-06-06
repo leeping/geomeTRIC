@@ -25,6 +25,12 @@ try:
 except ImportError:
     from itertools import izip_longest as zip_longest
 
+# For Python 2 backwards-compatibility
+try:
+    input = raw_input
+except NameError:
+    pass
+
 # ======================================================================#
 # |                                                                    |#
 # |              Chemical file format conversion module                |#
