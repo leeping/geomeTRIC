@@ -36,7 +36,7 @@ except NameError:
 # |              Chemical file format conversion module                |#
 # |                                                                    |#
 # |                Lee-Ping Wang (leeping@ucdavis.edu)                 |#
-# |                   Last updated April 19, 2018                      |#
+# |                     Last updated June 6, 2018                      |#
 # |                                                                    |#
 # |   This code is part of geomeTRIC and is covered under the          |#
 # |   geomeTRIC copyright notice and MIT license.                      |#
@@ -2046,6 +2046,7 @@ class Molecule(object):
         self.topology = G
         # LPW: Molecule.molecules is a funny misnomer... it should be fragments or substructures or something
         self.molecules = [G.subgraph(c).copy() for c in nx.connected_components(G)]
+        for g in self.molecules: g.__class__ = MyG
         # Deprecated in networkx 2.2
         # self.molecules = list(nx.connected_component_subgraphs(G))
 
