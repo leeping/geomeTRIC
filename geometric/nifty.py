@@ -1328,7 +1328,8 @@ def _exec(command, print_to_screen = False, outfnm = None, logfnm = None, stdin 
     if stdin is None: stdin = ""
 
     if print_command:
-        logger.info("Executing process: \x1b[92m%-50s\x1b[0m%s%s%s\n" % (' '.join(command) if type(command) is list else command,
+        logger.info("Executing process: \x1b[92m%-50s\x1b[0m%s%s%s%s\n" % (' '.join(command) if type(command) is list else command,
+                                                               " In: %s" % cwd if cwd is not None else "",
                                                                " Output: %s" % outfnm if outfnm is not None else "",
                                                                " Append: %s" % logfnm if logfnm is not None else "",
                                                                (" Stdin: %s" % stdin.replace('\n','\\n')) if stdin else ""))
