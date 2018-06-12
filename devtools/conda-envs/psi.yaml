@@ -1,0 +1,20 @@
+name: test
+channels:
+  - conda-forge
+  - rdkit
+  - molssi
+dependencies:
+    # Psi test depends
+  - rdkit
+  - qcengine
+
+    # geomeTRIC base depends
+  - numpy
+  - networkx
+  - pyyaml
+  - py-cpuinfo
+
+    # Testing
+  - pytest
+  - codecov
+  - pytest-cov
