@@ -406,6 +406,7 @@ class Psi4(Engine):
         """ Psi4 input file parser, only support xyz coordinates for now """
         coords = []
         elems = []
+        fragn = []
         found_molecule, found_geo, found_gradient = False, False, False
         psi4_temp = [] # store a template of the input file for generating new ones
         for line in open(psi4in):
@@ -421,6 +422,8 @@ class Psi4(Engine):
                     # parse the xyz format
                     elems.append(ls[0])
                     coords.append(ls[1:4])
+                elif '--' in line:
+                    fragn.append(len(elems))
                 else:
                     psi4_temp.append(line)
                     if '}' in line:
@@ -435,6 +438,7 @@ class Psi4(Engine):
         self.M.elem = elems
         self.M.xyzs = [np.array(coords, dtype=np.float64)]
         self.psi4_temp = psi4_temp
+        self.fragn = fragn
 
     def calc_new(self, coords, dirname):
         if not os.path.exists(dirname): os.makedirs(dirname)
@@ -444,7 +448,9 @@ class Psi4(Engine):
         with open(os.path.join(dirname, 'input.dat'), 'w') as outfile:
             for line in self.psi4_temp:
                 if line == '$!geometry@here':
-                    for e, c in zip(self.M.elem, self.M.xyzs[0]):
+                    for i, (e, c) in enumerate(zip(self.M.elem, self.M.xyzs[0])):
+                        if i in self.fragn:
+                            outfile.write('--\n')
                         outfile.write("%-7s %13.7f %13.7f %13.7f\n" % (e, c[0], c[1], c[2]))
                 else:
                     outfile.write(line)
