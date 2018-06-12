@@ -1,11 +1,11 @@
 name: test
 channels:
   - conda-forge
-  - rdkit
+  - psi4/label/dev
   - molssi
 dependencies:
     # Psi test depends
-  - rdkit
+  - psi4=1.2rc2
   - qcengine
 
     # geomeTRIC base depends
