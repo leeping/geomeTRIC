@@ -11,8 +11,6 @@ dependencies:
     # geomeTRIC base depends
   - numpy
   - networkx
-  - pyyaml
-  - py-cpuinfo
 
     # Testing
   - pytest
