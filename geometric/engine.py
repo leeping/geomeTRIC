@@ -660,15 +660,15 @@ class Molpro(Engine):
         return energy, gradient
 
 class QCEngineAPI(Engine):
-    def __init__(self, schema):
+    def __init__(self, schema, program):
         try:
             import qcengine
         except ImportError:
             raise ImportError("QCEngine computation object requires the 'qcengine' package. Please pip or conda install 'qcengine'.")
 
         self.schema = schema
+        self.program = program
         self.schema["driver"] = "gradient"
-        self.program = schema["program"]
 
         self.M = Molecule()
         self.M.elem = schema["molecule"]["symbols"]
@@ -691,10 +691,13 @@ class QCEngineAPI(Engine):
         new_schema = deepcopy(self.schema)
         new_schema["molecule"]["geometry"] = coords.tolist()
         ret = qcengine.compute(new_schema, self.program)
+
         # store the schema_traj for run_json to pick up
         self.schema_traj.append(ret)
+
+        # Unpack the erngies and gradient
         energy = ret["properties"]["return_energy"]
-        gradient = np.array(ret["return_value"])
+        gradient = np.array(ret["return_result"])
         return energy, gradient
 
     def calc(self, coords, dirname):
