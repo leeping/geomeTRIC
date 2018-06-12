@@ -31,7 +31,7 @@ def test_rdkit_simple(localizer):
         "program": "rdkit"
     }
 
-    opts = {"qcengine": True, "qcschema": schema, "input": "tmp_data"}
+    opts = {"qcengine": True, "qcschema": schema, "input": "tmp_data", "qce_program": "rdkit"}
 
     ret = geometric.optimize.run_optimizer(**opts)
 
