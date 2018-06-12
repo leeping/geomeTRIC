@@ -7,10 +7,11 @@ import json, os, shutil
 from . import addons
 import geometric
 
-@addons.in_folder
+localizer = addons.in_folder
+
 @addons.using_qcengine
 @addons.using_rdkit
-def test_run_json():
+def test_run_json(localizer):
     # create a test input json file
     qc_schema_input = {
         "schema_name": "qc_schema_input",
@@ -42,9 +43,12 @@ def test_run_json():
         "input_specification": qc_schema_input
     }
 
-    json.dump(in_json_dict, open('in.json','w'), indent=2)
+    with open('in.json', 'r') as handle:
+        json.dump(in_json_dict, handle, indent=2)
     out_json_dict = geometric.run_json.geometric_run_json(in_json_dict)
-    json.dump(out_json_dict, open('out.json','w'), indent=2)
+
+    with open('out.json', 'r') as handle:
+        json.dump(out_json_dict, handle, indent=2)
 
     result_geo = out_json_dict['final_molecule']['molecule']['geometry']
 

@@ -3,14 +3,14 @@ A set of tests for using the QCEngine project
 """
 
 import numpy as np
-import os
 from . import addons
 import geometric
 
-@addons.in_folder
+localizer = addons.in_folder
+
 @addons.using_qcengine
 @addons.using_rdkit
-def test_rdkit_simple():
+def test_rdkit_simple(localizer):
     schema = {
         "schema_version": 1,
         "molecule": {
