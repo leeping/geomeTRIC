@@ -7,13 +7,19 @@ matrix:
   include:
     - os: linux
       python: 2.7
-      env: PYTHON_VER=2.7
+      env:
+        - PYTHON_VER=2.7
+        - PROG=RDKIT
     - os: linux
       python: 3.5
-      env: PYTHON_VER=3.5
+      env:
+        - PYTHON_VER=3.5
+        - PROG=RDKIT
     - os: linux
       python: 3.6
-      env: PYTHON_VER=3.6
+      env:
+        - PYTHON_VER=3.6
+        - PROG=PSI4
 
 before_install:
     # Additional info about the build
@@ -28,20 +34,30 @@ before_install:
 install:
 
     # Create test environment for package
-  - conda create -n test python=$PYTHON_VER numpy nomkl networkx pip pytest pyyaml pytest-cov py-cpuinfo qcengine rdkit -c rdkit -c conda-forge -c molssi
+  - |
+    if [ $PROG == "RDKIT" ]; then
+      conda env create -n test python=$PYTHON_VER -f devtools/conda-envs/rdkit.yaml
+    elif [ $PROG == "PSI4" ]; then
+      conda env create -n test python=$PYTHON_VER -f devtools/conda-envs/psi.yaml
+    else
+      echo "ERROR: No match for PROG ($PROG)."
+      exit 1
+    fi
   - source activate test
 
-    # Install pip only modules
-  - pip install codecov
-
     # Build and install package
-  - python setup.py develop
+  - python setup.py develop --no-deps
 
 script:
   - pytest -v --cov=geometric geometric/tests/
-#  - cd examples/water2_psi4
-#  - coverage run `which geometric-optimize` --psi4 water2.psi4in
-#  - cd ../..
+
+    # Run a Psi4 command line test if possible
+  - |
+    if [ $PROG == "PSI4" ]; then
+      cd examples/water2_psi4
+      coverage run `which geometric-optimize` --psi4 water2.psi4in
+      cd ../..
+    fi
 
 notifications:
     email: false

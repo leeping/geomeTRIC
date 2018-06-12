@@ -1365,7 +1365,12 @@ def get_molecule_engine(**kwargs):
         schema = kwargs.get('qcschema', False)
         if schema is False:
             raise RuntimeError("QCEngineAPI option requires a QCSchema")
-        engine = QCEngineAPI(schema)
+
+        program = kwargs.get('qce_program', False)
+        if program is False:
+            raise RuntimeError("QCEngineAPI option requires a qce_program option")
+        
+        engine = QCEngineAPI(schema, program)
         M = engine.M
     else:
         set_tcenv()

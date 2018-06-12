@@ -51,13 +51,15 @@ def parse_input_json_dict(in_json_dict):
     # Here we force the use of qcengine because other engines don't support qc schema
     input_opts.update({
         'qcengine': True,
-        'qcschema': input_specification
+        'qcschema': input_specification,
+        'qce_program': input_opts["program"]
     })
     return input_opts
 
 def get_output_json_dict(in_json_dict, schema_traj):
     # copy the input json data
     out_json_dict = in_json_dict.copy()
+    out_json_dict["schema_name"] = "qc_schema_optimization_output"
     out_json_dict.update({
         "trajectory": schema_traj,
         "energies": [s['properties']['return_energy'] for s in schema_traj],
