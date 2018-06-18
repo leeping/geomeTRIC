@@ -845,13 +845,14 @@ class OptParams(object):
         self.tmax = kwargs.get('tmax', 0.3)
         self.maxiter = kwargs.get('maxiter', 300)
         self.qccnv = kwargs.get('qccnv', False)
+        self.molcnv = kwargs.get('molcnv', False)
         self.Convergence_energy = 1e-6
         self.Convergence_grms = 3e-4
         self.Convergence_gmax = 4.5e-4
         self.Convergence_drms = 1.2e-3
         self.Convergence_dmax = 1.8e-3
-        self.qc_convergence_gmax = 3e-4
-        self.qc_convergence_dmax = 1.2e-3
+        self.molpro_convergence_gmax = 3e-4
+        self.molpro_convergence_dmax = 1.2e-3
 
 def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None, xyzout2=None):
     """
@@ -917,9 +918,10 @@ def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None, xyzout2
     Convergence_gmax = params.Convergence_gmax
     Convergence_drms = params.Convergence_drms
     Convergence_dmax = params.Convergence_dmax
-    # Q-chem convergence criteria
-    qc_convergence_gmax = params.qc_convergence_gmax
-    qc_convergence_dmax = params.qc_convergence_dmax
+    # Approximate Molpro convergence criteria
+    # Approximate b/c Molpro appears to evaluate criteria in normal coordinates instead of cartesian coordinates.
+    molpro_convergence_gmax = params.molpro_convergence_gmax
+    molpro_convergence_dmax = params.molpro_convergence_dmax
     X_hist = [X]
     Gx_hist = [gradx]
     trustprint = "="
@@ -1044,9 +1046,9 @@ def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None, xyzout2
         Converged_drms = rms_displacement < Convergence_drms
         Converged_dmax = max_displacement < Convergence_dmax
         BadStep = Quality < 0
-        # Qchem defaults for convergence
-        qc_converged_gmax = max_gradient < qc_convergence_gmax
-        qc_converged_dmax = max_displacement < qc_convergence_dmax
+        # Molpro defaults for convergence
+        molpro_converged_gmax = max_gradient < molpro_convergence_gmax
+        molpro_converged_dmax = max_displacement < molpro_convergence_dmax
         # Print status
         print("Step %4i :" % Iteration, end=' '),
         print("Displace = %s%.3e\x1b[0m/%s%.3e\x1b[0m (rms/max)" % ("\x1b[92m" if Converged_drms else "\x1b[0m", rms_displacement, "\x1b[92m" if Converged_dmax else "\x1b[0m", max_displacement), end=' '),
@@ -1074,8 +1076,18 @@ def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None, xyzout2
         if Iteration > params.maxiter:
             print("Maximum iterations reached (%i); increase --maxiter for more" % params.maxiter)
             break
-        if params.qccnv and qc_converged_gmax and (qc_converged_dmax or Converged_energy) and conSatisfied:
-            print("Converged! (Q-Chem style criteria requires gmax and either dmax or energy)")
+        if params.qccnv and Converged_grms and (Converged_drms or Converged_energy) and conSatisfied:
+            print("Converged! (Q-Chem style criteria requires grms and either drms or energy)")
+            # _exec("touch energy.txt") #JS these two lines used to make a energy.txt file using the final energy
+            with open("energy.txt","w") as f:
+                print("% .10f" % E, file=f)
+            progress2.xyzs = [X.reshape(-1,3) * 0.529177] #JS these two lines used to make a opt.xyz file along with the if statement below.
+            progress2.comms = ['Iteration %i Energy % .8f' % (Iteration, E)]
+            if xyzout2 is not None:
+                progress2.write(xyzout2) #This contains the last frame of the trajectory.
+            break
+        if params.molcnv and molpro_converged_gmax and (molpro_converged_dmax or Converged_energy) and conSatisfied:
+            print("Converged! (Molpro style criteria requires gmax and either dmax or energy) This is approximate since convergence checks are done in cartesian coordinates.")
             # _exec("touch energy.txt") #JS these two lines used to make a energy.txt file using the final energy
             with open("energy.txt","w") as f:
                 print("% .10f" % E, file=f)
@@ -1517,6 +1529,7 @@ def main():
     parser.add_argument('--gmx', action='store_true', help='Compute gradients in Gromacs (requires conf.gro, topol.top, shot.mdp).')
     parser.add_argument('--molpro', action='store_true', help='Compute gradients in Molpro.')
     parser.add_argument('--molproexe', type=str, default=None, help='Specify absolute path of Molpro executable.')
+    parser.add_argument('--molcnv', action='store_true', help='Use Molpro style convergence criteria instead of the default.')
     parser.add_argument('--prefix', type=str, default=None, help='Specify a prefix for output file and temporary directory.')
     parser.add_argument('--displace', action='store_true', help='Write out the displacements of the coordinates.')
     parser.add_argument('--fdcheck', action='store_true', help='Check internal coordinate gradients using finite difference..')
