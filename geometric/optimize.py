@@ -264,14 +264,14 @@ def OneDScan(init, final, steps):
     Answer = list([list(i) for i in np.array(Answer).T])
     return Answer
 
-def ParseConstraints(molecule, cFile):
+def ParseConstraints(molecule, constraints_string):
     """
     Parameters
     ----------
     molecule : Molecule
         Molecule object
-    cFile : str
-        File containing the constraint specification.
+    constraints_string : str
+        String containing the constraint specification.
 
     Returns
     -------
@@ -309,7 +309,7 @@ def ParseConstraints(molecule, cFile):
     objs = []
     vals = []
     coords = molecule.xyzs[0].flatten() / ang2bohr
-    for line in open(cFile).readlines():
+    for line in constraints_string.split('\n'):
         line = line.split("#")[0].strip().lower()
         # This is a list-of-lists. The intention is to create a multidimensional grid
         # of constraint values if necessary.
@@ -1369,7 +1369,7 @@ def get_molecule_engine(**kwargs):
         program = kwargs.get('qce_program', False)
         if program is False:
             raise RuntimeError("QCEngineAPI option requires a qce_program option")
-        
+
         engine = QCEngineAPI(schema, program)
         M = engine.M
     else:
@@ -1439,7 +1439,7 @@ def run_optimizer(**kwargs):
     # Read in the constraints
     constraints = kwargs.get('constraints', None)
     if constraints is not None:
-        Cons, CVals = ParseConstraints(M, constraints)
+        Cons, CVals = ParseConstraints(M, open(constraints).read())
     else:
         Cons = None
         CVals = None

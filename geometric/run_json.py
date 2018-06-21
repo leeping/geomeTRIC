@@ -4,11 +4,6 @@ import json
 import geometric
 import copy
 
-def get_qc_schema_traj(qc_schema_input, progress):
-    qc_schema_traj = []
-
-    return qc_schema_traj
-
 def parse_input_json_dict(in_json_dict):
     """
     Parse an input json dictionary into options, example:
@@ -74,11 +69,10 @@ def geometric_run_json(in_json_dict):
     # Get initial coordinates in bohr
     coords = M.xyzs[0].flatten() * geometric.nifty.ang2bohr
     # Read in the constraints
-    constraints = input_opts.get('constraints', None)
-    if constraints is not None:
-        Cons, CVals = geometric.optimize.ParseConstraints(M, constraints)
-    else:
-        Cons, CVals = None, None
+    constraints_string = input_opts.get('constraints', None)
+    Cons, CVals = None, None
+    if constraints_string != None:
+        Cons, CVals = geometric.optimize.ParseConstraints(M, constraints_string)
     # set up the internal coordinate system
     coordsys = input_opts.get('coordsys', 'tric')
     CoordSysDict = {'cart':(geometric.internal.CartesianCoordinates, False, False),
