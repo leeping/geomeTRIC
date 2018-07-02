@@ -9,6 +9,7 @@ import os
 import re
 import sys
 import sysconfig
+import json
 from collections import OrderedDict, namedtuple, Counter
 from ctypes import *
 from datetime import date
@@ -24,12 +25,18 @@ try:
 except ImportError:
     from itertools import izip_longest as zip_longest
 
+# For Python 2 backwards-compatibility
+try:
+    input = raw_input
+except NameError:
+    pass
+
 # ======================================================================#
 # |                                                                    |#
 # |              Chemical file format conversion module                |#
 # |                                                                    |#
 # |                Lee-Ping Wang (leeping@ucdavis.edu)                 |#
-# |                   Last updated April 19, 2018                      |#
+# |                     Last updated June 6, 2018                      |#
 # |                                                                    |#
 # |   This code is part of geomeTRIC and is covered under the          |#
 # |   geomeTRIC copyright notice and MIT license.                      |#
@@ -136,9 +143,9 @@ except ImportError:
 # qm_entropy = Entropy contribution at STP, cal/mol.K (from a qchem freq calculation)
 # qm_enthalpy= Enthalpic contribution at STP, excluding electronic energy and ZPE, kcal/mol (from a qchem freq calculation)
 
-FrameVariableNames = set(['xyzs', 'comms', 'boxes', 'qm_hessians', 'qm_grads', 'qm_energies', 'qm_interaction',
-                          'qm_espxyzs', 'qm_espvals', 'qm_extchgs', 'qm_mulliken_charges', 'qm_mulliken_spins',
-                          'qm_zpe', 'qm_entropy', 'qm_enthalpy', 'qm_bondorder'])
+FrameVariableNames = {'xyzs', 'comms', 'boxes', 'qm_hessians', 'qm_grads', 'qm_energies', 'qm_interaction',
+                      'qm_espxyzs', 'qm_espvals', 'qm_extchgs', 'qm_mulliken_charges', 'qm_mulliken_spins', 'qm_zpe',
+                      'qm_entropy', 'qm_enthalpy', 'qm_bondorder'}
 #=========================================#
 #| Data attributes in AtomVariableNames  |#
 #| must be a list along the atom axis,   |#
@@ -152,7 +159,8 @@ FrameVariableNames = set(['xyzs', 'comms', 'boxes', 'qm_hessians', 'qm_grads', '
 # resid      = Residue IDs (can come from MM coordinate file)
 # resname    = Residue names
 # terminal   = List of true/false denoting whether this atom is followed by a terminal group.
-AtomVariableNames = set(['elem', 'partial_charge', 'atomname', 'atomtype', 'tinkersuf', 'resid', 'resname', 'qcsuf', 'qm_ghost', 'chain', 'altloc', 'icode', 'terminal'])
+AtomVariableNames = {'elem', 'partial_charge', 'atomname', 'atomtype', 'tinkersuf', 'resid', 'resname', 'qcsuf',
+                     'qm_ghost', 'chain', 'altloc', 'icode', 'terminal'}
 #=========================================#
 #| This can be any data attribute we     |#
 #| want but it's usually some property   |#
@@ -165,12 +173,12 @@ AtomVariableNames = set(['elem', 'partial_charge', 'atomname', 'atomtype', 'tink
 # qctemplate = The Q-Chem template file, not including the coordinates or rem variables
 # charge     = The net charge of the molecule
 # mult       = The spin multiplicity of the molecule
-MetaVariableNames = set(['fnm', 'ftype', 'qcrems', 'qctemplate', 'qcerr', 'charge', 'mult', 'bonds', 'topology', 'molecules'])
+MetaVariableNames = {'fnm', 'ftype', 'qcrems', 'qctemplate', 'qcerr', 'charge', 'mult', 'bonds', 'topology',
+                     'molecules'}
 # Variable names relevant to quantum calculations explicitly
-QuantumVariableNames = set(['qcrems', 'qctemplate', 'charge', 'mult', 'qcsuf', 'qm_ghost', 'qm_bondorder'])
+QuantumVariableNames = {'qcrems', 'qctemplate', 'charge', 'mult', 'qcsuf', 'qm_ghost', 'qm_bondorder'}
 # Superset of all variable names.
 AllVariableNames = QuantumVariableNames | AtomVariableNames | MetaVariableNames | FrameVariableNames
-
 
 
 #================================#
@@ -296,7 +304,7 @@ if "forcebalance" in __name__:
 #===========================#
 
 ## One bohr equals this many angstroms
-bohrang = 0.529177249
+bohr2ang = 0.529177210
 
 def unmangle(M1, M2):
     """
@@ -656,7 +664,7 @@ def AlignToDensity(elem,xyz1,xyz2,binary=False):
     grid = np.pi*np.array(list(itertools.product([0,1],[0,1],[0,1])))
     ovlp = np.array([ComputeOverlap(e, elem, xyz1, xyz2) for e in grid]) # Mao
     t1 = grid[np.argmin(ovlp)]
-    xyz2R = (np.array(EulerMatrix(t1[0],t1[1],t1[2])*np.matrix(xyz2.T)).T).copy()
+    xyz2R = np.array(EulerMatrix(t1[0],t1[1],t1[2])*np.matrix(xyz2.T)).T.copy()
     return xyz2R
 
 def AlignToMoments(elem,xyz1,xyz2=None):
@@ -1077,6 +1085,7 @@ class Molecule(object):
                          'inpcrd'   : self.read_inpcrd,
                          'pdb'      : self.read_pdb,
                          'xyz'      : self.read_xyz,
+                         'qcschema' : self.read_qcschema,
                          'mol2'     : self.read_mol2,
                          'qcin'     : self.read_qcin,
                          'qcout'    : self.read_qcout,
@@ -1732,7 +1741,7 @@ class Molecule(object):
         # Now build the new atom keys.
         for key in self.AtomKeys:
             if key not in other.Data:
-                logger.error('Trying to stack two Molecule objects - the first object contains %s and the other does not\n' % (key))
+                logger.error('Trying to stack two Molecule objects - the first object contains %s and the other does not\n' % key)
                 raise RuntimeError
             if key == 'tinkersuf': # Tinker suffix is a bit tricky
                 NewSuf = []
@@ -2037,6 +2046,7 @@ class Molecule(object):
         self.topology = G
         # LPW: Molecule.molecules is a funny misnomer... it should be fragments or substructures or something
         self.molecules = [G.subgraph(c).copy() for c in nx.connected_components(G)]
+        for g in self.molecules: g.__class__ = MyG
         # Deprecated in networkx 2.2
         # self.molecules = list(nx.connected_component_subgraphs(G))
 
@@ -2112,7 +2122,7 @@ class Molecule(object):
                 for a1 in sorted(list(nx.neighbors(mol, a2))):
                     if a1 != a3:
                         for a4 in sorted(list(nx.neighbors(mol, a3))):
-                            if a4 != a2 and len(set([a1, a2, a3, a4])) == 4:
+                            if a4 != a2 and len({a1, a2, a3, a4}) == 4:
                                 dihidx.append((a1, a2, a3, a4))
         return dihidx
 
@@ -2465,6 +2475,23 @@ class Molecule(object):
     #=====================================#
     #|         Reading functions         |#
     #=====================================#
+    def read_qcschema(self, schema, **kwargs):
+
+        # Already read in
+        if isinstance(schema, dict):
+            pass
+
+        # Try to read file
+        elif isinstance(schema, str):
+            with open(schema, "r") as handle:
+                schema = json.loads(handle)
+        else:
+            raise TypeError("Schema type not understood '{}'".format(type(schema)))
+        ret = {"elem": schema["symbols"],
+               "xyzs": [np.array(schema["geometry"])],
+               "comments": []}
+        return ret
+
     def read_xyz(self, fnm, **kwargs):
         """ .xyz files can be TINKER formatted which is why we have the try/except here. """
         try:
@@ -3049,7 +3076,7 @@ class Molecule(object):
                                 xyzs.append(np.array(xyz))
                             xyz = []
                             fff = True
-                            if suffix != []:
+                            if suffix:
                                 readsuf = False
                         elif section == 'rem':
                             if reading_template:
@@ -3112,7 +3139,7 @@ class Molecule(object):
                   'charge'      : charge,
                   'mult'        : mult,
                   }
-        if suffix != []:
+        if suffix:
             Answer['qcsuf'] = suffix
 
         if len(xyzs) > 0:
@@ -3232,7 +3259,7 @@ class Molecule(object):
             if len(sline) == 4 and all([isfloat(sline[i]) for i in range(4)]):
                 espxyz.append([float(sline[i]) for i in range(3)])
                 espval.append(float(sline[3]))
-        Answer = {'qm_espxyzs' : [np.array(espxyz) * bohrang],
+        Answer = {'qm_espxyzs' : [np.array(espxyz) * bohr2ang],
                   'qm_espvals'  : [np.array(espval)]
                   }
         return Answer
@@ -3350,7 +3377,7 @@ class Molecule(object):
                     elemThis.append(sline[1])
                     xyz.append([float(i) for i in sline[2:]])
                 elif XMode == 2: # Break out of the loop if we encounter anything other than atomic data
-                    if elem == []:
+                    if not elem:
                         elem = elemThis
                     elif elem != elemThis:
                         logger.error('Q-Chem output parser will not work if successive calculations have different numbers of atoms!\n')
@@ -3554,7 +3581,7 @@ class Molecule(object):
         if 0 in conv and 'SCF failed to converge' not in errok:
             logger.error('SCF convergence failure encountered in parsing %s\n' % fnm)
             raise RuntimeError
-        elif (0 not in conv):
+        elif 0 not in conv:
             # The molecule should have only one charge and one multiplicity
             if len(set(Floats['charge'])) != 1 or len(set(Floats['mult'])) != 1:
                 logger.error('Unexpected number of charges or multiplicities in parsing %s\n' % fnm)
@@ -3588,7 +3615,7 @@ class Molecule(object):
 
         # The number of atoms should all be the same
         if len(set([len(i) for i in Answer['xyzs']])) > 1:
-            logger.error('The numbers of atoms across frames in %s are not all the same\n' % (fnm))
+            logger.error('The numbers of atoms across frames in %s are not all the same\n' % fnm)
             raise RuntimeError
 
         if 'qm_grads' in Answer:
@@ -3600,12 +3627,12 @@ class Molecule(object):
                 warn("Number of energies and gradients is inconsistent (composite jobs?)  Deleting gradients.")
                 del Answer['qm_grads']
         # A strange peculiarity; Q-Chem sometimes prints out the final Mulliken charges a second time, after the geometry optimization.
-        if mkchg != []:
+        if mkchg:
             Answer['qm_mulliken_charges'] = list(np.array(mkchg))
             for i in np.where(np.array(conv) == 0)[0]:
                 Answer['qm_mulliken_charges'].insert(i, np.array([0.0 for i in mkchg[-1]]))
             Answer['qm_mulliken_charges'] = Answer['qm_mulliken_charges'][:len(Answer['qm_energies'])]
-        if mkspn != []:
+        if mkspn:
             Answer['qm_mulliken_spins'] = list(np.array(mkspn))
             for i in np.where(np.array(conv) == 0)[0]:
                 Answer['qm_mulliken_spins'].insert(i, np.array([0.0 for i in mkspn[-1]]))
@@ -4037,7 +4064,7 @@ class Molecule(object):
             for index2 in bonded:
                 line = "%s%5d" % (line, index2)
             out.append(line)
-        return(out)
+        return out
 
     def write_qdata(self, selection, **kwargs):
         """ Text quantum data format. """
