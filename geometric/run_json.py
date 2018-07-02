@@ -67,7 +67,7 @@ def make_constraints_string(constraints_dict):
     constraints_string = ''
     for key, value_list in constraints_dict.items():
         if key not in ('freeze', 'set', 'scan'):
-            print("Warning, constraints key %s is not recognized" % key)
+            raise KeyError("constraints key %s is not recognized" % key)
         constraints_string += '$' + key + '\n'
         for spec_tuple in value_list:
             constraints_string += ' '.join(spec_tuple) + '\n'
