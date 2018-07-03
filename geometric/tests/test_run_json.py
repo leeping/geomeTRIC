@@ -10,6 +10,29 @@ import pytest
 
 localizer = addons.in_folder
 
+def test_convert_constraint_dict_to_string():
+    constraint_dict = {
+      'freeze' : [('xyz', '1-5')],
+      'set'    : [('angle', '2', '1', '5', '110.0')],
+      'scan'   : [('distance', '2', '1', '1.0', '1.2', '3'),
+                  ('dihedral', '1', '5', '6', '7', '110.0', '150.0', '3')]
+    }
+    constraint_string = geometric.run_json.make_constraints_string(constraint_dict)
+    assert constraint_string == """$freeze
+xyz 1-5
+$set
+angle 2 1 5 110.0
+$scan
+distance 2 1 1.0 1.2 3
+dihedral 1 5 6 7 110.0 150.0 3
+"""
+    failing_constraint_dict = {
+      'not_recognized_keyword' : [('xyz', '1-5')]
+    }
+    with pytest.raises(KeyError):
+        geometric.run_json.make_constraints_string(failing_constraint_dict)
+
+
 @addons.using_qcengine
 @addons.using_rdkit
 def test_run_json_rdkit_water(localizer):
