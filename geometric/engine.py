@@ -9,11 +9,10 @@ from copy import deepcopy
 
 import numpy as np
 import re
+import os
 
-from geometric.global_vars import *
-from geometric.molecule import Molecule
-from geometric.nifty import eqcgmx, fqcgmx, getWorkQueue, queue_up_src_dest
-
+from .molecule import Molecule
+from .nifty import eqcgmx, fqcgmx, bohr2ang, getWorkQueue, queue_up_src_dest
 
 #=============================#
 #| Useful TeraChem functions |#
@@ -235,7 +234,7 @@ class TeraChem(Engine):
             self.tcin['mixguess'] = "0.0"
         edit_tcin(fout="%s/run.in" % dirname, options=self.tcin)
         # Convert coordinates back to the xyz file
-        self.M.xyzs[0] = coords.reshape(-1, 3) * 0.529177
+        self.M.xyzs[0] = coords.reshape(-1, 3) * bohr2ang
         self.M[0].write(os.path.join(dirname, 'start.xyz'))
         # Run TeraChem
         subprocess.call('terachem run.in > run.out', cwd=dirname, shell=True)
@@ -291,7 +290,7 @@ class TeraChem(Engine):
             self.tcin['mixguess'] = "0.0"
         tcopts = edit_tcin(fout="%s/run.in" % dirname, options=self.tcin)
         # Convert coordinates back to the xyz file
-        self.M.xyzs[0] = coords.reshape(-1, 3) * 0.529177
+        self.M.xyzs[0] = coords.reshape(-1, 3) * bohr2ang
         self.M[0].write(os.path.join(dirname, 'start.xyz'))
         in_files = [('%s/run.in' % dirname, 'run.in'), ('%s/start.xyz' % dirname, 'start.xyz')]
         out_files = [('%s/run.out' % dirname, 'run.out')]
@@ -514,7 +513,7 @@ class Gromacs(Engine):
             raise ImportError("ForceBalance is needed to compute energies and gradients using Gromacs.")
         if not os.path.exists(dirname): os.makedirs(dirname)
         Gro = Molecule("conf.gro")
-        Gro.xyzs[0] = coords.reshape(-1,3) * 0.529
+        Gro.xyzs[0] = coords.reshape(-1,3) * bohr2ang
         cwd = os.getcwd()
         shutil.copy2("topol.top", dirname)
         shutil.copy2("shot.mdp", dirname)
@@ -647,3 +646,49 @@ class Molpro(Engine):
             raise RuntimeError("Molpro gradient is not found in %s, please check." % molpro_out)
         gradient = np.array(gradient, dtype=np.float64).ravel()
         return energy, gradient
+
+class QCEngineAPI(Engine):
+    def __init__(self, schema, program):
+        try:
+            import qcengine
+        except ImportError:
+            raise ImportError("QCEngine computation object requires the 'qcengine' package. Please pip or conda install 'qcengine'.")
+
+        self.schema = schema
+        self.program = program
+        self.schema["driver"] = "gradient"
+
+        self.M = Molecule()
+        self.M.elem = schema["molecule"]["symbols"]
+
+        # Geometry in (-1, 3) array in angstroms
+        geom = np.array(schema["molecule"]["geometry"], dtype=np.float64).reshape(-1, 3) * bohr2ang
+        self.M.xyzs = [geom]
+
+        # Use or build connectivity
+        if "connectivity" in schema["molecule"]:
+            self.M.Data["bonds"] = sorted((x[0], x[1]) for x in schema["molecule"]["connectivity"])
+            self.M.built_bonds = True
+        else:
+            self.M.build_bonds()
+        # one additional attribute to store each schema on the opt trajectory
+        self.schema_traj = []
+
+    def calc_new(self, coords, dirname):
+        import qcengine
+        new_schema = deepcopy(self.schema)
+        new_schema["molecule"]["geometry"] = coords.tolist()
+        ret = qcengine.compute(new_schema, self.program)
+
+        # store the schema_traj for run_json to pick up
+        self.schema_traj.append(ret)
+
+        # Unpack the erngies and gradient
+        energy = ret["properties"]["return_energy"]
+        gradient = np.array(ret["return_result"])
+        return energy, gradient
+
+    def calc(self, coords, dirname):
+        # overwrites the calc method of base class to skip caching and creating folders
+        return self.calc_new(coords, dirname)
+
