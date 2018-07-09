@@ -539,7 +539,10 @@ class Molpro(Engine):
         super(Molpro, self).__init__(molecule)
 
         # Set options for running the molpro executable
-        self.exe = exe
+        if exe is None:
+            self.exe = 'molpro'
+        else:
+            self.exe = exe
         self.threads = threads
         self.exeargs = exeargs
 
@@ -603,7 +606,13 @@ class Molpro(Engine):
                 else:
                     outfile.write(line)
         # Run Molpro
-        subprocess.call('%s%s run.mol' % (self.exe, self.nt()), cwd=dirname, shell=True)
+        command = '%s%s' % (self.exe, self.nt())
+        if self.exeargs is not None:
+            for arg in self.exeargs:
+                command += ' ' + arg
+        command += ' run.mol'
+        errorcode = subprocess.call(command, cwd=dirname, shell=True)
+        # FIXME Should cancel job if an errorcode is returned
         # Read energy and gradients from Molpro output
         energy, gradient = Molpro.parse_output(os.path.join(dirname, 'run.out'))
         return energy, gradient
