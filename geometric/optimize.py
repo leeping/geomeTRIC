@@ -1312,7 +1312,8 @@ def get_molecule_engine(**kwargs):
     psi4 = kwargs.get('psi4', False)
     gmx = kwargs.get('gmx', False)
     molpro = kwargs.get('molpro', False)
-    molproexe = kwargs.get('molproexe', None)
+    exe = kwargs.get('exe', None)
+    exeargs = kwargs.get('exeargs', None)
     pdb = kwargs.get('pdb', None)
     frag = kwargs.get('frag', False)
     inputf = kwargs.get('input')
@@ -1350,13 +1351,8 @@ def get_molecule_engine(**kwargs):
         if nt is not None:
             engine.set_nt(nt)
     elif molpro:
-        engine = Molpro()
-        engine.load_molpro_input(inputf)
+        engine = Molpro(inputf,exe,nt,exeargs)
         M = engine.M
-        if nt is not None:
-            engine.set_nt(nt)
-        if molproexe is not None:
-            engine.set_molproexe(molproexe)
     else:
         set_tcenv()
         tcin = load_tcin(inputf)
@@ -1508,7 +1504,8 @@ def main():
     parser.add_argument('--psi4', action='store_true', help='Compute gradients in Psi4.')
     parser.add_argument('--gmx', action='store_true', help='Compute gradients in Gromacs (requires conf.gro, topol.top, shot.mdp).')
     parser.add_argument('--molpro', action='store_true', help='Compute gradients in Molpro.')
-    parser.add_argument('--molproexe', type=str, default=None, help='Specify absolute path of Molpro executable.')
+    parser.add_argument('--exe', type=str, default=None, help='Specify absolute path of the executable.')
+    parser.add_argument('--exeargs', type=str, default=None, action='append', help='Specify arguments to be given to the executable.')
     parser.add_argument('--prefix', type=str, default=None, help='Specify a prefix for output file and temporary directory.')
     parser.add_argument('--displace', action='store_true', help='Write out the displacements of the coordinates.')
     parser.add_argument('--fdcheck', action='store_true', help='Check internal coordinate gradients using finite difference..')
@@ -1528,7 +1525,7 @@ def main():
     parser.add_argument('--qcdir', type=str, help='Provide an initial qchem scratch folder (e.g. supplied initial guess).')
     parser.add_argument('--qccnv', action='store_true', help='Use Q-Chem style convergence criteria instead of the default.')
     parser.add_argument('--nt', type=int, help='Specify number of threads for running in parallel (for TeraChem this should be number of GPUs)')
-    parser.add_argument('input', type=str, help='TeraChem or Q-Chem input file')
+    parser.add_argument('input', type=str, help='Input file for one of the supported engines.')
     parser.add_argument('constraints', type=str, nargs='?', help='Constraint input file (optional)')
     print('geometric-optimize called with the following command line:')
     print(' '.join(sys.argv))
