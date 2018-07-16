@@ -308,7 +308,7 @@ def ParseConstraints(molecule, constraints_string):
     TransKeys = ["trans-x", "trans-y", "trans-z", "trans-xy", "trans-yz", "trans-xz", "trans-xyz"]
     objs = []
     vals = []
-    coords = molecule.xyzs[0].flatten() / ang2bohr
+    coords = molecule.xyzs[0].flatten() * ang2bohr
     for line in constraints_string.split('\n'):
         line = line.split("#")[0].strip().lower()
         # This is a list-of-lists. The intention is to create a multidimensional grid
