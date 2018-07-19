@@ -40,15 +40,6 @@ def test_run_json_rdkit_water(localizer):
     qc_schema_input = {
         "schema_name": "qc_schema_input",
         "schema_version": 1,
-        "molecule": {
-            "geometry": [
-                0.0,  0.0,              -0.1294769411935893,
-                0.0, -1.494187339479985, 1.0274465079245698,
-                0.0,  1.494187339479985, 1.0274465079245698
-            ],
-            "symbols": ["O", "H", "H"],
-            "connectivity": [[0, 1, 1], [0, 2, 1]]
-        },
         "driver": "gradient",
         "model": {
             "method": "UFF",
@@ -64,7 +55,16 @@ def test_run_json_rdkit_water(localizer):
             "maxiter": 100,
             "program": "rdkit"
         },
-        "input_specification": qc_schema_input
+        "initial_molecule": {
+            "geometry": [
+                0.0,  0.0,              -0.1294769411935893,
+                0.0, -1.494187339479985, 1.0274465079245698,
+                0.0,  1.494187339479985, 1.0274465079245698
+            ],
+            "symbols": ["O", "H", "H"],
+            "connectivity": [[0, 1, 1], [0, 2, 1]]
+        },
+        "input_specification": qc_schema_input,
     }
 
     with open('in.json', 'w') as handle:
@@ -74,7 +74,7 @@ def test_run_json_rdkit_water(localizer):
     with open('out.json', 'w') as handle:
         json.dump(out_json, handle, indent=2)
 
-    result_geo = out_json['final_molecule']['molecule']['geometry']
+    result_geo = out_json['final_molecule']['geometry']
 
     # The results here are in Bohr
     ref = np.array([0., 0., -0.1218737, 0., -1.47972457, 1.0236449059, 0., 1.47972457, 1.023644906])
@@ -88,14 +88,6 @@ def test_run_json_psi4_hydrogen(localizer):
     qc_schema_input = {
         "schema_name": "qc_schema_input",
         "schema_version": 1,
-        "molecule": {
-            "geometry": [
-                0.0,  0.0, -0.5,
-                0.0,  0.0,  0.5,
-            ],
-            "symbols": ["H", "H"],
-            "connectivity": [[0, 1, 1]]
-        },
         "driver": "gradient",
         "model": {
             "method": "HF",
@@ -111,6 +103,14 @@ def test_run_json_psi4_hydrogen(localizer):
             "maxiter": 100,
             "program": "psi4"
         },
+        "initial_molecule": {
+            "geometry": [
+                0.0,  0.0, -0.5,
+                0.0,  0.0,  0.5,
+            ],
+            "symbols": ["H", "H"],
+            "connectivity": [[0, 1, 1]]
+        },
         "input_specification": qc_schema_input
     }
 
@@ -122,7 +122,7 @@ def test_run_json_psi4_hydrogen(localizer):
     with open('out.json', 'w') as handle:
         json.dump(out_json, handle, indent=2)
 
-    result_geo = out_json['final_molecule']['molecule']['geometry']
+    result_geo = out_json['final_molecule']['geometry']
 
     # The results here are in Bohr
     ref = np.array([0., 0., -0.672954004258, 0., 0., 0.672954004258])
