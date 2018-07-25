@@ -30,7 +30,6 @@ before_install:
     # Install the Python environemt
   - source devtools/travis-ci/before_install.sh
   - python -V
-  - conda config --set always_yes yes
 
 install:
 
