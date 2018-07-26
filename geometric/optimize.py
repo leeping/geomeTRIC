@@ -1529,6 +1529,9 @@ def run_optimizer(**kwargs):
                 xyzout = prefix+".xyz"
                 xyzout2="opt.xyz"
             progress = Optimize(coords, M, IC, engine, dirname, params, xyzout,xyzout2)
+            # update the structure for next optimization in SCAN (by CNH)
+            M.xyzs[0] = progress.xyzs[-1]
+            coords = progress.xyzs[-1].flatten() * ang2bohr
             print
     print_msg()
     return progress
