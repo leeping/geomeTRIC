@@ -26,7 +26,8 @@ bash $MINICONDA -b -p $MINICONDA_HOME
 export PIP_ARGS="-U"
 export PATH=$MINICONDA_HOME/bin:$PATH
     
-conda config --add channels conda-forge  --set always_yes yes
+conda config --set always_yes yes
+conda config --add channels conda-forge
 conda update -q conda
 
 # Restore original directory
