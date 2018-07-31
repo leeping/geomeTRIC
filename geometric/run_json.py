@@ -42,7 +42,7 @@ def parse_input_json_dict(in_json_dict):
     input_specification = in_json_dict['input_specification']
 
     # insert `fix_orientation` and `fix_com`
-    input_specification['molecule'] = copy.deepcopy(in_json_dict['initial_molecule'])
+    input_specification['molecule'] = in_json_dict['initial_molecule']
     input_specification['molecule'].update({
         'fix_orientation': True,
         'fix_com': True,
@@ -111,13 +111,12 @@ def geometric_run_json(in_json_dict):
         print("%i internal coordinates being used (instead of %i Cartesians)" % (len(IC.Internals), 3*M.na))
     print(IC)
 
-    dirname = 'opt_tmp'
     params = geometric.optimize.OptParams(**input_opts)
 
     # Run the optimization
     if Cons is None:
         # Run a standard geometry optimization
-        geometric.optimize.Optimize(coords, M, IC, engine, dirname, params)
+        geometric.optimize.Optimize(coords, M, IC, engine, None, params)
     else:
         # Run a constrained geometry optimization
         if isinstance(IC, (geometric.internal.CartesianCoordinates, geometric.internal.PrimitiveInternalCoordinates)):
@@ -127,7 +126,7 @@ def geometric_run_json(in_json_dict):
                 print("---=== Scan %i/%i : Constrained Optimization ===---" % (ic+1, len(CVals)))
             IC = CoordClass(M, build=True, connect=connect, addcart=addcart, constraints=Cons, cvals=CVal)
             IC.printConstraints(coords, thre=-1)
-            geometric.optimize.Optimize(coords, M, IC, engine, dirname, params)
+            geometric.optimize.Optimize(coords, M, IC, engine, None, params)
 
     out_json_dict = get_output_json_dict(in_json_dict, engine.schema_traj)
 
