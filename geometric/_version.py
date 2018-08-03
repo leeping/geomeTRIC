@@ -40,8 +40,8 @@ def get_config():
     # _version.py
     cfg = VersioneerConfig()
     cfg.VCS = "git"
-    cfg.style = ""
-    cfg.tag_prefix = "None"
+    cfg.style = "pep440"
+    cfg.tag_prefix = ""
     cfg.parentdir_prefix = "None"
     cfg.versionfile_source = "geometric/_version.py"
     cfg.verbose = False
