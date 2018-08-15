@@ -1,5 +1,8 @@
 import versioneer
-from setuptools import setup
+from setuptools import setup, find_packages
+
+with open("README.md", "r") as fh:
+    long_description = fh.read()
 
 with open("README.md", "r") as fh:
     long_description = fh.read()
@@ -9,7 +12,7 @@ setup(
     description='Geometry optimization for quantum chemistry',
     url='https://github.com/leeping/geomeTRIC',
     author='Lee-Ping Wang, Chenchen Song',
-    packages=['geometric'],
+    packages=find_packages(),
     long_description=long_description,
     long_description_content_type="text/markdown",
     entry_points={'console_scripts': [
@@ -20,5 +23,17 @@ setup(
         'networkx',
         'six',
     ],
+    tests_require=[
+        'pytest',
+        'pytest-cov',
+    ],
     version=versioneer.get_version(),
-    cmdclass=versioneer.get_cmdclass())
+    cmdclass=versioneer.get_cmdclass(),
+    classifiers=[
+        'Development Status :: 4 - Beta',
+        'Intended Audience :: Science/Research',
+        'Programming Language :: Python :: 2.7',
+        'Programming Language :: Python :: 3',
+    ],
+    zip_safe=True,
+)

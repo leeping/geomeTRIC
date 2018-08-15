@@ -927,7 +927,7 @@ def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None, xyzout2
     Gx_hist = [gradx]
     trustprint = "="
     ForceRebuild = False
-    while 1:
+    while True:
         if np.isnan(G).any():
             raise RuntimeError("Gradient contains nan - check output and temp-files for possible errors")
         if np.isnan(H).any():
@@ -1068,8 +1068,9 @@ def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None, xyzout2
         if Converged_energy and Converged_grms and Converged_drms and Converged_gmax and Converged_dmax and conSatisfied:
             print("Converged! =D")
             # _exec("touch energy.txt") #JS these two lines used to make a energy.txt file using the final energy
-            with open("energy.txt","w") as f:
-                print("% .10f" % E, file=f)
+            if dirname is not None:
+                with open("energy.txt","w") as f:
+                    print("% .10f" % E, file=f)
             progress2.xyzs = [X.reshape(-1,3) * bohr2ang] #JS these two lines used to make a opt.xyz file along with the if statement below.
             progress2.comms = ['Iteration %i Energy % .8f' % (Iteration, E)]
             if xyzout2 is not None:
@@ -1529,6 +1530,9 @@ def run_optimizer(**kwargs):
                 xyzout = prefix+".xyz"
                 xyzout2="opt.xyz"
             progress = Optimize(coords, M, IC, engine, dirname, params, xyzout,xyzout2)
+            # update the structure for next optimization in SCAN (by CNH)
+            M.xyzs[0] = progress.xyzs[-1]
+            coords = progress.xyzs[-1].flatten() * ang2bohr
             print
     print_msg()
     return progress
