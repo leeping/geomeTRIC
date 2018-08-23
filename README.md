@@ -4,7 +4,7 @@
 
 This is an open-source geometry optimization code for quantum
 chemistry.  The code works by calling external software for the energy
-and gradient through wrapper functions.  Currently Q-Chem, TeraChem
+and gradient through wrapper functions.  Currently Q-Chem, TeraChem, 
 Psi4, and Molpro are supported.
 
 Authors: Lee-Ping Wang, Chenchen Song
