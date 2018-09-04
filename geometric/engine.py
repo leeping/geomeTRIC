@@ -704,3 +704,65 @@ class QCEngineAPI(Engine):
         # overwrites the calc method of base class to skip caching and creating folders
         return self.calc_new(coords, dirname)
 
+class TeraChem_CI(Engine):
+    """
+    Run a TeraChem energy and gradient calculation.
+    """
+    def __init__(self, molecule, tcin, sigma, alpha):
+        self.tcin = tcin.copy()
+        self.sigma = sigma
+        self.alpha = alpha
+        super(TeraChem_CI, self).__init__(molecule)
+
+    def calc_new(self, coords, dirname):
+        self.tcin['coordinates'] = 'start.xyz'
+        self.tcin['run'] = 'gradient'
+        self.tcin['guess'] = 'ca0 cb0'
+        self.tcin['purify'] = 'no'
+        self.tcin['mixguess'] = "0.0"
+        edit_tcin(fout="%s/run.in" % dirname, options=self.tcin)
+        GDict = OrderedDict()
+        EDict = OrderedDict()
+        SDict = OrderedDict()
+        # Convert coordinates back to the xyz file
+        self.M.xyzs[0] = coords.reshape(-1, 3) * bohr2ang
+        self.M[0].write(os.path.join(dirname, 'start.xyz'))
+        for istate, guess_dir, ca, cb in [(1, os.path.join(dirname, 'guess_1'), 'ca1', 'cb1'), (2, os.path.join(dirname, 'guess_2'), 'ca2', 'cb2')]:
+            if not os.path.exists(guess_dir): os.makedirs(guess_dir)
+            shutil.copy2(os.path.join(dirname, 'start.xyz'), guess_dir)
+            shutil.copy2(os.path.join(dirname, 'run.in'), guess_dir)
+            shutil.copy2(ca, os.path.join(guess_dir, 'ca0'))
+            shutil.copy2(cb, os.path.join(guess_dir, 'cb0'))
+            subprocess.call('terachem run.in &> run.out', cwd=guess_dir, shell=True)
+            subprocess.call("awk '/FINAL ENERGY/ {p=$3} /Correlation Energy/ {p+=$5} END {printf \"%.10f\\n\", p}' run.out > energy.txt", cwd=guess_dir, shell=True)
+            subprocess.call("awk '/Gradient units are Hartree/,/Net gradient/ {if ($1 ~ /^-?[0-9]/) {print}}' run.out > grad.txt", cwd=guess_dir, shell=True)
+            subprocess.call("awk 'BEGIN {s=0.0} /SPIN S-SQUARED/ {s=$3} END {printf \"%.6f\\n\",s}' run.out > s-squared.txt", cwd=guess_dir, shell=True)
+            EDict[istate] = float(open(os.path.join(guess_dir,'energy.txt')).readlines()[0].strip())
+            GDict[istate] = np.loadtxt(os.path.join(guess_dir,'grad.txt')).flatten()
+            SDict[istate] = float(open(os.path.join(guess_dir,'s-squared.txt')).readlines()[0].strip())
+        # Determine the higher energy state
+        if EDict[2] > EDict[1]:
+            I = 2
+            J = 1
+        else:
+            I = 1
+            J = 2
+        # Calculate energy and gradient avg and differences
+        EAvg = 0.5*(EDict[I]+EDict[J])
+        EDif = EDict[I]-EDict[J]
+        GAvg = 0.5*(GDict[I]+GDict[J])
+        GDif = GDict[I]-GDict[J]
+        # Compute penalty function
+        Penalty = EDif**2 / (EDif + self.alpha)
+        # Compute objective function and gradient
+        Obj = EAvg + self.sigma * Penalty
+        ObjGrad = GAvg + self.sigma * (EDif**2 + 2*self.alpha*EDif)/(EDif+self.alpha)**2 * GDif
+        print("EI= % .8f EJ= % .8f S2I= %.4f S2J= %.4f <E>= % .8f Gap= %.8f Pen= %.8f Obj= % .8f" % (EDict[I], EDict[J], SDict[I], SDict[J], EAvg, EDif, Penalty, Obj))
+        return Obj, ObjGrad
+
+    def number_output(self, dirname, calcNum):
+        for istate, guess_dir in [(1, os.path.join(dirname, 'guess_1')), (2, os.path.join(dirname, 'guess_2'))]:
+            if not os.path.exists(os.path.join(guess_dir, 'run.out')):
+                raise RuntimeError('%s/run.out does not exist' % guess_dir)
+            shutil.copy2(os.path.join(guess_dir,'start.xyz'), os.path.join(guess_dir,'start_%03i.xyz' % calcNum))
+            shutil.copy2(os.path.join(guess_dir,'run.out'), os.path.join(guess_dir,'run_%03i.out' % calcNum))

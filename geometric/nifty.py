@@ -959,7 +959,7 @@ def wq_wait1(wq, wait_time=10, wait_intvl=1, print_time=60, verbose=False):
                 % (wq.stats.tasks_running,wq.stats.tasks_waiting,Total,Complete))
             logger.info("Data: %i / %i kb sent/received\n" % (int(wq.stats.total_bytes_sent/1000), int(wq.stats.total_bytes_received/1024)))
         else:
-            logger.info("\r%s : %i/%i workers busy; %i/%i jobs complete\r" %\
+            logger.info("\r%s : %i/%i workers busy; %i/%i jobs complete  \r" %\
             (time.ctime(), nbusy, (wq.stats.total_workers_joined - wq.stats.total_workers_removed), Complete, Total))
             if time.time() - wq_wait1.t0 > 900:
                 wq_wait1.t0 = time.time()

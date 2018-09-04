@@ -8,7 +8,7 @@ import sys
 
 import numpy as np
 
-from .engine import set_tcenv, load_tcin, TeraChem, Psi4, QChem, Gromacs, Molpro, QCEngineAPI
+from .engine import set_tcenv, load_tcin, TeraChem, TeraChem_CI, Psi4, QChem, Gromacs, Molpro, QCEngineAPI
 from .internal import *
 from .molecule import Molecule, Elements
 from .nifty import row, col, flat, invert_svd, uncommadash, isint, bohr2ang, ang2bohr
@@ -853,6 +853,8 @@ class OptParams(object):
         self.Convergence_dmax = 1.8e-3
         self.molpro_convergence_gmax = 3e-4
         self.molpro_convergence_dmax = 1.2e-3
+        # CI optimizations sometimes require tiny steps
+        self.meci = kwargs.get('meci', False)
 
 def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None, xyzout2=None):
     """
@@ -898,7 +900,10 @@ def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None, xyzout2
     Iteration = 0
     CoordCounter = 0
     trust = params.trust
-    thre_rj = 0.01
+    if params.meci:
+        thre_rj = 1e-4
+    else:
+        thre_rj = 1e-2
     # Print initial iteration
     gradxc = IC.calcGradProj(X, gradx) if IC.haveConstraints() else gradx.copy()
     atomgrad = np.sqrt(np.sum((gradxc.reshape(-1,3))**2, axis=1))
@@ -1112,7 +1117,7 @@ def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None, xyzout2
         if Quality <= ThreLQ:
             # For bad steps, the trust radius is reduced
             if not farConstraints:
-                trust = max(Convergence_drms, trust/2)
+                trust = max(0.0 if params.meci else Convergence_drms, trust/2)
                 trustprint = "\x1b[91m-\x1b[0m"
             else:
                 trustprint = "="
@@ -1127,7 +1132,7 @@ def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None, xyzout2
             trustprint = "="
         if Quality < -1 and rejectOk:
             # Reject the step and take a smaller one from the previous iteration
-            trust = max(Convergence_drms, min(trust, cnorm/2))
+            trust = max(0.0 if params.meci else Convergence_drms, min(trust, cnorm/2))
             trustprint = "\x1b[1;91mx\x1b[0m"
             Y = Yprev.copy()
             X = Xprev.copy()
@@ -1341,10 +1346,15 @@ def get_molecule_engine(**kwargs):
     pdb = kwargs.get('pdb', None)
     frag = kwargs.get('frag', False)
     inputf = kwargs.get('input')
+    meci = kwargs.get('meci', False)
+    meci_sigma = kwargs.get('meci_sigma')
+    meci_alpha = kwargs.get('meci_alpha')
     nt = kwargs.get('nt', None)
 
     if sum([qchem, psi4, gmx, molpro, qcengine]) > 1:
         raise RuntimeError("Do not specify more than one of --qchem, --psi4, --gmx, --molpro, --qcengine")
+    if sum([qchem, psi4, gmx, molpro, qcengine, meci]) > 1:
+        raise RuntimeError("Do not specify --qchem, --psi4, --gmx, --molpro, --qcengine with --meci")
     if qchem:
         # The file from which we make the Molecule object
         if pdb is not None:
@@ -1404,11 +1414,14 @@ def get_molecule_engine(**kwargs):
             M = Molecule(tcin['coordinates'], radii=radii, fragment=frag)
         M.charge = tcin['charge']
         M.mult = tcin.get('spinmult',1)
-        if 'guess' in tcin:
-            for f in tcin['guess'].split():
-                if not os.path.exists(f):
-                    raise RuntimeError("TeraChem input file specifies guess %s but it does not exist\nPlease include this file in the same folder as your input" % f)
-        engine = TeraChem(M, tcin)
+        if meci:
+            engine = TeraChem_CI(M, tcin, meci_sigma, meci_alpha)
+        else:
+            engine = TeraChem(M, tcin)
+            if 'guess' in tcin:
+                for f in tcin['guess'].split():
+                    if not os.path.exists(f):
+                        raise RuntimeError("TeraChem input file specifies guess %s but it does not exist\nPlease include this file in the same folder as your input" % f)
         if nt is not None:
             raise RuntimeError("--nt not configured to work with terachem yet")
 
@@ -1547,6 +1560,9 @@ def main():
     parser.add_argument('--qchem', action='store_true', help='Run optimization in Q-Chem (pass Q-Chem input).')
     parser.add_argument('--psi4', action='store_true', help='Compute gradients in Psi4.')
     parser.add_argument('--gmx', action='store_true', help='Compute gradients in Gromacs (requires conf.gro, topol.top, shot.mdp).')
+    parser.add_argument('--meci', action='store_true', help='Compute minimum-energy conical intersection or crossing point between two SCF solutions (TeraChem only).')
+    parser.add_argument('--meci_sigma', type=float, default=3.5, help='Sigma parameter for MECI optimization.')
+    parser.add_argument('--meci_alpha', type=float, default=0.025, help='Alpha parameter for MECI optimization.')
     parser.add_argument('--molpro', action='store_true', help='Compute gradients in Molpro.')
     parser.add_argument('--molproexe', type=str, default=None, help='Specify absolute path of Molpro executable.')
     parser.add_argument('--molcnv', action='store_true', help='Use Molpro style convergence criteria instead of the default.')
