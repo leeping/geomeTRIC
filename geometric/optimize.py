@@ -846,13 +846,13 @@ class OptParams(object):
         self.maxiter = kwargs.get('maxiter', 300)
         self.qccnv = kwargs.get('qccnv', False)
         self.molcnv = kwargs.get('molcnv', False)
-        self.Convergence_energy = 1e-6
-        self.Convergence_grms = 3e-4
-        self.Convergence_gmax = 4.5e-4
-        self.Convergence_drms = 1.2e-3
-        self.Convergence_dmax = 1.8e-3
-        self.molpro_convergence_gmax = 3e-4
-        self.molpro_convergence_dmax = 1.2e-3
+        self.Convergence_energy = kwargs.get('convergence_energy', 1e-6)
+        self.Convergence_grms = kwargs.get('convergence_grms', 3e-4)
+        self.Convergence_gmax = kwargs.get('convergence_gmax', 4.5e-4)
+        self.Convergence_drms = kwargs.get('convergence_drms', 1.2e-3)
+        self.Convergence_dmax = kwargs.get('convergence_dmax', 1.8e-3)
+        self.molpro_convergence_gmax = kwargs.get('molpro_convergence_gmax', 3e-4)
+        self.molpro_convergence_dmax = kwargs.get('molpro_convergence_dmax', 1.2e-3)
         # CI optimizations sometimes require tiny steps
         self.meci = kwargs.get('meci', False)
 
