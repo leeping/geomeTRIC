@@ -2684,6 +2684,8 @@ class Molecule(object):
         atomname = []
         atomtype = []
         elem     = []
+        resname  = []
+        resid    = []
         data = Mol2.mol2_set(fnm)
         if len(data.compounds) > 1:
             sys.stderr.write("Not sure what to do if the MOL2 file contains multiple compounds\n")
@@ -2692,13 +2694,15 @@ class Molecule(object):
             charge.append(atom.charge)
             atomname.append(atom.atom_name)
             atomtype.append(atom.atom_type)
+            resname.append(atom.subst_name)
+            resid.append(atom.subst_id)
             thiselem = atom.atom_name
             if len(thiselem) > 1:
                 thiselem = thiselem[0] + re.sub('[A-Z0-9]','',thiselem[1:])
             elem.append(thiselem)
 
-        resname = [list(data.compounds.items())[0][0] for i in range(len(elem))]
-        resid = [1 for i in range(len(elem))]
+        # resname = [list(data.compounds.items())[0][0] for i in range(len(elem))]
+        # resid = [1 for i in range(len(elem))]
 
         # Deprecated 'abonds' format.
         # bonds    = [[] for i in range(len(elem))]
@@ -3911,15 +3915,19 @@ class Molecule(object):
             logger.error("Unable to init DCD plugin\n")
             raise IOError
         natoms    = c_int(self.na)
-        dcd       = _dcdlib.open_dcd_write(self.fout, "dcd", natoms)
+        fname     = self.fout.encode('ascii')
+        dcd       = _dcdlib.open_dcd_write(create_string_buffer(fname), "dcd", natoms)
         ts        = MolfileTimestep()
         _xyz      = c_float * (natoms.value * 3)
         for I in selection:
             xyz = self.xyzs[I]
             ts.coords = _xyz(*list(xyz.flatten()))
-            ts.A      = self.boxes[I].a if 'boxes' in self.Data else 1.0
-            ts.B      = self.boxes[I].b if 'boxes' in self.Data else 1.0
-            ts.C      = self.boxes[I].c if 'boxes' in self.Data else 1.0
+            ts.A      = c_float(self.boxes[I].a if 'boxes' in self.Data else 1.0)
+            ts.B      = c_float(self.boxes[I].b if 'boxes' in self.Data else 1.0)
+            ts.C      = c_float(self.boxes[I].c if 'boxes' in self.Data else 1.0)
+            ts.alpha  = c_float(self.boxes[I].alpha  if 'boxes' in self.Data else 90.0)
+            ts.beta   = c_float(self.boxes[I].beta   if 'boxes' in self.Data else 90.0)
+            ts.gamma  = c_float(self.boxes[I].gamma  if 'boxes' in self.Data else 90.0)
             result    = _dcdlib.write_timestep(dcd, byref(ts))
             if result != 0:
                 logger.error("Error encountered when writing DCD\n")
