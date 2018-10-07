@@ -531,25 +531,23 @@ class Molpro(Engine):
     """
     Run a Molpro energy and gradient calculation.
     """
-    def __init__(self, molecule=None):
-        # molecule.py can not parse molpro input yet, so we use self.load_molpro_input() as a walk around
-        if molecule is None:
-            # create a fake molecule
-            molecule = Molecule()
-            molecule.elem = ['H']
-            molecule.xyzs = [[[0,0,0]]]
+    def __init__(self, input_filename, exe=None, threads=None, exeargs=None):
+        # Create a fake molecule
+        molecule = Molecule()
+        molecule.elem = ['H']
+        molecule.xyzs = [[[0,0,0]]]
         super(Molpro, self).__init__(molecule)
-        self.threads = None
-        self.molproExePath = None
 
-    def molproExe(self):
-        if self.molproExePath is not None:
-            return self.molproExePath
+        # Set options for running the molpro executable
+        if exe is None:
+            self.exe = 'molpro'
         else:
-            return "molpro"
+            self.exe = exe
+        self.threads = threads
+        self.exeargs = exeargs
 
-    def set_molproexe(self, molproExePath):
-        self.molproExePath = molproExePath
+        # Replace fake molecule with molecule found from the input file
+        self.init_from_input(input_filename)
 
     def nt(self):
         if self.threads is not None:
@@ -557,17 +555,14 @@ class Molpro(Engine):
         else:
             return ""
 
-    def set_nt(self, threads):
-        self.threads = threads
-
-    def load_molpro_input(self, molproin):
+    def init_from_input(self, input_filename):
         """ Molpro input file parser, only support xyz coordinates for now """
         coords = []
         elems = []
         labels = []
         found_molecule, found_geo, found_gradient = False, False, False
         molpro_temp = [] # store a template of the input file for generating new ones
-        for line in open(molproin):
+        for line in open(input_filename):
             if 'geometry' in line:
                 found_molecule = True
                 molpro_temp.append(line)
@@ -591,7 +586,7 @@ class Molpro(Engine):
             if "force" in line:
                 found_gradient = True
         if found_gradient == False:
-            raise RuntimeError("Molpro inputfile %s should have force command." % molproin)
+            raise RuntimeError("Molpro inputfile %s should have force command." % input_filename)
         self.M = Molecule()
         self.M.elem = elems
         self.M.xyzs = [np.array(coords, dtype=np.float64)]
@@ -611,17 +606,19 @@ class Molpro(Engine):
                 else:
                     outfile.write(line)
         # Run Molpro
-        subprocess.call('%s%s run.mol' % (self.molproExe(), self.nt()), cwd=dirname, shell=True)
+        command = '%s%s' % (self.exe, self.nt())
+        if self.exeargs is not None:
+            for arg in self.exeargs:
+                command += ' ' + arg
+        command += ' run.mol'
+        errorcode = subprocess.call(command, cwd=dirname, shell=True)
+        # FIXME Should cancel job if an errorcode is returned
         # Read energy and gradients from Molpro output
-        energy, gradient = self.parse_molpro_output(os.path.join(dirname, 'run.out'))
+        energy, gradient = Molpro.parse_output(os.path.join(dirname, 'run.out'))
         return energy, gradient
 
-    def number_output(self, dirname, calcNum):
-        if not os.path.exists(os.path.join(dirname, 'run.out')):
-            raise RuntimeError('run.out does not exist')
-        shutil.copy2(os.path.join(dirname,'run.out'), os.path.join(dirname,'run_%03i.out' % calcNum))
-
-    def parse_molpro_output(self, molpro_out):
+    @staticmethod
+    def parse_output(molpro_out):
         """ read an output file from Molpro"""
         energy, gradient = None, None
         with open(molpro_out) as outfile:
