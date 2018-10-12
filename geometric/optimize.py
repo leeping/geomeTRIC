@@ -62,8 +62,8 @@ def RebuildHessian(IC, H0, coord_seq, grad_seq, params):
         Gprev = g_seq[i-1]
         Dy   = col(Y - Yprev)
         Dg   = col(G - Gprev)
-        Mat1 = (Dg*Dg.T)/(Dg.T*Dy)[0,0]
-        Mat2 = ((H*Dy)*(H*Dy).T)/(Dy.T*H*Dy)[0,0]
+        Mat1 = (Dg@Dg.T)/(Dg.T@Dy)[0,0]
+        Mat2 = ((H@Dy)@(H@Dy).T)/(Dy.T@H@Dy)[0,0]
         Hstor = H.copy()
         H += Mat1-Mat2
     if np.min(np.linalg.eigh(H)[0]) < params.epsilon and params.reset:
@@ -95,7 +95,7 @@ def calc_drms_dmax(Xnew, Xold, align=True):
     # Obtain the rotation
     if align:
         U = get_rot(Xnew, Xold)
-        Xrot = np.array((U*np.matrix(Xnew).T).T).flatten()
+        Xrot = np.array((U@np.array(Xnew).T).T).flatten()
         Xold = np.array(Xold).flatten()
         displacement = np.sqrt(np.sum((((Xrot-Xold)*bohr2ang).reshape(-1,3))**2, axis=1))
     else:
@@ -520,15 +520,15 @@ def get_delta_prime_trm(v, X, G, H, IC, verbose=False):
         seig = sorted(np.linalg.eig(HT)[0])
         print("sorted(eig) : % .5e % .5e % .5e ... % .5e % .5e % .5e" % (seig[0], seig[1], seig[2], seig[-3], seig[-2], seig[-1]))
     try:
-        Hi = invert_svd(np.matrix(HT))
+        Hi = invert_svd(np.array(HT))
     except:
         print ("\x1b[1;91mSVD Error - increasing v by 0.001 and trying again\x1b[0m")
         return get_delta_prime_trm(v+0.001, X, G, H, IC)
-    dyc = flat(-1 * Hi * col(GC))
+    dyc = flat(-1 * Hi @ col(GC))
     dy = dyc[:len(G)]
-    d_prime = flat(-1 * Hi * col(dyc))[:len(G)]
+    d_prime = flat(-1 * Hi @ col(dyc))[:len(G)]
     dy_prime = np.dot(dy,d_prime)/np.linalg.norm(dy)
-    sol = flat(0.5*row(dy)*np.matrix(H)*col(dy))[0] + np.dot(dy,G)
+    sol = flat(0.5*row(dy)@np.array(H)@col(dy))[0] + np.dot(dy,G)
     return dy, sol, dy_prime
 
 def get_delta_prime_rfo(alpha, X, G, H, IC, verbose=False):
@@ -578,7 +578,7 @@ def get_delta_prime_rfo(alpha, X, G, H, IC, verbose=False):
         raise ImportError("RFO optimization requires scipy package. If this becomes important in the future, scipy will become a required dependency.")
     if IC.haveConstraints():
         raise RuntimeError("Still need to implement RFO with constraints")
-    S = alpha*np.matrix(np.eye(len(H)))
+    S = alpha*np.array(np.eye(len(H)))
     # Augmented Hessian matrix
     AH = np.zeros((H.shape[0]+1, H.shape[1]+1), dtype=float)
     AH[1:, 1:] = H
@@ -603,7 +603,7 @@ def get_delta_prime_rfo(alpha, X, G, H, IC, verbose=False):
         dyprime2 += np.dot(Hvec[:,i].T,G)**2/(Heig[i]-nu)**3
         dy2 += np.dot(Hvec[:,i].T,G)**2/(Heig[i]-nu)**2
     dyprime2 *= (2*lmin)/(1+alpha*np.dot(dy,dy))
-    expect = lmin/2*(1+row(dy)*S*col(dy))[0]
+    expect = lmin/2*(1+row(dy)@S@col(dy))[0]
     dyprime1 = dyprime2 / (2*np.sqrt(dy2))
     return dy, expect, dyprime1
 
@@ -1200,15 +1200,15 @@ def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None, xyzout2
             # Catch some abnormal cases of extremely small changes.
             if np.linalg.norm(Dg) < 1e-6: continue
             if np.linalg.norm(Dy) < 1e-6: continue
-            Mat1 = (Dg*Dg.T)/(Dg.T*Dy)[0,0]
-            Mat2 = ((H*Dy)*(H*Dy).T)/(Dy.T*H*Dy)[0,0]
+            Mat1 = (Dg@Dg.T)/(Dg.T@Dy)[0,0]
+            Mat2 = ((H@Dy)@(H@Dy).T)/(Dy.T@H@Dy)[0,0]
             Eig = np.linalg.eigh(H)[0]
             Eig.sort()
             ndy = np.array(Dy).flatten()/np.linalg.norm(np.array(Dy))
             ndg = np.array(Dg).flatten()/np.linalg.norm(np.array(Dg))
-            nhdy = np.array(H*Dy).flatten()/np.linalg.norm(np.array(H*Dy))
+            nhdy = np.array(H@Dy).flatten()/np.linalg.norm(np.array(H@Dy))
             if params.verbose:
-                print("Denoms: %.3e %.3e" % ((Dg.T*Dy)[0,0], (Dy.T*H*Dy)[0,0]), end=''),
+                print("Denoms: %.3e %.3e" % ((Dg.T@Dy)[0,0], (Dy.T@H@Dy)[0,0]), end=''),
                 print("Dots: %.3e %.3e" % (np.dot(ndg, ndy), np.dot(ndy, nhdy)), end=''),
             H1 = H.copy()
             H += Mat1-Mat2
