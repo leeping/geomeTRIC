@@ -55,15 +55,14 @@ def build_correlation(x, y):
     -------
     numpy.ndarray
         3x3 correlation matrix
+
     """
-    assert x.ndim == 2
-    assert y.ndim == 2
-    assert x.shape[1] == 3
-    assert y.shape[1] == 3
-    assert x.shape[0] == y.shape[0]
-    xmat = np.matrix(x).T
-    ymat = np.matrix(y).T
-    return np.array(xmat*ymat.T)
+    if not (x.ndim == 2 and y.ndim == 2 and x.shape[1] == 3 and y.shape[1] == 3 and x.shape[0] == y.shape[0]):
+        raise ValueError("Input dimensions not (any_same_value, 3): x ({}), y ({})".format(x.shape, y.shape))
+    xmat = np.array(x).T
+    ymat = np.array(y).T
+    return xmat@ymat.T
+
 
 def build_F(x, y):
     """
@@ -119,13 +118,14 @@ def al(p):
     
     Returns
     -------
-    numpy.matrix
+    numpy.array
         4x4 matrix describing action of quaternion multiplication
+
     """
     # Given a quaternion p, return the 4x4 matrix A_L(p)
     # which when multiplied with a column vector q gives
     # the quaternion product pq.
-    return np.matrix([[ p[0], -p[1], -p[2], -p[3]],
+    return np.array([[ p[0], -p[1], -p[2], -p[3]],
                       [ p[1],  p[0], -p[3],  p[2]],
                       [ p[2],  p[3],  p[0], -p[1]],
                       [ p[3], -p[2],  p[1],  p[0]]])
@@ -143,10 +143,11 @@ def ar(p):
     
     Returns
     -------
-    numpy.matrix
+    numpy.array
         4x4 matrix describing action of quaternion multiplication
+
     """
-    return np.matrix([[ p[0], -p[1], -p[2], -p[3]],
+    return np.array([[ p[0], -p[1], -p[2], -p[3]],
                       [ p[1],  p[0],  p[3], -p[2]],
                       [ p[2], -p[3],  p[0],  p[1]],
                       [ p[3],  p[2], -p[1],  p[0]]])
@@ -186,11 +187,11 @@ def form_rot(q):
     
     Returns
     -------
-    numpy.matrix
+    numpy.array
         3x3 rotation matrix
     """
     qc = conj(q)
-    R4 = al(q)*ar(qc)
+    R4 = al(q)@ar(qc)
     return R4[1:, 1:]
 
 def sorted_eigh(mat, b=None, asc=False):
@@ -295,16 +296,16 @@ def get_rot(x, y):
 
     Returns
     -------
-    numpy.matrix
+    numpy.array
         3x3 rotation matrix
+
     """
     x = x - np.mean(x,axis=0)
     y = y - np.mean(y,axis=0)
     N = x.shape[0]
     q = get_quat(x, y)
     U = form_rot(q)
-    x = np.matrix(x)
-    xr = np.array((U*x.T).T)
+    xr = np.array((U@x.T).T)
     rmsd = np.sqrt(np.sum((xr-y)**2)/N)
     # print rmsd
     return U
@@ -449,7 +450,7 @@ def get_q_der(x, y):
     dq = np.zeros((x.shape[0], 3, 4), dtype=float)
     for u in range(x.shape[0]):
         for w in range(3):
-            dquw = pinv*np.matrix(dF[u, w])*np.matrix(q).T
+            dquw = pinv@np.array(dF[u, w])@np.array(q).T
             dq[u, w] = np.array(dquw).flatten()
     fdcheck = False
     if fdcheck:

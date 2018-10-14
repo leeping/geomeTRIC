@@ -374,7 +374,7 @@ def col(vec):
     Output:
     A column matrix
     """
-    return np.matrix(np.array(vec).reshape(-1, 1))
+    return np.array(vec).reshape(-1, 1)
 
 def row(vec):
     """Given any list, array, or matrix, return a 1-row matrix.
@@ -383,7 +383,7 @@ def row(vec):
 
     @return answer A row matrix
     """
-    return np.matrix(np.array(vec).reshape(1, -1))
+    return np.array(vec).reshape(1, -1)
 
 def flat(vec):
     """Given any list, array, or matrix, return a single-index array.
@@ -543,16 +543,16 @@ def invert_svd(X,thresh=1e-12):
     """
 
     u,s,vh = np.linalg.svd(X, full_matrices=0)
-    uh     = np.matrix(np.transpose(u))
-    v      = np.matrix(np.transpose(vh))
+    uh     = np.array(np.transpose(u))
+    v      = np.array(np.transpose(vh))
     si     = s.copy()
     for i in range(s.shape[0]):
         if abs(s[i]) > thresh:
             si[i] = 1./s[i]
         else:
             si[i] = 0.0
-    si     = np.matrix(np.diag(si))
-    Xt     = v*si*uh
+    si     = np.array(np.diag(si))
+    Xt     = v@si@uh
     return Xt
 
 #==============================#
@@ -601,9 +601,9 @@ def get_least_squares(x, y, w = None, thresh=1e-12):
     # else:
     # This resembles the formula (X'WX)^-1 X' W^1/2
     MPPI = np.linalg.pinv(WH*X)
-    Beta = MPPI * WH * Y
+    Beta = MPPI @ WH @ Y
     Hat = WH * X * MPPI
-    yfit = flat(Hat * Y)
+    yfit = flat(Hat @ Y)
     # Return three things: the least-squares coefficients, the hat matrix (turns y into yfit), and yfit
     # We could get these all from MPPI, but I might get confused later on, so might as well do it here :P
     return np.array(Beta).flatten(), np.array(Hat), np.array(yfit).flatten(), np.array(MPPI)
