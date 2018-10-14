@@ -57,14 +57,8 @@ def build_correlation(x, y):
         3x3 correlation matrix
 
     """
-    assert x.ndim == 2
-    assert y.ndim == 2
-    assert x.shape[1] == 3
-    assert y.shape[1] == 3
-    assert x.shape[0] == y.shape[0]
-    # xmat = np.matrix(x).T
-    # ymat = np.matrix(y).T
-    # return np.array(xmat*ymat.T)
+    if not (x.ndim == 2 and y.ndim == 2 and x.shape[1] == 3 and y.shape[1] == 3 and x.shape[0] == y.shape[0]):
+        raise ValueError("Input dimensions not (any_same_value, 3): x ({}), y ({})".format(x.shape, y.shape))
     xmat = x.T
     ymat = y.T
     return np.dot(xmat, ymat.T)
