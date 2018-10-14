@@ -1,0 +1,15 @@
+coordinates start.xyz
+run gradient
+basis 6-311++gss
+method rpbe0
+charge 0
+spinmult 1
+precision mixed
+convthre 1.0e-6
+threall 1.0e-16
+mixguess 0.0
+scf diis+a
+maxit 50
+threspdp 1e-8
+dftgrid 1
+dispersion yes

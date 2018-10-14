@@ -9,6 +9,7 @@ from copy import deepcopy
 
 import networkx as nx
 import numpy as np
+from numpy.linalg import multi_dot
 
 from geometric.molecule import Elements, Radii
 from geometric.nifty import click, commadash, ang2bohr, bohr2ang
@@ -2421,7 +2422,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
                 elif len(U) < self.Vecs.shape[1]:
                     raise RuntimeError('Gram-Schmidt orthogonalization has failed (expect %i length %i)' % (self.Vecs.shape[1], len(U)))
             # print "Gram-Schmidt completed with thre=%.0e" % thre
-            self.Vecs = U.T
+            self.Vecs = np.array(U).T
             # Constrained DLCs are on the left of self.Vecs.
             self.cDLC = [i for i in range(len(self.Prims.cPrims))]
 
@@ -2476,7 +2477,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
             elif len(U) < self.Vecs.shape[1]:
                 raise RuntimeError('Gram-Schmidt orthogonalization has failed (expect %i length %i)' % (self.Vecs.shape[1], len(U)))
         # print "Gram-Schmidt completed with thre=%.0e" % thre
-        self.Vecs = U.T
+        self.Vecs = np.array(U).T
         # Constrained DLCs are on the left of self.Vecs.
         # for i, p in enumerate(self.Prims.Internals):
         #     print "%20s" % p,
