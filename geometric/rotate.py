@@ -55,6 +55,7 @@ def build_correlation(x, y):
     -------
     numpy.ndarray
         3x3 correlation matrix
+
     """
     assert x.ndim == 2
     assert y.ndim == 2
@@ -124,6 +125,7 @@ def al(p):
     -------
     numpy.ndarray
         4x4 matrix describing action of quaternion multiplication
+
     """
     # Given a quaternion p, return the 4x4 matrix A_L(p)
     # which when multiplied with a column vector q gives
@@ -148,6 +150,7 @@ def ar(p):
     -------
     numpy.ndarray
         4x4 matrix describing action of quaternion multiplication
+
     """
     return np.array([[ p[0], -p[1], -p[2], -p[3]],
                      [ p[1],  p[0],  p[3], -p[2]],
@@ -189,7 +192,7 @@ def form_rot(q):
     
     Returns
     -------
-    numpy.matrix
+    numpy.array
         3x3 rotation matrix
     """
     qc = conj(q)
@@ -298,8 +301,9 @@ def get_rot(x, y):
 
     Returns
     -------
-    numpy.matrix
+    numpy.array
         3x3 rotation matrix
+
     """
     x = x - np.mean(x,axis=0)
     y = y - np.mean(y,axis=0)

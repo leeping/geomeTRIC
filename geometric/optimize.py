@@ -1213,9 +1213,9 @@ def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None, xyzout2
             Eig.sort()
             ndy = np.array(Dy).flatten()/np.linalg.norm(np.array(Dy))
             ndg = np.array(Dg).flatten()/np.linalg.norm(np.array(Dg))
-            nhdy = np.array(H*Dy).flatten()/np.linalg.norm(np.array(H*Dy))
+            nhdy = np.dot(H,Dy).flatten()/np.linalg.norm(np.dot(H,Dy))
             if params.verbose:
-                print("Denoms: %.3e %.3e" % ((Dg.T*Dy)[0,0], (Dy.T*H*Dy)[0,0]), end=''),
+                print("Denoms: %.3e %.3e" % (np.dot(Dg.T,Dy)[0,0], multi_dot(Dy.T,H,Dy)[0,0]), end=''),
                 print("Dots: %.3e %.3e" % (np.dot(ndg, ndy), np.dot(ndy, nhdy)), end=''),
             H1 = H.copy()
             H += Mat1-Mat2

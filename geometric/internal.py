@@ -70,28 +70,28 @@ def d_ncross(a, b):
     return answer
 
 def nudot(a, b):
-    """
+    r"""
     Given two vectors a and b, return the dot product (\hat{a}).b.
     """
     ev = a / np.linalg.norm(a)
     return np.dot(ev, b)
     
 def d_nudot(a, b):
-    """
+    r"""
     Given two vectors a and b, return the gradient of 
     the norm of the dot product (\hat{a}).b w/r.t. a.
     """
     return np.dot(d_unit_vector(a), b)
 
 def ucross(a, b):
-    """
+    r"""
     Given two vectors a and b, return the cross product (\hat{a})xb.
     """
     ev = a / np.linalg.norm(a)
     return np.cross(ev, b)
     
 def d_ucross(a, b):
-    """
+    r"""
     Given two vectors a and b, return the gradient of 
     the cross product (\hat{a})xb w/r.t. a.
     """
@@ -99,14 +99,14 @@ def d_ucross(a, b):
     return np.dot(d_unit_vector(a), d_cross(ev, b))
 
 def nucross(a, b):
-    """
+    r"""
     Given two vectors a and b, return the norm of the cross product (\hat{a})xb.
     """
     ev = a / np.linalg.norm(a)
     return np.linalg.norm(np.cross(ev, b))
     
 def d_nucross(a, b):
-    """
+    r"""
     Given two vectors a and b, return the gradient of 
     the norm of the cross product (\hat{a})xb w/r.t. a.
     """
