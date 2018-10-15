@@ -27,6 +27,7 @@ import sys
 from select import select
 
 import numpy as np
+from numpy.linalg import multi_dot
 
 # For Python 3 compatibility
 try:
@@ -146,9 +147,9 @@ def astr(vec1d, precision=4):
     return ' '.join([("%% .%ie " % precision % i) for i in vec1d])
 
 def pmat2d(mat2d, precision=1, format="e", loglevel=INFO):
-    """Printout of a 2-D matrix.
+    """Printout of a 2-D array.
 
-    @param[in] mat2d a 2-D matrix
+    @param[in] mat2d a 2-D array
     """
     m2a = np.array(mat2d)
     for i in range(m2a.shape[0]):
@@ -366,22 +367,22 @@ def floatornan(word):
 
 def col(vec):
     """
-    Given any list, array, or matrix, return a 1-column matrix.
+    Given any list, array, or matrix, return a 1-column 2D array.
 
     Input:
     vec  = The input vector that is to be made into a column
 
     Output:
-    A column matrix
+    A 1-column 2D array
     """
     return np.array(vec).reshape(-1, 1)
 
 def row(vec):
-    """Given any list, array, or matrix, return a 1-row matrix.
+    """Given any list, array, or matrix, return a 1-row 2D array.
 
     @param[in] vec The input vector that is to be made into a row
 
-    @return answer A row matrix
+    @return answer A 1-row 2D array
     """
     return np.array(vec).reshape(1, -1)
 
@@ -536,23 +537,23 @@ def invert_svd(X,thresh=1e-12):
     """
 
     Invert a matrix using singular value decomposition.
-    @param[in] X The matrix to be inverted
+    @param[in] X The 2-D NumPy array containing the matrix to be inverted
     @param[in] thresh The SVD threshold; eigenvalues below this are not inverted but set to zero
-    @return Xt The inverted matrix
+    @return Xt The 2-D NumPy array containing the inverted matrix
 
     """
 
     u,s,vh = np.linalg.svd(X, full_matrices=0)
-    uh     = np.array(np.transpose(u))
-    v      = np.array(np.transpose(vh))
+    uh     = np.transpose(u)
+    v      = np.transpose(vh)
     si     = s.copy()
     for i in range(s.shape[0]):
         if abs(s[i]) > thresh:
             si[i] = 1./s[i]
         else:
             si[i] = 0.0
-    si     = np.array(np.diag(si))
-    Xt     = v@si@uh
+    si     = np.diag(si)
+    Xt     = multi_dot([v, si, uh])
     return Xt
 
 #==============================#
@@ -581,7 +582,9 @@ def get_least_squares(x, y, w = None, thresh=1e-12):
     @param[out] MPPI The Moore-Penrose pseudoinverse (multiply by Y to get least-squares coefficients, multiply by dY/dk to get derivatives of least-squares coefficients)
     """
     # X is a 'tall' matrix.
-    X = np.matrix(x)
+    X = np.array(x)
+    if len(X.shape) == 1:
+        X = X[:,np.newaxis]
     Y = col(y)
     n_x = X.shape[0]
     n_fit = X.shape[1]
@@ -592,18 +595,18 @@ def get_least_squares(x, y, w = None, thresh=1e-12):
         if len(w) != n_x:
             warn_press_key("The weight array length (%i) must be the same as the number of 'X' data points (%i)!" % len(w), n_x)
         w /= np.mean(w)
-        WH = np.matrix(np.diag(w**0.5))
+        WH = np.diag(w**0.5)
     else:
-        WH = np.matrix(np.eye(n_x))
+        WH = np.eye(n_x)
     # Make the Moore-Penrose Pseudoinverse.
     # if n_fit == n_x:
     #     MPPI = np.linalg.inv(WH*X)
     # else:
     # This resembles the formula (X'WX)^-1 X' W^1/2
-    MPPI = np.linalg.pinv(WH*X)
-    Beta = MPPI @ WH @ Y
-    Hat = WH * X * MPPI
-    yfit = flat(Hat @ Y)
+    MPPI = np.linalg.pinv(np.dot(WH, X))
+    Beta = multi_dot([MPPI, WH, Y])
+    Hat = multi_dot([WH, X, MPPI])
+    yfit = flat(np.dot(Hat, Y))
     # Return three things: the least-squares coefficients, the hat matrix (turns y into yfit), and yfit
     # We could get these all from MPPI, but I might get confused later on, so might as well do it here :P
     return np.array(Beta).flatten(), np.array(Hat), np.array(yfit).flatten(), np.array(MPPI)
@@ -942,24 +945,18 @@ def wq_wait1(wq, wait_time=10, wait_intvl=1, print_time=60, verbose=False):
                     if task.id in WQIDS[tnm]:
                         WQIDS[tnm].remove(task.id)
                 del task
-        # if hasattr(wq.stats, 'workers_full'):
-        #     # Full workers statistic was added with CCTools 4.0
-        #     # But deprecated with CCTools 4.1 (so if they're equal we don't add them.)
-        #     nbusy = wq.stats.workers_busy + wq.stats.workers_full
-        # else:
-        nbusy = wq.stats.workers_busy
-        Complete = wq.stats.total_tasks_complete
-        Total = wq.stats.total_tasks_dispatched
 
+        # LPW 2018-09-10 Updated to use stats fields from CCTools 6.2.10
+        # Please upgrade CCTools version if errors are encountered during runtime.
         if verbose:
-            logger.info("Workers: %i init, %i ready, %i busy, %i total joined, %i total removed\n" \
-                % (wq.stats.workers_init, wq.stats.workers_ready, nbusy, wq.stats.total_workers_joined, wq.stats.total_workers_removed))
-            logger.info("Tasks: %i running, %i waiting, %i total dispatched, %i total complete\n" \
-                % (wq.stats.tasks_running,wq.stats.tasks_waiting,Total,Complete))
-            logger.info("Data: %i / %i kb sent/received\n" % (int(wq.stats.total_bytes_sent/1000), int(wq.stats.total_bytes_received/1024)))
+            logger.info("Workers: %i init, %i idle, %i busy, %i total joined, %i total removed\n" \
+                % (wq.stats.workers_init, wq.stats.workers_idle, wq.stats.workers_busy, wq.stats.workers_joined, wq.stats.workers_removed))
+            logger.info("Tasks: %i running, %i waiting, %i dispatched, %i submitted, %i total complete\n" \
+                % (wq.stats.tasks_running, wq.stats.tasks_waiting, wq.stats.tasks_dispatched, wq.stats.tasks_submitted, wq.stats.tasks_done))
+            logger.info("Data: %i / %i kb sent/received\n" % (int(wq.stats.bytes_sent/1024), int(wq.stats.bytes_received/1024)))
         else:
             logger.info("\r%s : %i/%i workers busy; %i/%i jobs complete  \r" %\
-            (time.ctime(), nbusy, (wq.stats.total_workers_joined - wq.stats.total_workers_removed), Complete, Total))
+            (time.ctime(), wq.stats.workers_busy, wq.stats.workers_connected, wq.stats.tasks_done, wq.stats.tasks_submitted))
             if time.time() - wq_wait1.t0 > 900:
                 wq_wait1.t0 = time.time()
                 logger.info('\n')

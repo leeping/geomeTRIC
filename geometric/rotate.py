@@ -59,10 +59,9 @@ def build_correlation(x, y):
     """
     if not (x.ndim == 2 and y.ndim == 2 and x.shape[1] == 3 and y.shape[1] == 3 and x.shape[0] == y.shape[0]):
         raise ValueError("Input dimensions not (any_same_value, 3): x ({}), y ({})".format(x.shape, y.shape))
-    xmat = np.array(x).T
-    ymat = np.array(y).T
-    return xmat@ymat.T
-
+    xmat = x.T
+    ymat = y.T
+    return np.dot(xmat, ymat.T)
 
 def build_F(x, y):
     """
@@ -118,7 +117,7 @@ def al(p):
     
     Returns
     -------
-    numpy.array
+    numpy.ndarray
         4x4 matrix describing action of quaternion multiplication
 
     """
@@ -126,9 +125,9 @@ def al(p):
     # which when multiplied with a column vector q gives
     # the quaternion product pq.
     return np.array([[ p[0], -p[1], -p[2], -p[3]],
-                      [ p[1],  p[0], -p[3],  p[2]],
-                      [ p[2],  p[3],  p[0], -p[1]],
-                      [ p[3], -p[2],  p[1],  p[0]]])
+                     [ p[1],  p[0], -p[3],  p[2]],
+                     [ p[2],  p[3],  p[0], -p[1]],
+                     [ p[3], -p[2],  p[1],  p[0]]])
      
 def ar(p):
     """
@@ -143,14 +142,14 @@ def ar(p):
     
     Returns
     -------
-    numpy.array
+    numpy.ndarray
         4x4 matrix describing action of quaternion multiplication
 
     """
     return np.array([[ p[0], -p[1], -p[2], -p[3]],
-                      [ p[1],  p[0],  p[3], -p[2]],
-                      [ p[2], -p[3],  p[0],  p[1]],
-                      [ p[3],  p[2], -p[1],  p[0]]])
+                     [ p[1],  p[0],  p[3], -p[2]],
+                     [ p[2], -p[3],  p[0],  p[1]],
+                     [ p[3],  p[2], -p[1],  p[0]]])
 
 def conj(q):
     """
@@ -191,7 +190,7 @@ def form_rot(q):
         3x3 rotation matrix
     """
     qc = conj(q)
-    R4 = al(q)@ar(qc)
+    R4 = np.dot(al(q),ar(qc))
     return R4[1:, 1:]
 
 def sorted_eigh(mat, b=None, asc=False):
@@ -305,9 +304,10 @@ def get_rot(x, y):
     N = x.shape[0]
     q = get_quat(x, y)
     U = form_rot(q)
-    xr = np.array((U@x.T).T)
+    # x = np.matrix(x)
+    # xr = np.array((U*x.T).T)
+    xr = np.dot(U,x.T).T
     rmsd = np.sqrt(np.sum((xr-y)**2)/N)
-    # print rmsd
     return U
 
 
@@ -450,7 +450,8 @@ def get_q_der(x, y):
     dq = np.zeros((x.shape[0], 3, 4), dtype=float)
     for u in range(x.shape[0]):
         for w in range(3):
-            dquw = pinv@np.array(dF[u, w])@np.array(q).T
+            # dquw = pinv*np.matrix(dF[u, w])*np.matrix(q).T
+            dquw = multi_dot([pinv,dF[u, w],q.T])
             dq[u, w] = np.array(dquw).flatten()
     fdcheck = False
     if fdcheck:
