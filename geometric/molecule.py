@@ -818,7 +818,7 @@ def extract_pop(M, verbose=True):
     srch  = lambda s : np.array([float(re.search(r'(?<=%s )[-+]?[0-9]*\.?[0-9]*([eEdD][-+]?[0-9]+)?' % s, c).group(0)) for c in M.comms if all([i in c for i in ('charge', 'sz')])])
     Chgs  = srch('charge') # An array of the net charge.
     SpnZs = srch('sz')    # An array of the net Z-spin.
-    Spn2s = srch('sz\^2') # An array of the sum of sz^2 by atom.
+    Spn2s = srch(r'sz\^2') # An array of the sum of sz^2 by atom.
 
     chg, chgpass = extract_int(Chgs, 0.3, 1.0, label="charge")
     spn, spnpass = extract_int(abs(SpnZs), 0.3, 1.0, label="spin-z")
