@@ -339,7 +339,7 @@ def isint(word):
 
 def isfloat(word):
     """Matches ANY number; it can be a decimal, scientific notation, integer, or what have you"""
-    return re.match('^[-+]?[0-9]*\.?[0-9]*([eEdD][-+]?[0-9]+)?$',word)
+    return re.match(r'^[-+]?[0-9]*\.?[0-9]*([eEdD][-+]?[0-9]+)?$',word)
 
 # Used to get the white spaces in a split line.
 splitter = re.compile(r'(\s+|\S+)')
@@ -815,10 +815,10 @@ def extract_pop(M, verbose=True):
     """
 
     # Read in the charge and spin on the whole system.
-    srch  = lambda s : np.array([float(re.search('(?<=%s )[-+]?[0-9]*\.?[0-9]*([eEdD][-+]?[0-9]+)?' % s, c).group(0)) for c in M.comms if all([i in c for i in ('charge', 'sz')])])
+    srch  = lambda s : np.array([float(re.search(r'(?<=%s )[-+]?[0-9]*\.?[0-9]*([eEdD][-+]?[0-9]+)?' % s, c).group(0)) for c in M.comms if all([i in c for i in ('charge', 'sz')])])
     Chgs  = srch('charge') # An array of the net charge.
     SpnZs = srch('sz')    # An array of the net Z-spin.
-    Spn2s = srch('sz\^2') # An array of the sum of sz^2 by atom.
+    Spn2s = srch(r'sz\^2') # An array of the sum of sz^2 by atom.
 
     chg, chgpass = extract_int(Chgs, 0.3, 1.0, label="charge")
     spn, spnpass = extract_int(abs(SpnZs), 0.3, 1.0, label="spin-z")
@@ -2981,7 +2981,7 @@ class Molecule(object):
         for line in open(fnm):
             line = line.strip().expandtabs()
             sline = line.split()
-            if re.match('^\*',line):
+            if re.match(r'^\*',line):
                 if len(sline) == 1:
                     comms.append(';'.join(list(thiscomm)))
                     thiscomm = []
@@ -3067,8 +3067,8 @@ class Molecule(object):
             dline = line.split('!')[0].split()
             if "Z-matrix Print" in line:
                 zmatrix = True
-            if re.match('^\$',line):
-                wrd = re.sub('\$','',line).lower()
+            if re.match(r'^\$',line):
+                wrd = re.sub(r'\$','',line).lower()
                 if zmatrix:
                     if wrd == 'end':
                         zmatrix = False
@@ -3307,16 +3307,16 @@ class Molecule(object):
         convThis = 0
         readChargeMult = 0
         energy_scf = []
-        float_match  = {'energy_scfThis'   : ("^[1-9][0-9]* +[-+]?([0-9]*\.)?[0-9]+ +[-+]?([0-9]*\.)?[0-9]+([eE][-+]?[0-9]+)[A-Za-z0 ]*$", 1),
-                        'energy_opt'       : ("^Final energy is +[-+]?([0-9]*\.)?[0-9]+$", -1),
+        float_match  = {'energy_scfThis'   : (r"^[1-9][0-9]* +[-+]?([0-9]*\.)?[0-9]+ +[-+]?([0-9]*\.)?[0-9]+([eE][-+]?[0-9]+)[A-Za-z0 ]*$", 1),
+                        'energy_opt'       : (r"^Final energy is +[-+]?([0-9]*\.)?[0-9]+$", -1),
                         'charge'           : ("Sum of atomic charges", -1),
                         'mult'             : ("Sum of spin +charges", -1),
-                        'energy_mp2'       : ("^(ri)*(-)*mp2 +total energy += +[-+]?([0-9]*\.)?[0-9]+ +au$",-2),
-                        'energy_ccsd'      : ("^CCSD Total Energy += +[-+]?([0-9]*\.)?[0-9]+$",-1),
-                        'energy_ccsdt'     : ("^CCSD\(T\) Total Energy += +[-+]?([0-9]*\.)?[0-9]+$",-1),
-                        'zpe'              : ("^(\s+)?Zero point vibrational energy:\s+[-+]?([0-9]*\.)?[0-9]+\s+kcal\/mol$", -2),
-                        'entropy'          : ("^(\s+)?Total Entropy:\s+[-+]?([0-9]*\.)?[0-9]+\s+cal\/mol\.K$", -2),
-                        'enthalpy'         : ("^(\s+)?Total Enthalpy:\s+[-+]?([0-9]*\.)?[0-9]+\s+kcal\/mol$", -2)
+                        'energy_mp2'       : (r"^(ri)*(-)*mp2 +total energy += +[-+]?([0-9]*\.)?[0-9]+ +au$",-2),
+                        'energy_ccsd'      : (r"^CCSD Total Energy += +[-+]?([0-9]*\.)?[0-9]+$",-1),
+                        'energy_ccsdt'     : (r"^CCSD\(T\) Total Energy += +[-+]?([0-9]*\.)?[0-9]+$",-1),
+                        'zpe'              : (r"^(\s+)?Zero point vibrational energy:\s+[-+]?([0-9]*\.)?[0-9]+\s+kcal\/mol$", -2),
+                        'entropy'          : (r"^(\s+)?Total Entropy:\s+[-+]?([0-9]*\.)?[0-9]+\s+cal\/mol\.K$", -2),
+                        'enthalpy'         : (r"^(\s+)?Total Enthalpy:\s+[-+]?([0-9]*\.)?[0-9]+\s+kcal\/mol$", -2)
                         }
         matrix_match = {'analytical_grad'  :'Full Analytical Gradient',
                         'gradient_scf'     :'Gradient of SCF Energy',
@@ -3375,7 +3375,7 @@ class Molecule(object):
                 fatal = 1
             if XMode >= 1:
                 # Perfectionist here; matches integer, element, and three floating points
-                if re.match("^[0-9]+ +[A-Z][A-Za-z]?( +[-+]?([0-9]*\.)?[0-9]+){3}$", line):
+                if re.match(r"^[0-9]+ +[A-Z][A-Za-z]?( +[-+]?([0-9]*\.)?[0-9]+){3}$", line):
                     XMode = 2
                     sline = line.split()
                     elemThis.append(sline[1])
@@ -3394,12 +3394,12 @@ class Molecule(object):
                 XMode = 1
             if MMode >= 1:
                 # Perfectionist here; matches integer, element, and two floating points
-                if re.match("^[0-9]+ +[A-Z][a-z]?( +[-+]?([0-9]*\.)?[0-9]+){2}$", line):
+                if re.match(r"^[0-9]+ +[A-Z][a-z]?( +[-+]?([0-9]*\.)?[0-9]+){2}$", line):
                     MMode = 2
                     sline = line.split()
                     mkchgThis.append(float(sline[2]))
                     mkspnThis.append(float(sline[3]))
-                elif re.match("^[0-9]+ +[A-Z][a-z]?( +[-+]?([0-9]*\.)?[0-9]+){1}$", line):
+                elif re.match(r"^[0-9]+ +[A-Z][a-z]?( +[-+]?([0-9]*\.)?[0-9]+){1}$", line):
                     MMode = 2
                     sline = line.split()
                     mkchgThis.append(float(sline[2]))
@@ -3470,7 +3470,7 @@ class Molecule(object):
                 pcmgradmode = True
             if pcmgradmode:
                 # Perfectionist here; matches integer, and three floating points
-                if re.match("^[0-9]+ +( +[-+]?([0-9]*\.)?[0-9]+){3}$", line):
+                if re.match(r"^[0-9]+ +( +[-+]?([0-9]*\.)?[0-9]+){3}$", line):
                     pcmgrad.append([float(i) for i in line.split()[1:]])
                 if 'Gradient time' in line:
                     pcmgradmode = False
@@ -3509,7 +3509,7 @@ class Molecule(object):
                         Mats[key]["Strip"] = []
                         Mats[key]["Mode"] = 2
                     # Match a single integer followed by any number of floats.  This is a strip of data to be added to the matrix
-                    elif re.match("^[0-9]+( +[-+]?([0-9]*\.)?[0-9]+)+$",line):
+                    elif re.match(r"^[0-9]+( +[-+]?([0-9]*\.)?[0-9]+)+$",line):
                         Mats[key]["Strip"].append([float(i) for i in line.split()[1:]])
                     # In any other case, the matrix is terminated.
                     elif Mats[key]["Mode"] >= 2:
