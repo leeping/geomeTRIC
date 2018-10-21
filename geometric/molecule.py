@@ -201,9 +201,12 @@ except (ImportError, ValueError):
             message = record.getMessage()
             self.stream.write(message)
             self.flush()
-    logger=getLogger()
-    logger.handlers = [RawStreamHandler(sys.stdout)]
+
+    logger = getLogger("MoleculeLogger")
     logger.setLevel(INFO)
+
+    handler = RawStreamHandler()
+    logger.addHandler(handler)
 
 module_name = __name__.replace('.molecule','')
 

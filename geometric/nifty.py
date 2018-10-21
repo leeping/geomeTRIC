@@ -63,9 +63,12 @@ except ImportError:
             message = record.getMessage()
             self.stream.write(message)
             self.flush()
-    logger=getLogger()
-    logger.handlers = [RawStreamHandler(sys.stdout)]
+
+    logger = getLogger("NiftyLogger")
     logger.setLevel(INFO)
+
+    handler = RawStreamHandler()
+    logger.addHandler(handler)
 
 try:
     import bz2
