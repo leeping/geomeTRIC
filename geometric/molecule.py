@@ -201,10 +201,11 @@ except (ImportError, ValueError):
             message = record.getMessage()
             self.stream.write(message)
             self.flush()
-
+    # logger=getLogger()
+    # logger.handlers = [RawStreamHandler(sys.stdout)]
+    # LPW: Daniel Smith suggested the below four lines to improve logger behavior
     logger = getLogger("MoleculeLogger")
     logger.setLevel(INFO)
-
     handler = RawStreamHandler()
     logger.addHandler(handler)
 
