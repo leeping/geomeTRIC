@@ -63,10 +63,11 @@ except ImportError:
             message = record.getMessage()
             self.stream.write(message)
             self.flush()
-
+    # logger=getLogger()
+    # logger.handlers = [RawStreamHandler(sys.stdout)]
+    # LPW: Daniel Smith suggested these changes to improve logger behavior
     logger = getLogger("NiftyLogger")
     logger.setLevel(INFO)
-
     handler = RawStreamHandler()
     logger.addHandler(handler)
 
