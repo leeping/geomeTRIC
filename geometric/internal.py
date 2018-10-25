@@ -473,7 +473,7 @@ class Rotator(object):
                 #     fdxdum[i] = (dPlus-dMinus)/(2*h)
                 # if np.linalg.norm(dexdum - fdxdum) > 1e-6:
                 #     print dexdum - fdxdum
-                #     sys.exit()
+                #     raise Exception()
                 # Apply terms from chain rule
                 deriv_raw[0]  -= np.dot(dexdum, deriv_raw[-1])
                 for i in range(len(self.a)):
@@ -863,7 +863,7 @@ class LinearAngle(object):
         ## Finite difference derivatives
         ## if np.linalg.norm(derivatives - fderivatives) > 1e-6:
         ##     print np.linalg.norm(derivatives - fderivatives)
-        ##     sys.exit()
+        ##     raise Exception()
         return derivatives
     
 class MultiAngle(object):

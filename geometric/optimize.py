@@ -1005,8 +1005,7 @@ def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None, xyzout2
                 if LastForce:
                     print("\x1b[1;91mFailed twice in a row to rebuild the coordinate system\x1b[0m")
                     if IC.haveConstraints():
-                        print("Cannot continue a constrained optimization; please implement constrained optimization in Cartesian coordinates")
-                        sys.exit()
+                        raise ValueError("Cannot continue a constrained optimization; please implement constrained optimization in Cartesian coordinates")
                     else:
                         print("\x1b[93mContinuing in Cartesian coordinates\x1b[0m")
                         IC = CartesianCoordinates(newmol)
@@ -1506,13 +1505,13 @@ def run_optimizer(**kwargs):
     verbose = kwargs.get('verbose', False)
     if displace:
         WriteDisplacements(coords, M, IC, dirname, verbose)
-        sys.exit()
+        return 
 
     fdcheck = kwargs.get('fdcheck', False)
     if fdcheck:
         IC.Prims.checkFiniteDifference(coords)
         CheckInternalGrad(coords, M, IC.Prims, engine, dirname, verbose)
-        sys.exit()
+        return 
 
     # Print out information about the coordinate system
     if isinstance(IC, CartesianCoordinates):
