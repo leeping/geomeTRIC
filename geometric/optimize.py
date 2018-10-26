@@ -1505,13 +1505,13 @@ def run_optimizer(**kwargs):
     verbose = kwargs.get('verbose', False)
     if displace:
         WriteDisplacements(coords, M, IC, dirname, verbose)
-        return 
+        return
 
     fdcheck = kwargs.get('fdcheck', False)
     if fdcheck:
         IC.Prims.checkFiniteDifference(coords)
         CheckInternalGrad(coords, M, IC.Prims, engine, dirname, verbose)
-        return 
+        return
 
     # Print out information about the coordinate system
     if isinstance(IC, CartesianCoordinates):

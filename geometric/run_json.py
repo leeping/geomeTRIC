@@ -1,8 +1,10 @@
 #!/usr/bin/env python
 
-import json
-import geometric
 import copy
+import geometric
+import json
+import traceback
+
 
 def parse_input_json_dict(in_json_dict):
     """
@@ -56,16 +58,30 @@ def parse_input_json_dict(in_json_dict):
     })
     return input_opts
 
+
 def get_output_json_dict(in_json_dict, schema_traj):
     # copy the input json data
     out_json_dict = in_json_dict.copy()
     out_json_dict["schema_name"] = "qc_schema_optimization_output"
+
+    energy_traj = []
+    for x in schema_traj:
+        try:
+            energy_traj.append(x["properties"]["return_energy"])
+        except KeyError:
+            energy_traj.append(None)
+
+    final_molecule = None
+    if schema_traj:
+        final_molecule = schema_traj[-1]["molecule"]
+
     out_json_dict.update({
         "trajectory": schema_traj,
-        "energies": [s['properties']['return_energy'] for s in schema_traj],
-        "final_molecule": schema_traj[-1]["molecule"]
+        "energies": energy_traj,
+        "final_molecule": final_molecule
     })
     return out_json_dict
+
 
 def make_constraints_string(constraints_dict):
     """ Convert the new constraints dict format into the original string format """
@@ -77,6 +93,7 @@ def make_constraints_string(constraints_dict):
         for spec_tuple in value_list:
             constraints_string += ' '.join(spec_tuple) + '\n'
     return constraints_string
+
 
 def geometric_run_json(in_json_dict):
     """ Take a input dictionary loaded from json, and return an output dictionary for json """
@@ -101,37 +118,46 @@ def geometric_run_json(in_json_dict):
                     'dlc':(geometric.internal.DelocalizedInternalCoordinates, True, False),
                     'hdlc':(geometric.internal.DelocalizedInternalCoordinates, False, True),
                     'tric':(geometric.internal.DelocalizedInternalCoordinates, False, False)}
+
     CoordClass, connect, addcart = CoordSysDict[coordsys.lower()]
     IC = CoordClass(M, build=True, connect=connect, addcart=addcart, constraints=Cons, cvals=CVals[0] if CVals is not None else None)
 
     # Print out information about the coordinate system
     if isinstance(IC, geometric.internal.CartesianCoordinates):
-        print("%i Cartesian coordinates being used" % (3*M.na))
+        print("%i Cartesian coordinates being used" % (3 * M.na))
     else:
-        print("%i internal coordinates being used (instead of %i Cartesians)" % (len(IC.Internals), 3*M.na))
+        print("%i internal coordinates being used (instead of %i Cartesians)" % (len(IC.Internals), 3 * M.na))
     print(IC)
 
     params = geometric.optimize.OptParams(**input_opts)
 
-    # Run the optimization
-    if Cons is None:
-        # Run a standard geometry optimization
-        geometric.optimize.Optimize(coords, M, IC, engine, None, params)
-    else:
-        # Run a constrained geometry optimization
-        if isinstance(IC, (geometric.internal.CartesianCoordinates, geometric.internal.PrimitiveInternalCoordinates)):
-            raise RuntimeError("Constraints only work with delocalized internal coordinates")
-        for ic, CVal in enumerate(CVals):
-            if len(CVals) > 1:
-                print("---=== Scan %i/%i : Constrained Optimization ===---" % (ic+1, len(CVals)))
-            IC = CoordClass(M, build=True, connect=connect, addcart=addcart, constraints=Cons, cvals=CVal)
-            IC.printConstraints(coords, thre=-1)
+    try:
+        # Run the optimization
+        if Cons is None:
+            # Run a standard geometry optimization
             geometric.optimize.Optimize(coords, M, IC, engine, None, params)
+        else:
+            # Run a constrained geometry optimization
+            if isinstance(IC, (geometric.internal.CartesianCoordinates,
+                               geometric.internal.PrimitiveInternalCoordinates)):
+                raise RuntimeError("Constraints only work with delocalized internal coordinates")
+            for ic, CVal in enumerate(CVals):
+                if len(CVals) > 1:
+                    print("---=== Scan %i/%i : Constrained Optimization ===---" % (ic + 1, len(CVals)))
+                IC = CoordClass(M, build=True, connect=connect, addcart=addcart, constraints=Cons, cvals=CVal)
+                IC.printConstraints(coords, thre=-1)
+                geometric.optimize.Optimize(coords, M, IC, engine, None, params)
 
-    out_json_dict = get_output_json_dict(in_json_dict, engine.schema_traj)
+        out_json_dict = get_output_json_dict(in_json_dict, engine.schema_traj)
+        out_json_dict["success"] = True
 
-    out_json_dict["success"] = True
+    except Exception as e:
+        out_json_dict = get_output_json_dict(in_json_dict, engine.schema_traj)
+        out_json_dict["error_message"] = "geomeTRIC run_json error:\n" + traceback.format_exc()
+        out_json_dict["success"] = False
+
     return out_json_dict
+
 
 def main():
     import sys, argparse
