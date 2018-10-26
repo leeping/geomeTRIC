@@ -2,16 +2,14 @@
 A set of tests for using the QCEngine project
 """
 
+import copy
 import numpy as np
 from . import addons
 import geometric
 
 localizer = addons.in_folder
 
-@addons.using_qcengine
-@addons.using_rdkit
-def test_rdkit_simple(localizer):
-    schema = {
+_base_schema = {
         "schema_version": 1,
         "molecule": {
             "geometry": [
@@ -29,8 +27,13 @@ def test_rdkit_simple(localizer):
         },
         "keywords": {},
         "program": "rdkit"
-    }
+    } # yapf: disable
 
+@addons.using_qcengine
+@addons.using_rdkit
+def test_rdkit_simple(localizer):
+
+    schema = copy.deepcopy(_base_schema)
     opts = {"qcengine": True, "qcschema": schema, "input": "tmp_data", "qce_program": "rdkit"}
 
     ret = geometric.optimize.run_optimizer(**opts)
