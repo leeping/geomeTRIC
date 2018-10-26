@@ -695,6 +695,9 @@ class QCEngineAPI(Engine):
         # store the schema_traj for run_json to pick up
         self.schema_traj.append(ret)
 
+        if ret["success"] is False:
+            raise ValueError("QCEngineAPI computation did not execute correctly.")
+
         # Unpack the erngies and gradient
         energy = ret["properties"]["return_energy"]
         gradient = np.array(ret["return_result"])
