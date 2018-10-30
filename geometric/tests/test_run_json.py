@@ -68,6 +68,7 @@ def test_convert_constraint_dict_failure():
     with pytest.raises(KeyError):
         geometric.run_json.make_constraints_string(failing_constraint_dict)
 
+
 @addons.using_qcengine
 @addons.using_rdkit
 def test_run_json_scan_rejection(localizer):
@@ -149,7 +150,7 @@ def test_run_json_rdkit_hooh_constraint(localizer):
     result_geo = out_json['final_molecule']['geometry']
 
     # The results here are in Bohr
-    assert pytest.approx(out_json["energies"][-1], 1.e-4) == 1.9782943930
+    assert pytest.approx(out_json["energies"][-1], 1.e-4) == 0.0007534925
 
 
 @addons.using_qcengine
