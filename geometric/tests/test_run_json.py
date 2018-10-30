@@ -68,6 +68,28 @@ def test_convert_constraint_dict_failure():
     with pytest.raises(KeyError):
         geometric.run_json.make_constraints_string(failing_constraint_dict)
 
+@addons.using_qcengine
+@addons.using_rdkit
+def test_run_json_scan_rejection(localizer):
+
+    molecule = {
+        "geometry": [
+            0.0,  0.0, -0.5,
+            0.0,  0.0,  0.5,
+        ],
+        "symbols": ["H", "H"],
+        "connectivity": [[0, 1, 1]]
+    } # yapf: disable
+
+    in_json_dict = _build_input(molecule, program="psi4", method="HF", basis="sto-3g")
+    in_json_dict["keywords"]["constraints"] = {'scan': [('bond', 0, 1, 0.8, 1.2, 4)]}
+
+    with open('in.json', 'w') as handle:
+        json.dump(in_json_dict, handle, indent=2)
+
+    with pytest.raises(KeyError):
+        out_json = geometric.run_json.geometric_run_json(in_json_dict)
+
 
 @addons.using_qcengine
 @addons.using_rdkit
@@ -104,10 +126,10 @@ def test_run_json_rdkit_water(localizer):
 def test_run_json_rdkit_hooh_constraint(localizer):
     molecule = {
         "geometry": [
-            1.848671612718783,   1.4723466699847623,  0.6446435664312682,
-            1.3127881568370925, -0.1304193792618355, -0.2118922703584585,
-           -1.3127927010942337,  0.1334187339129038, -0.21189641512867613,
-           -1.8386801669381663, -1.4823483245499950,  0.6446369709610646
+             1.76498,  1.3431,  0.7946,
+             1.24509, -0.0343, -0.3637,
+            -1.24263,  0.0351, -0.3580,
+            -1.75745, -1.3508,  0.7925
         ],
         "symbols": ["H", "O", "O", "H"],
         "connectivity": [[0, 1, 1], [1, 2, 1], [2, 3, 1]]
@@ -115,7 +137,7 @@ def test_run_json_rdkit_hooh_constraint(localizer):
 
 
     in_json_dict = _build_input(molecule)
-    in_json_dict["keywords"]["constraints"] = {'scan': [('dihedral', '1', '2', '3', '4', '0', '180', '2')]}
+    in_json_dict["keywords"]["constraints"] = {'set': [('dihedral', 0, 1, 2, 3, -180)]}
 
     with open('in.json', 'w') as handle:
         json.dump(in_json_dict, handle, indent=2)
@@ -127,9 +149,7 @@ def test_run_json_rdkit_hooh_constraint(localizer):
     result_geo = out_json['final_molecule']['geometry']
 
     # The results here are in Bohr
-    ref = np.array([0., 0., -0.1218737, 0., -1.47972457, 1.0236449059, 0., 1.47972457, 1.023644906])
-    assert pytest.approx(out_json["energies"][-1], 1.e-4) == 0.0
-    assert np.allclose(ref, result_geo, atol=1.e-4)
+    assert pytest.approx(out_json["energies"][-1], 1.e-4) == 1.9782943930
 
 
 @addons.using_qcengine

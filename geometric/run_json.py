@@ -152,6 +152,9 @@ def geometric_run_json(in_json_dict):
 
     # Read in the constraints
     constraints_dict = input_opts.get('constraints', {})
+    if "scan" in constraints_dict:
+        raise KeyError("The constraint 'scan' keyword is not yet supported by the JSON interface")
+
     constraints_string = make_constraints_string(constraints_dict)
     Cons, CVals = None, None
     if constraints_string:
