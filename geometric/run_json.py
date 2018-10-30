@@ -51,11 +51,7 @@ def parse_input_json_dict(in_json_dict):
     })
 
     # Here we force the use of qcengine because other engines don't support qc schema
-    input_opts.update({
-        'qcengine': True,
-        'qcschema': input_specification,
-        'qce_program': input_opts["program"]
-    })
+    input_opts.update({'qcengine': True, 'qcschema': input_specification, 'qce_program': input_opts["program"]})
     return input_opts
 
 
@@ -75,24 +71,74 @@ def get_output_json_dict(in_json_dict, schema_traj):
     if schema_traj:
         final_molecule = schema_traj[-1]["molecule"]
 
-    out_json_dict.update({
-        "trajectory": schema_traj,
-        "energies": energy_traj,
-        "final_molecule": final_molecule
-    })
+    out_json_dict.update({"trajectory": schema_traj, "energies": energy_traj, "final_molecule": final_molecule})
     return out_json_dict
+
+
+def _inc_commadash(arg):
+    """
+    '27-31,88-91,100,136-139' -> '28-32,89-92,101,137-140'
+    """
+    rep = []
+    for a in (x.split("-") for x in arg.split(",")):
+        if len(a) == 1:
+            rep.append(str(int(a[0]) + 1))
+        elif len(a) == 2:
+            rep.append(str(int(a[0]) + 1) + "-" + str(int(a[1]) + 1))
+        else:
+            raise KeyError("Uncommadash exception, found incorrectly formated arg: %s" % a)
+    return ",".join(rep)
 
 
 def make_constraints_string(constraints_dict):
     """ Convert the new constraints dict format into the original string format """
-    constraints_string = ''
+    key_numbers = {"freeze": 0, "set": 1, "scan": 3}
+    spec_numbers = {"xyz": 1, "distance": 2, "angle": 3, "dihedral": 4}
+
+    constraints_string = []
+
+    # Parse overall constraints
     for key, value_list in constraints_dict.items():
-        if key not in ('freeze', 'set', 'scan'):
+
+        if key not in key_numbers:
             raise KeyError("constraints key %s is not recognized" % key)
-        constraints_string += '$' + key + '\n'
+        key_args = key_numbers[key]
+
+        # Parse individual constraints within a key
+        constraints_string.append("$" + key)
         for spec_tuple in value_list:
-            constraints_string += ' '.join(spec_tuple) + '\n'
-    return constraints_string
+
+            # If it is a string nothing to be done
+            if isinstance(spec_tuple, str):
+                constraints_string.append(spec_tuple)
+                continue
+
+            # Figure out total args
+            if spec_tuple[0] not in spec_numbers:
+                raise KeyError("constraint type %s is not yet supported % primary")
+
+            rep = [spec_tuple[0]]
+            spec_args = spec_numbers[spec_tuple[0]]
+            total_args = 1 + key_args + spec_args
+            if len(spec_tuple) != total_args:
+                raise KeyError("Length of tuple should be %d not %d, %s" % (total_args, len(spec_tuple), spec_tuple))
+
+            # We need to increment these by 1
+            for arg in spec_tuple[1:(spec_args + 1)]:
+
+                # Parse '27-31,88-91,100,136-139' and add one
+                if isinstance(arg, str) and (("-" in arg) or ("," in arg)):
+                    rep.append(_inc_commadash(arg))
+                else:
+                    rep.append(str(int(arg) + 1))
+
+            # Append the set or scan values
+            for arg in spec_tuple[spec_args + 1:]:
+                rep.append(str(arg))
+
+            constraints_string.append(" ".join(rep))
+
+    return "\n".join(constraints_string)
 
 
 def geometric_run_json(in_json_dict):
@@ -113,14 +159,22 @@ def geometric_run_json(in_json_dict):
 
     # set up the internal coordinate system
     coordsys = input_opts.get('coordsys', 'tric')
-    CoordSysDict = {'cart':(geometric.internal.CartesianCoordinates, False, False),
-                    'prim':(geometric.internal.PrimitiveInternalCoordinates, True, False),
-                    'dlc':(geometric.internal.DelocalizedInternalCoordinates, True, False),
-                    'hdlc':(geometric.internal.DelocalizedInternalCoordinates, False, True),
-                    'tric':(geometric.internal.DelocalizedInternalCoordinates, False, False)}
+    CoordSysDict = {
+        'cart': (geometric.internal.CartesianCoordinates, False, False),
+        'prim': (geometric.internal.PrimitiveInternalCoordinates, True, False),
+        'dlc': (geometric.internal.DelocalizedInternalCoordinates, True, False),
+        'hdlc': (geometric.internal.DelocalizedInternalCoordinates, False, True),
+        'tric': (geometric.internal.DelocalizedInternalCoordinates, False, False)
+    }
 
     CoordClass, connect, addcart = CoordSysDict[coordsys.lower()]
-    IC = CoordClass(M, build=True, connect=connect, addcart=addcart, constraints=Cons, cvals=CVals[0] if CVals is not None else None)
+    IC = CoordClass(
+        M,
+        build=True,
+        connect=connect,
+        addcart=addcart,
+        constraints=Cons,
+        cvals=CVals[0] if CVals is not None else None)
 
     # Print out information about the coordinate system
     if isinstance(IC, geometric.internal.CartesianCoordinates):

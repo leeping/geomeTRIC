@@ -37,12 +37,21 @@ def _build_input(molecule, program="rdkit", method="UFF", basis=None):
     return in_json_dict
 
 
-def test_convert_constraint_dict_to_string():
+def test_convert_constraint_dict_uncommadash():
     constraint_dict = {
-      'freeze' : [('xyz', '1-5')],
-      'set'    : [('angle', '2', '1', '5', '110.0')],
-      'scan'   : [('distance', '2', '1', '1.0', '1.2', '3'),
-                  ('dihedral', '1', '5', '6', '7', '110.0', '150.0', '3')]
+      'freeze' : [('xyz', '0-2,10,6-11')],
+    } # yapf: disable
+    constraint_string = geometric.run_json.make_constraints_string(constraint_dict)
+    assert constraint_string == """$freeze
+xyz 1-3,11,7-12"""
+
+
+def test_convert_constraint_dict_full():
+    constraint_dict = {
+      'freeze' : [('xyz', '0-4')],
+      'set'    : [('angle', 1, 0, 4, 110.0)],
+      'scan'   : [('distance', 1, 0, 1.0, 1.2, 3),
+                  ('dihedral', 0, 4, 5, 6, 110.0, 150.0, 3)]
     } # yapf: disable
     constraint_string = geometric.run_json.make_constraints_string(constraint_dict)
     assert constraint_string == """$freeze
@@ -51,8 +60,10 @@ $set
 angle 2 1 5 110.0
 $scan
 distance 2 1 1.0 1.2 3
-dihedral 1 5 6 7 110.0 150.0 3
-"""
+dihedral 1 5 6 7 110.0 150.0 3"""
+
+
+def test_convert_constraint_dict_failure():
     failing_constraint_dict = {'not_recognized_keyword': [('xyz', '1-5')]}
     with pytest.raises(KeyError):
         geometric.run_json.make_constraints_string(failing_constraint_dict)
@@ -72,6 +83,39 @@ def test_run_json_rdkit_water(localizer):
     } # yapf: disable
 
     in_json_dict = _build_input(molecule)
+
+    with open('in.json', 'w') as handle:
+        json.dump(in_json_dict, handle, indent=2)
+    out_json = geometric.run_json.geometric_run_json(in_json_dict)
+
+    with open('out.json', 'w') as handle:
+        json.dump(out_json, handle, indent=2)
+
+    result_geo = out_json['final_molecule']['geometry']
+
+    # The results here are in Bohr
+    ref = np.array([0., 0., -0.1218737, 0., -1.47972457, 1.0236449059, 0., 1.47972457, 1.023644906])
+    assert pytest.approx(out_json["energies"][-1], 1.e-4) == 0.0
+    assert np.allclose(ref, result_geo, atol=1.e-4)
+
+
+@addons.using_qcengine
+@addons.using_rdkit
+def test_run_json_rdkit_hooh_constraint(localizer):
+    molecule = {
+        "geometry": [
+            1.848671612718783,   1.4723466699847623,  0.6446435664312682,
+            1.3127881568370925, -0.1304193792618355, -0.2118922703584585,
+           -1.3127927010942337,  0.1334187339129038, -0.21189641512867613,
+           -1.8386801669381663, -1.4823483245499950,  0.6446369709610646
+        ],
+        "symbols": ["H", "O", "O", "H"],
+        "connectivity": [[0, 1, 1], [1, 2, 1], [2, 3, 1]]
+    } # yapf: disable
+
+
+    in_json_dict = _build_input(molecule)
+    in_json_dict["keywords"]["constraints"] = {'scan': [('dihedral', '1', '2', '3', '4', '0', '180', '2')]}
 
     with open('in.json', 'w') as handle:
         json.dump(in_json_dict, handle, indent=2)
