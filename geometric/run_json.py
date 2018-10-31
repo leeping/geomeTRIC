@@ -75,70 +75,52 @@ def get_output_json_dict(in_json_dict, schema_traj):
     return out_json_dict
 
 
-def _inc_commadash(arg):
-    """
-    '27-31,88-91,100,136-139' -> '28-32,89-92,101,137-140'
-    """
-    rep = []
-    for a in (x.split("-") for x in arg.split(",")):
-        if len(a) == 1:
-            rep.append(str(int(a[0]) + 1))
-        elif len(a) == 2:
-            rep.append(str(int(a[0]) + 1) + "-" + str(int(a[1]) + 1))
-        else:
-            raise KeyError("Uncommadash exception, found incorrectly formated arg: %s" % a)
-    return ",".join(rep)
-
-
 def make_constraints_string(constraints_dict):
     """ Convert the new constraints dict format into the original string format """
-    key_numbers = {"freeze": 0, "set": 1, "scan": 3}
-    spec_numbers = {"xyz": 1, "distance": 2, "angle": 3, "dihedral": 4}
+    key_fields = {"freeze": ("type", ), "set": ("type", "value"), "scan": ("type", "start", "stop", "steps")}
+    spec_numbers = {"xyz": None, "distance": 2, "angle": 3, "dihedral": 4}
 
-    constraints_string = []
+    constraints_repr = []
 
     # Parse overall constraints
-    for key, value_list in constraints_dict.items():
+    for key, constraints_list in constraints_dict.items():
 
-        if key not in key_numbers:
-            raise KeyError("constraints key %s is not recognized" % key)
-        key_args = key_numbers[key]
+        if key not in key_fields:
+            raise KeyError("Constraints key %s is not recognized" % key)
+        key_args = key_fields[key]
 
         # Parse individual constraints within a key
-        constraints_string.append("$" + key)
-        for spec_tuple in value_list:
+        constraints_repr.append("$" + key)
+        for constraint in constraints_list:
 
-            # If it is a string nothing to be done
-            if isinstance(spec_tuple, str):
-                constraints_string.append(spec_tuple)
-                continue
+            # Check keys
+            missing = set(key_args) - constraint.keys()
+            if missing:
+                raise KeyError("Constraint type '%s' requires fields '%s', found '%s'" % (key, key_args,
+                                                                                          constraint.keys()))
 
-            # Figure out total args
-            if spec_tuple[0] not in spec_numbers:
-                raise KeyError("constraint type %s is not yet supported % primary")
+            # Check types and length
+            constraint_type = constraint["type"][0].lower()
+            if constraint_type not in spec_numbers:
+                raise KeyError("Constraint type '%s' not recognized." % constraint["type"][0])
 
-            rep = [spec_tuple[0]]
-            spec_args = spec_numbers[spec_tuple[0]]
-            total_args = 1 + key_args + spec_args
-            if len(spec_tuple) != total_args:
-                raise KeyError("Length of tuple should be %d not %d, %s" % (total_args, len(spec_tuple), spec_tuple))
+            spec_length = spec_numbers[constraint_type]
+            if (spec_length is not None) and (len(constraint["type"][1]) != spec_length):
+                raise ValueError("Expected constraint of type '%s' to have length '%d', found %s." %
+                                 (constraint_type, spec_length, str(constraint["type"][1])))
 
-            # We need to increment these by 1
-            for arg in spec_tuple[1:(spec_args + 1)]:
+            # Get base values
+            const_rep = [constraint_type]
+            # Add one to make it consistent with normal input
+            const_rep.extend([x + 1 for x in constraint["type"][1]])
+            for k in key_args[1:]:
+                const_rep.append(constraint[k])
 
-                # Parse '27-31,88-91,100,136-139' and add one
-                if isinstance(arg, str) and (("-" in arg) or ("," in arg)):
-                    rep.append(_inc_commadash(arg))
-                else:
-                    rep.append(str(int(arg) + 1))
+            rep = " ".join(map(str, const_rep))
 
-            # Append the set or scan values
-            for arg in spec_tuple[spec_args + 1:]:
-                rep.append(str(arg))
+            constraints_repr.append(rep)
 
-            constraints_string.append(" ".join(rep))
-
-    return "\n".join(constraints_string)
+    return "\n".join(constraints_repr)
 
 
 def geometric_run_json(in_json_dict):
