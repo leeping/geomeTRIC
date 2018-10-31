@@ -51,11 +51,7 @@ def parse_input_json_dict(in_json_dict):
     })
 
     # Here we force the use of qcengine because other engines don't support qc schema
-    input_opts.update({
-        'qcengine': True,
-        'qcschema': input_specification,
-        'qce_program': input_opts["program"]
-    })
+    input_opts.update({'qcengine': True, 'qcschema': input_specification, 'qce_program': input_opts["program"]})
     return input_opts
 
 
@@ -75,24 +71,56 @@ def get_output_json_dict(in_json_dict, schema_traj):
     if schema_traj:
         final_molecule = schema_traj[-1]["molecule"]
 
-    out_json_dict.update({
-        "trajectory": schema_traj,
-        "energies": energy_traj,
-        "final_molecule": final_molecule
-    })
+    out_json_dict.update({"trajectory": schema_traj, "energies": energy_traj, "final_molecule": final_molecule})
     return out_json_dict
 
 
 def make_constraints_string(constraints_dict):
     """ Convert the new constraints dict format into the original string format """
-    constraints_string = ''
-    for key, value_list in constraints_dict.items():
-        if key not in ('freeze', 'set', 'scan'):
-            raise KeyError("constraints key %s is not recognized" % key)
-        constraints_string += '$' + key + '\n'
-        for spec_tuple in value_list:
-            constraints_string += ' '.join(spec_tuple) + '\n'
-    return constraints_string
+    key_fields = {"freeze": ("type", ), "set": ("type", "value"), "scan": ("type", "start", "stop", "steps")}
+    spec_numbers = {"xyz": None, "distance": 2, "angle": 3, "dihedral": 4}
+
+    constraints_repr = []
+
+    # Parse overall constraints
+    for key, constraints_list in constraints_dict.items():
+
+        if key not in key_fields:
+            raise KeyError("Constraints key %s is not recognized" % key)
+        key_args = key_fields[key]
+
+        # Parse individual constraints within a key
+        constraints_repr.append("$" + key)
+        for constraint in constraints_list:
+
+            # Check keys
+            missing = set(key_args) - constraint.keys()
+            if missing:
+                raise KeyError("Constraint type '%s' requires fields '%s', found '%s'" % (key, key_args,
+                                                                                          constraint.keys()))
+
+            # Check types and length
+            constraint_type = constraint["type"].lower()
+            if constraint_type not in spec_numbers:
+                raise KeyError("Constraint type '%s' not recognized." % constraint["type"][0])
+
+            spec_length = spec_numbers[constraint_type]
+            if (spec_length is not None) and (len(constraint["indices"]) != spec_length):
+                raise ValueError("Expected constraint of type '%s' to have length '%d', found %s." %
+                                 (constraint_type, spec_length, str(constraint["indices"])))
+
+            # Get base values
+            const_rep = [constraint_type]
+            # Add one to make it consistent with normal input
+            const_rep.extend([x + 1 for x in constraint["indices"]])
+            for k in key_args[1:]:
+                const_rep.append(constraint[k])
+
+            rep = " ".join(map(str, const_rep))
+
+            constraints_repr.append(rep)
+
+    return "\n".join(constraints_repr)
 
 
 def geometric_run_json(in_json_dict):
@@ -106,6 +134,9 @@ def geometric_run_json(in_json_dict):
 
     # Read in the constraints
     constraints_dict = input_opts.get('constraints', {})
+    if "scan" in constraints_dict:
+        raise KeyError("The constraint 'scan' keyword is not yet supported by the JSON interface")
+
     constraints_string = make_constraints_string(constraints_dict)
     Cons, CVals = None, None
     if constraints_string:
@@ -113,14 +144,22 @@ def geometric_run_json(in_json_dict):
 
     # set up the internal coordinate system
     coordsys = input_opts.get('coordsys', 'tric')
-    CoordSysDict = {'cart':(geometric.internal.CartesianCoordinates, False, False),
-                    'prim':(geometric.internal.PrimitiveInternalCoordinates, True, False),
-                    'dlc':(geometric.internal.DelocalizedInternalCoordinates, True, False),
-                    'hdlc':(geometric.internal.DelocalizedInternalCoordinates, False, True),
-                    'tric':(geometric.internal.DelocalizedInternalCoordinates, False, False)}
+    CoordSysDict = {
+        'cart': (geometric.internal.CartesianCoordinates, False, False),
+        'prim': (geometric.internal.PrimitiveInternalCoordinates, True, False),
+        'dlc': (geometric.internal.DelocalizedInternalCoordinates, True, False),
+        'hdlc': (geometric.internal.DelocalizedInternalCoordinates, False, True),
+        'tric': (geometric.internal.DelocalizedInternalCoordinates, False, False)
+    }
 
     CoordClass, connect, addcart = CoordSysDict[coordsys.lower()]
-    IC = CoordClass(M, build=True, connect=connect, addcart=addcart, constraints=Cons, cvals=CVals[0] if CVals is not None else None)
+    IC = CoordClass(
+        M,
+        build=True,
+        connect=connect,
+        addcart=addcart,
+        constraints=Cons,
+        cvals=CVals[0] if CVals is not None else None)
 
     # Print out information about the coordinate system
     if isinstance(IC, geometric.internal.CartesianCoordinates):
