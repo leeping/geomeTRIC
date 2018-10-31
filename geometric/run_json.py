@@ -100,19 +100,19 @@ def make_constraints_string(constraints_dict):
                                                                                           constraint.keys()))
 
             # Check types and length
-            constraint_type = constraint["type"][0].lower()
+            constraint_type = constraint["type"].lower()
             if constraint_type not in spec_numbers:
                 raise KeyError("Constraint type '%s' not recognized." % constraint["type"][0])
 
             spec_length = spec_numbers[constraint_type]
-            if (spec_length is not None) and (len(constraint["type"][1]) != spec_length):
+            if (spec_length is not None) and (len(constraint["indices"]) != spec_length):
                 raise ValueError("Expected constraint of type '%s' to have length '%d', found %s." %
-                                 (constraint_type, spec_length, str(constraint["type"][1])))
+                                 (constraint_type, spec_length, str(constraint["indices"])))
 
             # Get base values
             const_rep = [constraint_type]
             # Add one to make it consistent with normal input
-            const_rep.extend([x + 1 for x in constraint["type"][1]])
+            const_rep.extend([x + 1 for x in constraint["indices"]])
             for k in key_args[1:]:
                 const_rep.append(constraint[k])
 

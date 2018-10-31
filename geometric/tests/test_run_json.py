@@ -39,20 +39,24 @@ def _build_input(molecule, program="rdkit", method="UFF", basis=None):
 
 def test_convert_constraint_dict_full():
     constraint_dict = {
-        'freeze': [{
-            "type": ("xyz", [0, 1, 2])
+        "freeze": [{
+            "type": "xyz",
+            "indices": [0, 1, 2, 3, 4]
         }],
-        'set': [{
-            "type": ("angle", [1, 0, 4]),
+        "set": [{
+            "type": "angle",
+            "indices": [1, 0, 4],
             "value": 110.0
         }],
-        'scan': [{
-            "type": ("distance", [1, 0]),
+        "scan": [{
+            "type": "distance",
+            "indices": [1, 0],
             "start": 1.0,
             "stop": 1.2,
             "steps": 3
         }, {
-            "type": ('dihedral', [0, 4, 5, 6]),
+            "type": "dihedral",
+            "indices": [0, 4, 5, 6],
             "start": 110.0,
             "stop": 150.0,
             "steps": 3
@@ -60,7 +64,7 @@ def test_convert_constraint_dict_full():
     }
     constraint_string = geometric.run_json.make_constraints_string(constraint_dict)
     assert constraint_string == """$freeze
-xyz 1 2 3
+xyz 1 2 3 4 5
 $set
 angle 2 1 5 110.0
 $scan
@@ -150,7 +154,7 @@ def test_run_json_rdkit_hooh_constraint(localizer):
 
 
     in_json_dict = _build_input(molecule)
-    in_json_dict["keywords"]["constraints"] = {'set': [{"type": ('dihedral', [0, 1, 2, 3]), "value": -180}]}
+    in_json_dict["keywords"]["constraints"] = {"set": [{"type": "dihedral", "indices": [0, 1, 2, 3], "value": -180}]}
 
     with open('in.json', 'w') as handle:
         json.dump(in_json_dict, handle, indent=2)
