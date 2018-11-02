@@ -1533,6 +1533,7 @@ def run_optimizer(**kwargs):
         # Run a constrained geometry optimization
         if isinstance(IC, (CartesianCoordinates, PrimitiveInternalCoordinates)):
             raise RuntimeError("Constraints only work with delocalized internal coordinates")
+        Mfinal = None
         for ic, CVal in enumerate(CVals):
             if len(CVals) > 1:
                 print("---=== Scan %i/%i : Constrained Optimization ===---" % (ic+1, len(CVals)))
@@ -1552,7 +1553,13 @@ def run_optimizer(**kwargs):
             # update the structure for next optimization in SCAN (by CNH)
             M.xyzs[0] = progress.xyzs[-1]
             coords = progress.xyzs[-1].flatten() * ang2bohr
+            if Mfinal:
+                Mfinal += progress[-1]
+            else:
+                Mfinal = progress[-1]
+            Mfinal.comms[-1] = "Scan Cycle %i/%i : %s" % (ic+1, len(CVals), progress.comms[-1])
             print
+        Mfinal.write('scan-final.xyz')
     print_msg()
     return progress
 
