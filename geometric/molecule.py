@@ -303,6 +303,14 @@ if "forcebalance" in __name__:
         from simtk.openmm.app import *
     except ImportError:
         warn('The OpenMM modules cannot be imported (Cannot interface with OpenMM)')
+elif "geometric" in __name__:
+    #============================#
+    #| PDB read/write functions |#
+    #============================#
+    try:
+        from .PDB import *
+    except ImportError:
+        warn('The pdb module cannot be imported (Cannot read/write PDB files)')
 
 #===========================#
 #| Convenience subroutines |#
