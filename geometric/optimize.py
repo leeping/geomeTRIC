@@ -1387,7 +1387,14 @@ def get_molecule_engine(**kwargs):
     elif psi4:
         engine = Psi4()
         engine.load_psi4_input(inputf)
-        M = engine.M
+        if pdb is not None:
+            M = Molecule(pdb, radii=radii, fragment=frag)
+            M1 = engine.M
+            for i in ['elem']:
+                if i in M1: M[i] = M1[i]
+        else:
+            M = engine.M
+            M.top_settings['radii'] = radii
         if nt is not None:
             engine.set_nt(nt)
     elif molpro:
@@ -1539,7 +1546,6 @@ def run_optimizer(**kwargs):
                 print("---=== Scan %i/%i : Constrained Optimization ===---" % (ic+1, len(CVals)))
             IC = CoordClass(M, build=True, connect=connect, addcart=addcart, constraints=Cons, cvals=CVal)
             IC.printConstraints(coords, thre=-1)
-
             if len(CVals) > 1:
                 xyzout = prefix+"_scan-%03i.xyz" % ic
                 xyzout2="opt.xyz"
@@ -1557,7 +1563,9 @@ def run_optimizer(**kwargs):
                 Mfinal += progress[-1]
             else:
                 Mfinal = progress[-1]
-            Mfinal.comms[-1] = "Scan Cycle %i/%i : %s" % (ic+1, len(CVals), progress.comms[-1])
+            cNames, cVals = IC.getConstraintTargetVals()
+            comment = ', '.join(["%s = %.2f" % (cName, cVal) for cName, cVal in zip(cNames, cVals)])
+            Mfinal.comms[-1] = "Scan Cycle %i/%i ; %s ; %s" % (ic+1, len(CVals), comment, progress.comms[-1])
             print
         Mfinal.write('scan-final.xyz')
     print_msg()

@@ -2060,7 +2060,22 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
             # if type(c) in [RotationA, RotationB, RotationC]:
             #     print c, c.value(xyz)
             #     printArray(c.x0)
-    
+
+    def getConstraintTargetVals(self):
+        nc = len(self.cPrims)
+        cNames = []
+        cVals = []
+        for ic, c in enumerate(self.cPrims):
+            w = c.w if type(c) in [RotationA, RotationB, RotationC] else 1.0
+            reference = self.cVals[ic]/w
+            if type(c) in [TranslationX, TranslationY, TranslationZ, CartesianX, CartesianY, CartesianZ, Distance]:
+                factor = bohr2ang
+            elif c.isAngular:
+                factor = 180.0/np.pi
+            cNames.append(str(c))
+            cVals.append(reference*factor)
+        return(cNames, cVals)
+
     def guess_hessian(self, coords):
         """
         Build a guess Hessian that roughly follows Schlegel's guidelines. 
@@ -2183,6 +2198,9 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
 
     def printConstraints(self, xyz, thre=1e-5):
         self.Prims.printConstraints(xyz, thre=thre)
+
+    def getConstraintTargetVals(self):
+        return self.Prims.getConstraintTargetVals()
 
     def augmentGH(self, xyz, G, H):
         """
