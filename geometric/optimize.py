@@ -405,7 +405,7 @@ def ParseConstraints(molecule, constraints_string):
                 if len(classes) != 1:
                     raise RuntimeError("Not OK!")
                 atoms = [int(i)-1 for i in s[1:1+n_atom]]
-                if key == "bond" and atoms[0] > atoms[1]:
+                if key == "distance" and atoms[0] > atoms[1]:
                     atoms = atoms[::-1]
                 if key == "angle" and atoms[0] > atoms[2]:
                     atoms = atoms[::-1]
