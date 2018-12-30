@@ -50,8 +50,8 @@ install:
       conda env create -n test python=$PYTHON_VER -f devtools/conda-envs/rdkit.yaml
     elif [ $PROG == "PSI4" ]; then
       conda env create -n test python=$PYTHON_VER -f devtools/conda-envs/psi.yaml
-    elif [ $PROG == "LATEST" ]; then
-      conda env create -n test python=$PYTHON_VER -f devtools/conda-envs/latest.yaml
+#    elif [ $PROG == "LATEST" ]; then
+#      conda env create -n test python=$PYTHON_VER -f devtools/conda-envs/latest.yaml
     else
       echo "ERROR: No match for PROG ($PROG)."
       exit 1
