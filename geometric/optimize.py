@@ -1471,11 +1471,11 @@ class Optimizer(object):
             if optimizee.IC.bork:
                 print("\x1b[91mInverse iteration for Cartesians failed\x1b[0m")
                 # This variable is added because IC.bork is unset later.
-                ForceRebuild = True
+                optimizee.ForceRebuild = True
             else:
                 if params.verbose: print("\x1b[93mBrent algorithm requires %i evaluations\x1b[0m" % froot.counter)
             ##### Force a rebuild of the coordinate system
-            if ForceRebuild:
+            if optimizee.ForceRebuild:
                 if LastForce:
                     print("\x1b[1;91mFailed twice in a row to rebuild the coordinate system\x1b[0m")
                     if optimizee.IC.haveConstraints():
