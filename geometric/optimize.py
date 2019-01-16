@@ -1533,7 +1533,7 @@ class Optimizer(object):
         # Print status
         print("Step %4i :" % optimizee.Iteration, end=' '),
         print("Displace = %s%.3e\x1b[0m/%s%.3e\x1b[0m (rms/max)" % ("\x1b[92m" if Converged_drms else "\x1b[0m", rms_displacement, "\x1b[92m" if Converged_dmax else "\x1b[0m", max_displacement), end=' '),
-        print("Trust = %.3e (%s)" % (optimizee.trust, self.trustprint), end=' '),
+        print("Trust = %.3e (%s)" % (optimizee.trust, optimizee.trustprint), end=' '),
         print("Grad%s = %s%.3e\x1b[0m/%s%.3e\x1b[0m (rms/max)" % ("_T" if optimizee.IC.haveConstraints() else "", "\x1b[92m" if Converged_grms else "\x1b[0m", rms_gradient, "\x1b[92m" if Converged_gmax else "\x1b[0m", max_gradient), end=' '),
         # print "Dy.G = %.3f" % Dot,
         print("E (change) = % .10f (%s%+.3e\x1b[0m) Quality = %s%.3f\x1b[0m" % (optimizee.E, "\x1b[91m" if BadStep else ("\x1b[92m" if Converged_energy else "\x1b[0m"), optimizee.E-Eprev, "\x1b[91m" if BadStep else "\x1b[0m", Quality))
