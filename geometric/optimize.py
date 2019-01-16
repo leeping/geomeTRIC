@@ -1254,6 +1254,7 @@ class Optimizee(object):
         """
         
         self.coords = coords
+        self.IC = IC
         self.molecule = molecule
         self.progress = deepcopy(molecule)
         self.progress2 = deepcopy(molecule)
