@@ -1259,6 +1259,7 @@ class Optimizee(object):
         self.progress = deepcopy(molecule)
         self.progress2 = deepcopy(molecule)
         self.engine = engine
+        self.dirname = dirname
         self.xyzout = xyzout
         self.xyzout2 = xyzout2
 
