@@ -1306,8 +1306,8 @@ class Optimizee(object):
         return get_delta_prime(v0, self.X, self.G, self.H, self.IC, rfo)
 
         
-    def createFroot(self, trust, v0, params):
-        return Froot(trust, v0, self.X, self.G, self.H, self.IC, params)
+    def createFroot(self, v0, params):
+        return Froot(self.trust, v0, self.X, self.G, self.H, self.IC, params)
     
     
     def recover(self, params):
@@ -1447,14 +1447,14 @@ class Optimizer(object):
         if params.verbose: print("dy(i): %.4f dy(c) -> target: %.4f -> %.4f" % (inorm, cnorm, optimizee.trust))
         # If the step is above the trust radius in Cartesian coordinates, then
         # do the following to reduce the step length:
-        if cnorm > 1.1 * self.trust:
+        if cnorm > 1.1 * optimizee.trust:
             # This is the function f(inorm) = cnorm-target that we find a root
             # for obtaining a step with the desired Cartesian step size.
-            froot = optimizee.createFroot(self.trust, v0, params)
+            froot = optimizee.createFroot(v0, params)
             froot.stores[inorm] = cnorm
             # Find the internal coordinate norm that matches the desired
             # Cartesian coordinate norm
-            iopt = brent_wiki(froot.evaluate, 0.0, inorm, self.trust, cvg=0.1, obj=froot, verbose=params.verbose)
+            iopt = brent_wiki(froot.evaluate, 0.0, inorm, optimizee.trust, cvg=0.1, obj=froot, verbose=params.verbose)
             if froot.brentFailed and froot.stored_arg is not None:
                 if params.verbose: print ("\x1b[93mUsing stored solution at %.3e\x1b[0m" % froot.stored_val)
                 iopt = froot.stored_arg
@@ -1496,7 +1496,7 @@ class Optimizer(object):
         # Dot product of the gradient with the step direction
         Dot = -np.dot(dy/np.linalg.norm(dy), optimizee.G/np.linalg.norm(optimizee.G))
         # Whether the Cartesian norm comes close to the trust radius
-        bump = cnorm > 0.8 * self.trust
+        bump = cnorm > 0.8 * optimizee.trust
         # Before updating any of our variables, copy current variables to "previous"
         Yprev = optimizee.Y.copy()
         Xprev = optimizee.X.copy()
@@ -1601,7 +1601,7 @@ class Optimizer(object):
         elif Quality >= self.ThreHQ: # and bump:
             if optimizee.trust < params.tmax:
                 # For good steps, the trust radius is increased
-                trust = min(np.sqrt(2)*optimizee.trust, params.tmax)
+                optimizee.trust = min(np.sqrt(2)*optimizee.trust, params.tmax)
                 optimizee.trustprint = "\x1b[92m+\x1b[0m"
             else:
                 optimizee.trustprint = "="
@@ -1609,7 +1609,7 @@ class Optimizer(object):
             optimizee.trustprint = "="
         if Quality < -1 and rejectOk:
             # Reject the step and take a smaller one from the previous iteration
-            trust = max(0.0 if params.meci else self.Convergence_drms, min(trust, cnorm/2))
+            optimizee.trust = max(0.0 if params.meci else self.Convergence_drms, min(optimizee.trust, cnorm/2))
             optimizee.trustprint = "\x1b[1;91mx\x1b[0m"
             optimizee.Y = Yprev.copy()
             optimizee.X = Xprev.copy()
@@ -1621,7 +1621,7 @@ class Optimizer(object):
         # This is because some systems (e.g. formate) have discontinuities on the
         # potential surface that can cause an infinite loop
         if Quality < -1:
-            if trust < self.thre_rj: print("\x1b[93mNot rejecting step - trust below %.3e\x1b[0m" % self.thre_rj)
+            if optimizee.trust < self.thre_rj: print("\x1b[93mNot rejecting step - trust below %.3e\x1b[0m" % self.thre_rj)
             elif optimizee.E < Eprev: print("\x1b[93mNot rejecting step - energy decreases\x1b[0m")
             elif farConstraints: print("\x1b[93mNot rejecting step - far from constraint satisfaction\x1b[0m")
         # Append steps to history (for rebuilding Hessian)
