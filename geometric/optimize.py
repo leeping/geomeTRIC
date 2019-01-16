@@ -1409,8 +1409,8 @@ class Optimizer(object):
         """
 
         params = self.params
-        if self.xyzout  is None: xyzout = optimizee.xyzout
-        if self.xyzout2 is None: xyzout2 = optimizee.xyzout2
+        xyzout = self.xyzout  if self.xyzout  is not None else optimizee.xyzout
+        xyzout2= self.xyzout2 if self.xyzout2 is not None else optimizee.xyzout2
         
         if np.isnan(optimizee.G).any():
             raise RuntimeError("Gradient contains nan - check output and temp-files for possible errors")
