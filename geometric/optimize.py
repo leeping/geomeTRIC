@@ -1504,7 +1504,7 @@ class Optimizer(object):
         Eprev = optimizee.E
         ### Update the Internal Coordinates ###
         optimizee.Y += dy
-        optimizee.newCartesian(dy, verbose=params.verbose)
+        optimizee.newCartesian(dy, params.enforce, params.verbose)
         
         ### Calculate Energy and Gradient ###
         optimizee.calcEnergyForce()
