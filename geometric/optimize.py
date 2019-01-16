@@ -1483,7 +1483,7 @@ class Optimizer(object):
                     else:
                         print("\x1b[93mContinuing in Cartesian coordinates\x1b[0m")
                         optimizee.IC = CartesianCoordinates(optimizee.newmol)
-                CoordCounter = 0
+                optimizee.CoordCounter = 0
                 optimizee.recover(params)
                 print("\x1b[1;93mSkipping optimization step\x1b[0m")
                 optimizee.Iteration -= 1
@@ -1641,7 +1641,7 @@ class Optimizer(object):
             check = True
             reinit = True
         # Check the coordinate system every (N) steps
-        if (CoordCounter == (params.check - 1)) or check:
+        if (optimizee.CoordCounter == (params.check - 1)) or check:
             optimizee.newmol = deepcopy(optimizee.molecule)
             optimizee.newmol.xyzs[0] = optimizee.X.reshape(-1,3) * bohr2ang
 
@@ -1654,9 +1654,9 @@ class Optimizer(object):
                     print(optimizee.IC.repr_diff(IC1))
                 reinit = True
                 optimizee.IC = IC1
-            CoordCounter = 0
+            optimizee.CoordCounter = 0
         else:
-            CoordCounter += 1
+            optimizee.CoordCounter += 1
         # Reinitialize the coordinates (may happen even if coordinate system does not change)
         UpdateHessian = True
         if reinit:
