@@ -1725,7 +1725,7 @@ def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None, xyzout2
         A molecule object for opt trajectory and energies
     """
 
-    optzer = Optimizer(engine, params, xyzout, xyzout2);
+    optzer = Optimizer(params, xyzout, xyzout2);
     
     optee  = Optimizee(coords, molecule, IC, engine, params.trust, dirname)
     
