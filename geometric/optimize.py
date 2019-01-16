@@ -1350,14 +1350,12 @@ class OPT_RESULT(Enum):
     FAILED = -1    
         
 class Optimizer(object):
-    def __init__(self, engine, params, xyzout=None, xyzout2=None):
+    def __init__(self, params, xyzout=None, xyzout2=None):
         """
         Optimizer of molecules.
     
         Parameters
         ----------
-        engine : Engine
-            Object containing methods for calculating energy and gradient
         params : OptParams object
             Contains optimization parameters (really just a struct)
         xyzout : str, optional
@@ -1366,7 +1364,6 @@ class Optimizer(object):
             Output file name for writing the last frame of optimization.
         """
     
-        self.engine = engine;
         self.params = params;
         self.xyzout = xyzout;
         self.xyzout2 = xyzout2;
@@ -1418,7 +1415,7 @@ class Optimizer(object):
             raise RuntimeError("Hessian contains nan - check output and temp-files for possible errors")
         optimizee.Iteration += 1
         if (optimizee.Iteration%5) == 0:
-            self.engine.clearCalcs()
+            optimizee.engine.clearCalcs()
             optimizee.IC.clearCache()
         # At the start of the loop, the function value, gradient and Hessian are known.
         Eig = sorted(np.linalg.eigh(optimizee.H)[0])
