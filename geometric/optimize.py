@@ -1699,7 +1699,7 @@ class Optimizer(object):
                 optimizee.H = optimizee.IC.guess_hessian(optimizee.coords)
             # Then it's on to the next loop iteration!
             
-    return OPT_RESULT.NOT_CONVERGED
+        return OPT_RESULT.NOT_CONVERGED
     
 def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None, xyzout2=None):
     """
