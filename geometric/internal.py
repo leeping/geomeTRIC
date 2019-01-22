@@ -160,6 +160,11 @@ class CartesianX(object):
         derivatives[self.a][0] = self.w
         return derivatives
 
+    def second_derivative(self, xyz):
+        xyz = xyz.reshape(-1,3)
+        der2 = np.zeros((xyz.shape[0], xyz.shape[1], xyz.shape[0], xyz.shape[1]))
+        return der2
+    
 class CartesianY(object):
     def __init__(self, a, w=1.0):
         self.a = a
@@ -191,6 +196,11 @@ class CartesianY(object):
         derivatives = np.zeros_like(xyz)
         derivatives[self.a][1] = self.w
         return derivatives
+
+    def second_derivative(self, xyz):
+        xyz = xyz.reshape(-1,3)
+        der2 = np.zeros((xyz.shape[0], xyz.shape[1], xyz.shape[0], xyz.shape[1]))
+        return der2
 
 class CartesianZ(object):
     def __init__(self, a, w=1.0):
@@ -224,6 +234,11 @@ class CartesianZ(object):
         derivatives[self.a][2] = self.w
         return derivatives
 
+    def second_derivative(self, xyz):
+        xyz = xyz.reshape(-1,3)
+        der2 = np.zeros((xyz.shape[0], xyz.shape[1], xyz.shape[0], xyz.shape[1]))
+        return der2
+    
 class TranslationX(object):
     def __init__(self, a, w):
         self.a = a
@@ -259,6 +274,11 @@ class TranslationX(object):
             derivatives[a][0] = self.w[i]
         return derivatives
 
+    def second_derivative(self, xyz):
+        xyz = xyz.reshape(-1,3)
+        der2 = np.zeros((xyz.shape[0], xyz.shape[1], xyz.shape[0], xyz.shape[1]))
+        return der2
+    
 class TranslationY(object):
     def __init__(self, a, w):
         self.a = a
@@ -294,6 +314,11 @@ class TranslationY(object):
             derivatives[a][1] = self.w[i]
         return derivatives
 
+    def second_derivative(self, xyz):
+        xyz = xyz.reshape(-1,3)
+        der2 = np.zeros((xyz.shape[0], xyz.shape[1], xyz.shape[0], xyz.shape[1]))
+        return der2
+
 class TranslationZ(object):
     def __init__(self, a, w):
         self.a = a
@@ -328,6 +353,11 @@ class TranslationZ(object):
         for i, a in enumerate(self.a):
             derivatives[a][2] = self.w[i]
         return derivatives
+    
+    def second_derivative(self, xyz):
+        xyz = xyz.reshape(-1,3)
+        der2 = np.zeros((xyz.shape[0], xyz.shape[1], xyz.shape[0], xyz.shape[1]))
+        return der2
 
 class Rotator(object):
 
@@ -486,7 +516,12 @@ class Rotator(object):
             self.stored_derxyz = xyz.copy()
             self.stored_deriv = derivatives
             return derivatives
-
+        
+    def second_derivative(self, xyz):
+        xyz = xyz.reshape(-1,3)
+        der2 = np.zeros((xyz.shape[0], xyz.shape[1], xyz.shape[0], xyz.shape[1]))
+        return der2
+        
 class RotationA(object):
     def __init__(self, a, x0, Rotators, w=1.0):
         self.a = tuple(sorted(a))
@@ -522,6 +557,11 @@ class RotationA(object):
         derivatives = der_all[:, :, 0]*self.w
         return derivatives
 
+    def second_derivative(self, xyz):
+        xyz = xyz.reshape(-1,3)
+        der2 = np.zeros((xyz.shape[0], xyz.shape[1], xyz.shape[0], xyz.shape[1]))
+        return der2
+    
 class RotationB(object):
     def __init__(self, a, x0, Rotators, w=1.0):
         self.a = tuple(sorted(a))
@@ -557,6 +597,11 @@ class RotationB(object):
         derivatives = der_all[:, :, 1]*self.w
         return derivatives
 
+    def second_derivative(self, xyz):
+        xyz = xyz.reshape(-1,3)
+        der2 = np.zeros((xyz.shape[0], xyz.shape[1], xyz.shape[0], xyz.shape[1]))
+        return der2
+
 class RotationC(object):
     def __init__(self, a, x0, Rotators, w=1.0):
         self.a = tuple(sorted(a))
@@ -591,6 +636,11 @@ class RotationC(object):
         der_all = self.Rotator.derivative(xyz)
         derivatives = der_all[:, :, 2]*self.w
         return derivatives
+
+    def second_derivative(self, xyz):
+        xyz = xyz.reshape(-1,3)
+        der2 = np.zeros((xyz.shape[0], xyz.shape[1], xyz.shape[0], xyz.shape[1]))
+        return der2
 
 class Distance(object):
     def __init__(self, a, b):
@@ -633,6 +683,20 @@ class Distance(object):
         derivatives[n, :] = -u
         return derivatives
 
+    def second_derivative(self, xyz):
+        xyz = xyz.reshape(-1,3)
+        der2 = np.zeros((xyz.shape[0], xyz.shape[1], xyz.shape[0], xyz.shape[1]))
+        m = self.a
+        n = self.b
+        l = np.linalg.norm(xyz[m] - xyz[n])
+        u = (xyz[m] - xyz[n]) / l
+        mtx = (np.outer(u, u) - np.eye(3))/l
+        der2[m, :, m, :] = -mtx
+        der2[n, :, n, :] = -mtx
+        der2[m, :, n, :] = mtx
+        der2[n, :, m, :] = mtx
+        return der2
+    
 class Angle(object):
     def __init__(self, a, b, c):
         self.a = a
@@ -732,6 +796,51 @@ class Angle(object):
         derivatives[n, :] = term2
         derivatives[o, :] = -(term1 + term2)
         return derivatives
+
+    def second_derivative(self, xyz):
+        xyz = xyz.reshape(-1,3)
+        der2 = np.zeros((xyz.shape[0], xyz.shape[1], xyz.shape[0], xyz.shape[1]))
+        m = self.a
+        o = self.b
+        n = self.c
+        # Unit displacement vectors
+        u_prime = (xyz[m] - xyz[o])
+        u_norm = np.linalg.norm(u_prime)
+        v_prime = (xyz[n] - xyz[o])
+        v_norm = np.linalg.norm(v_prime)
+        u = u_prime / u_norm
+        v = v_prime / v_norm
+        # Der2 derivatives are set to zero in the case of parallel or antiparallel vectors
+        if np.linalg.norm(u + v) < 1e-10 or np.linalg.norm(u - v) < 1e-10:
+            return der2
+        # cosine and sine of the bond angle
+        cq = np.dot(u, v)
+        sq = np.sqrt(1-cqa**2)
+
+        uu = np.outer(u, u)
+        uv = np.outer(u, v)
+        vv = np.outer(v, v)
+        de = np.eye(3)
+
+        term1 = (uv + uv.T - (3*uu - de)*cq)/(u_norm**2*sq)
+        term2 = (uv + uv.T - (3*vv - de)*cq)/(v_norm**2*sq)
+        term3 = (uu + vv - uv*cq   - de)/(u_norm*v_norm*sq)
+        term4 = (uu + vv - uv.T*cq - de)/(u_norm*v_norm*sq)
+
+        der1 = self.derivative(xyz);
+
+        # xi_amo xi_bmo =
+        # 
+        
+        
+        # l = np.linalg.norm(xyz[m] - xyz[n])
+        # u = (xyz[m] - xyz[n]) / l
+        # mtx = (np.outer(u, u) - np.eye(3))/l
+        # der2[m, :, m, :] = -mtx
+        # der2[n, :, n, :] = -mtx
+        # der2[m, :, n, :] = mtx
+        # der2[n, :, m, :] = mtx
+        return der2
 
 class LinearAngle(object):
     def __init__(self, a, b, c, axis):
@@ -866,6 +975,11 @@ class LinearAngle(object):
         ##     raise Exception()
         return derivatives
     
+    def second_derivative(self, xyz):
+        xyz = xyz.reshape(-1,3)
+        der2 = np.zeros((xyz.shape[0], xyz.shape[1], xyz.shape[0], xyz.shape[1]))
+        return der2
+    
 class MultiAngle(object):
     def __init__(self, a, b, c):
         if type(a) is int:
@@ -976,6 +1090,11 @@ class MultiAngle(object):
         derivatives[o, :] = -(term1 + term2)
         return derivatives
     
+    def second_derivative(self, xyz):
+        xyz = xyz.reshape(-1,3)
+        der2 = np.zeros((xyz.shape[0], xyz.shape[1], xyz.shape[0], xyz.shape[1]))
+        return der2
+
 class Dihedral(object):
     def __init__(self, a, b, c, d):
         self.a = a
@@ -1061,6 +1180,11 @@ class Dihedral(object):
         derivatives[o, :] = -term1 + term3 - term4
         derivatives[p, :] = term2 - term3 + term4
         return derivatives
+
+    def second_derivative(self, xyz):
+        xyz = xyz.reshape(-1,3)
+        der2 = np.zeros((xyz.shape[0], xyz.shape[1], xyz.shape[0], xyz.shape[1]))
+        return der2
 
 class MultiDihedral(object):
     def __init__(self, a, b, c, d):
@@ -1162,6 +1286,11 @@ class MultiDihedral(object):
         derivatives[p, :] = term2 - term3 + term4
         return derivatives
     
+    def second_derivative(self, xyz):
+        xyz = xyz.reshape(-1,3)
+        der2 = np.zeros((xyz.shape[0], xyz.shape[1], xyz.shape[0], xyz.shape[1]))
+        return der2
+
 class OutOfPlane(object):
     def __init__(self, a, b, c, d):
         self.a = a
@@ -1252,6 +1381,11 @@ class OutOfPlane(object):
         derivatives[p, :] = term2 - term3 + term4
         return derivatives
 
+    def second_derivative(self, xyz):
+        xyz = xyz.reshape(-1,3)
+        der2 = np.zeros((xyz.shape[0], xyz.shape[1], xyz.shape[0], xyz.shape[1]))
+        return der2
+    
 CacheWarning = False
 
 class InternalCoordinates(object):
