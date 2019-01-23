@@ -518,9 +518,7 @@ class Rotator(object):
             return derivatives
         
     def second_derivative(self, xyz):
-        xyz = xyz.reshape(-1,3)
-        der2 = np.zeros((xyz.shape[0], xyz.shape[1], xyz.shape[0], xyz.shape[1]))
-        return der2
+        raise NotImplementedError("Second derivatives have not been implemented for IC type %s" % self.__name__)
         
 class RotationA(object):
     def __init__(self, a, x0, Rotators, w=1.0):
@@ -558,9 +556,7 @@ class RotationA(object):
         return derivatives
 
     def second_derivative(self, xyz):
-        xyz = xyz.reshape(-1,3)
-        der2 = np.zeros((xyz.shape[0], xyz.shape[1], xyz.shape[0], xyz.shape[1]))
-        return der2
+        raise NotImplementedError("Second derivatives have not been implemented for IC type %s" % self.__name__)
     
 class RotationB(object):
     def __init__(self, a, x0, Rotators, w=1.0):
@@ -598,9 +594,7 @@ class RotationB(object):
         return derivatives
 
     def second_derivative(self, xyz):
-        xyz = xyz.reshape(-1,3)
-        der2 = np.zeros((xyz.shape[0], xyz.shape[1], xyz.shape[0], xyz.shape[1]))
-        return der2
+        raise NotImplementedError("Second derivatives have not been implemented for IC type %s" % self.__name__)
 
 class RotationC(object):
     def __init__(self, a, x0, Rotators, w=1.0):
@@ -638,9 +632,7 @@ class RotationC(object):
         return derivatives
 
     def second_derivative(self, xyz):
-        xyz = xyz.reshape(-1,3)
-        der2 = np.zeros((xyz.shape[0], xyz.shape[1], xyz.shape[0], xyz.shape[1]))
-        return der2
+        raise NotImplementedError("Second derivatives have not been implemented for IC type %s" % self.__name__)
 
 class Distance(object):
     def __init__(self, a, b):
@@ -816,30 +808,24 @@ class Angle(object):
         # cosine and sine of the bond angle
         cq = np.dot(u, v)
         sq = np.sqrt(1-cqa**2)
-
         uu = np.outer(u, u)
         uv = np.outer(u, v)
         vv = np.outer(v, v)
         de = np.eye(3)
-
         term1 = (uv + uv.T - (3*uu - de)*cq)/(u_norm**2*sq)
         term2 = (uv + uv.T - (3*vv - de)*cq)/(v_norm**2*sq)
         term3 = (uu + vv - uv*cq   - de)/(u_norm*v_norm*sq)
         term4 = (uu + vv - uv.T*cq - de)/(u_norm*v_norm*sq)
-
-        der1 = self.derivative(xyz);
-
-        # xi_amo xi_bmo =
-        # 
-        
-        
-        # l = np.linalg.norm(xyz[m] - xyz[n])
-        # u = (xyz[m] - xyz[n]) / l
-        # mtx = (np.outer(u, u) - np.eye(3))/l
-        # der2[m, :, m, :] = -mtx
-        # der2[n, :, n, :] = -mtx
-        # der2[m, :, n, :] = mtx
-        # der2[n, :, m, :] = mtx
+        der1 = self.derivatives(xyz)
+        def zeta(a, m, n):
+            return (a==m - a==n)
+        for a in [m, n, o]:
+            for b in [m, n, o]:
+                der2[a, :, b, :] = (zeta(a, m, o)*zeta(b, m, o)*term1
+                                    + zeta(a, n, o)*zeta(b, n, o)*term2
+                                    + zeta(a, m, o)*zeta(b, n, o)*term3
+                                    + zeta(a, n, o)*zeta(b, m, o)*term4
+                                    + (cq/sq) * np.outer(der1[a], der1[b]))
         return der2
 
 class LinearAngle(object):
@@ -976,9 +962,7 @@ class LinearAngle(object):
         return derivatives
     
     def second_derivative(self, xyz):
-        xyz = xyz.reshape(-1,3)
-        der2 = np.zeros((xyz.shape[0], xyz.shape[1], xyz.shape[0], xyz.shape[1]))
-        return der2
+        raise NotImplementedError("Second derivatives have not been implemented for IC type %s" % self.__name__)
     
 class MultiAngle(object):
     def __init__(self, a, b, c):
@@ -1091,9 +1075,7 @@ class MultiAngle(object):
         return derivatives
     
     def second_derivative(self, xyz):
-        xyz = xyz.reshape(-1,3)
-        der2 = np.zeros((xyz.shape[0], xyz.shape[1], xyz.shape[0], xyz.shape[1]))
-        return der2
+        raise NotImplementedError("Second derivatives have not been implemented for IC type %s" % self.__name__)
 
 class Dihedral(object):
     def __init__(self, a, b, c, d):
@@ -1184,6 +1166,74 @@ class Dihedral(object):
     def second_derivative(self, xyz):
         xyz = xyz.reshape(-1,3)
         der2 = np.zeros((xyz.shape[0], xyz.shape[1], xyz.shape[0], xyz.shape[1]))
+        m = self.a
+        o = self.b
+        p = self.c
+        n = self.d
+        u_prime = (xyz[m] - xyz[o])
+        w_prime = (xyz[p] - xyz[o])
+        v_prime = (xyz[n] - xyz[p])
+        lu = np.linalg.norm(u_prime)
+        lw = np.linalg.norm(w_prime)
+        lv = np.linalg.norm(v_prime)
+        u = u_prime / lu
+        w = w_prime / lw
+        v = v_prime / lv
+        # cos(phi_u), sin(phi_u), cos(phi_v), sin(phi_v)
+        cu = np.dot(u, w)
+        su = (1 - np.dot(u, w)**2)**0.5
+        su4 = su**4
+        cv = np.dot(v, w)
+        sv = (1 - np.dot(v, w)**2)**0.5
+        sv4 = sv**4
+        if su < 1e-6 or sv < 1e-6 : return der2
+        
+        uxw = np.cross(u, w)
+        vxw = np.cross(v, w)
+
+        term1 = np.outer(uxw, w*cu - u)/(lu**2*su4)
+        # check plus vs. minus in the second argument of the numerator
+        term2 = np.outer(vxw, w*cv + v)/(lv**2*sv4)
+        term3 = np.outer(uxw, w - 2*u*cu + w*cu**2)/(2*lu*lw*su4)
+        # check v vs. u in the second term of the second argument of the numerator
+        term4 = np.outer(vxw, w + 2*v*cv + w*cv**2)/(2*lv*lw*sv4)
+        term5 = np.outer(uxw, u + u*cu**2 - 3*w*cu + w*cu**3)/(2*lw**2*su4)
+        # check signs in first, second, and fourth terms of second argument of numerator
+        term6 = np.outer(vxw, -v - v*cv**2 - 3*w*cv + w*cv**3)/(2*lw**2*sv4)
+        term1 += term1.T
+        term2 += term2.T
+        term3 += term3.T
+        term4 += term4.T
+        term5 += term5.T
+        term6 += term6.T
+        def mk_amat(vec):
+            amat = np.zeros((3,3))
+            for i in range(3):
+                for j in range(3):
+                    if i == j: continue
+                    k = 3 - i - j
+                    amat[i, j] = vec[k] * (j-i) * (-0.5**np.abs(j-i))
+            return amat
+        # check signs in this numerator (-, +) vs. (+, -)
+        term7 = mk_amat((-w*cu + u)/(lu*lw*su**2))
+        # check signs in this numerator (-, -) vs. (+, -)
+        term8 = mk_amat((-w*cv - v)/(lv*lw*sv**2))
+        def zeta(a, m, n):
+            return (a==m - a==n)
+        # Accumulate the second derivative
+        for a in [m, n, o, p]:
+            for b in [m, n, o, p]:
+                der2[a, :, b, :] = (zeta(a, m, o)*zeta(b, m, o)*term1 +
+                                    zeta(a, n, p)*zeta(b, n, p)*term2 +
+                                    (zeta(a, m, o)*zeta(b, o, p) + zeta(a, p, o)*zeta(b, o, m))*term3 +
+                                    (zeta(a, n, p)*zeta(b, p, o) + zeta(a, p, o)*zeta(b, n, p))*term4 +
+                                    zeta(a, o, p)*zeta(b, p, o)*term5 +
+                                    zeta(a, p, o)*zeta(b, o, p)*term6)
+                if a != b:
+                    der2[a, :, b, :] += ((zeta(a, m, o)*zeta(b, o, p) + zeta(a, p, o)*zeta(b, o, m))*term7 +
+                                         (zeta(a, n, o)*zeta(b, o, p) + zeta(a, p, o)*zeta(b, o, m))*term8)
+                                    
+                
         return der2
 
 class MultiDihedral(object):
