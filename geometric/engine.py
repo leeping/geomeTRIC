@@ -126,40 +126,37 @@ def load_tcin(f_tcin):
 #| Classes for external codes used  |#
 #| to calculate energy and gradient |#
 #====================================#
-stored_calcs = OrderedDict()
 
 class Engine(object):
     def __init__(self, molecule):
         if len(molecule) != 1:
             raise RuntimeError('Please pass only length-1 molecule objects to engine creation')
         self.M = deepcopy(molecule)
-        # self.stored_calcs = OrderedDict()
+        self.stored_calcs = OrderedDict()
 
     # def __deepcopy__(self, memo):
     #     return copy(self)
 
     def calc(self, coords, dirname):
-        global stored_calcs
         coord_hash = hash(coords.tostring())
-        if coord_hash in stored_calcs:
-            energy = stored_calcs[coord_hash]['energy']
-            gradient = stored_calcs[coord_hash]['gradient']
+        if coord_hash in self.stored_calcs:
+            energy = self.stored_calcs[coord_hash]['energy']
+            gradient = self.stored_calcs[coord_hash]['gradient']
         else:
             if not os.path.exists(dirname): os.makedirs(dirname)
             energy, gradient = self.calc_new(coords, dirname)
-            stored_calcs[coord_hash] = {'coords':coords,'energy':energy,'gradient':gradient}
+            self.stored_calcs[coord_hash] = {'coords':coords,'energy':energy,'gradient':gradient}
         return energy, gradient
 
     def clearCalcs(self):
-        global stored_calcs
-        stored_calcs = OrderedDict()
+        self.stored_calcs = OrderedDict()
 
     def calc_new(self, coords, dirname):
         raise NotImplementedError("Not implemented for the base class")
 
     def calc_wq(self, coords, dirname):
         coord_hash = hash(coords.tostring())
-        if coord_hash in stored_calcs:
+        if coord_hash in self.stored_calcs:
             return
         else:
             self.calc_wq_new(coords, dirname)
@@ -168,16 +165,15 @@ class Engine(object):
         raise NotImplementedError("Work Queue is not implemented for this class")
 
     def read_wq(self, coords, dirname):
-        global stored_calcs
         coord_hash = hash(coords.tostring())
-        if coord_hash in stored_calcs:
-            energy = stored_calcs[coord_hash]['energy']
-            gradient = stored_calcs[coord_hash]['gradient']
+        if coord_hash in self.stored_calcs:
+            energy = self.stored_calcs[coord_hash]['energy']
+            gradient = self.stored_calcs[coord_hash]['gradient']
         else:
             if not os.path.exists(dirname):
                 raise RuntimeError("In read_wq, %s doesn't exist" % dirname)
             energy, gradient = self.read_wq_new(coords, dirname)
-            stored_calcs[coord_hash] = {'coords':coords,'energy':energy,'gradient':gradient}
+            self.stored_calcs[coord_hash] = {'coords':coords,'energy':energy,'gradient':gradient}
         return energy, gradient
 
     def read_wq_new(self, coords, dirname):
