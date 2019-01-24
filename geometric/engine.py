@@ -696,7 +696,7 @@ class QCEngineAPI(Engine):
         self.schema_traj.append(ret)
 
         if ret["success"] is False:
-            raise ValueError("QCEngineAPI computation did not execute correctly.")
+            raise ValueError("QCEngineAPI computation did not execute correctly.\n" + ret["error_message"])
 
         # Unpack the erngies and gradient
         energy = ret["properties"]["return_energy"]
