@@ -873,7 +873,7 @@ class OptObject(object):
         coords : np.ndarray
             Nx3 array of Cartesian coordinates in atomic units
         molecule : Molecule
-            Molecule object
+            Molecule object (Units Angstrom)
         IC : InternalCoordinates
             Object describing the internal coordinate system
         engine : Engine
