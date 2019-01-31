@@ -863,6 +863,15 @@ class OptParams(object):
         self.meci = kwargs.get('meci', False)
 
 
+class OPT_STATE(object):
+    """ This describes the state of an OptObject during the optimization process
+    """
+    NEEDS_EVALUATION = 0  # convergence has not been evaluated -> calcualte Energy, Forces
+    SKIP_EVALUATION  = 1  # We know this is not yet converged -> skip Energy
+    CONVERGED        = 2
+    FAILED           = 3  # optimization failed with no recovery option
+    
+
 class OptObject(object):
     def __init__(self, coords, molecule, IC, engine, trust, dirname, xyzout=None, xyzout2=None):
         """
@@ -885,6 +894,8 @@ class OptObject(object):
             Output file name for writing the last frame of optimization.
             Overwrites parameter to Optimizer
         """
+        
+        self.state = OPT_STATE.NEEDS_EVALUATION
         
         self.coords = coords
         self.IC = IC
@@ -942,6 +953,9 @@ class OptObject(object):
         self.Xprev = None
         self.Gprev = None
 
+    def currentCoordinatesA(self):
+        return self.X.reshape(-1,3) * bohr2ang
+
     def getCartesianNorm(self, dy, enforce, verbose):
         return getCartesianNorm(self.X, dy, self.IC, enforce, verbose)
 
@@ -992,6 +1006,7 @@ class OPT_RESULT(Enum):
     NOT_CONVERGED = 0
     FAILED = -1    
         
+
 class Optimizer(object):
     def __init__(self, params, xyzout=None, xyzout2=None):
         """
@@ -1124,17 +1139,19 @@ class Optimizer(object):
                 optObj.recover(params)
                 print("\x1b[1;93mSkipping optimization step\x1b[0m")
                 optObj.Iteration -= 1
-                return OPT_RESULT.NOT_CONVERGED
+                
+                optObj.state = OPT_STATE.SKIP_EVALUATION
+                return
             
             ##### End Rebuild
             # Finally, take an internal coordinate step of the desired length.
             optObj.dy, optObj.expect = optObj.trust_step(iopt, v0, params.rfo, params.verbose)
-            cnorm = optObj.getCartesianNorm(optObj.dy, params.enforce, params.verbose)
+            optObj.cnorm = optObj.getCartesianNorm(optObj.dy, params.enforce, params.verbose)
         ### DONE OBTAINING THE STEP ###
         # Dot product of the gradient with the step direction
         Dot = -np.dot(optObj.dy/np.linalg.norm(optObj.dy), optObj.G/np.linalg.norm(optObj.G))
         # Whether the Cartesian norm comes close to the trust radius
-        bump = cnorm > 0.8 * optObj.trust
+        bump = optObj.cnorm > 0.8 * optObj.trust
         # Before updating any of our variables, copy current variables to "previous"
         optObj.Yprev = optObj.Y.copy()
         optObj.Xprev = optObj.X.copy()
@@ -1144,9 +1161,9 @@ class Optimizer(object):
         optObj.Y += optObj.dy
         optObj.newCartesian(optObj.dy, params.enforce, params.verbose)
         
-        return optObj.X.reshape(-1,3) * bohr2ang
-
-
+        optObj.state = OPT_STATE.NEEDS_EVALUATION
+    
+    
     def evaluateStep(self, optObj):        
         """
         Evaluate last call to step() given that the energy and gradient
@@ -1162,6 +1179,9 @@ class Optimizer(object):
         RESULT: OPT_RESULT
             an indicator if the optimization has converged
         """
+        
+        assert optObj.state == OPT_STATE.NEEDS_EVALUATION
+        
         params = self.params
         xyzout = self.xyzout  if self.xyzout  is not None else optObj.xyzout
         xyzout2= self.xyzout2 if self.xyzout2 is not None else optObj.xyzout2
@@ -1212,10 +1232,13 @@ class Optimizer(object):
             optObj.progress2.comms = ['Iteration %i Energy % .8f' % (optObj.Iteration, optObj.E)]
             if xyzout2 is not None:
                 optObj.progress2.write(xyzout2) #This contains the last frame of the trajectory.
+                
+            optObj.state = OPT_STATE.CONVERGED
             return OPT_RESULT.CONVERGED
         
         if optObj.Iteration > params.maxiter:
             print("Maximum iterations reached (%i); increase --maxiter for more" % params.maxiter)
+            optObj.state = OPT_STATE.FAILED
             return OPT_RESULT.FAILED
         
         if params.qccnv and Converged_grms and (Converged_drms or Converged_energy) and optObj.conSatisfied:
@@ -1227,6 +1250,7 @@ class Optimizer(object):
             optObj.progress2.comms = ['Iteration %i Energy % .8f' % (optObj.Iteration, optObj.E)]
             if xyzout2 is not None:
                 optObj.progress2.write(xyzout2) #This contains the last frame of the trajectory.
+            optObj.state = OPT_STATE.CONVERGED
             return OPT_RESULT.CONVERGED
         
         if params.molcnv and molpro_converged_gmax and (molpro_converged_dmax or Converged_energy) and optObj.conSatisfied:
@@ -1238,6 +1262,7 @@ class Optimizer(object):
             optObj.progress2.comms = ['Iteration %i Energy % .8f' % (optObj.Iteration, optObj.E)]
             if xyzout2 is not None:
                 optObj.progress2.write(xyzout2) #This contains the last frame of the trajectory.
+            optObj.state = OPT_STATE.CONVERGED
             return OPT_RESULT.CONVERGED
 
         ### Adjust Trust Radius and/or Reject Step ###
@@ -1273,6 +1298,8 @@ class Optimizer(object):
             optObj.X = optObj.Xprev.copy()
             optObj.G = optObj.Gprev.copy()
             optObj.E = optObj.Eprev
+            
+            optObj.state = OPT_STATE.NEEDS_EVALUATION
             return OPT_RESULT.NOT_CONVERGED
 
         # Steps that are bad, but are very small (under thre_rj) are not rejected.
@@ -1333,8 +1360,9 @@ class Optimizer(object):
             Dy   = col(optObj.Y - optObj.Yprev)
             Dg   = col(optObj.G - optObj.Gprev)
             # Catch some abnormal cases of extremely small changes.
-            if np.linalg.norm(Dg) < 1e-6: return OPT_RESULT.NOT_CONVERGED
-            if np.linalg.norm(Dy) < 1e-6: return OPT_RESULT.NOT_CONVERGED
+            if np.linalg.norm(Dg) < 1e-6 or np.linalg.norm(Dy) < 1e-6:
+                optObj.state = OPT_STATE.NEEDS_EVALUATION 
+                return OPT_RESULT.NOT_CONVERGED
             # Mat1 = (Dg*Dg.T)/(Dg.T*Dy)[0,0]
             # Mat2 = ((optObj.H*Dy)*(optObj.H*Dy).T)/(Dy.T*optObj.H*Dy)[0,0]
             Mat1 = np.dot(Dg,Dg.T)/np.dot(Dg.T,Dy)[0,0]
@@ -1358,6 +1386,7 @@ class Optimizer(object):
                 optObj.H = optObj.IC.guess_hessian(optObj.coords)
             # Then it's on to the next loop iteration!
             
+        optObj.state = OPT_STATE.NEEDS_EVALUATION
         return OPT_RESULT.NOT_CONVERGED
     
 def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None, xyzout2=None):
@@ -1394,11 +1423,14 @@ def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None, xyzout2
     optzer.step(optObj)
     
     ### Calculate new Energy and Gradient ###
-    optObj.calcEnergyForce()
+    if optObj.state == OPT_STATE.NEEDS_EVALUATION: 
+        optObj.calcEnergyForce()
     
     while optzer.evaluateStep() is OPT_RESULT.NOT_CONVERGED:
         optzer.step(optObj)
-        optObj.calcEnergyForce()
+        if optObj.state == OPT_STATE.NEEDS_EVALUATION: 
+            optObj.calcEnergyForce()
+
         
     return optObj.progress
 
