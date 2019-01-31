@@ -956,8 +956,8 @@ class OptObject(object):
     def currentCoordinatesA(self):
         return self.X.reshape(-1,3) * bohr2ang
 
-    def getCartesianNorm(self, dy, enforce, verbose):
-        return getCartesianNorm(self.X, dy, self.IC, enforce, verbose)
+    def getCartesianNorm(self, enforce, verbose):
+        return getCartesianNorm(self.X, self.dy, self.IC, enforce, verbose)
 
 
     def get_delta_prime(self, v0, rfo):
@@ -977,11 +977,11 @@ class OptObject(object):
         return trust_step(iopt, v0, self.X, self.G, self.H, self.IC, rfo, verbose)
         
         
-    def newCartesian(self, dy, enforce, verbose):
+    def newCartesian(self, enforce, verbose):
         if self.IC.haveConstraints() and enforce:
-            self.X = self.IC.newCartesian_withConstraint(self.X, dy, verbose)
+            self.X = self.IC.newCartesian_withConstraint(self.X, self.dy, verbose)
         else:
-            self.X = self.IC.newCartesian(self.X, dy, verbose=verbose)
+            self.X = self.IC.newCartesian(self.X, self.dy, verbose=verbose)
             
     def calcEnergyForce(self):
         ### Calculate Energy and Gradient ###
@@ -1096,7 +1096,7 @@ class Optimizer(object):
         # Internal coordinate step size
         inorm = np.linalg.norm(optObj.dy)
         # Cartesian coordinate step size
-        optObj.cnorm = optObj.getCartesianNorm(optObj.dy, params.enforce, params.verbose)
+        optObj.cnorm = optObj.getCartesianNorm(params.enforce, params.verbose)
         if params.verbose: print("dy(i): %.4f dy(c) -> target: %.4f -> %.4f" % (inorm, optObj.cnorm, optObj.trust))
         # If the step is above the trust radius in Cartesian coordinates, then
         # do the following to reduce the step length:
@@ -1146,7 +1146,8 @@ class Optimizer(object):
             ##### End Rebuild
             # Finally, take an internal coordinate step of the desired length.
             optObj.dy, optObj.expect = optObj.trust_step(iopt, v0, params.rfo, params.verbose)
-            optObj.cnorm = optObj.getCartesianNorm(optObj.dy, params.enforce, params.verbose)
+            optObj.cnorm = optObj.getCartesianNorm(params.enforce, params.verbose)
+
         ### DONE OBTAINING THE STEP ###
         # Dot product of the gradient with the step direction
         Dot = -np.dot(optObj.dy/np.linalg.norm(optObj.dy), optObj.G/np.linalg.norm(optObj.G))
@@ -1159,7 +1160,7 @@ class Optimizer(object):
         optObj.Eprev = optObj.E
         ### Update the Internal Coordinates ###
         optObj.Y += optObj.dy
-        optObj.newCartesian(optObj.dy, params.enforce, params.verbose)
+        optObj.newCartesian(params.enforce, params.verbose)
         
         optObj.state = OPT_STATE.NEEDS_EVALUATION
     
@@ -1426,7 +1427,7 @@ def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None, xyzout2
     if optObj.state == OPT_STATE.NEEDS_EVALUATION: 
         optObj.calcEnergyForce()
     
-    while optzer.evaluateStep() is OPT_RESULT.NOT_CONVERGED:
+    while optzer.evaluateStep(optObj) is OPT_RESULT.NOT_CONVERGED:
         optzer.step(optObj)
         if optObj.state == OPT_STATE.NEEDS_EVALUATION: 
             optObj.calcEnergyForce()
