@@ -1181,6 +1181,9 @@ class Optimizer(object):
             an indicator if the optimization has converged
         """
         
+        if optObj.state == OPT_STATE.SKIP_EVALUATION:
+            return OPT_RESULT.NOT_CONVERGED
+        
         assert optObj.state == OPT_STATE.NEEDS_EVALUATION
         
         params = self.params
