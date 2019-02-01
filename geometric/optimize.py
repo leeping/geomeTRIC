@@ -1812,6 +1812,7 @@ def main():
     parser.add_argument('--epsilon', type=float, default=1e-5, help='Small eigenvalue threshold.')
     parser.add_argument('--check', type=int, default=0, help='Check coordinates every N steps to see whether it has changed.')
     parser.add_argument('--verbose', action='store_true', help='Write out the displacements.')
+    parser.add_argument('--logINI',  type=str, dest='logFile', help='ini file for logging')
     parser.add_argument('--reset', action='store_true', help='Reset Hessian when eigenvalues are under epsilon.')
     parser.add_argument('--rfo', action='store_true', help='Use rational function optimization (default is trust-radius Newton Raphson).')
     parser.add_argument('--trust', type=float, default=0.1, help='Starting trust radius.')
@@ -1831,7 +1832,8 @@ def main():
     
     logIni = 'log.ini'
     if args.logFile is None:
-        logIni = pkg_resources.resource_filename(__name__, logIni) 
+        import geometric.optimize
+        logIni = pkg_resources.resource_filename(geometric.optimize.__name__, logIni) 
     else:
         logIni = args.logFile
     logConfig.fileConfig(logIni,disable_existing_loggers=False)
