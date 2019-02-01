@@ -10,6 +10,7 @@ import numpy as np
 from numpy.linalg import multi_dot
 
 import logging
+import pkg_resources
 log = logging.getLogger(__name__)
 
 from .engine import set_tcenv, load_tcin, TeraChem, TeraChem_CI, Psi4, QChem, Gromacs, Molpro, QCEngineAPI
@@ -1234,7 +1235,7 @@ class Optimizer(object):
             # _exec("touch energy.txt") #JS these two lines used to make a energy.txt file using the final energy
             if optObj.dirname is not None:
                 with open("energy.txt","w") as f:
-                    log.warning("% .10f" % optObj.E, file=f)
+                    print("% .10f" % optObj.E, file=f)
             optObj.progress2.xyzs = [optObj.X.reshape(-1,3) * bohr2ang] #JS these two lines used to make a opt.xyz file along with the if statement below.
             optObj.progress2.comms = ['Iteration %i Energy % .8f' % (optObj.Iteration, optObj.E)]
             if xyzout2 is not None:
@@ -1789,6 +1790,8 @@ def run_optimizer(**kwargs):
 def main():
     """Read user's input"""
 
+    import logging.config as logConfig
+    
     parser = argparse.ArgumentParser()
     parser.add_argument('--coordsys', type=str, default='tric', help='Coordinate system: "cart" for Cartesian, "prim" for Primitive (a.k.a redundant), '
                         '"dlc" for Delocalized Internal Coordinates, "hdlc" for Hybrid Delocalized Internal Coordinates, "tric" for Translation-Rotation'
@@ -1823,10 +1826,18 @@ def main():
     parser.add_argument('--nt', type=int, help='Specify number of threads for running in parallel (for TeraChem this should be number of GPUs)')
     parser.add_argument('input', type=str, help='TeraChem or Q-Chem input file')
     parser.add_argument('constraints', type=str, nargs='?', help='Constraint input file (optional)')
-    log.warning('geometric-optimize called with the following command line:')
-    log.warning(' '.join(sys.argv))
     args = parser.parse_args(sys.argv[1:])
     # Run the optimizer.
+    
+    logIni = 'log.ini'
+    if args.logFile is None:
+        logIni = pkg_resources.resource_filename(__name__, logIni) 
+    else:
+        logIni = args.logFile
+    logConfig.fileConfig(logIni,disable_existing_loggers=False)
+    
+    log.info('geometric-optimize called with the following command line:')
+    log.info(' '.join(sys.argv))
     run_optimizer(**vars(args))
 
 if __name__ == "__main__":
