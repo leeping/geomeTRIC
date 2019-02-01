@@ -15,6 +15,9 @@ from ctypes import *
 from datetime import date
 from warnings import warn
 
+import logging
+log = logging.getLogger(__name__)
+
 import numpy as np
 from numpy import sin, cos, arccos
 from numpy.linalg import multi_dot
@@ -698,7 +701,7 @@ def AlignToMoments(elem,xyz1,xyz2=None):
     Thresh = 1e-3
     if np.abs(determ - 1.0) > Thresh:
         if np.abs(determ + 1.0) > Thresh:
-            print("in AlignToMoments, determinant is % .3f" % determ)
+            log.warning("in AlignToMoments, determinant is % .3f" % determ)
         BB[:,2] *= -1
     xyzr = np.dot(BB.T, xyz.T).T.copy()
     if xyz2 is not None:
@@ -1354,7 +1357,7 @@ class Molecule(object):
                 Sum.Data[key] = self.Data[key]
             elif diff(self, other, key):
                 for i, j in zip(self.Data[key], other.Data[key]):
-                    print(i, j, i==j)
+                    log.warning(i, j, i==j)
                 logger.error('The data member called %s is not the same for these two objects\n' % key)
                 raise RuntimeError
             elif key in self.Data:
@@ -1393,7 +1396,7 @@ class Molecule(object):
             if key in ['fnm', 'ftype', 'bonds', 'molecules', 'topology']: pass
             elif diff(self, other, key):
                 for i, j in zip(self.Data[key], other.Data[key]):
-                    print(i, j, i==j)
+                    log.warning(i, j, i==j)
                 logger.error('The data member called %s is not the same for these two objects\n' % key)
                 raise RuntimeError
             # Information from the other class is added to this class (if said info doesn't exist.)
@@ -1876,7 +1879,7 @@ class Molecule(object):
             ymax = self.boxes[sn].b
             zmax = self.boxes[sn].c
             if any([i != 90.0 for i in [self.boxes[sn].alpha, self.boxes[sn].beta, self.boxes[sn].gamma]]):
-                print("Warning: Topology building will not work with broken molecules in nonorthogonal cells.")
+                log.warning("Warning: Topology building will not work with broken molecules in nonorthogonal cells.")
                 toppbc = False
         else:
             xmin = mins[0]
@@ -2032,7 +2035,7 @@ class Molecule(object):
         sn = kwargs.get('topframe', self.top_settings['topframe'])
         self.top_settings['topframe'] = sn
         if self.na > 100000:
-            print("Warning: Large number of atoms (%i), topology building may take a long time" % self.na)
+            log.warning("Warning: Large number of atoms (%i), topology building may take a long time" % self.na)
         # Build bonds from connectivity graph if not read from file.
         if (not self.top_settings['read_bonds']) or force_bonds:
             self.build_bonds()
@@ -2141,7 +2144,7 @@ class Molecule(object):
         phis = []
         if 'bonds' in self.Data:
             if any(p not in self.bonds for p in [(min(i,j),max(i,j)),(min(j,k),max(j,k)),(min(k,l),max(k,l))]):
-                print([(min(i,j),max(i,j)),(min(j,k),max(j,k)),(min(k,l),max(k,l))])
+                log.warning([(min(i,j),max(i,j)),(min(j,k),max(j,k)),(min(k,l),max(k,l))])
                 warn("Measuring dihedral angle for four atoms that aren't bonded.  Hope you know what you're doing!")
         else:
             warn("This molecule object doesn't have bonds defined, sanity-checking is off.")
@@ -4175,8 +4178,8 @@ class Molecule(object):
                 self.boxes = [mybox for i in range(self.ns)]
 
 def main():
-    print("Basic usage as an executable: molecule.py input.format1 output.format2")
-    print("where format stands for xyz, pdb, gro, etc.")
+    log.warning("Basic usage as an executable: molecule.py input.format1 output.format2")
+    log.warning("where format stands for xyz, pdb, gro, etc.")
     Mao = Molecule(sys.argv[1])
     Mao.write(sys.argv[2])
 
