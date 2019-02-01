@@ -530,7 +530,7 @@ def get_delta_prime_trm(v, X, G, H, IC, verbose=False):
     try:
         Hi = invert_svd(HT)
     except:
-        print ("\x1b[1;91mSVD Error - increasing v by 0.001 and trying again\x1b[0m")
+        log.warning("\x1b[1;91mSVD Error - increasing v by 0.001 and trying again\x1b[0m")
         return get_delta_prime_trm(v+0.001, X, G, H, IC)
     dyc = flat(-1 * np.dot(Hi,col(GC)))
     dy = dyc[:len(G)]
@@ -718,7 +718,7 @@ def trust_step(target, v0, X, G, H, IC, rfo, verbose=False):
             log.warning("trust_step hit niter = 100, randomizing")
             v += np.random.random() * niter / 100
         if niter%1000 == 999:
-            print ("trust_step hit niter = 1000, giving up")
+            log.warning("trust_step hit niter = 1000, giving up")
             return m_dy, m_sol
 
 class Froot(object):
@@ -1112,12 +1112,12 @@ class Optimizer(object):
             # Cartesian coordinate norm
             iopt = brent_wiki(froot.evaluate, 0.0, inorm, optObj.trust, cvg=0.1, obj=froot, verbose=params.verbose)
             if froot.brentFailed and froot.stored_arg is not None:
-                if params.verbose: print ("\x1b[93mUsing stored solution at %.3e\x1b[0m" % froot.stored_val)
+                if params.verbose: log.info("\x1b[93mUsing stored solution at %.3e\x1b[0m" % froot.stored_val)
                 iopt = froot.stored_arg
             elif optObj.IC.bork:
                 for i in range(3):
                     froot.target /= 2
-                    if params.verbose: print ("\x1b[93mReducing target to %.3e\x1b[0m" % froot.target)
+                    if params.verbose: log.info("\x1b[93mReducing target to %.3e\x1b[0m" % froot.target)
                     froot.above_flag = True
                     iopt = brent_wiki(froot.evaluate, 0.0, iopt, froot.target, cvg=0.1, verbose=params.verbose)
                     if not optObj.IC.bork: break
@@ -1234,7 +1234,7 @@ class Optimizer(object):
             # _exec("touch energy.txt") #JS these two lines used to make a energy.txt file using the final energy
             if optObj.dirname is not None:
                 with open("energy.txt","w") as f:
-                    log.warning("% .10f" % optObj.E, file=f)
+                    print("% .10f" % optObj.E, file=f)
             optObj.progress2.xyzs = [optObj.X.reshape(-1,3) * bohr2ang] #JS these two lines used to make a opt.xyz file along with the if statement below.
             optObj.progress2.comms = ['Iteration %i Energy % .8f' % (optObj.Iteration, optObj.E)]
             if xyzout2 is not None:
@@ -1252,7 +1252,7 @@ class Optimizer(object):
             log.warning("Converged! (Q-Chem style criteria requires grms and either drms or energy)")
             # _exec("touch energy.txt") #JS these two lines used to make a energy.txt file using the final energy
             with open("energy.txt","w") as f:
-                log.warning("% .10f" % optObj.E, file=f)
+                print("% .10f" % optObj.E, file=f)
             optObj.progress2.xyzs = [optObj.X.reshape(-1,3) * bohr2ang] #JS these two lines used to make a opt.xyz file along with the if statement below.
             optObj.progress2.comms = ['Iteration %i Energy % .8f' % (optObj.Iteration, optObj.E)]
             if xyzout2 is not None:
@@ -1264,7 +1264,7 @@ class Optimizer(object):
             log.warning("Converged! (Molpro style criteria requires gmax and either dmax or energy) This is approximate since convergence checks are done in cartesian coordinates.")
             # _exec("touch energy.txt") #JS these two lines used to make a energy.txt file using the final energy
             with open("energy.txt","w") as f:
-                log.warning("% .10f" % optObj.E, file=f)
+                print("% .10f" % optObj.E, file=f)
             optObj.progress2.xyzs = [optObj.X.reshape(-1,3) * 0.529177] #JS these two lines used to make a opt.xyz file along with the if statement below.
             optObj.progress2.comms = ['Iteration %i Energy % .8f' % (optObj.Iteration, optObj.E)]
             if xyzout2 is not None:
@@ -1489,7 +1489,7 @@ def print_msg():
     #| translation and rotation coordinates", J. Chem, Phys. 144, 214108.     |#
     #| http://dx.doi.org/10.1063/1.4952956                                    |#
     #==========================================================================#
-    """, sys.stderr)
+    """, file=sys.stderr)
 
 def WriteDisplacements(coords, M, IC, dirname, verbose):
     """
@@ -1781,7 +1781,7 @@ def run_optimizer(**kwargs):
             cNames, cVals = IC.getConstraintTargetVals()
             comment = ', '.join(["%s = %.2f" % (cName, cVal) for cName, cVal in zip(cNames, cVals)])
             Mfinal.comms[-1] = "Scan Cycle %i/%i ; %s ; %s" % (ic+1, len(CVals), comment, progress.comms[-1])
-            print
+            #print
         Mfinal.write('scan-final.xyz')
     print_msg()
     return progress

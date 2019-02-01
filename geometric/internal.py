@@ -1367,7 +1367,7 @@ class InternalCoordinates(object):
                 PMDiff = self.calcDiff(x1,x2)
                 FiniteDifference[:,i,j] = PMDiff/(2*h)
         for i in range(Analytical.shape[0]):
-            log.warning("IC %i/%i : %s" % (i, Analytical.shape[0], self.Internals[i])),
+            log.warning("IC %i/%i : %s" % (i, Analytical.shape[0], self.Internals[i]))
             lines = [""]
             maxerr = 0.0
             for j in range(Analytical.shape[1]):
