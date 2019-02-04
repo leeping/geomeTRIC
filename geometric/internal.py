@@ -415,6 +415,7 @@ class Rotator(object):
                 vy = ysel[-1]-ysel[0]
                 # Calculate reference axis (if needed)
                 if self.e0 is None: self.calc_e0()
+                #log.debug(vx)
                 ev = vx / np.linalg.norm(vx)
                 # Measure alignment of molecular axis with reference axis
                 self.stored_dot2 = np.dot(ev, self.e0)**2
