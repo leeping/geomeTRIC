@@ -901,7 +901,6 @@ class OptObject(object):
         
         self.state = OPT_STATE.NEEDS_EVALUATION
         
-        self.coords = coords
         self.IC = IC
         self.molecule = molecule
         self.progress = deepcopy(molecule)
@@ -922,7 +921,7 @@ class OptObject(object):
         self.E, self.gradx = engine.calc(coords, dirname)
         self.progress.qm_energies = [self.E]
         # Initial internal coordinates
-        q0 = IC.calculate(self.coords)
+        q0 = IC.calculate(coords)
         self.Gq = IC.calcGrad(self.X, self.gradx)
         # The optimization variables are the internal coordinates.
         self.Y = q0.copy()

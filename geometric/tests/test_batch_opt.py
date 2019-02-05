@@ -7,6 +7,8 @@ import numpy as np
 import tempfile
 import logging
 import math
+from geometric.molecule import bohr2ang
+
 log = logging.getLogger(__name__)
 
 from . import addons
@@ -98,7 +100,11 @@ class BatchOptimizer(object):
             IC = CoordClass(M, build=True, connect=connect, addcart=addcart, constraints=Cons, 
                             cvals=CVals[0] if CVals is not None else None)
             tmpDir = tempfile.mkdtemp(".tmp", "batchOpt")
-            optObjs.append(gt.OptObject(coords, M, IC, engine, self.params.trust, tmpDir))
+
+            obj = gt.OptObject(coords, M, IC, engine, self.params.trust, tmpDir)
+            log.debug("[AU]: e=%.5f bl=%.5f,%.5f g=%.4f" % (
+                    obj.E, obj.X[0],obj.X[3], obj.gradx[0]))
+            optObjs.append(obj)
             
         return optObjs
     
@@ -110,7 +116,8 @@ class BatchOptimizer(object):
         for obj in optObjs:
             if obj.state == gt.OPT_STATE.NEEDS_EVALUATION:
                 obj.calcEnergyForce()
-    
+                log.debug("[AU]: e=%.5f bl=%.5f,%.5f g=%.4f" % (
+                    obj.E, obj.X[0],obj.X[3], obj.gradx[0]))
     
     def optimizeMols(self, schemas):
         """ Optmize all molecules as represented by the schemas.
@@ -154,7 +161,7 @@ def test_rdkit_simple():
 
     schema1 = copy.deepcopy(_base_schema)
     schema2 = copy.deepcopy(_base_schema)
-    schema2['molecule']['geometry']=_geo2
+    schema2['molecule']['geometry']= [c  / bohr2ang for c in _geo2]
     
     opts = {"qcengine": True, "input": "tmp_data", "qce_program": "rdkit"}
 
@@ -183,7 +190,7 @@ _N2_schema = {
         "molecule": {
             "geometry": [
                 0.0, 0., 0.,
-                1.0, 0., 0.
+                1.9, 0., 0.
             ],
             "symbols": ["N", "N"],
             "connectivity": [[0, 1, 3]]
@@ -198,7 +205,7 @@ _N2_schema = {
     } # yapf: disable
 
 _N2_geo2 = [0.0, 0., 0.,
-            0.5, 0., 0.,]
+            0.6, 0., 0.,]
 
 
 
@@ -206,7 +213,7 @@ def test_rdkit_N2():
 
     schema1 = copy.deepcopy(_N2_schema)
     schema2 = copy.deepcopy(_N2_schema)
-    schema2['molecule']['geometry']=_N2_geo2
+    schema2['molecule']['geometry']= [c / bohr2ang for c in _N2_geo2]
     
     opts = {"qcengine": True, "input": "tmp_data", "qce_program": "rdkit"}
 
@@ -214,7 +221,7 @@ def test_rdkit_N2():
     ret = bOptimizer.optimizeMols([schema1, schema2])
 
     # Currently in angstrom
-    ref = np.array([-0.2954, 0., 0.,   0.8246, 0., 0.])
+    ref = np.array([-0.05729, 0., 0.,   1.06272, 0., 0.])
     assert np.allclose(ref, ret[0].xyzs[-1].ravel(), atol=1.e-3)
     
     # check that distances in ref are same as in ret[1]
