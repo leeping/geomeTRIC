@@ -901,6 +901,7 @@ class OptObject(object):
         
         self.state = OPT_STATE.NEEDS_EVALUATION
         
+        self.coords = coords
         self.IC = IC
         self.molecule = molecule
         self.progress = deepcopy(molecule)
@@ -921,7 +922,7 @@ class OptObject(object):
         self.E, self.gradx = engine.calc(coords, dirname)
         self.progress.qm_energies = [self.E]
         # Initial internal coordinates
-        q0 = IC.calculate(coords)
+        q0 = IC.calculate(self.coords)
         self.Gq = IC.calcGrad(self.X, self.gradx)
         # The optimization variables are the internal coordinates.
         self.Y = q0.copy()
@@ -1084,7 +1085,7 @@ class Optimizer(object):
             v0 = params.epsilon-Emin
         else:
             v0 = 0.0
-        if params.verbose: optObj.IC.Prims.printRotations()
+        #if params.verbose: optObj.IC.Prims.printRotations(optObj.X)
         if len(Eig) >= 6:
             log.debug("Hessian Eigenvalues: %.5e %.5e %.5e ... %.5e %.5e %.5e" % (Eig[0],Eig[1],Eig[2],Eig[-3],Eig[-2],Eig[-1]))
         else:
@@ -1380,8 +1381,8 @@ class Optimizer(object):
             ndg = np.array(Dg).flatten()/np.linalg.norm(np.array(Dg))
             nhdy = np.dot(optObj.H,Dy).flatten()/np.linalg.norm(np.dot(optObj.H,Dy))
             if params.verbose:
-                msg = "Denoms: %.3e %.3e" % (np.dot(Dg.T,Dy)[0,0], multi_dot(Dy.T,optObj.H,Dy)[0,0])
-                msg +=" Dots: %.3e %.3e" % (np.dot(ndg, ndy), np.dot(ndy, nhdy))
+                #msg = "Denoms: %.3e %.3e" % (np.dot(Dg.T,Dy)[0,0], multi_dot(Dy.T,optObj.H,Dy)[0,0])
+                msg =" Dots: %.3e %.3e" % (np.dot(ndg, ndy), np.dot(ndy, nhdy))
             #H1 = H.copy()
             optObj.H += Mat1-Mat2
             Eig1 = np.linalg.eigh(optObj.H)[0]
