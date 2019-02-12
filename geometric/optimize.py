@@ -867,7 +867,7 @@ class OptParams(object):
         self.meci = kwargs.get('meci', False)
 
 
-class OPT_STATE(object):
+class OPT_STATE(Enum):
     """ This describes the state of an OptObject during the optimization process
     """
     NEEDS_EVALUATION = 0  # convergence has not been evaluated -> calcualte Energy, Forces
@@ -1286,6 +1286,7 @@ class Optimizer(object):
             # For bad steps, the trust radius is reduced
             if not optObj.farConstraints:
                 optObj.trust = max(0.0 if params.meci else self.Convergence_drms, optObj.trust/2)
+                optObj.trust += optObj.trust * np.random.normal(0,0.1)
                 optObj.trustprint = "\x1b[91m-\x1b[0m"
             else:
                 optObj.trustprint = "="
@@ -1293,6 +1294,7 @@ class Optimizer(object):
             if optObj.trust < params.tmax:
                 # For good steps, the trust radius is increased
                 optObj.trust = min(np.sqrt(2)*optObj.trust, params.tmax)
+                optObj.trust += optObj.trust * np.random.normal(0,0.1)
                 optObj.trustprint = "\x1b[92m+\x1b[0m"
             else:
                 optObj.trustprint = "="
