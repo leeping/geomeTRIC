@@ -2,10 +2,10 @@ name: test
 channels:
   - conda-forge
   - rdkit
-  - molssi
 dependencies:
     # RDKit test depends
   - rdkit
+  - qcengine
 
     # geomeTRIC base depends
   - numpy
@@ -15,5 +15,3 @@ dependencies:
   - pytest
   - codecov
   - pytest-cov
-  - pip:
-    - git+git://github.com/MolSSI/QCEngine@v0.4.0#egg=qcengine
