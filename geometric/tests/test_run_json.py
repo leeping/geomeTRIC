@@ -14,7 +14,7 @@ localizer = addons.in_folder
 
 def _build_input(molecule, program="rdkit", method="UFF", basis=None):
     qc_schema_input = {
-        "schema_name": "qc_schema_input",
+        "schema_name": "qcschema_input",
         "schema_version": 1,
         "driver": "gradient",
         "model": {
@@ -24,7 +24,7 @@ def _build_input(molecule, program="rdkit", method="UFF", basis=None):
         "keywords": {},
     } # yapf: disable
     in_json_dict = {
-        "schema_name": "qc_schema_optimization_input",
+        "schema_name": "qcschema_optimization_input",
         "schema_version": 1,
         "keywords": {
             "coordsys": "tric",
@@ -44,6 +44,10 @@ def test_convert_constraint_dict_full():
             "indices": [0, 1, 2, 3, 4]
         }],
         "set": [{
+            "type": "distance",
+            "indices": [1, 0],
+            "value": 1.1
+        },{
             "type": "angle",
             "indices": [1, 0, 4],
             "value": 110.0
@@ -52,7 +56,7 @@ def test_convert_constraint_dict_full():
             "type": "distance",
             "indices": [1, 0],
             "start": 1.0,
-            "stop": 1.2,
+            "stop": 2,
             "steps": 3
         }, {
             "type": "dihedral",
@@ -66,9 +70,10 @@ def test_convert_constraint_dict_full():
     assert constraint_string == """$freeze
 xyz 1 2 3 4 5
 $set
+distance 2 1 0.582094931
 angle 2 1 5 110.0
 $scan
-distance 2 1 1.0 1.2 3
+distance 2 1 0.52917721 1.05835442 3
 dihedral 1 5 6 7 110.0 150.0 3"""
 
 
@@ -104,8 +109,10 @@ def test_run_json_scan_rejection(localizer):
     with open('in.json', 'w') as handle:
         json.dump(in_json_dict, handle, indent=2)
 
-    with pytest.raises(KeyError):
+    with pytest.raises(KeyError) as excinfo:
         out_json = geometric.run_json.geometric_run_json(in_json_dict)
+
+    assert "'scan' keyword" in str(excinfo.value)
 
 
 @addons.using_qcengine
@@ -168,6 +175,36 @@ def test_run_json_rdkit_hooh_constraint(localizer):
     # The results here are in Bohr
     assert pytest.approx(out_json["energies"][-1], 1.e-4) == 0.0007534925
 
+@addons.using_qcengine
+@addons.using_rdkit
+def test_run_json_distance_constraint(localizer):
+    molecule = {
+        "geometry": [
+             1.76498,  1.3431,  0.7946,
+             1.24509, -0.0343, -0.3637,
+            -1.24263,  0.0351, -0.3580,
+            -1.75745, -1.3508,  0.7925
+        ],
+        "symbols": ["H", "O", "O", "H"],
+        "connectivity": [[0, 1, 1], [1, 2, 1], [2, 3, 1]]
+    } # yapf: disable
+
+    result_geo = np.array(molecule["geometry"]).reshape(-1, 3)
+
+    in_json_dict = _build_input(molecule)
+    in_json_dict["keywords"]["constraints"] = {"set": [{"type": "distance", "indices": [1, 2], "value": 2.4}]}
+
+    with open('in.json', 'w') as handle:
+        json.dump(in_json_dict, handle, indent=2)
+
+    out_json = geometric.run_json.geometric_run_json(in_json_dict)
+
+    with open('out.json', 'w') as handle:
+        json.dump(out_json, handle, indent=2)
+
+    result_geo = np.array(out_json['final_molecule']['geometry']).reshape(-1, 3)
+    assert pytest.approx(2.4) ==  np.linalg.norm(result_geo[1] - result_geo[2])
+
 
 @addons.using_qcengine
 @addons.using_psi4
@@ -191,6 +228,8 @@ def test_run_json_psi4_hydrogen(localizer):
 
     with open('out.json', 'w') as handle:
         json.dump(out_json, handle, indent=2)
+
+    assert out_json["success"], out_json["error"]
 
     result_geo = out_json['final_molecule']['geometry']
 
@@ -220,5 +259,4 @@ def test_rdkit_run_error(localizer):
     ret = geometric.run_json.geometric_run_json(in_json_dict)
 
     assert ret["success"] == False
-    assert "run_json error" in ret["error_message"]
-    assert ret["trajectory"][-1]["success"] == False
+    assert "UFF methods" in ret["error"]["error_message"]
