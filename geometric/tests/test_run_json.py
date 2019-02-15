@@ -109,8 +109,10 @@ def test_run_json_scan_rejection(localizer):
     with open('in.json', 'w') as handle:
         json.dump(in_json_dict, handle, indent=2)
 
-    with pytest.raises(KeyError):
+    with pytest.raises(KeyError) as excinfo:
         out_json = geometric.run_json.geometric_run_json(in_json_dict)
+
+    assert "'scan' keyword" in str(excinfo.value)
 
 
 @addons.using_qcengine
@@ -227,7 +229,7 @@ def test_run_json_psi4_hydrogen(localizer):
     with open('out.json', 'w') as handle:
         json.dump(out_json, handle, indent=2)
 
-    assert result_geo["success"], result_geo["error"]
+    assert out_json["success"], out_json["error"]
 
     result_geo = out_json['final_molecule']['geometry']
 
@@ -257,4 +259,4 @@ def test_rdkit_run_error(localizer):
     ret = geometric.run_json.geometric_run_json(in_json_dict)
 
     assert ret["success"] == False
-    assert "run_json error" in ret["error"]["error_message"]
+    assert "UFF methods" in ret["error"]["error_message"]
