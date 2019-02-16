@@ -1303,37 +1303,6 @@ class Optimizer(object):
                 break
         return self.progress
     
-def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None, xyzout2=None):
-    """
-    Optimize the geometry of a molecule.
-
-    Parameters
-    ----------
-    coords : np.ndarray
-        Nx3 array of Cartesian coordinates in atomic units
-    molecule : Molecule
-        Molecule object
-    IC : InternalCoordinates
-        Object describing the internal coordinate system
-    engine : Engine
-        Object containing methods for calculating energy and gradient
-    dirname : str
-        Directory name for files to be written
-    params : OptParams object
-        Contains optimization parameters (really just a struct)
-    xyzout : str, optional
-        Output file name for writing the progress of the optimization.
-    xyzout2 : str, optional
-        Output file name for writing the last frame of optimization.
-
-    Returns
-    -------
-    progress: Molecule
-        A molecule object for opt trajectory and energies
-    """
-    optimizer = Optimizer(coords, molecule, IC, engine, dirname, params, xyzout, xyzout2)
-    return optimizer.optimizeGeometry()
-    
 def CheckInternalGrad(coords, molecule, IC, engine, dirname, verbose=False):
     """ Check the internal coordinate gradient using finite difference. """
     # Initial energy and gradient
@@ -1642,7 +1611,7 @@ def run_optimizer(**kwargs):
         else:
             xyzout = prefix+".xyz"
             xyzout2="opt.xyz"
-        progress = Optimize(coords, M, IC, engine, dirname, params, xyzout,xyzout2)
+        progress = Optimizer(coords, M, IC, engine, dirname, params, xyzout,xyzout2).optimizeGeometry()
     else:
         # Run a constrained geometry optimization
         if isinstance(IC, (CartesianCoordinates, PrimitiveInternalCoordinates)):
@@ -1662,7 +1631,7 @@ def run_optimizer(**kwargs):
             else:
                 xyzout = prefix+".xyz"
                 xyzout2="opt.xyz"
-            progress = Optimize(coords, M, IC, engine, dirname, params, xyzout, xyzout2)
+            progress = Optimizer(coords, M, IC, engine, dirname, params, xyzout, xyzout2).optimizeGeometry()
             # update the structure for next optimization in SCAN (by CNH)
             M.xyzs[0] = progress.xyzs[-1]
             coords = progress.xyzs[-1].flatten() * ang2bohr
