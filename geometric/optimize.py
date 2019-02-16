@@ -1642,7 +1642,7 @@ def run_optimizer(**kwargs):
         else:
             xyzout = prefix+".xyz"
             xyzout2="opt.xyz"
-        progress = Optimize(coords, M, IC, engine, dirname, params, xyzout,xyzout2)
+        progress = Optimize(coords, M, IC, engine, dirname, params, xyzout, xyzout2)
     else:
         # Run a constrained geometry optimization
         if isinstance(IC, (CartesianCoordinates, PrimitiveInternalCoordinates)):
