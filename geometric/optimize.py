@@ -878,6 +878,10 @@ class OptObject(object):
             Object describing the internal coordinate system
         engine : Engine
             Object containing methods for calculating energy and gradient
+        trust : float
+            Trust radius of the optimization, subject to be updated
+        dirname : str
+            Directory name for files to be written
         xyzout : str, optional
             Output file name for writing the progress of the optimization.
             Overwrites parameter to Optimizer
@@ -885,19 +889,18 @@ class OptObject(object):
             Output file name for writing the last frame of optimization.
             Overwrites parameter to Optimizer
         """
-        
+        # Copies of data passed into constructor
         self.coords = coords
-        self.IC = IC
         self.molecule = molecule
-        self.progress = deepcopy(molecule)
-        self.progress2 = deepcopy(molecule)
+        self.IC = IC
         self.engine = engine
+        self.trust = trust
         self.dirname = dirname
         self.xyzout = xyzout
         self.xyzout2 = xyzout2
-
-        self.trust = trust
-        
+        # Copies of molecule object for preserving the optimization trajectory and the last frame
+        self.progress = deepcopy(molecule)
+        self.progress2 = deepcopy(molecule)
         # Initial Hessian
         self.H0 = IC.guess_hessian(coords)
         self.H = self.H0.copy()
@@ -915,7 +918,6 @@ class OptObject(object):
         # Loop of optimization
         self.Iteration = 0
         self.CoordCounter = 0
-
         # Print initial iteration
         self.gradxc = IC.calcGradProj(self.X, self.gradx) if self.IC.haveConstraints() else self.gradx.copy()
         self.atomgrad = np.sqrt(np.sum((self.gradxc.reshape(-1,3))**2, axis=1))
@@ -930,28 +932,22 @@ class OptObject(object):
         self.trustprint = "="
         self.ForceRebuild = False    
         self.newmol = None            
-        
 
     def getCartesianNorm(self, dy, enforce, verbose):
         return getCartesianNorm(self.X, dy, self.IC, enforce, verbose)
 
-
     def get_delta_prime(self, v0, rfo):
         return get_delta_prime(v0, self.X, self.G, self.H, self.IC, rfo)
-
         
     def createFroot(self, v0, params):
         return Froot(self.trust, v0, self.X, self.G, self.H, self.IC, params)
-    
     
     def recover(self, params):
         (self.Y, self.G, self.H, self.IC) = \
             recover(self.molecule, self.IC, self.X, self.gradx, self.X_hist, self.Gx_hist, params)
         
-        
     def trust_step(self, iopt, v0, rfo, verbose):
         return trust_step(iopt, v0, self.X, self.G, self.H, self.IC, rfo, verbose)
-        
         
     def newCartesian(self, dy, enforce, verbose):
         if self.IC.haveConstraints() and enforce:
@@ -968,14 +964,11 @@ class OptObject(object):
         self.progress.qm_energies.append(self.E)
         self.progress.comms.append('Iteration %i Energy % .8f' % (self.Iteration, self.E))
         
-        
     def calcGradProj(self):
         self.gradxc = self.IC.calcGradProj(self.X, self.gradx) if self.IC.haveConstraints() else self.gradx.copy()
-        
 
     def RebuildHessian(self, params):
         self.H = RebuildHessian(self.IC, self.H0, self.X_hist, self.Gx_hist, params)
-
 
 class OPT_RESULT(Enum):
     CONVERGED = 1
@@ -1000,13 +993,11 @@ class Optimizer(object):
         self.params = params;
         self.xyzout = xyzout;
         self.xyzout2 = xyzout2;
-        
-
+        # If the trust radius is lower than this number, do not reject steps.
         if self.params.meci:
             self.thre_rj = 1e-4
         else:
             self.thre_rj = 1e-2
-
         # Threshold for "low quality step" which decreases trust radius.
         self.ThreLQ = 0.25
         # Threshold for "high quality step" which increases trust radius.
@@ -1021,7 +1012,6 @@ class Optimizer(object):
         # Approximate b/c Molpro appears to evaluate criteria in normal coordinates instead of cartesian coordinates.
         self.molpro_convergence_gmax = self.params.molpro_convergence_gmax
         self.molpro_convergence_dmax = self.params.molpro_convergence_dmax
-    
     
     def step(self, optObj):
         """
@@ -1118,7 +1108,6 @@ class Optimizer(object):
                 print("\x1b[1;93mSkipping optimization step\x1b[0m")
                 optObj.Iteration -= 1
                 return OPT_RESULT.NOT_CONVERGED
-            
             ##### End Rebuild
             # Finally, take an internal coordinate step of the desired length.
             dy, expect = optObj.trust_step(iopt, v0, params.rfo, params.verbose)
@@ -1152,14 +1141,14 @@ class Optimizer(object):
         # The ratio of the actual energy change to the expected change
         Quality = (optObj.E-Eprev)/expect
         Converged_energy = np.abs(optObj.E-Eprev) < self.Convergence_energy
-        Converged_grms = rms_gradient                < self.Convergence_grms
-        Converged_gmax = max_gradient                < self.Convergence_gmax
-        Converged_drms = rms_displacement            < self.Convergence_drms
-        Converged_dmax = max_displacement            < self.Convergence_dmax
+        Converged_grms = rms_gradient < self.Convergence_grms
+        Converged_gmax = max_gradient < self.Convergence_gmax
+        Converged_drms = rms_displacement < self.Convergence_drms
+        Converged_dmax = max_displacement < self.Convergence_dmax
         BadStep = Quality < 0
         # Molpro defaults for convergence
-        molpro_converged_gmax = max_gradient         < self.molpro_convergence_gmax
-        molpro_converged_dmax = max_displacement     < self.molpro_convergence_dmax
+        molpro_converged_gmax = max_gradient < self.molpro_convergence_gmax
+        molpro_converged_dmax = max_displacement < self.molpro_convergence_dmax
         # Print status
         print("Step %4i :" % optObj.Iteration, end=' '),
         print("Displace = %s%.3e\x1b[0m/%s%.3e\x1b[0m (rms/max)" % ("\x1b[92m" if Converged_drms else "\x1b[0m", rms_displacement, "\x1b[92m" if Converged_dmax else "\x1b[0m", max_displacement), end=' '),
@@ -1274,7 +1263,6 @@ class Optimizer(object):
         if (optObj.CoordCounter == (params.check - 1)) or check:
             optObj.newmol = deepcopy(optObj.molecule)
             optObj.newmol.xyzs[0] = optObj.X.reshape(-1,3) * bohr2ang
-
             optObj.newmol.build_topology()
             IC1 = optObj.IC.__class__(optObj.newmol, build=False, connect=optObj.IC.connect, addcart=optObj.IC.addcart)
             if optObj.IC.haveConstraints(): IC1.getConstraints_from(optObj.IC)
@@ -1359,7 +1347,7 @@ def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None, xyzout2
     """
 
     optzer = Optimizer(params, xyzout, xyzout2);
-    
+
     optObj  = OptObject(coords, molecule, IC, engine, params.trust, dirname)
     
     while optzer.step(optObj) is OPT_RESULT.NOT_CONVERGED:
