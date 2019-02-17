@@ -36,8 +36,8 @@ def _build_input(molecule, program="rdkit", method="UFF", basis=None):
     } # yapf: disable
     return in_json_dict
 
-@pytest.mark.skipif(sys.version_info < (3,5),
-                    reason="requires python3 or higher")
+@pytest.mark.skipif(sys.version_info < (3,6),
+                    reason="requires python3.6 or higher (ordered dict)")
 def test_convert_constraint_dict_full():
     constraint_dict = {
         "freeze": [{
