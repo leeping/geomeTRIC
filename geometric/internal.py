@@ -1290,8 +1290,8 @@ class InternalCoordinates(object):
         for i in range(Der.shape[0]):
             WilsonB.append(Der[i].flatten())
         self.stored_wilsonB[xhash] = np.array(WilsonB)
-        if len(self.stored_wilsonB) > 100 and not CacheWarning:
-            print("\x1b[91mWarning: more than 100 B-matrices stored, memory leaks likely\x1b[0m")
+        if len(self.stored_wilsonB) > 1000 and not CacheWarning:
+            print("\x1b[91mWarning: more than 1000 B-matrices stored, memory leaks likely\x1b[0m")
             CacheWarning = True
         ans = np.array(WilsonB)
         return ans
@@ -1629,14 +1629,34 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                         nnc = (min(a, b), max(a, b)) in noncov
                         nnc += (min(b, c), max(b, c)) in noncov
                         # if nnc >= 2: continue
+                        # print("LPW: cosine of angle", a, b, c, "is", np.abs(np.cos(Ang.value(coords))))
                         if np.abs(np.cos(Ang.value(coords))) < LinThre:
                             self.add(Angle(a, b, c))
                             AngDict[b].append(Ang)
                         elif connect or not addcart:
+                            # print("Adding linear angle")
                             # Add linear angle IC's
-                            self.add(LinearAngle(a, b, c, 0))
-                            self.add(LinearAngle(a, b, c, 1))
-
+                            # LPW 2019-02-16: Linear angle ICs work well for "very" linear angles in molecules (e.g. HCCCN)
+                            # but do not work well for "almost" linear angles in noncovalent systems (e.g. H2O6).
+                            # Bringing back old code to use "translations" for the latter case, but should be investigated
+                            # more deeply in the future.
+                            if nnc == 0:
+                                self.add(LinearAngle(a, b, c, 0))
+                                self.add(LinearAngle(a, b, c, 1))
+                            else:
+                                # Unit vector connecting atoms a and c
+                                nac = molecule.xyzs[0][c] - molecule.xyzs[0][a]
+                                nac /= np.linalg.norm(nac)
+                                # Dot products of this vector with the Cartesian axes
+                                dots = [np.abs(np.dot(ei, nac)) for ei in np.eye(3)]
+                                # Functions for adding Cartesian coordinate
+                                # carts = [CartesianX, CartesianY, CartesianZ]
+                                trans = [TranslationX, TranslationY, TranslationZ]
+                                w = np.array([-1.0, 2.0, -1.0])
+                                # Add two of the most perpendicular Cartesian coordinates
+                                for i in np.argsort(dots)[:2]:
+                                    self.add(trans[i]([a, b, c], w=w))
+                            
         for b in molecule.topology.nodes():
             for a in molecule.topology.neighbors(b):
                 for c in molecule.topology.neighbors(b):

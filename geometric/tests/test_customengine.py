@@ -45,7 +45,7 @@ def test_customengine():
     customengine = CustomEngine(molecule)
 
     tmpf = tempfile.mktemp()
-    m = geometric.optimize.run_optimizer(customengine=customengine, input=tmpf)
+    m = geometric.optimize.run_optimizer(customengine=customengine, check=1, input=tmpf)
 
     coords = m.xyzs[-1] / Bohr
     e = model(coords)[0]
