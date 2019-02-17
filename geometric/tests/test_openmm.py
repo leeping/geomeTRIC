@@ -122,8 +122,8 @@ def test_tric_openmm_water6(localizer):
     assert progress.qm_energies[-1] < (e_ref + 0.001)
     # Check that the optimization converged in less than 100 steps
     assert len(progress) < 100
-    # Check that the geometry matches the reference to within 0.03 RMS 0.05 max displacement
-    assert rmsd < 0.005
-    assert maxd < 0.01
+    # Check that the geometry matches the reference
+    assert rmsd < 0.01
+    assert maxd < 0.02
 
 
