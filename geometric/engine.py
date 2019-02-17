@@ -327,6 +327,49 @@ class TeraChem(Engine):
         energy = float(open(os.path.join(dirname,'energy.txt')).readlines()[0].strip())
         gradient = np.loadtxt(os.path.join(dirname,'grad.txt')).flatten()
         return energy, gradient
+    
+class OpenMM(Engine):
+    """
+    Run a OpenMM energy and gradient calculation.
+    """
+    def __init__(self, molecule, pdb, xml):
+        try:
+            import simtk.openmm.app as app
+            import simtk.openmm as mm
+            import simtk.unit as u
+        except ImportError:
+            raise ImportError("OpenMM computation object requires the 'simtk' package. Please pip or conda install 'openmm' from omnia channel.")
+        pdb = app.PDBFile(pdb)
+        xmlSystem = False
+        if os.path.exists(xml):
+            xmlStr = open(xml).read()
+            try:
+                # If the user has provided an OpenMM system, we can use it directly
+                system = mm.XmlSerializer.deserialize(xmlStr)
+                xmlSystem = True
+                print("Treating the provided xml as a system XML file")
+            except ValueError:
+                print("Treating the provided xml as a force field XML file")
+        else:
+            print("xml file not in the current folder, treating as a force field XML file and setting up in gas phase.")
+        if not xmlSystem:
+            forcefield = app.ForceField(xml)
+            system = forcefield.createSystem(pdb.topology, nonbondedMethod=app.NoCutoff, constraints=None, rigidWater=False)
+        integrator = mm.VerletIntegrator(1.0*u.femtoseconds)
+        platform = mm.Platform.getPlatformByName('Reference')
+        self.simulation = app.Simulation(pdb.topology, system, integrator, platform)
+        super(OpenMM, self).__init__(molecule)
+
+    def calc_new(self, coords, dirname):
+        from simtk.openmm import Vec3
+        import simtk.unit as u
+        self.M.xyzs[0] = coords.reshape(-1, 3) * bohr2ang
+        pos = [Vec3(self.M.xyzs[0][i,0]/10, self.M.xyzs[0][i,1]/10, self.M.xyzs[0][i,2]/10) for i in range(self.M.na)]*u.nanometer
+        self.simulation.context.setPositions(pos)
+        state = self.simulation.context.getState(getEnergy=True, getForces=True)
+        energy = state.getPotentialEnergy().value_in_unit(u.kilojoule_per_mole) / eqcgmx
+        gradient = state.getForces(asNumpy=True).flatten() / fqcgmx
+        return energy, gradient
 
 class Psi4(Engine):
     """

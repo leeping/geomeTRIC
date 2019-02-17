@@ -5,12 +5,13 @@ import itertools
 import os
 import shutil
 import sys
+import time
 
 import numpy as np
 from numpy.linalg import multi_dot
 
 import geometric
-from .engine import set_tcenv, load_tcin, TeraChem, TeraChem_CI, Psi4, QChem, Gromacs, Molpro, QCEngineAPI
+from .engine import set_tcenv, load_tcin, TeraChem, TeraChem_CI, Psi4, QChem, Gromacs, Molpro, OpenMM, QCEngineAPI
 from .internal import *
 from .molecule import Molecule, Elements
 from .nifty import row, col, flat, invert_svd, uncommadash, isint, bohr2ang, ang2bohr
@@ -1412,6 +1413,7 @@ def get_molecule_engine(**kwargs):
     psi4 = kwargs.get('psi4', False)
     gmx = kwargs.get('gmx', False)
     molpro = kwargs.get('molpro', False)
+    openmm = kwargs.get('openmm', False)
     qcengine = kwargs.get('qcengine', False)
     customengine = kwargs.get('customengine', None)
     molproexe = kwargs.get('molproexe', None)
@@ -1423,10 +1425,10 @@ def get_molecule_engine(**kwargs):
     meci_alpha = kwargs.get('meci_alpha')
     nt = kwargs.get('nt', None)
 
-    if sum([qchem, psi4, gmx, molpro, qcengine]) > 1:
-        raise RuntimeError("Do not specify more than one of --qchem, --psi4, --gmx, --molpro, --qcengine")
-    if sum([qchem, psi4, gmx, molpro, qcengine, meci]) > 1:
-        raise RuntimeError("Do not specify --qchem, --psi4, --gmx, --molpro, --qcengine with --meci")
+    if sum([qchem, psi4, gmx, molpro, qcengine, openmm]) > 1:
+        raise RuntimeError("Do not specify more than one of --qchem, --psi4, --gmx, --molpro, --qcengine, --openmm")
+    if sum([qchem, psi4, gmx, molpro, qcengine, openmm, meci]) > 1:
+        raise RuntimeError("Do not specify --qchem, --psi4, --gmx, --molpro, --qcengine, --openmm with --meci")
     if qchem:
         # The file from which we make the Molecule object
         if pdb is not None:
@@ -1450,6 +1452,15 @@ def get_molecule_engine(**kwargs):
         engine = Gromacs(M)
         if nt is not None:
             raise RuntimeError("--nt not configured to work with --gmx yet")
+    elif openmm:
+        if pdb is None:
+            raise RuntimeError("Must pass a PDB with option --pdb to use OpenMM.")
+        M = Molecule(pdb, radii=radii, fragment=frag)
+        if 'boxes' in M.Data:
+            del M.Data['boxes']
+        engine = OpenMM(M, pdb, inputf)
+        if nt is not None:
+            raise RuntimeError("--nt not configured to work with --openmm yet")
     elif psi4:
         engine = Psi4()
         engine.load_psi4_input(inputf)
@@ -1521,6 +1532,7 @@ def run_optimizer(**kwargs):
     Run geometry optimization, constrained optimization, or 
     constrained scan job given arguments from command line.
     """
+    t0 = time.time()
     params = OptParams(**kwargs)
 
     # Get the Molecule and engine objects needed for optimization
@@ -1638,6 +1650,7 @@ def run_optimizer(**kwargs):
         if len(CVals) > 1:
             Mfinal.write('scan-final.xyz')
     print_msg()
+    print("Time elapsed since start of run_optimizer: %.3f seconds" % (time.time()-t0))
     return progress
 
 def main():
@@ -1649,6 +1662,7 @@ def main():
                         'Internal Coordinates (default).')
     parser.add_argument('--qchem', action='store_true', help='Run optimization in Q-Chem (pass Q-Chem input).')
     parser.add_argument('--psi4', action='store_true', help='Compute gradients in Psi4.')
+    parser.add_argument('--openmm', action='store_true', help='Compute gradients in OpenMM. Provide state.xml as input, and --pdb is required.')
     parser.add_argument('--gmx', action='store_true', help='Compute gradients in Gromacs (requires conf.gro, topol.top, shot.mdp).')
     parser.add_argument('--meci', action='store_true', help='Compute minimum-energy conical intersection or crossing point between two SCF solutions (TeraChem only).')
     parser.add_argument('--meci_sigma', type=float, default=3.5, help='Sigma parameter for MECI optimization.')
