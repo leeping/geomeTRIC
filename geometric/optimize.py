@@ -931,7 +931,7 @@ class Optimizer(object):
         self.trustprint = "="
         self.ForceRebuild = False    
         self.newmol = None
-        self.state = NEEDS_EVALUATION
+        self.state = OPT_STATE.NEEDS_EVALUATION
 
     def getCartesianNorm(self, dy):
         return getCartesianNorm(self.X, dy, self.IC, self.params.enforce, self.params.verbose)
