@@ -55,10 +55,9 @@ class BatchOptimizer(object):
     def __init__(self, **kwargs):
         self.kwargs = kwargs
         self.params = gt.OptParams(**kwargs)
-        self.gtOptimizer = gt.Optimizer(self.params, None, None)
         
         
-    def _initOptObjects(self, schemas):
+    def _initOptimizer(self, schemas):
         """ initilize all OptObjects for the schmas passed.
         
         Arguements
@@ -70,7 +69,21 @@ class BatchOptimizer(object):
         list of OptOject's for each schema
         """
         
-        optObjs = []
+        #=========================================#
+        #| Set up the internal coordinate system |#
+        #=========================================#
+        # First item in tuple: The class to be initialized
+        # Second item in tuple: Whether to connect non-bonded fragments
+        # Third item in tuple: Whether to throw in all Cartesian (no effect if second item is True)
+        CoordSysDict = {'cart':(CartesianCoordinates, False, False),
+                        'prim':(PrimitiveInternalCoordinates, True, False),
+                        'dlc':(DelocalizedInternalCoordinates, True, False),
+                        'hdlc':(DelocalizedInternalCoordinates, False, True),
+                        'tric':(DelocalizedInternalCoordinates, False, False)}
+        coordsys = self.kwargs.get('coordsys', 'tric')
+        CoordClass, connect, addcart = CoordSysDict[coordsys.lower()]
+
+        optimizers = []
         for schema in schemas:
             M, engine = gt.get_molecule_engine(qcschema=schema, **self.kwargs)
             coords = M.xyzs[0].flatten() * ang2bohr
@@ -82,42 +95,30 @@ class BatchOptimizer(object):
             else:
                 Cons = None
                 CVals = None
-        
-            #=========================================#
-            #| Set up the internal coordinate system |#
-            #=========================================#
-            # First item in tuple: The class to be initialized
-            # Second item in tuple: Whether to connect non-bonded fragments
-            # Third item in tuple: Whether to throw in all Cartesian (no effect if second item is True)
-            CoordSysDict = {'cart':(CartesianCoordinates, False, False),
-                            'prim':(PrimitiveInternalCoordinates, True, False),
-                            'dlc':(DelocalizedInternalCoordinates, True, False),
-                            'hdlc':(DelocalizedInternalCoordinates, False, True),
-                            'tric':(DelocalizedInternalCoordinates, False, False)}
-            coordsys = self.kwargs.get('coordsys', 'tric')
-            CoordClass, connect, addcart = CoordSysDict[coordsys.lower()]
-    
+            
             IC = CoordClass(M, build=True, connect=connect, addcart=addcart, constraints=Cons, 
                             cvals=CVals[0] if CVals is not None else None)
             tmpDir = tempfile.mkdtemp(".tmp", "batchOpt")
 
-            obj = gt.OptObject(coords, M, IC, engine, self.params.trust, tmpDir)
+            optimizer = gt.Optimizer(coords, M, IC, engine, tmpDir, self.params)
+            optimizer.calcEnergyForce()
+            optimizer.prepareFirstStep()
             log.debug("[AU]: e=%.5f bl=%.5f,%.5f g=%.4f" % (
-                    obj.E, obj.X[0],obj.X[3], obj.gradx[0]))
-            optObjs.append(obj)
+                    optimizer.E, optimizer.X[0],optimizer.X[3], optimizer.gradx[0]))
+            optimizers.append(optimizer)
             
-        return optObjs
+        return optimizers
     
 
-    def _batchComputeEnergyAndForces(self, optObjs):
+    def _batchComputeEnergyAndForces(self, optimizers):
         """ This just an mockup. if this was NNP this would work in one batch
             on the GPU.
         """
-        for obj in optObjs:
-            if obj.state == gt.OPT_STATE.NEEDS_EVALUATION:
-                obj.calcEnergyForce()
+        for optimizer in optimizers:
+            if optimizer.state == gt.OPT_STATE.NEEDS_EVALUATION:
+                optimizer.calcEnergyForce()
                 log.debug("[AU]: e=%.5f bl=%.5f,%.5f g=%.4f" % (
-                    obj.E, obj.X[0],obj.X[3], obj.gradx[0]))
+                    optimizer.E, optimizer.X[0],optimizer.X[3], optimizer.gradx[0]))
     
     def optimizeMols(self, schemas):
         """ Optmize all molecules as represented by the schemas.
@@ -126,33 +127,33 @@ class BatchOptimizer(object):
             ------
             list of optimized Molecule's
         """
-        optObjs = self._initOptObjects(schemas)
+        optimizers = self._initOptimizer(schemas)
         res = []
         
         # Optimization Loop, while not all have completed optimization
-        while len(optObjs) > 0:
+        while len(optimizers) > 0:
             nextOptObjs = []
             
             # take one step, energy and gradient must have been stored in optObj
-            for optObj in optObjs:    
-                self.gtOptimizer.step(optObj)
+            for optimizer in optimizers:    
+                optimizer.step()
 
-            self._batchComputeEnergyAndForces(optObjs)
+            self._batchComputeEnergyAndForces(optimizers)
 
             # evaluate step
-            for optObj in optObjs:    
-                if optObj.state == gt.OPT_STATE.NEEDS_EVALUATION:
+            for optimizer in optimizers:    
+                if optimizer.state == gt.OPT_STATE.NEEDS_EVALUATION:
                     
-                    optStatus = self.gtOptimizer.evaluateStep(optObj) 
-                    if optStatus is not gt.OPT_RESULT.NOT_CONVERGED:
+                    optimizer.evaluateStep() 
+                    if optimizer.state in [gt.OPT_STATE.CONVERGED, gt.OPT_STATE.FAILED]:
                         log.info("Optmization convereged!")
-                        res.append(optObj.progress)
+                        res.append(optimizer.progress)
                         continue
-                nextOptObjs.append(optObj)
+                nextOptObjs.append(optimizer)
             if len(nextOptObjs) == 0: break  ######## All Done
              
             # step and evaluation completed, next step for remaining conformations
-            optObjs = nextOptObjs
+            optimizers = nextOptObjs
             
         return res
  
