@@ -10,7 +10,7 @@ using OpenMM and Gromacs.
 
 Authors: Lee-Ping Wang, Chenchen Song
 
-Contributors: Yudong Qiu (Psi4 engine); Sebastian Lee (Molpro engine); Daniel G. A. Smith (Testing framework); Chaya Stern (Travis, Conda); Qiming Sun (Custom engine); Alberto Gobbi (Batch energy/gradient)
+Contributors: Yudong Qiu (Psi4 engine); Daniel G. A. Smith (Testing framework, QCEngine JSON API); Sebastian Lee (Molpro engine); Chaya Stern (Travis, Conda); Qiming Sun (Custom engine); Alberto Gobbi (Batch energy/gradient)
 
 Contact Email: leeping@ucdavis.edu
 
