@@ -1204,7 +1204,6 @@ class Optimizer(object):
         UpdateHessian = True
         if self.IC.bork: 
             print("Failed inverse iteration - checking coordinate system")
-            print("\x1b[1mWarning: This should only happen in unexpected pathological cases. Please check your system or report an issue.\x1b[0m")
             self.checkCoordinateSystem(recover=True)
             UpdateHessian = False
         elif self.CoordCounter == (params.check - 1):
