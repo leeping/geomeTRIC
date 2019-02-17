@@ -9,6 +9,7 @@ import sys
 import numpy as np
 from numpy.linalg import multi_dot
 
+import geometric
 from .engine import set_tcenv, load_tcin, TeraChem, TeraChem_CI, Psi4, QChem, Gromacs, Molpro, QCEngineAPI
 from .internal import *
 from .molecule import Molecule, Elements
@@ -1692,6 +1693,7 @@ def main():
     parser.add_argument('--nt', type=int, help='Specify number of threads for running in parallel (for TeraChem this should be number of GPUs)')
     parser.add_argument('input', type=str, help='TeraChem or Q-Chem input file')
     parser.add_argument('constraints', type=str, nargs='?', help='Constraint input file (optional)')
+    print('-=# \x1b[1;94m geomeTRIC started. Version: %s \x1b[0m #=-' % geometric.__version__)
     print('geometric-optimize called with the following command line:')
     print(' '.join(sys.argv))
     args = parser.parse_args(sys.argv[1:])
