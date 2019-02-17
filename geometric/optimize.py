@@ -931,6 +931,7 @@ class Optimizer(object):
         self.trustprint = "="
         self.ForceRebuild = False    
         self.newmol = None
+        self.state = NEEDS_EVALUATION
 
     def getCartesianNorm(self, dy):
         return getCartesianNorm(self.X, dy, self.IC, self.params.enforce, self.params.verbose)
@@ -1102,10 +1103,6 @@ class Optimizer(object):
         self.state = OPT_STATE.NEEDS_EVALUATION
 
     def evaluateStep(self):
-        ### Skip evaluation if specified in step()
-        if self.state == OPT_STATE.SKIP_EVALUATION:
-            self.state = OPT_STATE.NEEDS_EVALUATION
-            return
         ### At this point, the state should be NEEDS_EVALUATION
         assert self.state == OPT_STATE.NEEDS_EVALUATION
         # Shorthand for self.params
@@ -1279,13 +1276,11 @@ class Optimizer(object):
     def optimizeGeometry(self):
         self.calcEnergyForce()
         self.prepareFirstStep()
-        while True:
+        while self.state not in [OPT_STATE.CONVERGED, OPT_STATE.FAILED]:
             self.step()
             if self.state == OPT_STATE.NEEDS_EVALUATION: 
                 self.calcEnergyForce()
-            self.evaluateStep()
-            if self.state in [OPT_STATE.CONVERGED, OPT_STATE.FAILED]: 
-                break
+                self.evaluateStep()
         return self.progress
     
 def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None):
