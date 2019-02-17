@@ -937,11 +937,11 @@ class Optimizer(object):
             IC1 = self.IC.__class__(newmol, connect=self.IC.connect, addcart=self.IC.addcart, build=False)
             if self.IC.haveConstraints(): IC1.getConstraints_from(self.IC)
         # Check for differences
-        if IC1 != self.IC:
+        changed = (IC1 != self.IC)
+        if changed:
             print("\x1b[1;94mInternal coordinate system may have changed\x1b[0m")
             if self.IC.repr_diff(IC1) != "":
                 print(self.IC.repr_diff(IC1))
-            changed = True
         # Set current ICs to the new one
         if changed or recover or cartesian:
             self.IC = IC1
