@@ -2301,10 +2301,9 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
             niter += 1
             dQ0 = dQ.copy()
             
-    def newCartesian_withConstraint(self, xyz, dQ, verbose=False):
+    def newCartesian_withConstraint(self, xyz, dQ, thre=0.1, verbose=False):
         xyz2 = self.newCartesian(xyz, dQ, verbose)
         constraintSmall = len(self.Prims.cPrims) > 0
-        thre = 1e-2
         for ic, c in enumerate(self.Prims.cPrims):
             w = c.w if type(c) in [RotationA, RotationB, RotationC] else 1.0
             current = c.value(xyz)/w
@@ -2317,7 +2316,6 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
             if np.abs(diff) > thre:
                 constraintSmall = False
         if constraintSmall:
-            # print "Enforcing exact constraint!"
             xyz2 = self.applyConstraints(xyz2)
         return xyz2
     

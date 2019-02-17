@@ -9,6 +9,7 @@ import sys
 import numpy as np
 from numpy.linalg import multi_dot
 
+import geometric
 from .engine import set_tcenv, load_tcin, TeraChem, TeraChem_CI, Psi4, QChem, Gromacs, Molpro, QCEngineAPI
 from .internal import *
 from .molecule import Molecule, Elements
@@ -109,7 +110,7 @@ def calc_drms_dmax(Xnew, Xold, align=True):
     max_displacement = np.max(displacement)
     return rms_displacement, max_displacement
 
-def getCartesianNorm(X, dy, IC, enforce=False, verbose=False):
+def getCartesianNorm(X, dy, IC, enforce=0.0, verbose=False):
     """
     Get the norm of the optimization step in Cartesian coordinates.
 
@@ -121,8 +122,10 @@ def getCartesianNorm(X, dy, IC, enforce=False, verbose=False):
         N_ic array of internal coordinate displacements
     IC : InternalCoordinates
         Object describing the internal coordinate system
-    enforce : bool
-        Enforce constraints in the internal coordinate system
+    enforce : float
+        Enforce constraints in the internal coordinate system when
+        all constraints are satisfied to within the provided tolerance.
+        Passing a value of zero means this is not used.
     verbose : bool
         Print diagnostic messages
 
@@ -132,8 +135,8 @@ def getCartesianNorm(X, dy, IC, enforce=False, verbose=False):
         The RMSD between the updated and original Cartesian coordinates
     """
     # Displacement of each atom in Angstrom
-    if IC.haveConstraints() and enforce:
-        Xnew = IC.newCartesian_withConstraint(X, dy, verbose=verbose)
+    if IC.haveConstraints() and enforce > 0.0:
+        Xnew = IC.newCartesian_withConstraint(X, dy, thre=enforce, verbose=verbose)
     else:
         Xnew = IC.newCartesian(X, dy, verbose=verbose)
     rmsd, maxd = calc_drms_dmax(Xnew, X)
@@ -841,7 +844,7 @@ class OptParams(object):
     but this was dropped in order to call Optimize() from another script.
     """
     def __init__(self, **kwargs):
-        self.enforce = kwargs.get('enforce', False)
+        self.enforce = kwargs.get('enforce', 0.0)
         self.epsilon = kwargs.get('epsilon', 1e-5)
         self.check = kwargs.get('check', 0)
         self.verbose = kwargs.get('verbose', False)
@@ -871,7 +874,7 @@ class OPT_STATE(object):
     FAILED           = 3  # optimization failed with no recovery option
 
 class Optimizer(object):
-    def __init__(self, coords, molecule, IC, engine, dirname, params, xyzout=None, xyzout2=None):
+    def __init__(self, coords, molecule, IC, engine, dirname, params, xyzout=None):
         """
         Object representing the geometry optimization of a single molecule.
     
@@ -891,8 +894,6 @@ class Optimizer(object):
             Contains optimization parameters (really just a struct)
         xyzout : str, optional
             Output file name for writing the progress of the optimization.
-        xyzout2 : str, optional
-            Output file name for writing the last frame of optimization.
         """
         # Copies of data passed into constructor
         self.coords = coords
@@ -902,7 +903,6 @@ class Optimizer(object):
         self.dirname = dirname
         self.params = params
         self.xyzout = xyzout
-        self.xyzout2 = xyzout2
         # Threshold for "low quality step" which decreases trust radius.
         self.ThreLQ = 0.25
         # Threshold for "high quality step" which increases trust radius.
@@ -951,7 +951,7 @@ class Optimizer(object):
         
     def newCartesian(self, dy):
         if self.IC.haveConstraints() and self.params.enforce:
-            self.X = self.IC.newCartesian_withConstraint(self.X, dy, self.params.verbose)
+            self.X = self.IC.newCartesian_withConstraint(self.X, dy, thre=self.params.enforce, verbose=self.params.verbose)
         else:
             self.X = self.IC.newCartesian(self.X, dy, self.params.verbose)
             
@@ -1137,12 +1137,6 @@ class Optimizer(object):
         
         if Converged_energy and Converged_grms and Converged_drms and Converged_gmax and Converged_dmax and self.conSatisfied:
             print("Converged! =D")
-            # _exec("touch energy.txt") #JS these two lines used to make a energy.txt file using the final energy
-            if self.dirname is not None:
-                with open("energy.txt","w") as f:
-                    print("% .10f" % self.E, file=f)
-            if self.xyzout2 is not None:
-                self.progress[-1].write(self.xyzout2) #This contains the last frame of the trajectory.
             self.state = OPT_STATE.CONVERGED
             return
         
@@ -1153,20 +1147,11 @@ class Optimizer(object):
         
         if params.qccnv and Converged_grms and (Converged_drms or Converged_energy) and self.conSatisfied:
             print("Converged! (Q-Chem style criteria requires grms and either drms or energy)")
-            # _exec("touch energy.txt") #JS these two lines used to make a energy.txt file using the final energy
-            with open("energy.txt","w") as f:
-                print("% .10f" % self.E, file=f)
-            if self.xyzout2 is not None:
-                self.progress[-1].write(self.xyzout2) #This contains the last frame of the trajectory.
             self.state = OPT_STATE.CONVERGED
             return
         
         if params.molcnv and molpro_converged_gmax and (molpro_converged_dmax or Converged_energy) and self.conSatisfied:
             print("Converged! (Molpro style criteria requires gmax and either dmax or energy) This is approximate since convergence checks are done in cartesian coordinates.")
-            with open("energy.txt","w") as f:
-                print("% .10f" % self.E, file=f)
-            if self.xyzout2 is not None:
-                self.progress[-1].write(self.xyzout2) #This contains the last frame of the trajectory.
             self.state = OPT_STATE.CONVERGED
             return
 
@@ -1298,7 +1283,7 @@ class Optimizer(object):
                 self.evaluateStep()
         return self.progress
     
-def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None, xyzout2=None):
+def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None):
     """
     Optimize the geometry of a molecule.
 
@@ -1318,15 +1303,13 @@ def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None, xyzout2
         Contains optimization parameters (really just a struct)
     xyzout : str, optional
         Output file name for writing the progress of the optimization.
-    xyzout2 : str, optional
-        Output file name for writing the last frame of optimization.
 
     Returns
     -------
     progress: Molecule
         A molecule object for opt trajectory and energies
     """
-    optimizer = Optimizer(coords, molecule, IC, engine, dirname, params, xyzout, xyzout2)
+    optimizer = Optimizer(coords, molecule, IC, engine, dirname, params, xyzout)
     return optimizer.optimizeGeometry()
     
 def CheckInternalGrad(coords, molecule, IC, engine, dirname, verbose=False):
@@ -1637,11 +1620,9 @@ def run_optimizer(**kwargs):
         # Run a standard geometry optimization
         if prefix == os.path.splitext(inputf)[0]:
             xyzout = prefix+"_optim.xyz"
-            xyzout2="opt.xyz"
         else:
             xyzout = prefix+".xyz"
-            xyzout2="opt.xyz"
-        progress = Optimize(coords, M, IC, engine, dirname, params, xyzout, xyzout2)
+        progress = Optimize(coords, M, IC, engine, dirname, params, xyzout)
     else:
         # Run a constrained geometry optimization
         if isinstance(IC, (CartesianCoordinates, PrimitiveInternalCoordinates)):
@@ -1654,14 +1635,11 @@ def run_optimizer(**kwargs):
             IC.printConstraints(coords, thre=-1)
             if len(CVals) > 1:
                 xyzout = prefix+"_scan-%03i.xyz" % ic
-                xyzout2="opt.xyz"
             elif prefix == os.path.splitext(kwargs['input'])[0]:
                 xyzout = prefix+"_optim.xyz"
-                xyzout2="opt.xyz"
             else:
                 xyzout = prefix+".xyz"
-                xyzout2="opt.xyz"
-            progress = Optimize(coords, M, IC, engine, dirname, params, xyzout, xyzout2)
+            progress = Optimize(coords, M, IC, engine, dirname, params, xyzout)
             # update the structure for next optimization in SCAN (by CNH)
             M.xyzs[0] = progress.xyzs[-1]
             coords = progress.xyzs[-1].flatten() * ang2bohr
@@ -1696,7 +1674,7 @@ def main():
     parser.add_argument('--prefix', type=str, default=None, help='Specify a prefix for output file and temporary directory.')
     parser.add_argument('--displace', action='store_true', help='Write out the displacements of the coordinates.')
     parser.add_argument('--fdcheck', action='store_true', help='Check internal coordinate gradients using finite difference..')
-    parser.add_argument('--enforce', action='store_true', help='Enforce exact constraints (activated when constraints are almost satisfied)')
+    parser.add_argument('--enforce', type=float, default=0.0, help='Enforce exact constraints when within provided tolerance (in a.u. and radian)')
     parser.add_argument('--epsilon', type=float, default=1e-5, help='Small eigenvalue threshold.')
     parser.add_argument('--check', type=int, default=0, help='Check coordinates every N steps to see whether it has changed.')
     parser.add_argument('--verbose', action='store_true', help='Write out the displacements.')
@@ -1714,6 +1692,7 @@ def main():
     parser.add_argument('--nt', type=int, help='Specify number of threads for running in parallel (for TeraChem this should be number of GPUs)')
     parser.add_argument('input', type=str, help='TeraChem or Q-Chem input file')
     parser.add_argument('constraints', type=str, nargs='?', help='Constraint input file (optional)')
+    print('-=# \x1b[1;94m geomeTRIC started. Version: %s \x1b[0m #=-' % geometric.__version__)
     print('geometric-optimize called with the following command line:')
     print(' '.join(sys.argv))
     args = parser.parse_args(sys.argv[1:])
