@@ -1380,6 +1380,7 @@ def get_molecule_engine(**kwargs):
     gmx = kwargs.get('gmx', False)
     molpro = kwargs.get('molpro', False)
     qcengine = kwargs.get('qcengine', False)
+    customengine = kwargs.get('customengine', None)
     molproexe = kwargs.get('molproexe', None)
     pdb = kwargs.get('pdb', None)
     frag = kwargs.get('frag', False)
@@ -1447,6 +1448,9 @@ def get_molecule_engine(**kwargs):
             raise RuntimeError("QCEngineAPI option requires a qce_program option")
 
         engine = QCEngineAPI(schema, program)
+        M = engine.M
+    elif customengine:
+        engine = customengine
         M = engine.M
     else:
         set_tcenv()
