@@ -5,6 +5,9 @@ import geometric
 import json
 import traceback
 
+import logging
+log = logging.getLogger(__name__)
+
 
 def parse_input_json_dict(in_json_dict):
     """
@@ -177,10 +180,10 @@ def geometric_run_json(in_json_dict):
 
     # Print out information about the coordinate system
     if isinstance(IC, geometric.internal.CartesianCoordinates):
-        print("%i Cartesian coordinates being used" % (3 * M.na))
+        log.warning("%i Cartesian coordinates being used" % (3 * M.na))
     else:
-        print("%i internal coordinates being used (instead of %i Cartesians)" % (len(IC.Internals), 3 * M.na))
-    print(IC)
+        log.warning("%i internal coordinates being used (instead of %i Cartesians)" % (len(IC.Internals), 3 * M.na))
+    log.warning(IC)
 
     params = geometric.optimize.OptParams(**input_opts)
 
@@ -196,7 +199,7 @@ def geometric_run_json(in_json_dict):
                 raise RuntimeError("Constraints only work with delocalized internal coordinates")
             for ic, CVal in enumerate(CVals):
                 if len(CVals) > 1:
-                    print("---=== Scan %i/%i : Constrained Optimization ===---" % (ic + 1, len(CVals)))
+                    log.warning("---=== Scan %i/%i : Constrained Optimization ===---" % (ic + 1, len(CVals)))
                 IC = CoordClass(M, build=True, connect=connect, addcart=addcart, constraints=Cons, cvals=CVal)
                 IC.printConstraints(coords, thre=-1)
                 geometric.optimize.Optimize(coords, M, IC, engine, None, params)
@@ -221,7 +224,7 @@ def main():
     parser.add_argument('in_json', help='Input json file name')
     parser.add_argument('-o', '--out_json', default='out.json', help='Output Json file name')
     args = parser.parse_args()
-    print(' '.join(sys.argv))
+    log.warning(' '.join(sys.argv))
 
     in_json_dict = json.load(open(args.in_json))
     out_json_dict = geometric_run_json(in_json_dict)

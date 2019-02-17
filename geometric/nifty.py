@@ -18,6 +18,9 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import logging
+log = logging.getLogger(__name__)
+
 import filecmp
 import itertools
 import os
@@ -499,16 +502,16 @@ def monotonic_decreasing(arr, start=None, end=None, verbose=False):
         end = len(arr) - 1
     a0 = arr[start]
     idx = [start]
-    if verbose: print("Starting @ %i : %.6f" % (start, arr[start]))
+    if verbose: log.warning("Starting @ %i : %.6f" % (start, arr[start]))
     if end > start:
         i = start+1
         while i < end:
             if arr[i] < a0:
                 a0 = arr[i]
                 idx.append(i)
-                if verbose: print("Including  %i : %.6f" % (i, arr[i]))
+                if verbose: log.warning("Including  %i : %.6f" % (i, arr[i]))
             else:
-                if verbose: print("Excluding  %i : %.6f" % (i, arr[i]))
+                if verbose: log.warning("Excluding  %i : %.6f" % (i, arr[i]))
             i += 1
     if end < start:
         i = start-1
@@ -516,9 +519,9 @@ def monotonic_decreasing(arr, start=None, end=None, verbose=False):
             if arr[i] < a0:
                 a0 = arr[i]
                 idx.append(i)
-                if verbose: print("Including  %i : %.6f" % (i, arr[i]))
+                if verbose: log.warning("Including  %i : %.6f" % (i, arr[i]))
             else:
-                if verbose: print("Excluding  %i : %.6f" % (i, arr[i]))
+                if verbose: log.warning("Excluding  %i : %.6f" % (i, arr[i]))
             i -= 1
     return np.array(idx)
 
@@ -1078,7 +1081,7 @@ def listfiles(fnms=None, ext=None, err=False, dnm=None):
             raise RuntimeError
         answer = [fnms]
     elif fnms is not None:
-        print(fnms)
+        log.warning(fnms)
         logger.error('First argument to listfiles must be a list, a string, or None')
         raise RuntimeError
     if answer == [] and ext is not None:

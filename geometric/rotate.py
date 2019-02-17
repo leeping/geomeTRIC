@@ -4,6 +4,9 @@ import sys
 
 import numpy as np
 
+import logging
+log = logging.getLogger(__name__)
+
 from geometric.molecule import *
 from geometric.nifty import invert_svd
 
@@ -352,7 +355,7 @@ def get_R_der(x, y):
                 RMinus = build_correlation(x, y)
                 x[u, w] += h
                 FDiffR = (RPlus-RMinus)/(2*h)
-                print(u, w, np.max(np.abs(ADiffR[u, w]-FDiffR)))
+                log.warning(u, w, np.max(np.abs(ADiffR[u, w]-FDiffR)))
     return ADiffR
 
 def get_F_der(x, y):
@@ -417,7 +420,7 @@ def get_F_der(x, y):
                 FMinus = build_F(x, y)
                 x[u, w] += h
                 FDiffF = (FPlus-FMinus)/(2*h)
-                print(u, w, np.max(np.abs(dF[u, w]-FDiffF)))
+                log.warning(u, w, np.max(np.abs(dF[u, w]-FDiffF)))
     return dF
 
 def get_q_der(x, y):
@@ -464,9 +467,9 @@ def get_q_der(x, y):
                 QMinus = get_quat(x, y)
                 x[u, w] += h
                 FDiffQ = (QPlus-QMinus)/(2*h)
-                print(QPlus, QMinus)
-                print(dq[u, w], FDiffQ)
-                print(u, w, np.dot(QPlus, QMinus), np.max(np.abs(dq[u, w]-FDiffQ)))
+                log.warning(QPlus, QMinus)
+                log.warning(dq[u, w], FDiffQ)
+                log.warning(u, w, np.dot(QPlus, QMinus), np.max(np.abs(dq[u, w]-FDiffQ)))
     return dq
 
 def calc_fac_dfac(q0):
@@ -551,7 +554,7 @@ def get_expmap_der(x,y):
             VMinus = fac*q[1:]
             q[i] += h
             FDiffV = (VZero-VMinus)/h
-            print(i, dvdq[i], FDiffV, np.max(np.abs(dvdq[i]-FDiffV)))
+            log.warning(i, dvdq[i], FDiffV, np.max(np.abs(dvdq[i]-FDiffV)))
     # Dimensionality: Number of atoms, number of dimensions (3), number of elements in q (4)
     dqdx = get_q_der(x, y)
     # Dimensionality: Number of atoms, number of dimensions (3), number of elements in v (3)
@@ -571,7 +574,7 @@ def get_expmap_der(x,y):
                 VMinus = get_expmap(x, y)
                 x[u, w] += h
                 FDiffV = (VPlus-VMinus)/(2*h)
-                print(u, w, np.max(np.abs(dvdx[u, w]-FDiffV)))
+                log.warning(u, w, np.max(np.abs(dvdx[u, w]-FDiffV)))
     return dvdx
 
 def main():
