@@ -69,7 +69,10 @@ def get_output_json_dict(in_json_dict, schema_traj):
 
     final_molecule = None
     if schema_traj:
-        final_molecule = schema_traj[-1]["molecule"]
+        try:
+            final_molecule = schema_traj[-1]["molecule"]
+        except:
+            final_molecule = None
 
     out_json_dict.update({"trajectory": schema_traj, "energies": energy_traj, "final_molecule": final_molecule})
     return out_json_dict
@@ -77,6 +80,9 @@ def get_output_json_dict(in_json_dict, schema_traj):
 
 def make_constraints_string(constraints_dict):
     """ Convert the new constraints dict format into the original string format """
+
+    constraints_dict = copy.deepcopy(constraints_dict)
+
     key_fields = {"freeze": ("type", ), "set": ("type", "value"), "scan": ("type", "start", "stop", "steps")}
     spec_numbers = {"xyz": None, "distance": 2, "angle": 3, "dihedral": 4}
 
@@ -108,6 +114,14 @@ def make_constraints_string(constraints_dict):
             if (spec_length is not None) and (len(constraint["indices"]) != spec_length):
                 raise ValueError("Expected constraint of type '%s' to have length '%d', found %s." %
                                  (constraint_type, spec_length, str(constraint["indices"])))
+
+            # Translate distance bohr to angstrom
+            if constraint["type"] == "distance":
+                if key == "scan":
+                    constraint["start"] *= geometric.nifty.bohr2ang
+                    constraint["stop"] *= geometric.nifty.bohr2ang
+                elif key == "set":
+                    constraint["value"] *= geometric.nifty.bohr2ang
 
             # Get base values
             const_rep = [constraint_type]
@@ -192,8 +206,11 @@ def geometric_run_json(in_json_dict):
 
     except Exception as e:
         out_json_dict = get_output_json_dict(in_json_dict, engine.schema_traj)
-        out_json_dict["error_message"] = "geomeTRIC run_json error:\n" + traceback.format_exc()
         out_json_dict["success"] = False
+        out_json_dict["error"] = {
+            "error_type": "unknown",
+            "error_message": "geomeTRIC run_json error:\n" + traceback.format_exc()
+        }
 
     return out_json_dict
 

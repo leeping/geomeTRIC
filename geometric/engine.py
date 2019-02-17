@@ -18,7 +18,7 @@ from .nifty import eqcgmx, fqcgmx, bohr2ang, getWorkQueue, queue_up_src_dest
 #| Useful TeraChem functions |#
 #=============================#
 
-def edit_tcin(fin=None, fout=None, options=None, defaults=None):
+def edit_tcin(fin=None, fout=None, options=None, defaults=None, reqxyz=True, ignore_sections=True):
     """
     Parse, modify, and/or create a TeraChem input file.
 
@@ -32,6 +32,10 @@ def edit_tcin(fin=None, fout=None, options=None, defaults=None):
         Dictionary of options to overrule TeraChem input file. Pass None as value to delete a key.
     defaults : dict, optional
         Dictionary of options to add to the end
+    reqxyz : bool, optional
+        Require .xyz file to be present in the current folder
+    ignore_sections : bool, optional
+        Do not parse any blocks delimited by dollar signs (not copied to output and not returned)
 
     Returns
     -------
@@ -43,19 +47,32 @@ def edit_tcin(fin=None, fout=None, options=None, defaults=None):
         defaults = {}
     if options is None:
         options = {}
+    if not ignore_sections:
+        raise RuntimeError("Currently only ignore_constraints=True is supported")
     intkeys = ['charge', 'spinmult']
     Answer = OrderedDict()
     # Read from the input if provided
     if fin is not None:
+        tcin_dirname = os.path.dirname(os.path.abspath(fin))
+        section_mode = False
         for line in open(fin).readlines():
             line = line.split("#")[0].strip()
             if len(line) == 0: continue
+            if line == '$end':
+                section_mode = False
+                continue
+            elif line.startswith("$"):
+                section_mode = True
+            if section_mode : continue
             if line == 'end': break
             s = line.split(' ', 1)
             k = s[0].lower()
-            v = s[1].strip()
-            if k == 'coordinates':
-                if not os.path.exists(v.strip()):
+            try:
+                v = s[1].strip()
+            except IndexError:
+                raise RuntimeError("%s contains an error on the following line:\n%s" % (fin, line))
+            if k == 'coordinates' and reqxyz:
+                if not os.path.exists(os.path.join(tcin_dirname, v.strip())):
                     raise RuntimeError("TeraChem coordinate file does not exist")
             if k in intkeys:
                 v = int(v)
@@ -126,40 +143,37 @@ def load_tcin(f_tcin):
 #| Classes for external codes used  |#
 #| to calculate energy and gradient |#
 #====================================#
-stored_calcs = OrderedDict()
 
 class Engine(object):
     def __init__(self, molecule):
         if len(molecule) != 1:
             raise RuntimeError('Please pass only length-1 molecule objects to engine creation')
         self.M = deepcopy(molecule)
-        # self.stored_calcs = OrderedDict()
+        self.stored_calcs = OrderedDict()
 
     # def __deepcopy__(self, memo):
     #     return copy(self)
 
     def calc(self, coords, dirname):
-        global stored_calcs
         coord_hash = hash(coords.tostring())
-        if coord_hash in stored_calcs:
-            energy = stored_calcs[coord_hash]['energy']
-            gradient = stored_calcs[coord_hash]['gradient']
+        if coord_hash in self.stored_calcs:
+            energy = self.stored_calcs[coord_hash]['energy']
+            gradient = self.stored_calcs[coord_hash]['gradient']
         else:
             if not os.path.exists(dirname): os.makedirs(dirname)
             energy, gradient = self.calc_new(coords, dirname)
-            stored_calcs[coord_hash] = {'coords':coords,'energy':energy,'gradient':gradient}
+            self.stored_calcs[coord_hash] = {'coords':coords,'energy':energy,'gradient':gradient}
         return energy, gradient
 
     def clearCalcs(self):
-        global stored_calcs
-        stored_calcs = OrderedDict()
+        self.stored_calcs = OrderedDict()
 
     def calc_new(self, coords, dirname):
         raise NotImplementedError("Not implemented for the base class")
 
     def calc_wq(self, coords, dirname):
         coord_hash = hash(coords.tostring())
-        if coord_hash in stored_calcs:
+        if coord_hash in self.stored_calcs:
             return
         else:
             self.calc_wq_new(coords, dirname)
@@ -168,16 +182,15 @@ class Engine(object):
         raise NotImplementedError("Work Queue is not implemented for this class")
 
     def read_wq(self, coords, dirname):
-        global stored_calcs
         coord_hash = hash(coords.tostring())
-        if coord_hash in stored_calcs:
-            energy = stored_calcs[coord_hash]['energy']
-            gradient = stored_calcs[coord_hash]['gradient']
+        if coord_hash in self.stored_calcs:
+            energy = self.stored_calcs[coord_hash]['energy']
+            gradient = self.stored_calcs[coord_hash]['gradient']
         else:
             if not os.path.exists(dirname):
                 raise RuntimeError("In read_wq, %s doesn't exist" % dirname)
             energy, gradient = self.read_wq_new(coords, dirname)
-            stored_calcs[coord_hash] = {'coords':coords,'energy':energy,'gradient':gradient}
+            self.stored_calcs[coord_hash] = {'coords':coords,'energy':energy,'gradient':gradient}
         return energy, gradient
 
     def read_wq_new(self, coords, dirname):
@@ -696,7 +709,7 @@ class QCEngineAPI(Engine):
         self.schema_traj.append(ret)
 
         if ret["success"] is False:
-            raise ValueError("QCEngineAPI computation did not execute correctly.\n" + ret["error_message"])
+            raise ValueError("QCEngineAPI computation did not execute correctly. Message: " + ret["error"]["error_message"])
 
         # Unpack the erngies and gradient
         energy = ret["properties"]["return_energy"]
