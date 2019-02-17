@@ -119,7 +119,7 @@ def test_tric_openmm_water6(localizer):
     xdiff = (progress.xyzs[-1] - ref).flatten()
     rmsd, maxd = geometric.optimize.calc_drms_dmax(progress.xyzs[-1], ref, align=True)
     print("RMS / Max displacement from reference:", rmsd, maxd)
-    assert progress.qm_energies[-1] < (e_ref + 0.001)
+    assert progress.qm_energies[-1] < (e_ref + 0.01)
     # Check that the optimization converged in less than 100 steps
     assert len(progress) < 100
     # Check that the geometry matches the reference
