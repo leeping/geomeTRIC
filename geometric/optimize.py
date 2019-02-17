@@ -785,58 +785,6 @@ class Froot(object):
             if self.params.verbose: print("dy(i): %.4f dy(c) -> target: %.4f -> %.4f%s" % (trial, cnorm, self.target, " (done)" if self.from_above else ""))
             return cnorm-self.target
 
-def recover(molecule, IC, X, gradx, X_hist, Gx_hist, params):
-    """
-    Recover from a failed optimization.
-
-    Parameters
-    ----------
-    molecule : Molecule
-        Molecule object for rebuilding internal coordinates
-    IC : InternalCoordinates
-        Object describing the current internal coordinate system
-    X : np.ndarray
-        Nx3 array of Cartesian coordinates in atomic units
-    gradx : np.ndarray
-        Nx3 array of Cartesian gradients in atomic units
-    X_hist : list
-        List of previous Cartesian coordinates
-    Gx_hist : list
-        List of previous Cartesian gradients
-    params : OptParams
-        Pass optimization parameters to Hessian rebuild
-
-    Returns
-    -------
-    Y : np.ndarray
-        New internal coordinates
-    G : np.ndarray
-        New internal gradients
-    H : np.ndarray
-        New internal Hessian
-    """
-    newmol = deepcopy(molecule)
-    newmol.xyzs[0] = X.reshape(-1,3) * bohr2ang
-    newmol.build_topology()
-    IC1 = IC.__class__(newmol, connect=IC.connect, addcart=IC.addcart, build=False)
-    if IC.haveConstraints(): IC1.getConstraints_from(IC)
-    if IC1 != IC:
-        print("\x1b[1;94mInternal coordinate system may have changed\x1b[0m")
-        if IC.repr_diff(IC1) != "":
-            print(IC.repr_diff(IC1))
-    IC = IC1
-    IC.resetRotations(X)
-    if isinstance(IC, DelocalizedInternalCoordinates):
-        IC.build_dlc(X)
-    H0 = IC.guess_hessian(X)
-    if params.reset:
-        H = H0.copy()
-    else:
-        H = RebuildHessian(IC, H0, X_hist, Gx_hist, params)
-    Y = IC.calculate(X)
-    G = IC.calcGrad(X, gradx)
-    return Y, G, H, IC
-
 class OptParams(object):
     """
     Container for optimization parameters.
@@ -930,7 +878,6 @@ class Optimizer(object):
         # Some more variables to be updated throughout the course of the optimization
         self.trustprint = "="
         self.ForceRebuild = False    
-        self.newmol = None
         self.state = OPT_STATE.NEEDS_EVALUATION
 
     def getCartesianNorm(self, dy):
@@ -942,10 +889,38 @@ class Optimizer(object):
     def createFroot(self, v0):
         return Froot(self.trust, v0, self.X, self.G, self.H, self.IC, self.params)
     
-    def recover(self):
-        (self.Y, self.G, self.H, self.IC) = \
-            recover(self.molecule, self.IC, self.X, self.gradx, self.X_hist, self.Gx_hist, self.params)
+    def refreshCoordinates(self):
+        self.IC.resetRotations(self.X)
+        if isinstance(self.IC, DelocalizedInternalCoordinates):
+            self.IC.build_dlc(self.X)
+        self.H0 = self.IC.guess_hessian(self.coords)
+        self.RebuildHessian()
+        self.Y = self.IC.calculate(self.X)
+        self.G = self.IC.calcGrad(self.X, self.gradx)
         
+    def checkCoordinateSystem(self, recover=False, cartesian=False):
+        self.CoordCounter = 0
+        newmol = deepcopy(self.molecule)
+        newmol.xyzs[0] = self.X.reshape(-1,3) * bohr2ang
+        newmol.build_topology()
+        if cartesian:
+            if self.IC.haveConstraints():
+                raise ValueError("Cannot continue a constrained optimization; please implement constrained optimization in Cartesian coordinates")
+            IC1 = CartesianCoordinates(newmol)
+        else:
+            IC1 = self.IC.__class__(newmol, connect=self.IC.connect, addcart=self.IC.addcart, build=False)
+            if self.IC.haveConstraints(): IC1.getConstraints_from(self.IC)
+        if IC1 != self.IC:
+            print("\x1b[1;94mInternal coordinate system may have changed\x1b[0m")
+            if self.IC.repr_diff(IC1) != "":
+                print(self.IC.repr_diff(IC1))
+            changed = True
+        if changed or recover or cartesian:
+            self.IC = IC1
+            self.refreshCoordinates()
+            return True
+        else: return False
+
     def trust_step(self, iopt, v0):
         return trust_step(iopt, v0, self.X, self.G, self.H, self.IC, self.params.rfo, self.params.verbose)
         
@@ -1065,14 +1040,8 @@ class Optimizer(object):
             ##### Force a rebuild of the coordinate system
             if self.ForceRebuild:
                 if LastForce:
-                    print("\x1b[1;91mFailed twice in a row to rebuild the coordinate system\x1b[0m")
-                    if self.IC.haveConstraints():
-                        raise ValueError("Cannot continue a constrained optimization; please implement constrained optimization in Cartesian coordinates")
-                    else:
-                        print("\x1b[93mContinuing in Cartesian coordinates\x1b[0m")
-                        self.IC = CartesianCoordinates(self.newmol)
-                self.CoordCounter = 0
-                self.recover()
+                    print("\x1b[1;91mFailed twice in a row to rebuild the coordinate system; continuing in Cartesian coordinates\x1b[0m")
+                self.checkCoordinateSystem(recover=True, cartesian=LastForce)
                 print("\x1b[1;93mSkipping optimization step\x1b[0m")
                 self.Iteration -= 1
                 self.state = OPT_STATE.SKIP_EVALUATION
@@ -1201,44 +1170,23 @@ class Optimizer(object):
         # Append steps to history (for rebuilding Hessian)
         self.X_hist.append(self.X)
         self.Gx_hist.append(self.gradx)
+        
         ### Rebuild Coordinate System if Necessary ###
-        # Check to see whether the coordinate system has changed
-        check = False
-        # Reinitialize certain variables (i.e. DLC and rotations)
-        reinit = False
-        if self.IC.largeRots():
-            print("Large rotations - reinitializing coordinates")
-            reinit = True
-        if self.IC.bork:
-            print("Failed inverse iteration - reinitializing coordinates")
-            check = True
-            reinit = True
-        # Check the coordinate system every (N) steps
-        if (self.CoordCounter == (params.check - 1)) or check:
-            self.newmol = deepcopy(self.molecule)
-            self.newmol.xyzs[0] = self.X.reshape(-1,3) * bohr2ang
-            self.newmol.build_topology()
-            IC1 = self.IC.__class__(self.newmol, build=False, connect=self.IC.connect, addcart=self.IC.addcart)
-            if self.IC.haveConstraints(): IC1.getConstraints_from(self.IC)
-            if IC1 != self.IC:
-                print("\x1b[1;94mInternal coordinate system may have changed\x1b[0m")
-                if self.IC.repr_diff(IC1) != "":
-                    print(self.IC.repr_diff(IC1))
-                reinit = True
-                self.IC = IC1
-            self.CoordCounter = 0
+        UpdateHessian = True
+        if self.IC.bork: 
+            print("Failed inverse iteration - checking coordinate system")
+            print("\x1b[1mWarning: This should only happen when newly built internal coordinates fail to produce a step. Please check your system or report an issue.\x1b[0m")
+            self.checkCoordinateSystem(recover=True)
+            UpdateHessian = False
+        elif self.CoordCounter == (params.check - 1):
+            print("Checking coordinate system as requested every %i cycles" % params.check)
+            if self.checkCoordinateSystem(): UpdateHessian = False
         else:
             self.CoordCounter += 1
-        # Reinitialize the coordinates (may happen even if coordinate system does not change)
-        UpdateHessian = True
-        if reinit:
-            self.IC.resetRotations(self.X)
-            if isinstance(self.IC, DelocalizedInternalCoordinates):
-                self.IC.build_dlc(self.X)
-            self.H0 = self.IC.guess_hessian(self.coords)
-            self.RebuildHessian()
+        if self.IC.largeRots():
+            print("Large rotations - refreshing Rotator reference points and DLC vectors")
+            self.refreshCoordinates()
             UpdateHessian = False
-            self.Y = self.IC.calculate(self.X)
         self.G = self.IC.calcGrad(self.X, self.gradx).flatten()
 
         ### Update the Hessian ###
