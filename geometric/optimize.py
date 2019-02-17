@@ -837,7 +837,7 @@ class OPT_STATE(object):
 class Optimizer(object):
     def __init__(self, coords, molecule, IC, engine, dirname, params, xyzout=None):
         """
-        Object representing the geometry optimization of a single molecule.
+        Object representing the geometry optimization of a molecular system.
     
         Parameters
         ----------
