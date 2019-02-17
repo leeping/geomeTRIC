@@ -4,7 +4,7 @@ A set of tests for using the QCEngine project
 
 import copy
 import numpy as np
-import json, os, shutil
+import json, os, sys, shutil
 from . import addons
 import geometric
 import pytest
@@ -36,7 +36,8 @@ def _build_input(molecule, program="rdkit", method="UFF", basis=None):
     } # yapf: disable
     return in_json_dict
 
-
+@pytest.mark.skipif(sys.version_info < (3,5),
+                    reason="requires python3 or higher")
 def test_convert_constraint_dict_full():
     constraint_dict = {
         "freeze": [{
