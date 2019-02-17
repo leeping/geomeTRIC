@@ -1,0 +1,549 @@
+geometric-optimize called with the following command line:
+/home/leeping/opt/miniconda3/envs/geometric_psi4/bin/geometric-optimize --psi4 --nt 4 --enforce 0.1 input.dat constraints.txt
+input.tmp exists ; make sure nothing else is writing to the folder
+$freeze
+dihedral 1 3 6 2
+dihedral 3 6 2 12
+dihedral 7 1 3 6
+$scan
+dihedral 3 6 1 13 -40 40.0 20
+39 internal coordinates being used (instead of 39 Cartesians)
+Internal coordinate system (atoms numbered from 1):
+Dihedral 1-3-6-2
+Dihedral 12-2-6-3
+Dihedral 7-1-3-6
+Dihedral 13-1-6-3
+Distance 1-3
+Distance 1-7
+Distance 1-8
+Distance 1-9
+Distance 2-6
+Distance 2-10
+Distance 2-11
+Distance 2-12
+Distance 3-6
+Distance 3-13
+Distance 4-6
+Distance 5-6
+Angle 3-1-7
+Angle 3-1-8
+Angle 3-1-9
+Angle 7-1-8
+Angle 7-1-9
+Angle 8-1-9
+Angle 6-2-10
+Angle 6-2-11
+Angle 6-2-12
+Angle 10-2-11
+Angle 10-2-12
+Angle 11-2-12
+Angle 1-3-6
+Angle 1-3-13
+Angle 6-3-13
+Angle 2-6-3
+Angle 2-6-4
+Angle 2-6-5
+Angle 3-6-4
+Angle 3-6-5
+Angle 4-6-5
+Dihedral 7-1-3-13
+Dihedral 8-1-3-6
+Dihedral 8-1-3-13
+Dihedral 9-1-3-6
+Dihedral 9-1-3-13
+Dihedral 10-2-6-3
+Dihedral 10-2-6-4
+Dihedral 10-2-6-5
+Dihedral 11-2-6-3
+Dihedral 11-2-6-4
+Dihedral 11-2-6-5
+Dihedral 12-2-6-4
+Dihedral 12-2-6-5
+Dihedral 1-3-6-4
+Dihedral 1-3-6-5
+Dihedral 13-3-6-2
+Dihedral 13-3-6-4
+Dihedral 13-3-6-5
+Translation-X 1-13
+Translation-Y 1-13
+Translation-Z 1-13
+Rotation-A 1-13
+Rotation-B 1-13
+Rotation-C 1-13
+<class 'geometric.internal.Dihedral'> : 22
+<class 'geometric.internal.Distance'> : 12
+<class 'geometric.internal.Angle'> : 21
+<class 'geometric.internal.TranslationX'> : 1
+<class 'geometric.internal.TranslationY'> : 1
+<class 'geometric.internal.TranslationZ'> : 1
+<class 'geometric.internal.RotationA'> : 1
+<class 'geometric.internal.RotationB'> : 1
+<class 'geometric.internal.RotationC'> : 1
+---=== Scan 1/20 : Constrained Optimization ===---
+Constraint                         Current      Target       Diff.
+Dihedral 1-3-6-2                 105.55377   105.55377     0.00000
+Dihedral 12-2-6-3                 59.92333    59.92333     0.00000
+Dihedral 7-1-3-6                 -71.24017   -71.24017     0.00000
+Dihedral 13-1-6-3                -40.00224   -40.00000    -0.00224
+Step    0 : Gradient = 7.298e-04/2.073e-03 (rms/max) Energy = -681.0449874971
+Hessian Eigenvalues: 2.30000e-02 2.30000e-02 2.30000e-02 ... 4.27780e-01 1.04754e+00 1.05953e+00
+Step    1 : Displace = [0m5.829e-03[0m/[0m9.845e-03[0m (rms/max) Trust = 1.000e-01 (=) Grad_T = [92m2.502e-04[0m/[0m6.121e-04[0m (rms/max) E (change) = -681.0450038471 ([0m-1.635e-05[0m) Quality = [0m1.149[0m
+Hessian Eigenvalues: 2.08642e-02 2.30000e-02 2.30001e-02 ... 4.58501e-01 1.04755e+00 1.05988e+00
+Step    2 : Displace = [92m7.646e-04[0m/[92m1.639e-03[0m (rms/max) Trust = 1.414e-01 ([92m+[0m) Grad_T = [92m1.121e-04[0m/[92m3.148e-04[0m (rms/max) E (change) = -681.0450049390 ([0m-1.092e-06[0m) Quality = [0m0.980[0m
+Hessian Eigenvalues: 1.95613e-02 2.28611e-02 2.30002e-02 ... 4.26202e-01 1.04759e+00 1.06043e+00
+Step    3 : Displace = [92m2.540e-04[0m/[92m4.746e-04[0m (rms/max) Trust = 2.000e-01 ([92m+[0m) Grad_T = [92m2.899e-05[0m/[92m6.651e-05[0m (rms/max) E (change) = -681.0450050400 ([92m-1.010e-07[0m) Quality = [0m0.652[0m
+Converged! =D
+---=== Scan 2/20 : Constrained Optimization ===---
+Constraint                         Current      Target       Diff.
+Dihedral 1-3-6-2                 105.55377   105.55377     0.00000
+Dihedral 12-2-6-3                 59.92333    59.92333     0.00000
+Dihedral 7-1-3-6                 -71.24017   -71.24017     0.00000
+Dihedral 13-1-6-3                -40.00000   -35.78947    -4.21053
+Step    0 : Gradient = 4.555e-05/9.259e-05 (rms/max) Energy = -681.0450050400
+Hessian Eigenvalues: 2.30000e-02 2.30000e-02 2.30000e-02 ... 4.26858e-01 1.04752e+00 1.05930e+00
+Step    1 : Displace = [0m5.445e-02[0m/[0m9.589e-02[0m (rms/max) Trust = 1.000e-01 (=) Grad_T = [0m8.827e-03[0m/[0m2.386e-02[0m (rms/max) E (change) = -681.0477860709 ([0m-2.781e-03[0m) Quality = [0m3.338[0m
+Hessian Eigenvalues: 1.35788e-02 2.30000e-02 2.30305e-02 ... 1.04452e+00 1.05662e+00 3.24279e+00
+Step    2 : Displace = [0m5.288e-03[0m/[0m9.634e-03[0m (rms/max) Trust = 1.414e-01 ([92m+[0m) Grad_T = [0m7.701e-03[0m/[0m2.120e-02[0m (rms/max) E (change) = -681.0481128452 ([0m-3.268e-04[0m) Quality = [0m1.847[0m
+Hessian Eigenvalues: 1.60931e-02 2.29313e-02 2.30297e-02 ... 5.21602e-01 1.04775e+00 1.06115e+00
+Step    3 : Displace = [0m2.702e-02[0m/[0m4.612e-02[0m (rms/max) Trust = 2.000e-01 ([92m+[0m) Grad_T = [0m1.349e-03[0m/[0m3.502e-03[0m (rms/max) E (change) = -681.0490818588 ([0m-9.690e-04[0m) Quality = [0m0.980[0m
+Hessian Eigenvalues: 1.52057e-02 2.28905e-02 2.30276e-02 ... 5.34375e-01 1.04851e+00 1.06243e+00
+Step    4 : Displace = [0m8.755e-03[0m/[0m1.858e-02[0m (rms/max) Trust = 2.828e-01 ([92m+[0m) Grad_T = [0m7.949e-04[0m/[0m1.988e-03[0m (rms/max) E (change) = -681.0490943655 ([0m-1.251e-05[0m) Quality = [0m0.243[0m
+Hessian Eigenvalues: 1.49436e-02 2.28145e-02 2.29441e-02 ... 5.37648e-01 1.04700e+00 1.06154e+00
+Step    5 : Displace = [0m2.363e-03[0m/[0m5.247e-03[0m (rms/max) Trust = 1.414e-01 ([91m-[0m) Grad_T = [92m1.478e-04[0m/[92m4.056e-04[0m (rms/max) E (change) = -681.0491080896 ([0m-1.372e-05[0m) Quality = [0m0.963[0m
+Hessian Eigenvalues: 1.49329e-02 2.27659e-02 2.28839e-02 ... 5.21663e-01 1.04553e+00 1.06170e+00
+Step    6 : Displace = [92m9.554e-04[0m/[0m1.972e-03[0m (rms/max) Trust = 2.000e-01 ([92m+[0m) Grad_T = [92m7.390e-05[0m/[92m1.901e-04[0m (rms/max) E (change) = -681.0491091337 ([0m-1.044e-06[0m) Quality = [0m1.724[0m
+Hessian Eigenvalues: 1.47563e-02 2.27058e-02 2.27734e-02 ... 4.96836e-01 1.04225e+00 1.06379e+00
+Step    7 : Displace = [92m3.310e-04[0m/[92m5.143e-04[0m (rms/max) Trust = 2.828e-01 ([92m+[0m) Grad_T = [92m1.817e-05[0m/[92m4.318e-05[0m (rms/max) E (change) = -681.0491091301 ([91m+3.622e-09[0m) Quality = [91m-0.041[0m
+Converged! =D
+---=== Scan 3/20 : Constrained Optimization ===---
+Constraint                         Current      Target       Diff.
+Dihedral 1-3-6-2                 105.55377   105.55377     0.00000
+Dihedral 12-2-6-3                 59.92333    59.92333     0.00000
+Dihedral 7-1-3-6                 -71.24017   -71.24017     0.00000
+Dihedral 13-1-6-3                -35.78947   -31.57895    -4.21053
+Step    0 : Gradient = 3.791e-04/1.134e-03 (rms/max) Energy = -681.0491091301
+Hessian Eigenvalues: 2.30000e-02 2.30000e-02 2.30000e-02 ... 4.38822e-01 1.04955e+00 1.05742e+00
+Step    1 : Displace = [0m5.836e-02[0m/[0m9.880e-02[0m (rms/max) Trust = 1.000e-01 (=) Grad_T = [0m1.093e-02[0m/[0m3.000e-02[0m (rms/max) E (change) = -681.0499587218 ([0m-8.496e-04[0m) Quality = [0m1.675[0m
+Hessian Eigenvalues: 1.79965e-02 2.30000e-02 2.30192e-02 ... 1.04643e+00 1.05550e+00 3.38892e+00
+Step    2 : Displace = [0m5.530e-03[0m/[0m1.012e-02[0m (rms/max) Trust = 1.414e-01 ([92m+[0m) Grad_T = [0m9.632e-03[0m/[0m2.692e-02[0m (rms/max) E (change) = -681.0503714527 ([0m-4.127e-04[0m) Quality = [0m1.871[0m
+Hessian Eigenvalues: 1.83403e-02 2.29468e-02 2.30184e-02 ... 5.46456e-01 1.04987e+00 1.05973e+00
+Step    3 : Displace = [0m3.189e-02[0m/[0m5.254e-02[0m (rms/max) Trust = 2.000e-01 ([92m+[0m) Grad_T = [0m1.683e-03[0m/[0m4.279e-03[0m (rms/max) E (change) = -681.0517533958 ([0m-1.382e-03[0m) Quality = [0m1.029[0m
+Hessian Eigenvalues: 1.73581e-02 2.29125e-02 2.30154e-02 ... 5.65133e-01 1.05059e+00 1.06134e+00
+Step    4 : Displace = [0m1.115e-02[0m/[0m2.349e-02[0m (rms/max) Trust = 2.828e-01 ([92m+[0m) Grad_T = [0m9.591e-04[0m/[0m2.409e-03[0m (rms/max) E (change) = -681.0517813577 ([0m-2.796e-05[0m) Quality = [0m0.362[0m
+Hessian Eigenvalues: 1.70177e-02 2.28119e-02 2.29330e-02 ... 5.68549e-01 1.04949e+00 1.06036e+00
+Step    5 : Displace = [0m2.939e-03[0m/[0m6.411e-03[0m (rms/max) Trust = 2.828e-01 (=) Grad_T = [92m1.817e-04[0m/[0m4.988e-04[0m (rms/max) E (change) = -681.0518007587 ([0m-1.940e-05[0m) Quality = [0m0.925[0m
+Hessian Eigenvalues: 1.69825e-02 2.27374e-02 2.28889e-02 ... 5.55279e-01 1.04852e+00 1.06056e+00
+Step    6 : Displace = [0m1.216e-03[0m/[0m2.622e-03[0m (rms/max) Trust = 3.000e-01 ([92m+[0m) Grad_T = [92m8.621e-05[0m/[92m2.071e-04[0m (rms/max) E (change) = -681.0518020883 ([0m-1.330e-06[0m) Quality = [0m1.457[0m
+Hessian Eigenvalues: 1.69013e-02 2.26476e-02 2.27429e-02 ... 5.28852e-01 1.04655e+00 1.06252e+00
+Step    7 : Displace = [92m3.659e-04[0m/[92m5.357e-04[0m (rms/max) Trust = 3.000e-01 (=) Grad_T = [92m2.135e-05[0m/[92m5.293e-05[0m (rms/max) E (change) = -681.0518021447 ([92m-5.632e-08[0m) Quality = [0m0.522[0m
+Converged! =D
+---=== Scan 4/20 : Constrained Optimization ===---
+Constraint                         Current      Target       Diff.
+Dihedral 1-3-6-2                 105.55377   105.55377     0.00000
+Dihedral 12-2-6-3                 59.92333    59.92333     0.00000
+Dihedral 7-1-3-6                 -71.24017   -71.24017     0.00000
+Dihedral 13-1-6-3                -31.57895   -27.36842    -4.21053
+Step    0 : Gradient = 2.716e-04/8.180e-04 (rms/max) Energy = -681.0518021447
+Hessian Eigenvalues: 2.30000e-02 2.30000e-02 2.30000e-02 ... 4.50298e-01 1.05148e+00 1.05623e+00
+Step    1 : Displace = [0m5.910e-02[0m/[0m9.963e-02[0m (rms/max) Trust = 1.000e-01 (=) Grad_T = [0m1.336e-02[0m/[0m3.748e-02[0m (rms/max) E (change) = -681.0508408266 ([91m+9.613e-04[0m) Quality = [91m-3.764[0m
+[93mNot rejecting step - far from constraint satisfaction[0m
+Hessian Eigenvalues: 1.48383e-02 2.30000e-02 2.30107e-02 ... 1.04842e+00 1.05501e+00 4.76385e+00
+Step    2 : Displace = [0m4.348e-03[0m/[0m7.829e-03[0m (rms/max) Trust = 1.000e-01 (=) Grad_T = [0m1.224e-02[0m/[0m3.470e-02[0m (rms/max) E (change) = -681.0512202472 ([0m-3.794e-04[0m) Quality = [0m1.930[0m
+Hessian Eigenvalues: 1.61481e-02 2.29328e-02 2.30134e-02 ... 5.64275e-01 1.05184e+00 1.05872e+00
+Step    3 : Displace = [0m3.742e-02[0m/[0m6.012e-02[0m (rms/max) Trust = 1.414e-01 ([92m+[0m) Grad_T = [0m1.901e-03[0m/[0m4.748e-03[0m (rms/max) E (change) = -681.0531828492 ([0m-1.963e-03[0m) Quality = [0m1.055[0m
+Hessian Eigenvalues: 1.49085e-02 2.28850e-02 2.30124e-02 ... 5.80382e-01 1.05251e+00 1.06067e+00
+Step    4 : Displace = [0m1.363e-02[0m/[0m2.901e-02[0m (rms/max) Trust = 2.000e-01 ([92m+[0m) Grad_T = [0m1.170e-03[0m/[0m3.048e-03[0m (rms/max) E (change) = -681.0532290960 ([0m-4.625e-05[0m) Quality = [0m0.418[0m
+Hessian Eigenvalues: 1.46277e-02 2.27786e-02 2.29134e-02 ... 5.83836e-01 1.05151e+00 1.05957e+00
+Step    5 : Displace = [0m3.564e-03[0m/[0m7.635e-03[0m (rms/max) Trust = 2.000e-01 (=) Grad_T = [92m2.080e-04[0m/[0m5.513e-04[0m (rms/max) E (change) = -681.0532574731 ([0m-2.838e-05[0m) Quality = [0m0.927[0m
+Hessian Eigenvalues: 1.46017e-02 2.27311e-02 2.28689e-02 ... 5.75759e-01 1.05095e+00 1.05976e+00
+Step    6 : Displace = [0m1.429e-03[0m/[0m3.107e-03[0m (rms/max) Trust = 2.828e-01 ([92m+[0m) Grad_T = [92m9.354e-05[0m/[92m2.079e-04[0m (rms/max) E (change) = -681.0532588370 ([0m-1.364e-06[0m) Quality = [0m1.095[0m
+Hessian Eigenvalues: 1.45832e-02 2.26307e-02 2.27385e-02 ... 5.56639e-01 1.04983e+00 1.06235e+00
+Step    7 : Displace = [92m4.016e-04[0m/[92m6.028e-04[0m (rms/max) Trust = 3.000e-01 ([92m+[0m) Grad_T = [92m2.375e-05[0m/[92m5.912e-05[0m (rms/max) E (change) = -681.0532589330 ([92m-9.599e-08[0m) Quality = [0m0.746[0m
+Converged! =D
+---=== Scan 5/20 : Constrained Optimization ===---
+Constraint                         Current      Target       Diff.
+Dihedral 1-3-6-2                 105.55377   105.55377     0.00000
+Dihedral 12-2-6-3                 59.92333    59.92333     0.00000
+Dihedral 7-1-3-6                 -71.24017   -71.24017     0.00000
+Dihedral 13-1-6-3                -27.36842   -23.15789    -4.21053
+Step    0 : Gradient = 1.560e-04/4.724e-04 (rms/max) Energy = -681.0532589330
+Hessian Eigenvalues: 2.30000e-02 2.30000e-02 2.30000e-02 ... 4.59541e-01 1.05333e+00 1.05581e+00
+Step    1 : Displace = [0m5.924e-02[0m/[0m9.904e-02[0m (rms/max) Trust = 1.000e-01 (=) Grad_T = [0m1.576e-02[0m/[0m4.510e-02[0m (rms/max) E (change) = -681.0508656968 ([91m+2.393e-03[0m) Quality = [91m-25.905[0m
+[93mNot rejecting step - far from constraint satisfaction[0m
+Hessian Eigenvalues: 1.03174e-02 2.30000e-02 2.30052e-02 ... 1.05002e+00 1.05509e+00 6.94694e+00
+Step    2 : Displace = [0m3.059e-03[0m/[0m5.408e-03[0m (rms/max) Trust = 1.000e-01 (=) Grad_T = [0m1.487e-02[0m/[0m4.276e-02[0m (rms/max) E (change) = -681.0511704546 ([0m-3.048e-04[0m) Quality = [0m1.982[0m
+Hessian Eigenvalues: 1.15792e-02 2.29064e-02 2.30124e-02 ... 5.77444e-01 1.05370e+00 1.05871e+00
+Step    3 : Displace = [0m4.224e-02[0m/[0m6.571e-02[0m (rms/max) Trust = 1.414e-01 ([92m+[0m) Grad_T = [0m1.903e-03[0m/[0m4.657e-03[0m (rms/max) E (change) = -681.0536952360 ([0m-2.525e-03[0m) Quality = [0m1.075[0m
+Hessian Eigenvalues: 1.05768e-02 2.28466e-02 2.30121e-02 ... 5.88042e-01 1.05418e+00 1.06107e+00
+Step    4 : Displace = [0m1.482e-02[0m/[0m3.217e-02[0m (rms/max) Trust = 2.000e-01 ([92m+[0m) Grad_T = [0m1.290e-03[0m/[0m3.464e-03[0m (rms/max) E (change) = -681.0537500415 ([0m-5.481e-05[0m) Quality = [0m0.433[0m
+Hessian Eigenvalues: 1.04446e-02 2.27370e-02 2.28813e-02 ... 5.91007e-01 1.05341e+00 1.05976e+00
+Step    5 : Displace = [0m3.917e-03[0m/[0m8.245e-03[0m (rms/max) Trust = 2.000e-01 (=) Grad_T = [92m2.128e-04[0m/[0m5.353e-04[0m (rms/max) E (change) = -681.0537841227 ([0m-3.408e-05[0m) Quality = [0m0.926[0m
+Hessian Eigenvalues: 1.04333e-02 2.27122e-02 2.28418e-02 ... 5.86670e-01 1.05316e+00 1.05991e+00
+Step    6 : Displace = [0m1.514e-03[0m/[0m3.304e-03[0m (rms/max) Trust = 2.828e-01 ([92m+[0m) Grad_T = [92m8.847e-05[0m/[92m2.098e-04[0m (rms/max) E (change) = -681.0537852935 ([0m-1.171e-06[0m) Quality = [0m0.835[0m
+Hessian Eigenvalues: 1.04698e-02 2.26202e-02 2.27432e-02 ... 5.75294e-01 1.05260e+00 1.06305e+00
+Step    7 : Displace = [92m4.034e-04[0m/[92m7.180e-04[0m (rms/max) Trust = 3.000e-01 ([92m+[0m) Grad_T = [92m2.125e-05[0m/[92m5.273e-05[0m (rms/max) E (change) = -681.0537854135 ([92m-1.200e-07[0m) Quality = [0m0.925[0m
+Converged! =D
+---=== Scan 6/20 : Constrained Optimization ===---
+Constraint                         Current      Target       Diff.
+Dihedral 1-3-6-2                 105.55377   105.55377     0.00000
+Dihedral 12-2-6-3                 59.92333    59.92333     0.00000
+Dihedral 7-1-3-6                 -71.24017   -71.24017     0.00000
+Dihedral 13-1-6-3                -23.15789   -18.94737    -4.21053
+Step    0 : Gradient = 4.551e-05/1.361e-04 (rms/max) Energy = -681.0537854135
+Hessian Eigenvalues: 2.30000e-02 2.30000e-02 2.30000e-02 ... 4.66412e-01 1.05501e+00 1.05608e+00
+Step    1 : Displace = [0m5.860e-02[0m/[0m9.697e-02[0m (rms/max) Trust = 1.000e-01 (=) Grad_T = [0m1.773e-02[0m/[0m5.156e-02[0m (rms/max) E (change) = -681.0504600781 ([91m+3.325e-03[0m) Quality = [91m-941.249[0m
+[93mNot rejecting step - far from constraint satisfaction[0m
+Hessian Eigenvalues: 5.82990e-03 2.30000e-02 2.30025e-02 ... 1.05117e+00 1.05572e+00 1.06993e+01
+Step    2 : Displace = [0m1.957e-03[0m/[0m3.384e-03[0m (rms/max) Trust = 1.000e-01 (=) Grad_T = [0m1.709e-02[0m/[0m4.982e-02[0m (rms/max) E (change) = -681.0506722320 ([0m-2.122e-04[0m) Quality = [0m2.029[0m
+Hessian Eigenvalues: 6.44113e-03 2.28715e-02 2.30140e-02 ... 5.84596e-01 1.05534e+00 1.05946e+00
+Step    3 : Displace = [0m4.563e-02[0m/[0m6.836e-02[0m (rms/max) Trust = 1.414e-01 ([92m+[0m) Grad_T = [0m1.691e-03[0m/[0m3.938e-03[0m (rms/max) E (change) = -681.0536188690 ([0m-2.947e-03[0m) Quality = [0m1.090[0m
+Hessian Eigenvalues: 5.95206e-03 2.27933e-02 2.30142e-02 ... 5.87540e-01 1.05561e+00 1.06221e+00
+Step    4 : Displace = [0m1.450e-02[0m/[0m3.226e-02[0m (rms/max) Trust = 2.000e-01 ([92m+[0m) Grad_T = [0m1.270e-03[0m/[0m3.487e-03[0m (rms/max) E (change) = -681.0536713382 ([0m-5.247e-05[0m) Quality = [0m0.448[0m
+Hessian Eigenvalues: 5.94059e-03 2.26866e-02 2.28219e-02 ... 5.88954e-01 1.05505e+00 1.06064e+00
+Step    5 : Displace = [0m3.872e-03[0m/[0m8.061e-03[0m (rms/max) Trust = 2.000e-01 (=) Grad_T = [92m2.126e-04[0m/[0m4.917e-04[0m (rms/max) E (change) = -681.0537036060 ([0m-3.227e-05[0m) Quality = [0m0.915[0m
+Hessian Eigenvalues: 5.93853e-03 2.26755e-02 2.27903e-02 ... 5.86933e-01 1.05501e+00 1.06070e+00
+Step    6 : Displace = [0m1.507e-03[0m/[0m3.296e-03[0m (rms/max) Trust = 2.828e-01 ([92m+[0m) Grad_T = [92m7.469e-05[0m/[92m1.856e-04[0m (rms/max) E (change) = -681.0537045034 ([92m-8.974e-07[0m) Quality = [0m0.619[0m
+Hessian Eigenvalues: 5.97205e-03 2.26079e-02 2.27277e-02 ... 5.82875e-01 1.05498e+00 1.06443e+00
+Step    7 : Displace = [92m3.864e-04[0m/[92m8.295e-04[0m (rms/max) Trust = 2.828e-01 (=) Grad_T = [92m1.412e-05[0m/[92m3.335e-05[0m (rms/max) E (change) = -681.0537046512 ([92m-1.478e-07[0m) Quality = [0m1.212[0m
+Converged! =D
+---=== Scan 7/20 : Constrained Optimization ===---
+Constraint                         Current      Target       Diff.
+Dihedral 1-3-6-2                 105.55377   105.55377     0.00000
+Dihedral 12-2-6-3                 59.92333    59.92333     0.00000
+Dihedral 7-1-3-6                 -71.24017   -71.24017     0.00000
+Dihedral 13-1-6-3                -18.94736   -14.73684    -4.21052
+Step    0 : Gradient = 5.691e-05/1.746e-04 (rms/max) Energy = -681.0537046512
+Hessian Eigenvalues: 2.30000e-02 2.30000e-02 2.30000e-02 ... 4.71185e-01 1.05650e+00 1.05687e+00
+Step    1 : Displace = [0m5.667e-02[0m/[0m9.323e-02[0m (rms/max) Trust = 1.000e-01 (=) Grad_T = [0m1.870e-02[0m/[0m5.504e-02[0m (rms/max) E (change) = -681.0499853928 ([0m+3.719e-03[0m) Quality = [0m104.744[0m
+Hessian Eigenvalues: 2.67585e-03 2.30000e-02 2.30018e-02 ... 1.05187e+00 1.05673e+00 1.73371e+01
+Step    2 : Displace = [92m1.195e-03[0m/[0m2.009e-03[0m (rms/max) Trust = 1.414e-01 ([92m+[0m) Grad_T = [0m1.830e-02[0m/[0m5.391e-02[0m (rms/max) E (change) = -681.0501131903 ([0m-1.278e-04[0m) Quality = [0m2.076[0m
+Hessian Eigenvalues: 2.87851e-03 2.28461e-02 2.30132e-02 ... 5.80789e-01 1.05685e+00 1.06035e+00
+Step    3 : Displace = [0m4.636e-02[0m/[0m6.923e-02[0m (rms/max) Trust = 2.000e-01 ([92m+[0m) Grad_T = [0m1.411e-03[0m/[0m2.879e-03[0m (rms/max) E (change) = -681.0532025028 ([0m-3.089e-03[0m) Quality = [0m1.099[0m
+Hessian Eigenvalues: 2.70308e-03 2.27202e-02 2.30098e-02 ... 5.77742e-01 1.05701e+00 1.06362e+00
+Step    4 : Displace = [0m1.330e-02[0m/[0m3.008e-02[0m (rms/max) Trust = 2.828e-01 ([92m+[0m) Grad_T = [0m1.116e-03[0m/[0m3.119e-03[0m (rms/max) E (change) = -681.0532525698 ([0m-5.007e-05[0m) Quality = [0m0.517[0m
+Hessian Eigenvalues: 2.72022e-03 2.26107e-02 2.27240e-02 ... 5.77435e-01 1.05663e+00 1.06128e+00
+Step    5 : Displace = [0m3.513e-03[0m/[0m7.339e-03[0m (rms/max) Trust = 2.828e-01 (=) Grad_T = [92m2.358e-04[0m/[0m5.229e-04[0m (rms/max) E (change) = -681.0532765685 ([0m-2.400e-05[0m) Quality = [0m0.873[0m
+Hessian Eigenvalues: 2.72106e-03 2.25772e-02 2.27156e-02 ... 5.76354e-01 1.05669e+00 1.06127e+00
+Step    6 : Displace = [0m1.525e-03[0m/[0m3.317e-03[0m (rms/max) Trust = 3.000e-01 ([92m+[0m) Grad_T = [92m6.538e-05[0m/[92m1.553e-04[0m (rms/max) E (change) = -681.0532774266 ([92m-8.581e-07[0m) Quality = [0m0.508[0m
+Hessian Eigenvalues: 2.73598e-03 2.25985e-02 2.26102e-02 ... 5.76227e-01 1.05699e+00 1.06607e+00
+Step    7 : Displace = [92m3.686e-04[0m/[92m9.024e-04[0m (rms/max) Trust = 3.000e-01 (=) Grad_T = [92m8.267e-06[0m/[92m1.396e-05[0m (rms/max) E (change) = -681.0532776209 ([92m-1.943e-07[0m) Quality = [0m1.557[0m
+Converged! =D
+---=== Scan 8/20 : Constrained Optimization ===---
+Constraint                         Current      Target       Diff.
+Dihedral 1-3-6-2                 105.55377   105.55377     0.00000
+Dihedral 12-2-6-3                 59.92333    59.92333     0.00000
+Dihedral 7-1-3-6                 -71.24017   -71.24017     0.00000
+Dihedral 13-1-6-3                -14.73684   -10.52632    -4.21053
+Step    0 : Gradient = 1.593e-04/4.706e-04 (rms/max) Energy = -681.0532776209
+Hessian Eigenvalues: 2.30000e-02 2.30000e-02 2.30000e-02 ... 4.73417e-01 1.05783e+00 1.05803e+00
+[91mWarning: more than 100 B-matrices stored, memory leaks likely[0m
+Step    1 : Displace = [0m1.393e-01[0m/[0m2.105e-01[0m (rms/max) Trust = 1.000e-01 (=) Grad_T = [0m5.409e-02[0m/[0m1.545e-01[0m (rms/max) E (change) = -681.0402942596 ([0m+1.298e-02[0m) Quality = [0m158.226[0m
+Hessian Eigenvalues: 1.65351e-02 2.30000e-02 2.30020e-02 ... 1.05661e+00 1.05795e+00 1.13386e+01
+Step    2 : Displace = [0m1.391e-02[0m/[0m2.175e-02[0m (rms/max) Trust = 1.414e-01 ([92m+[0m) Grad_T = [0m4.723e-02[0m/[0m1.353e-01[0m (rms/max) E (change) = -681.0426040718 ([0m-2.310e-03[0m) Quality = [0m2.006[0m
+Hessian Eigenvalues: 1.74322e-02 2.26290e-02 2.30002e-02 ... 1.05676e+00 1.05794e+00 1.56408e+00
+Step    3 : Displace = [0m8.616e-02[0m/[0m1.353e-01[0m (rms/max) Trust = 2.000e-01 ([92m+[0m) Grad_T = [0m9.224e-03[0m/[0m2.441e-02[0m (rms/max) E (change) = -681.0516402204 ([0m-9.036e-03[0m) Quality = [0m1.175[0m
+Hessian Eigenvalues: 1.55607e-02 2.25307e-02 2.29747e-02 ... 1.04805e+00 1.05794e+00 1.25287e+00
+Step    4 : Displace = [0m3.889e-02[0m/[0m8.931e-02[0m (rms/max) Trust = 2.828e-01 ([92m+[0m) Grad_T = [0m4.485e-03[0m/[0m1.054e-02[0m (rms/max) E (change) = -681.0524639857 ([0m-8.238e-04[0m) Quality = [0m0.814[0m
+Hessian Eigenvalues: 1.56126e-02 2.21355e-02 2.28643e-02 ... 9.57046e-01 1.05798e+00 1.10304e+00
+Step    5 : Displace = [0m1.412e-02[0m/[0m2.136e-02[0m (rms/max) Trust = 3.000e-01 ([92m+[0m) Grad_T = [0m1.410e-03[0m/[0m3.207e-03[0m (rms/max) E (change) = -681.0526452867 ([0m-1.813e-04[0m) Quality = [0m0.797[0m
+Hessian Eigenvalues: 1.56423e-02 2.19046e-02 2.28665e-02 ... 9.25049e-01 1.05802e+00 1.07512e+00
+Step    6 : Displace = [0m3.601e-03[0m/[0m6.341e-03[0m (rms/max) Trust = 3.000e-01 (=) Grad_T = [92m2.408e-04[0m/[0m4.930e-04[0m (rms/max) E (change) = -681.0526752893 ([0m-3.000e-05[0m) Quality = [0m1.016[0m
+Hessian Eigenvalues: 1.56060e-02 2.20780e-02 2.26898e-02 ... 9.16963e-01 1.05068e+00 1.06124e+00
+Step    7 : Displace = [92m9.907e-04[0m/[0m2.095e-03[0m (rms/max) Trust = 3.000e-01 (=) Grad_T = [92m9.063e-05[0m/[92m2.121e-04[0m (rms/max) E (change) = -681.0526765676 ([0m-1.278e-06[0m) Quality = [0m1.515[0m
+Hessian Eigenvalues: 1.48069e-02 1.85011e-02 2.25493e-02 ... 8.47917e-01 1.02752e+00 1.06023e+00
+Step    8 : Displace = [92m4.574e-04[0m/[92m9.414e-04[0m (rms/max) Trust = 3.000e-01 (=) Grad_T = [92m1.216e-05[0m/[92m1.906e-05[0m (rms/max) E (change) = -681.0526768242 ([92m-2.567e-07[0m) Quality = [0m2.038[0m
+Converged! =D
+---=== Scan 9/20 : Constrained Optimization ===---
+Constraint                         Current      Target       Diff.
+Dihedral 1-3-6-2                 105.55377   105.55377     0.00000
+Dihedral 12-2-6-3                 59.92333    59.92333     0.00000
+Dihedral 7-1-3-6                 -71.24017   -71.24017     0.00000
+Dihedral 13-1-6-3                -10.52631    -6.31579    -4.21052
+Step    0 : Gradient = 2.061e-04/6.213e-04 (rms/max) Energy = -681.0526768242
+Hessian Eigenvalues: 2.30000e-02 2.30000e-02 2.30000e-02 ... 4.75706e-01 1.05891e+00 1.05954e+00
+Step    1 : Displace = [0m1.242e-01[0m/[0m1.905e-01[0m (rms/max) Trust = 1.000e-01 (=) Grad_T = [0m4.536e-02[0m/[0m1.320e-01[0m (rms/max) E (change) = -681.0418338830 ([0m+1.084e-02[0m) Quality = [0m155.002[0m
+Hessian Eigenvalues: 1.59269e-02 2.30000e-02 2.30033e-02 ... 1.05724e+00 1.05932e+00 1.25542e+01
+Step    2 : Displace = [0m1.020e-02[0m/[0m1.565e-02[0m (rms/max) Trust = 1.414e-01 ([92m+[0m) Grad_T = [0m4.087e-02[0m/[0m1.191e-01[0m (rms/max) E (change) = -681.0433654238 ([0m-1.532e-03[0m) Quality = [0m2.095[0m
+Hessian Eigenvalues: 1.63897e-02 2.28269e-02 2.30003e-02 ... 1.05665e+00 1.05927e+00 1.38004e+00
+Step    3 : Displace = [0m8.170e-02[0m/[0m1.289e-01[0m (rms/max) Trust = 2.000e-01 ([92m+[0m) Grad_T = [0m6.895e-03[0m/[0m1.804e-02[0m (rms/max) E (change) = -681.0512416066 ([0m-7.876e-03[0m) Quality = [0m1.170[0m
+Hessian Eigenvalues: 1.51515e-02 2.24542e-02 2.29851e-02 ... 1.02330e+00 1.05925e+00 1.13480e+00
+Step    4 : Displace = [0m3.522e-02[0m/[0m7.873e-02[0m (rms/max) Trust = 2.828e-01 ([92m+[0m) Grad_T = [0m3.465e-03[0m/[0m8.736e-03[0m (rms/max) E (change) = -681.0518479498 ([0m-6.063e-04[0m) Quality = [0m0.769[0m
+Hessian Eigenvalues: 1.51933e-02 2.21214e-02 2.27903e-02 ... 8.93254e-01 1.05935e+00 1.09123e+00
+Step    5 : Displace = [0m1.065e-02[0m/[0m1.820e-02[0m (rms/max) Trust = 3.000e-01 ([92m+[0m) Grad_T = [0m1.193e-03[0m/[0m2.608e-03[0m (rms/max) E (change) = -681.0519744904 ([0m-1.265e-04[0m) Quality = [0m0.764[0m
+Hessian Eigenvalues: 1.52320e-02 2.19934e-02 2.27873e-02 ... 8.75907e-01 1.05911e+00 1.07542e+00
+Step    6 : Displace = [0m3.438e-03[0m/[0m6.694e-03[0m (rms/max) Trust = 3.000e-01 (=) Grad_T = [92m1.655e-04[0m/[92m3.317e-04[0m (rms/max) E (change) = -681.0519962913 ([0m-2.180e-05[0m) Quality = [0m0.963[0m
+Hessian Eigenvalues: 1.52303e-02 2.21491e-02 2.26678e-02 ... 8.74094e-01 1.05435e+00 1.06536e+00
+Step    7 : Displace = [92m8.707e-04[0m/[0m1.871e-03[0m (rms/max) Trust = 3.000e-01 (=) Grad_T = [92m6.813e-05[0m/[92m1.595e-04[0m (rms/max) E (change) = -681.0519972306 ([92m-9.394e-07[0m) Quality = [0m1.561[0m
+Hessian Eigenvalues: 1.45168e-02 1.97121e-02 2.26769e-02 ... 8.14924e-01 1.03783e+00 1.06339e+00
+Step    8 : Displace = [92m3.077e-04[0m/[92m6.422e-04[0m (rms/max) Trust = 3.000e-01 (=) Grad_T = [92m1.507e-05[0m/[92m2.817e-05[0m (rms/max) E (change) = -681.0519974087 ([92m-1.780e-07[0m) Quality = [0m2.740[0m
+Converged! =D
+---=== Scan 10/20 : Constrained Optimization ===---
+Constraint                         Current      Target       Diff.
+Dihedral 1-3-6-2                 105.55377   105.55377     0.00000
+Dihedral 12-2-6-3                 59.92334    59.92334     0.00000
+Dihedral 7-1-3-6                 -71.24017   -71.24017     0.00000
+Dihedral 13-1-6-3                 -6.31579    -2.10526    -4.21053
+Step    0 : Gradient = 1.911e-04/5.918e-04 (rms/max) Energy = -681.0519974087
+Hessian Eigenvalues: 2.30000e-02 2.30000e-02 2.30000e-02 ... 4.76982e-01 1.05989e+00 1.06127e+00
+Step    1 : Displace = [0m8.214e-02[0m/[0m1.275e-01[0m (rms/max) Trust = 1.000e-01 (=) Grad_T = [0m2.345e-02[0m/[0m6.905e-02[0m (rms/max) E (change) = -681.0465793822 ([0m+5.418e-03[0m) Quality = [0m117.587[0m
+Hessian Eigenvalues: -3.32640e+01 1.77130e-03 2.30000e-02 ... 4.70462e-01 1.05719e+00 1.06079e+00
+Step    2 : Displace = [0m9.314e-03[0m/[0m1.437e-02[0m (rms/max) Trust = 1.414e-01 ([92m+[0m) Grad_T = [0m2.091e-02[0m/[0m6.159e-02[0m (rms/max) E (change) = -681.0473991619 ([0m-8.198e-04[0m) Quality = [0m0.343[0m
+Hessian Eigenvalues: 1.81029e-03 2.29998e-02 2.30067e-02 ... 1.00909e+00 1.05838e+00 1.06223e+00
+Step    3 : Displace = [0m5.713e-02[0m/[0m8.896e-02[0m (rms/max) Trust = 1.414e-01 (=) Grad_T = [0m3.345e-03[0m/[0m5.792e-03[0m (rms/max) E (change) = -681.0510267680 ([0m-3.628e-03[0m) Quality = [0m1.167[0m
+Hessian Eigenvalues: 1.72315e-03 2.25351e-02 2.30164e-02 ... 8.50022e-01 1.06048e+00 1.08049e+00
+Step    4 : Displace = [0m2.074e-02[0m/[0m4.451e-02[0m (rms/max) Trust = 2.000e-01 ([92m+[0m) Grad_T = [0m1.657e-03[0m/[0m4.707e-03[0m (rms/max) E (change) = -681.0512281368 ([0m-2.014e-04[0m) Quality = [0m0.702[0m
+Hessian Eigenvalues: 1.72723e-03 2.22511e-02 2.25929e-02 ... 8.08125e-01 1.06032e+00 1.07547e+00
+Step    5 : Displace = [0m5.589e-03[0m/[0m1.097e-02[0m (rms/max) Trust = 2.000e-01 (=) Grad_T = [0m5.378e-04[0m/[0m1.201e-03[0m (rms/max) E (change) = -681.0512740907 ([0m-4.595e-05[0m) Quality = [0m0.756[0m
+Hessian Eigenvalues: 1.73063e-03 2.21915e-02 2.25963e-02 ... 8.06884e-01 1.06034e+00 1.07441e+00
+Step    6 : Displace = [0m2.774e-03[0m/[0m5.683e-03[0m (rms/max) Trust = 2.828e-01 ([92m+[0m) Grad_T = [92m1.155e-04[0m/[92m2.470e-04[0m (rms/max) E (change) = -681.0512793474 ([0m-5.257e-06[0m) Quality = [0m0.745[0m
+Hessian Eigenvalues: 1.72331e-03 2.23038e-02 2.24276e-02 ... 8.07742e-01 1.06053e+00 1.07796e+00
+Step    7 : Displace = [92m3.952e-04[0m/[92m8.590e-04[0m (rms/max) Trust = 2.828e-01 (=) Grad_T = [92m3.179e-05[0m/[92m7.993e-05[0m (rms/max) E (change) = -681.0512796806 ([92m-3.332e-07[0m) Quality = [0m1.570[0m
+Converged! =D
+---=== Scan 11/20 : Constrained Optimization ===---
+Constraint                         Current      Target       Diff.
+Dihedral 1-3-6-2                 105.55377   105.55377     0.00000
+Dihedral 12-2-6-3                 59.92334    59.92334     0.00000
+Dihedral 7-1-3-6                 -71.24017   -71.24017     0.00000
+Dihedral 13-1-6-3                 -2.10526     2.10526    -4.21053
+Step    0 : Gradient = 1.645e-04/4.852e-04 (rms/max) Energy = -681.0512796806
+Hessian Eigenvalues: 2.30000e-02 2.30000e-02 2.30000e-02 ... 4.77315e-01 1.06094e+00 1.06294e+00
+Step    1 : Displace = [0m4.159e-02[0m/[0m7.752e-02[0m (rms/max) Trust = 1.000e-01 (=) Grad_T = [0m7.357e-03[0m/[0m1.902e-02[0m (rms/max) E (change) = -681.0491908331 ([0m+2.089e-03[0m) Quality = [0m49.727[0m
+Hessian Eigenvalues: -1.99395e+01 8.75892e-04 2.30000e-02 ... 4.71653e-01 1.04767e+00 1.06208e+00
+Step    2 : Displace = [0m5.754e-03[0m/[0m9.166e-03[0m (rms/max) Trust = 1.414e-01 ([92m+[0m) Grad_T = [0m6.497e-03[0m/[0m1.622e-02[0m (rms/max) E (change) = -681.0494083759 ([0m-2.175e-04[0m) Quality = [0m0.304[0m
+Hessian Eigenvalues: 9.17097e-04 2.30001e-02 2.30218e-02 ... 7.19469e-01 1.05679e+00 1.06367e+00
+Step    3 : Displace = [0m2.706e-02[0m/[0m4.460e-02[0m (rms/max) Trust = 1.414e-01 (=) Grad_T = [0m3.455e-03[0m/[0m8.589e-03[0m (rms/max) E (change) = -681.0503724746 ([0m-9.641e-04[0m) Quality = [0m1.010[0m
+Hessian Eigenvalues: 8.21842e-04 2.13095e-02 2.30289e-02 ... 6.42391e-01 1.06181e+00 1.10437e+00
+Step    4 : Displace = [0m1.297e-02[0m/[0m2.126e-02[0m (rms/max) Trust = 2.000e-01 ([92m+[0m) Grad_T = [0m1.094e-03[0m/[0m2.725e-03[0m (rms/max) E (change) = -681.0505123781 ([0m-1.399e-04[0m) Quality = [0m0.966[0m
+Hessian Eigenvalues: 8.35548e-04 2.02918e-02 2.28309e-02 ... 7.32117e-01 1.01018e+00 1.06242e+00
+Step    5 : Displace = [0m4.342e-03[0m/[0m8.112e-03[0m (rms/max) Trust = 2.828e-01 ([92m+[0m) Grad_T = [0m4.633e-04[0m/[0m1.302e-03[0m (rms/max) E (change) = -681.0505254660 ([0m-1.309e-05[0m) Quality = [0m0.725[0m
+Hessian Eigenvalues: 8.29782e-04 1.95617e-02 2.28239e-02 ... 6.09017e-01 9.32512e-01 1.06224e+00
+Step    6 : Displace = [0m2.530e-03[0m/[0m4.664e-03[0m (rms/max) Trust = 2.828e-01 (=) Grad_T = [92m1.020e-04[0m/[92m2.275e-04[0m (rms/max) E (change) = -681.0505273258 ([0m-1.860e-06[0m) Quality = [0m0.394[0m
+Hessian Eigenvalues: 8.01365e-04 1.91831e-02 2.27342e-02 ... 6.71941e-01 9.25197e-01 1.06226e+00
+Step    7 : Displace = [92m6.053e-04[0m/[92m1.050e-03[0m (rms/max) Trust = 2.828e-01 (=) Grad_T = [92m2.286e-05[0m/[92m5.557e-05[0m (rms/max) E (change) = -681.0505282057 ([92m-8.798e-07[0m) Quality = [0m2.885[0m
+Converged! =D
+---=== Scan 12/20 : Constrained Optimization ===---
+Constraint                         Current      Target       Diff.
+Dihedral 1-3-6-2                 105.55377   105.55377     0.00000
+Dihedral 12-2-6-3                 59.92334    59.92334     0.00000
+Dihedral 7-1-3-6                 -71.24017   -71.24017     0.00000
+Dihedral 13-1-6-3                  2.10526     6.31579    -4.21053
+Step    0 : Gradient = 1.953e-04/5.665e-04 (rms/max) Energy = -681.0505282057
+Hessian Eigenvalues: 2.30000e-02 2.30000e-02 2.30000e-02 ... 4.76846e-01 1.06143e+00 1.06509e+00
+Step    1 : Displace = [0m4.977e-02[0m/[0m9.680e-02[0m (rms/max) Trust = 1.000e-01 (=) Grad_T = [0m5.353e-03[0m/[0m1.423e-02[0m (rms/max) E (change) = -681.0486960186 ([0m+1.832e-03[0m) Quality = [0m42.232[0m
+Hessian Eigenvalues: 7.03859e-03 2.30000e-02 2.30232e-02 ... 1.05462e+00 1.06392e+00 5.54263e+00
+Step    2 : Displace = [0m2.414e-03[0m/[0m4.541e-03[0m (rms/max) Trust = 1.414e-01 ([92m+[0m) Grad_T = [0m5.111e-03[0m/[0m1.364e-02[0m (rms/max) E (change) = -681.0487952670 ([0m-9.925e-05[0m) Quality = [0m1.839[0m
+Hessian Eigenvalues: 7.05313e-03 2.18949e-02 2.30192e-02 ... 4.89699e-01 1.06245e+00 1.06813e+00
+Step    3 : Displace = [0m4.265e-02[0m/[0m8.494e-02[0m (rms/max) Trust = 2.000e-01 ([92m+[0m) Grad_T = [0m9.928e-04[0m/[0m2.080e-03[0m (rms/max) E (change) = -681.0496990585 ([0m-9.038e-04[0m) Quality = [0m0.897[0m
+Hessian Eigenvalues: 6.95402e-03 2.06520e-02 2.30214e-02 ... 4.85893e-01 1.06264e+00 1.07189e+00
+Step    4 : Displace = [0m6.885e-03[0m/[0m1.435e-02[0m (rms/max) Trust = 2.828e-01 ([92m+[0m) Grad_T = [0m7.379e-04[0m/[0m1.709e-03[0m (rms/max) E (change) = -681.0497041014 ([0m-5.043e-06[0m) Quality = [0m0.125[0m
+Hessian Eigenvalues: 7.01125e-03 2.04939e-02 2.30141e-02 ... 5.67171e-01 1.06284e+00 1.06468e+00
+Step    5 : Displace = [0m4.764e-03[0m/[0m9.418e-03[0m (rms/max) Trust = 1.414e-01 ([91m-[0m) Grad_T = [92m1.325e-04[0m/[92m3.124e-04[0m (rms/max) E (change) = -681.0497238857 ([0m-1.978e-05[0m) Quality = [0m1.183[0m
+Hessian Eigenvalues: 7.00261e-03 2.01874e-02 2.30155e-02 ... 6.11190e-01 1.06235e+00 1.06818e+00
+Step    6 : Displace = [0m1.275e-03[0m/[92m1.750e-03[0m (rms/max) Trust = 2.000e-01 ([92m+[0m) Grad_T = [92m1.427e-04[0m/[92m3.923e-04[0m (rms/max) E (change) = -681.0497229957 ([91m+8.901e-07[0m) Quality = [91m-1.097[0m
+Hessian Eigenvalues: 7.00261e-03 2.01874e-02 2.30155e-02 ... 6.11190e-01 1.06235e+00 1.06818e+00
+Step    7 : Displace = [0m1.275e-03[0m/[92m1.750e-03[0m (rms/max) Trust = 1.200e-03 ([1;91mx[0m) Grad_T = [92m1.427e-04[0m/[92m3.923e-04[0m (rms/max) E (change) = -681.0497229957 ([91m+8.901e-07[0m) Quality = [91m-1.097[0m
+[93mNot rejecting step - trust below 1.000e-02[0m
+Hessian Eigenvalues: 7.01471e-03 2.01947e-02 2.30157e-02 ... 6.27981e-01 1.05217e+00 1.06393e+00
+Step    8 : Displace = [92m4.740e-04[0m/[92m9.251e-04[0m (rms/max) Trust = 1.200e-03 ([91m-[0m) Grad_T = [92m2.067e-05[0m/[92m4.361e-05[0m (rms/max) E (change) = -681.0497237143 ([92m-7.186e-07[0m) Quality = [0m1.715[0m
+Converged! =D
+---=== Scan 13/20 : Constrained Optimization ===---
+Constraint                         Current      Target       Diff.
+Dihedral 1-3-6-2                 105.55377   105.55377     0.00000
+Dihedral 12-2-6-3                 59.92334    59.92334     0.00000
+Dihedral 7-1-3-6                 -71.24017   -71.24017     0.00000
+Dihedral 13-1-6-3                  6.31579    10.52632    -4.21053
+Step    0 : Gradient = 2.702e-04/7.657e-04 (rms/max) Energy = -681.0497237143
+Hessian Eigenvalues: 2.30000e-02 2.30000e-02 2.30000e-02 ... 4.75500e-01 1.06161e+00 1.06735e+00
+Step    1 : Displace = [0m8.341e-02[0m/[0m1.349e-01[0m (rms/max) Trust = 1.000e-01 (=) Grad_T = [0m1.496e-02[0m/[0m4.290e-02[0m (rms/max) E (change) = -681.0460548377 ([0m+3.669e-03[0m) Quality = [0m69.273[0m
+Hessian Eigenvalues: 8.39990e-03 2.30000e-02 2.30146e-02 ... 1.06140e+00 1.06725e+00 9.32873e+00
+Step    2 : Displace = [0m3.992e-03[0m/[0m6.205e-03[0m (rms/max) Trust = 1.414e-01 ([92m+[0m) Grad_T = [0m1.434e-02[0m/[0m4.119e-02[0m (rms/max) E (change) = -681.0462995083 ([0m-2.447e-04[0m) Quality = [0m1.785[0m
+Hessian Eigenvalues: 8.40150e-03 2.29572e-02 2.30000e-02 ... 5.13683e-01 1.06162e+00 1.06749e+00
+Step    3 : Displace = [0m9.219e-02[0m/[0m1.607e-01[0m (rms/max) Trust = 2.000e-01 ([92m+[0m) Grad_T = [0m2.991e-03[0m/[0m6.455e-03[0m (rms/max) E (change) = -681.0486832690 ([0m-2.384e-03[0m) Quality = [0m0.780[0m
+Hessian Eigenvalues: 8.38888e-03 2.23721e-02 2.29891e-02 ... 5.85766e-01 1.06199e+00 1.06782e+00
+Step    4 : Displace = [0m1.930e-02[0m/[0m3.785e-02[0m (rms/max) Trust = 2.828e-01 ([92m+[0m) Grad_T = [0m7.055e-04[0m/[0m1.425e-03[0m (rms/max) E (change) = -681.0488153336 ([0m-1.321e-04[0m) Quality = [0m0.843[0m
+Hessian Eigenvalues: 8.49241e-03 2.24460e-02 2.28509e-02 ... 6.14571e-01 1.06215e+00 1.06606e+00
+Step    5 : Displace = [0m4.182e-03[0m/[0m9.311e-03[0m (rms/max) Trust = 3.000e-01 ([92m+[0m) Grad_T = [0m3.106e-04[0m/[0m8.231e-04[0m (rms/max) E (change) = -681.0488252014 ([0m-9.868e-06[0m) Quality = [0m0.734[0m
+Hessian Eigenvalues: 8.34111e-03 2.12762e-02 2.28466e-02 ... 5.79293e-01 1.05862e+00 1.06476e+00
+Step    6 : Displace = [0m1.761e-03[0m/[0m3.080e-03[0m (rms/max) Trust = 3.000e-01 (=) Grad_T = [92m1.472e-04[0m/[92m3.065e-04[0m (rms/max) E (change) = -681.0488254261 ([92m-2.247e-07[0m) Quality = [0m0.088[0m
+Hessian Eigenvalues: 8.15368e-03 2.06081e-02 2.28441e-02 ... 6.12771e-01 1.05098e+00 1.06427e+00
+Step    7 : Displace = [92m6.519e-04[0m/[92m1.089e-03[0m (rms/max) Trust = 1.500e-01 ([91m-[0m) Grad_T = [92m2.979e-05[0m/[92m6.918e-05[0m (rms/max) E (change) = -681.0488262190 ([92m-7.930e-07[0m) Quality = [0m1.945[0m
+Converged! =D
+---=== Scan 14/20 : Constrained Optimization ===---
+Constraint                         Current      Target       Diff.
+Dihedral 1-3-6-2                 105.55377   105.55377     0.00000
+Dihedral 12-2-6-3                 59.92334    59.92334     0.00000
+Dihedral 7-1-3-6                 -71.24017   -71.24017     0.00000
+Dihedral 13-1-6-3                 10.52632    14.73684    -4.21053
+Step    0 : Gradient = 3.676e-04/1.038e-03 (rms/max) Energy = -681.0488262190
+Hessian Eigenvalues: 2.30000e-02 2.30000e-02 2.30000e-02 ... 4.73327e-01 1.06150e+00 1.06975e+00
+Step    1 : Displace = [0m1.050e-01[0m/[0m1.612e-01[0m (rms/max) Trust = 1.000e-01 (=) Grad_T = [0m2.270e-02[0m/[0m6.442e-02[0m (rms/max) E (change) = -681.0432938413 ([0m+5.532e-03[0m) Quality = [0m75.159[0m
+Hessian Eigenvalues: 9.76802e-03 2.30000e-02 2.30111e-02 ... 1.06147e+00 1.06960e+00 9.21352e+00
+Step    2 : Displace = [0m5.533e-03[0m/[0m8.171e-03[0m (rms/max) Trust = 1.414e-01 ([92m+[0m) Grad_T = [0m2.170e-02[0m/[0m6.165e-02[0m (rms/max) E (change) = -681.0437229284 ([0m-4.291e-04[0m) Quality = [0m1.789[0m
+Hessian Eigenvalues: 9.57120e-03 2.29923e-02 2.30008e-02 ... 5.07202e-01 1.06155e+00 1.07019e+00
+Step    3 : Displace = [0m1.289e-01[0m/[0m2.128e-01[0m (rms/max) Trust = 2.000e-01 ([92m+[0m) Grad_T = [0m7.400e-03[0m/[0m1.820e-02[0m (rms/max) E (change) = -681.0472958664 ([0m-3.573e-03[0m) Quality = [0m0.684[0m
+Hessian Eigenvalues: 9.94748e-03 2.25470e-02 2.29956e-02 ... 6.22908e-01 1.06159e+00 1.07012e+00
+Step    4 : Displace = [0m4.114e-02[0m/[0m8.051e-02[0m (rms/max) Trust = 2.000e-01 (=) Grad_T = [0m2.055e-03[0m/[0m5.096e-03[0m (rms/max) E (change) = -681.0477185155 ([0m-4.226e-04[0m) Quality = [0m0.658[0m
+Hessian Eigenvalues: 1.03063e-02 2.24387e-02 2.29685e-02 ... 6.94661e-01 1.06217e+00 1.06994e+00
+Step    5 : Displace = [0m9.846e-03[0m/[0m2.238e-02[0m (rms/max) Trust = 2.000e-01 (=) Grad_T = [0m6.106e-04[0m/[0m1.294e-03[0m (rms/max) E (change) = -681.0477682262 ([0m-4.971e-05[0m) Quality = [0m0.788[0m
+Hessian Eigenvalues: 1.01317e-02 2.18288e-02 2.29679e-02 ... 6.07096e-01 1.06302e+00 1.06848e+00
+Step    6 : Displace = [0m4.134e-03[0m/[0m6.974e-03[0m (rms/max) Trust = 2.828e-01 ([92m+[0m) Grad_T = [0m4.137e-04[0m/[0m8.090e-04[0m (rms/max) E (change) = -681.0477682847 ([92m-5.849e-08[0m) Quality = [0m0.006[0m
+Hessian Eigenvalues: 9.97627e-03 2.15734e-02 2.29401e-02 ... 6.79206e-01 1.06205e+00 1.06473e+00
+Step    7 : Displace = [0m1.662e-03[0m/[0m2.802e-03[0m (rms/max) Trust = 1.414e-01 ([91m-[0m) Grad_T = [92m5.150e-05[0m/[92m1.293e-04[0m (rms/max) E (change) = -681.0477721682 ([0m-3.883e-06[0m) Quality = [0m1.657[0m
+Hessian Eigenvalues: 1.00487e-02 2.16957e-02 2.29368e-02 ... 6.52589e-01 1.05872e+00 1.06532e+00
+Step    8 : Displace = [92m1.230e-04[0m/[92m2.284e-04[0m (rms/max) Trust = 2.000e-01 ([92m+[0m) Grad_T = [92m1.436e-05[0m/[92m3.898e-05[0m (rms/max) E (change) = -681.0477723026 ([92m-1.344e-07[0m) Quality = [0m5.758[0m
+Converged! =D
+---=== Scan 15/20 : Constrained Optimization ===---
+Constraint                         Current      Target       Diff.
+Dihedral 1-3-6-2                 105.55377   105.55377     0.00000
+Dihedral 12-2-6-3                 59.92334    59.92334     0.00000
+Dihedral 7-1-3-6                 -71.24017   -71.24017     0.00000
+Dihedral 13-1-6-3                 14.73684    18.94737    -4.21053
+Step    0 : Gradient = 4.313e-04/1.218e-03 (rms/max) Energy = -681.0477723026
+Hessian Eigenvalues: 2.30000e-02 2.30000e-02 2.30000e-02 ... 4.70262e-01 1.06091e+00 1.07244e+00
+Step    1 : Displace = [0m1.186e-01[0m/[0m1.781e-01[0m (rms/max) Trust = 1.000e-01 (=) Grad_T = [0m2.674e-02[0m/[0m7.540e-02[0m (rms/max) E (change) = -681.0407409227 ([0m+7.031e-03[0m) Quality = [0m60.195[0m
+Hessian Eigenvalues: 1.73451e-02 2.30000e-02 2.30071e-02 ... 1.06089e+00 1.07233e+00 5.29419e+00
+Step    2 : Displace = [0m1.124e-02[0m/[0m1.638e-02[0m (rms/max) Trust = 1.414e-01 ([92m+[0m) Grad_T = [0m2.458e-02[0m/[0m6.929e-02[0m (rms/max) E (change) = -681.0417354136 ([0m-9.945e-04[0m) Quality = [0m1.791[0m
+Hessian Eigenvalues: 1.60666e-02 2.29449e-02 2.30020e-02 ... 5.13707e-01 1.06094e+00 1.07272e+00
+Step    3 : Displace = [0m1.534e-01[0m/[0m2.486e-01[0m (rms/max) Trust = 2.000e-01 ([92m+[0m) Grad_T = [0m1.298e-02[0m/[0m3.295e-02[0m (rms/max) E (change) = -681.0454149840 ([0m-3.680e-03[0m) Quality = [0m0.564[0m
+Hessian Eigenvalues: 1.81556e-02 2.18764e-02 2.30016e-02 ... 6.97241e-01 1.06093e+00 1.07264e+00
+Step    4 : Displace = [0m6.534e-02[0m/[0m1.244e-01[0m (rms/max) Trust = 2.000e-01 (=) Grad_T = [0m4.067e-03[0m/[0m1.054e-02[0m (rms/max) E (change) = -681.0463177962 ([0m-9.028e-04[0m) Quality = [0m0.558[0m
+Hessian Eigenvalues: 1.91236e-02 2.19913e-02 2.29774e-02 ... 8.00859e-01 1.06132e+00 1.07273e+00
+Step    5 : Displace = [0m1.616e-02[0m/[0m3.566e-02[0m (rms/max) Trust = 2.000e-01 (=) Grad_T = [0m1.061e-03[0m/[0m2.409e-03[0m (rms/max) E (change) = -681.0464568389 ([0m-1.390e-04[0m) Quality = [0m0.875[0m
+Hessian Eigenvalues: 1.88926e-02 2.13904e-02 2.29218e-02 ... 6.54128e-01 1.06184e+00 1.07223e+00
+Step    6 : Displace = [0m7.140e-03[0m/[0m1.197e-02[0m (rms/max) Trust = 2.828e-01 ([92m+[0m) Grad_T = [0m7.629e-04[0m/[0m1.538e-03[0m (rms/max) E (change) = -681.0464536132 ([91m+3.226e-06[0m) Quality = [91m-0.133[0m
+Hessian Eigenvalues: 1.88524e-02 2.12010e-02 2.29134e-02 ... 7.51024e-01 1.06177e+00 1.07092e+00
+Step    7 : Displace = [0m2.832e-03[0m/[0m4.628e-03[0m (rms/max) Trust = 1.414e-01 ([91m-[0m) Grad_T = [92m5.529e-05[0m/[92m1.197e-04[0m (rms/max) E (change) = -681.0464642025 ([0m-1.059e-05[0m) Quality = [0m1.453[0m
+Hessian Eigenvalues: 1.90184e-02 2.13629e-02 2.29128e-02 ... 7.32839e-01 1.06126e+00 1.07122e+00
+Step    8 : Displace = [92m1.184e-04[0m/[92m2.438e-04[0m (rms/max) Trust = 2.000e-01 ([92m+[0m) Grad_T = [92m1.479e-05[0m/[92m3.839e-05[0m (rms/max) E (change) = -681.0464643980 ([92m-1.956e-07[0m) Quality = [0m6.897[0m
+Converged! =D
+---=== Scan 16/20 : Constrained Optimization ===---
+Constraint                         Current      Target       Diff.
+Dihedral 1-3-6-2                 105.55377   105.55377     0.00000
+Dihedral 12-2-6-3                 59.92334    59.92334     0.00000
+Dihedral 7-1-3-6                 -71.24017   -71.24017     0.00000
+Dihedral 13-1-6-3                 18.94737    23.15789    -4.21053
+Step    0 : Gradient = 3.729e-04/1.075e-03 (rms/max) Energy = -681.0464643980
+Hessian Eigenvalues: 2.30000e-02 2.30000e-02 2.30000e-02 ... 4.67528e-01 1.05991e+00 1.07520e+00
+Step    1 : Displace = [0m6.236e-02[0m/[0m1.174e-01[0m (rms/max) Trust = 1.000e-01 (=) Grad_T = [0m1.344e-02[0m/[0m3.967e-02[0m (rms/max) E (change) = -681.0426316594 ([0m+3.833e-03[0m) Quality = [0m28.613[0m
+Hessian Eigenvalues: 1.26421e-02 2.30000e-02 2.30296e-02 ... 1.05990e+00 1.07505e+00 5.50157e+00
+Step    2 : Displace = [0m2.245e-03[0m/[0m3.785e-03[0m (rms/max) Trust = 1.414e-01 ([92m+[0m) Grad_T = [0m1.284e-02[0m/[0m3.795e-02[0m (rms/max) E (change) = -681.0428191610 ([0m-1.875e-04[0m) Quality = [0m1.866[0m
+Hessian Eigenvalues: 1.28917e-02 2.29941e-02 2.30293e-02 ... 4.91709e-01 1.05999e+00 1.07587e+00
+Step    3 : Displace = [0m6.323e-02[0m/[0m1.102e-01[0m (rms/max) Trust = 2.000e-01 ([92m+[0m) Grad_T = [0m1.955e-03[0m/[0m4.113e-03[0m (rms/max) E (change) = -681.0446837584 ([0m-1.865e-03[0m) Quality = [0m0.834[0m
+Hessian Eigenvalues: 1.25693e-02 2.29815e-02 2.30696e-02 ... 5.17325e-01 1.06001e+00 1.07582e+00
+Step    4 : Displace = [0m8.697e-03[0m/[0m1.642e-02[0m (rms/max) Trust = 2.828e-01 ([92m+[0m) Grad_T = [0m5.765e-04[0m/[0m1.319e-03[0m (rms/max) E (change) = -681.0447504599 ([0m-6.670e-05[0m) Quality = [0m0.882[0m
+Hessian Eigenvalues: 1.27269e-02 2.25776e-02 2.30052e-02 ... 4.75104e-01 1.06096e+00 1.07905e+00
+Step    5 : Displace = [0m2.536e-03[0m/[0m5.000e-03[0m (rms/max) Trust = 3.000e-01 ([92m+[0m) Grad_T = [92m2.671e-04[0m/[0m6.227e-04[0m (rms/max) E (change) = -681.0447569720 ([0m-6.512e-06[0m) Quality = [0m0.676[0m
+Hessian Eigenvalues: 1.27766e-02 2.25357e-02 2.29308e-02 ... 4.80856e-01 1.06033e+00 1.06938e+00
+Step    6 : Displace = [0m1.595e-03[0m/[0m3.278e-03[0m (rms/max) Trust = 3.000e-01 (=) Grad_T = [92m7.039e-05[0m/[92m1.517e-04[0m (rms/max) E (change) = -681.0447563200 ([91m+6.521e-07[0m) Quality = [91m-0.396[0m
+Hessian Eigenvalues: 1.27484e-02 2.24939e-02 2.29059e-02 ... 4.94905e-01 1.06026e+00 1.06438e+00
+Step    7 : Displace = [92m4.399e-04[0m/[92m8.799e-04[0m (rms/max) Trust = 1.500e-01 ([91m-[0m) Grad_T = [92m2.122e-05[0m/[92m5.329e-05[0m (rms/max) E (change) = -681.0447568418 ([92m-5.218e-07[0m) Quality = [0m2.927[0m
+Converged! =D
+---=== Scan 17/20 : Constrained Optimization ===---
+Constraint                         Current      Target       Diff.
+Dihedral 1-3-6-2                 105.55377   105.55377     0.00000
+Dihedral 12-2-6-3                 59.92334    59.92334     0.00000
+Dihedral 7-1-3-6                 -71.24017   -71.24017     0.00000
+Dihedral 13-1-6-3                 23.15789    27.36842    -4.21053
+Step    0 : Gradient = 4.257e-04/1.237e-03 (rms/max) Energy = -681.0447568418
+Hessian Eigenvalues: 2.30000e-02 2.30000e-02 2.30000e-02 ... 4.62763e-01 1.05844e+00 1.07800e+00
+Step    1 : Displace = [0m6.317e-02[0m/[0m1.188e-01[0m (rms/max) Trust = 1.000e-01 (=) Grad_T = [0m1.277e-02[0m/[0m3.732e-02[0m (rms/max) E (change) = -681.0403641762 ([0m+4.393e-03[0m) Quality = [0m21.206[0m
+Hessian Eigenvalues: 1.50592e-02 2.30000e-02 2.30193e-02 ... 1.05839e+00 1.07795e+00 4.50596e+00
+Step    2 : Displace = [0m3.005e-03[0m/[0m4.833e-03[0m (rms/max) Trust = 1.414e-01 ([92m+[0m) Grad_T = [0m1.206e-02[0m/[0m3.531e-02[0m (rms/max) E (change) = -681.0405988324 ([0m-2.347e-04[0m) Quality = [0m1.861[0m
+Hessian Eigenvalues: 1.48071e-02 2.29958e-02 2.30543e-02 ... 4.89645e-01 1.05840e+00 1.07817e+00
+Step    3 : Displace = [0m6.307e-02[0m/[0m1.051e-01[0m (rms/max) Trust = 2.000e-01 ([92m+[0m) Grad_T = [0m1.857e-03[0m/[0m4.053e-03[0m (rms/max) E (change) = -681.0423672094 ([0m-1.768e-03[0m) Quality = [0m0.819[0m
+Hessian Eigenvalues: 1.47067e-02 2.29737e-02 2.30805e-02 ... 5.15897e-01 1.05840e+00 1.07818e+00
+Step    4 : Displace = [0m1.026e-02[0m/[0m1.884e-02[0m (rms/max) Trust = 2.828e-01 ([92m+[0m) Grad_T = [0m4.323e-04[0m/[0m1.031e-03[0m (rms/max) E (change) = -681.0424394589 ([0m-7.225e-05[0m) Quality = [0m1.081[0m
+Hessian Eigenvalues: 1.52976e-02 2.28742e-02 2.29748e-02 ... 4.73820e-01 1.05841e+00 1.07985e+00
+Step    5 : Displace = [0m2.038e-03[0m/[0m3.798e-03[0m (rms/max) Trust = 3.000e-01 ([92m+[0m) Grad_T = [92m1.686e-04[0m/[92m4.337e-04[0m (rms/max) E (change) = -681.0424415302 ([0m-2.071e-06[0m) Quality = [0m0.439[0m
+Hessian Eigenvalues: 1.47022e-02 2.28631e-02 2.29754e-02 ... 4.73657e-01 1.05827e+00 1.06738e+00
+Step    6 : Displace = [92m1.049e-03[0m/[0m2.097e-03[0m (rms/max) Trust = 3.000e-01 (=) Grad_T = [92m8.062e-05[0m/[92m1.916e-04[0m (rms/max) E (change) = -681.0424403341 ([91m+1.196e-06[0m) Quality = [91m-1.990[0m
+Hessian Eigenvalues: 1.47022e-02 2.28631e-02 2.29754e-02 ... 4.73657e-01 1.05827e+00 1.06738e+00
+Step    7 : Displace = [92m1.049e-03[0m/[0m2.097e-03[0m (rms/max) Trust = 1.200e-03 ([1;91mx[0m) Grad_T = [92m8.062e-05[0m/[92m1.916e-04[0m (rms/max) E (change) = -681.0424403341 ([91m+1.196e-06[0m) Quality = [91m-1.990[0m
+[93mNot rejecting step - trust below 1.000e-02[0m
+Hessian Eigenvalues: 1.45408e-02 2.26833e-02 2.29107e-02 ... 4.82773e-01 1.05513e+00 1.06059e+00
+Step    8 : Displace = [92m4.051e-04[0m/[92m9.342e-04[0m (rms/max) Trust = 1.200e-03 ([91m-[0m) Grad_T = [92m1.820e-05[0m/[92m3.787e-05[0m (rms/max) E (change) = -681.0424408172 ([92m-4.831e-07[0m) Quality = [0m3.073[0m
+Converged! =D
+---=== Scan 18/20 : Constrained Optimization ===---
+Constraint                         Current      Target       Diff.
+Dihedral 1-3-6-2                 105.55377   105.55377     0.00000
+Dihedral 12-2-6-3                 59.92334    59.92334     0.00000
+Dihedral 7-1-3-6                 -71.24017   -71.24017     0.00000
+Dihedral 13-1-6-3                 27.36842    31.57895    -4.21053
+Step    0 : Gradient = 5.253e-04/1.516e-03 (rms/max) Energy = -681.0424408172
+Hessian Eigenvalues: 2.30000e-02 2.30000e-02 2.30000e-02 ... 4.56401e-01 1.05654e+00 1.08083e+00
+Step    1 : Displace = [0m6.307e-02[0m/[0m1.186e-01[0m (rms/max) Trust = 1.000e-01 (=) Grad_T = [0m1.149e-02[0m/[0m3.319e-02[0m (rms/max) E (change) = -681.0374079248 ([0m+5.033e-03[0m) Quality = [0m15.351[0m
+Hessian Eigenvalues: 1.76412e-02 2.30000e-02 2.30089e-02 ... 1.05646e+00 1.08082e+00 3.50647e+00
+Step    2 : Displace = [0m3.919e-03[0m/[0m6.246e-03[0m (rms/max) Trust = 1.414e-01 ([92m+[0m) Grad_T = [0m1.063e-02[0m/[0m3.079e-02[0m (rms/max) E (change) = -681.0376911790 ([0m-2.833e-04[0m) Quality = [0m1.848[0m
+Hessian Eigenvalues: 1.65421e-02 2.29968e-02 2.30678e-02 ... 4.85457e-01 1.05650e+00 1.08085e+00
+Step    3 : Displace = [0m5.796e-02[0m/[0m9.364e-02[0m (rms/max) Trust = 2.000e-01 ([92m+[0m) Grad_T = [0m1.677e-03[0m/[0m3.889e-03[0m (rms/max) E (change) = -681.0391886945 ([0m-1.498e-03[0m) Quality = [0m0.806[0m
+Hessian Eigenvalues: 1.63533e-02 2.29754e-02 2.30955e-02 ... 5.14195e-01 1.05649e+00 1.08089e+00
+Step    4 : Displace = [0m9.623e-03[0m/[0m1.747e-02[0m (rms/max) Trust = 2.828e-01 ([92m+[0m) Grad_T = [0m4.121e-04[0m/[0m1.048e-03[0m (rms/max) E (change) = -681.0392560924 ([0m-6.740e-05[0m) Quality = [0m1.251[0m
+Hessian Eigenvalues: 1.70852e-02 2.29181e-02 2.30034e-02 ... 4.65000e-01 1.05638e+00 1.08095e+00
+Step    5 : Displace = [0m2.036e-03[0m/[0m4.086e-03[0m (rms/max) Trust = 3.000e-01 ([92m+[0m) Grad_T = [92m1.349e-04[0m/[92m3.200e-04[0m (rms/max) E (change) = -681.0392569338 ([92m-8.414e-07[0m) Quality = [0m0.234[0m
+Hessian Eigenvalues: 1.60378e-02 2.29221e-02 2.29777e-02 ... 4.64055e-01 1.05619e+00 1.06873e+00
+Step    6 : Displace = [92m7.275e-04[0m/[92m1.252e-03[0m (rms/max) Trust = 1.500e-01 ([91m-[0m) Grad_T = [92m5.234e-05[0m/[92m1.290e-04[0m (rms/max) E (change) = -681.0392556045 ([91m+1.329e-06[0m) Quality = [91m-4.172[0m
+Hessian Eigenvalues: 1.60378e-02 2.29221e-02 2.29777e-02 ... 4.64055e-01 1.05619e+00 1.06873e+00
+Step    7 : Displace = [92m7.275e-04[0m/[92m1.252e-03[0m (rms/max) Trust = 1.200e-03 ([1;91mx[0m) Grad_T = [92m5.234e-05[0m/[92m1.290e-04[0m (rms/max) E (change) = -681.0392556045 ([91m+1.329e-06[0m) Quality = [91m-4.172[0m
+[93mNot rejecting step - trust below 1.000e-02[0m
+Hessian Eigenvalues: 1.51904e-02 2.27184e-02 2.29278e-02 ... 4.65123e-01 1.04717e+00 1.06012e+00
+Step    8 : Displace = [92m2.470e-04[0m/[92m5.865e-04[0m (rms/max) Trust = 1.200e-03 ([91m-[0m) Grad_T = [92m1.888e-05[0m/[92m4.226e-05[0m (rms/max) E (change) = -681.0392557255 ([92m-1.210e-07[0m) Quality = [0m1.934[0m
+Converged! =D
+---=== Scan 19/20 : Constrained Optimization ===---
+Constraint                         Current      Target       Diff.
+Dihedral 1-3-6-2                 105.55377   105.55377     0.00000
+Dihedral 12-2-6-3                 59.92334    59.92334     0.00000
+Dihedral 7-1-3-6                 -71.24017   -71.24017     0.00000
+Dihedral 13-1-6-3                 31.57895    35.78947    -4.21053
+Step    0 : Gradient = 6.398e-04/1.838e-03 (rms/max) Energy = -681.0392557255
+Hessian Eigenvalues: 2.30000e-02 2.30000e-02 2.30000e-02 ... 4.48141e-01 1.05431e+00 1.08358e+00
+Step    1 : Displace = [0m6.230e-02[0m/[0m1.170e-01[0m (rms/max) Trust = 1.000e-01 (=) Grad_T = [0m9.906e-03[0m/[0m2.825e-02[0m (rms/max) E (change) = -681.0334414318 ([0m+5.814e-03[0m) Quality = [0m11.223[0m
+Hessian Eigenvalues: 1.94156e-02 2.30000e-02 2.30015e-02 ... 1.05420e+00 1.08358e+00 2.71659e+00
+Step    2 : Displace = [0m4.775e-03[0m/[0m7.727e-03[0m (rms/max) Trust = 1.414e-01 ([92m+[0m) Grad_T = [0m8.893e-03[0m/[0m2.548e-02[0m (rms/max) E (change) = -681.0337549366 ([0m-3.135e-04[0m) Quality = [0m1.823[0m
+Hessian Eigenvalues: 1.74005e-02 2.29983e-02 2.30826e-02 ... 4.78356e-01 1.05426e+00 1.08358e+00
+Step    3 : Displace = [0m4.921e-02[0m/[0m7.724e-02[0m (rms/max) Trust = 2.000e-01 ([92m+[0m) Grad_T = [0m1.416e-03[0m/[0m3.493e-03[0m (rms/max) E (change) = -681.0348919913 ([0m-1.137e-03[0m) Quality = [0m0.794[0m
+Hessian Eigenvalues: 1.69583e-02 2.29771e-02 2.31124e-02 ... 5.09005e-01 1.05425e+00 1.08364e+00
+Step    4 : Displace = [0m7.163e-03[0m/[0m1.295e-02[0m (rms/max) Trust = 2.828e-01 ([92m+[0m) Grad_T = [0m3.657e-04[0m/[0m9.056e-04[0m (rms/max) E (change) = -681.0349434067 ([0m-5.142e-05[0m) Quality = [0m1.498[0m
+Hessian Eigenvalues: 1.76242e-02 2.29433e-02 2.30478e-02 ... 4.50976e-01 1.05392e+00 1.08237e+00
+Step    5 : Displace = [0m1.547e-03[0m/[0m3.069e-03[0m (rms/max) Trust = 3.000e-01 ([92m+[0m) Grad_T = [92m1.258e-04[0m/[92m2.987e-04[0m (rms/max) E (change) = -681.0349438079 ([92m-4.012e-07[0m) Quality = [0m0.153[0m
+Hessian Eigenvalues: 1.62543e-02 2.29391e-02 2.30033e-02 ... 4.50617e-01 1.05351e+00 1.07031e+00
+Step    6 : Displace = [92m7.824e-04[0m/[92m1.414e-03[0m (rms/max) Trust = 1.500e-01 ([91m-[0m) Grad_T = [92m5.700e-05[0m/[92m1.412e-04[0m (rms/max) E (change) = -681.0349420038 ([91m+1.804e-06[0m) Quality = [91m-5.358[0m
+Hessian Eigenvalues: 1.62543e-02 2.29391e-02 2.30033e-02 ... 4.50617e-01 1.05351e+00 1.07031e+00
+Step    7 : Displace = [92m7.824e-04[0m/[92m1.414e-03[0m (rms/max) Trust = 1.200e-03 ([1;91mx[0m) Grad_T = [92m5.700e-05[0m/[92m1.412e-04[0m (rms/max) E (change) = -681.0349420038 ([91m+1.804e-06[0m) Quality = [91m-5.358[0m
+[93mNot rejecting step - trust below 1.000e-02[0m
+Hessian Eigenvalues: 1.54240e-02 2.27938e-02 2.29677e-02 ... 4.51502e-01 1.05005e+00 1.06125e+00
+Step    8 : Displace = [92m2.508e-04[0m/[92m5.972e-04[0m (rms/max) Trust = 1.200e-03 ([91m-[0m) Grad_T = [92m1.544e-05[0m/[92m3.530e-05[0m (rms/max) E (change) = -681.0349422503 ([92m-2.465e-07[0m) Quality = [0m3.517[0m
+Converged! =D
+---=== Scan 20/20 : Constrained Optimization ===---
+Constraint                         Current      Target       Diff.
+Dihedral 1-3-6-2                 105.55377   105.55377     0.00000
+Dihedral 12-2-6-3                 59.92334    59.92334     0.00000
+Dihedral 7-1-3-6                 -71.24017   -71.24017     0.00000
+Dihedral 13-1-6-3                 35.78947    40.00000    -4.21053
+Step    0 : Gradient = 7.442e-04/2.118e-03 (rms/max) Energy = -681.0349422503
+Hessian Eigenvalues: 2.30000e-02 2.30000e-02 2.30000e-02 ... 4.37918e-01 1.05189e+00 1.08605e+00
+Step    1 : Displace = [0m6.102e-02[0m/[0m1.142e-01[0m (rms/max) Trust = 1.000e-01 (=) Grad_T = [0m8.272e-03[0m/[0m2.322e-02[0m (rms/max) E (change) = -681.0282221701 ([0m+6.720e-03[0m) Quality = [0m8.464[0m
+Hessian Eigenvalues: 2.03308e-02 2.30000e-02 2.30012e-02 ... 1.05179e+00 1.08603e+00 2.12850e+00
+Step    2 : Displace = [0m5.148e-03[0m/[0m8.694e-03[0m (rms/max) Trust = 1.414e-01 ([92m+[0m) Grad_T = [0m7.126e-03[0m/[0m2.016e-02[0m (rms/max) E (change) = -681.0285334704 ([0m-3.113e-04[0m) Quality = [0m1.793[0m
+Hessian Eigenvalues: 1.76089e-02 2.29995e-02 2.30955e-02 ... 4.67279e-01 1.05185e+00 1.08607e+00
+Step    3 : Displace = [0m3.886e-02[0m/[0m6.254e-02[0m (rms/max) Trust = 2.000e-01 ([92m+[0m) Grad_T = [0m1.068e-03[0m/[0m2.552e-03[0m (rms/max) E (change) = -681.0293133629 ([0m-7.799e-04[0m) Quality = [0m0.785[0m
+Hessian Eigenvalues: 1.69071e-02 2.29732e-02 2.31255e-02 ... 4.99869e-01 1.05185e+00 1.08614e+00
+Step    4 : Displace = [0m4.525e-03[0m/[0m8.590e-03[0m (rms/max) Trust = 2.828e-01 ([92m+[0m) Grad_T = [0m3.228e-04[0m/[0m7.192e-04[0m (rms/max) E (change) = -681.0293444564 ([0m-3.109e-05[0m) Quality = [0m1.738[0m
+Hessian Eigenvalues: 1.74213e-02 2.29665e-02 2.30894e-02 ... 4.41479e-01 1.05085e+00 1.08313e+00
+Step    5 : Displace = [0m1.252e-03[0m/[0m2.435e-03[0m (rms/max) Trust = 3.000e-01 ([92m+[0m) Grad_T = [92m7.946e-05[0m/[92m1.542e-04[0m (rms/max) E (change) = -681.0293445141 ([92m-5.776e-08[0m) Quality = [0m0.033[0m
+Hessian Eigenvalues: 1.59922e-02 2.29543e-02 2.30435e-02 ... 4.41713e-01 1.04981e+00 1.07312e+00
+Step    6 : Displace = [92m4.290e-04[0m/[92m6.794e-04[0m (rms/max) Trust = 1.500e-01 ([91m-[0m) Grad_T = [92m2.499e-05[0m/[92m5.048e-05[0m (rms/max) E (change) = -681.0293431409 ([91m+1.373e-06[0m) Quality = [91m-9.950[0m
+Hessian Eigenvalues: 1.59922e-02 2.29543e-02 2.30435e-02 ... 4.41713e-01 1.04981e+00 1.07312e+00
+Step    7 : Displace = [92m4.290e-04[0m/[92m6.794e-04[0m (rms/max) Trust = 1.200e-03 ([1;91mx[0m) Grad_T = [92m2.499e-05[0m/[92m5.048e-05[0m (rms/max) E (change) = -681.0293431409 ([91m+1.373e-06[0m) Quality = [91m-9.950[0m
+[93mNot rejecting step - trust below 1.000e-02[0m
+Hessian Eigenvalues: 1.45614e-02 2.27463e-02 2.30604e-02 ... 4.38357e-01 1.04353e+00 1.06213e+00
+Step    8 : Displace = [92m7.475e-05[0m/[92m1.937e-04[0m (rms/max) Trust = 1.200e-03 ([91m-[0m) Grad_T = [92m1.288e-05[0m/[92m3.250e-05[0m (rms/max) E (change) = -681.0293431824 ([92m-4.143e-08[0m) Quality = [0m3.390[0m
+Converged! =D
+
+    #==========================================================================#
+    #| If this code has benefited your research, please support us by citing: |#
+    #|                                                                        |#
+    #| Wang, L.-P.; Song, C.C. (2016) "Geometry optimization made simple with |#
+    #| translation and rotation coordinates", J. Chem, Phys. 144, 214108.     |#
+    #| http://dx.doi.org/10.1063/1.4952956                                    |#
+    #==========================================================================#
+    
