@@ -1630,7 +1630,6 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                         nnc += (min(b, c), max(b, c)) in noncov
                         # if nnc >= 2: continue
                         # print("LPW: cosine of angle", a, b, c, "is", np.abs(np.cos(Ang.value(coords))))
-                        print(connect, addcart)
                         if np.abs(np.cos(Ang.value(coords))) < LinThre:
                             self.add(Angle(a, b, c))
                             AngDict[b].append(Ang)
