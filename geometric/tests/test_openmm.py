@@ -50,8 +50,8 @@ def test_rebuild_openmm_water3(localizer):
     # This test is a bit stochastic and doesn't converge to the same minimized geometry every time.
     # Check that the energy is 0.01 a.u. above reference. Not really the qm_energy, this is a misnomer
     assert progress.qm_energies[-1] < (e_ref + 0.01)
-    # Check that the optimization converged in less than 200 steps
-    assert len(progress) < 200
+    # Check that the optimization converged in less than 300 steps
+    assert len(progress) < 300
     # Check that the geometry matches the reference to within 0.03 RMS 0.05 max displacement
     assert rmsd < 0.03
     assert maxd < 0.05
