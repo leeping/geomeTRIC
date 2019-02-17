@@ -1071,7 +1071,7 @@ class Optimizer(object):
                         print("\x1b[93mContinuing in Cartesian coordinates\x1b[0m")
                         self.IC = CartesianCoordinates(self.newmol)
                 self.CoordCounter = 0
-                self.recover(params)
+                self.recover()
                 print("\x1b[1;93mSkipping optimization step\x1b[0m")
                 self.Iteration -= 1
                 self.state = OPT_STATE.SKIP_EVALUATION
