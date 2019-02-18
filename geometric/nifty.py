@@ -18,9 +18,6 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-from logging import *
-logger = getLogger(__name__)
-
 import filecmp
 import itertools
 import os
@@ -46,6 +43,40 @@ import math
 import six # For six.string_types
 from subprocess import PIPE
 from collections import OrderedDict, defaultdict
+
+#================================#
+#       Set up the logger        #
+#================================#
+if "forcebalance" in __name__:
+    # If this module is part of ForceBalance, use the package level logger
+    from .output import *
+elif "geometric" in __name__:
+    # This ensures logging behavior is consistent with the rest of geomeTRIC
+    from logging import *
+    logger = getLogger(__name__)
+else:
+    # Previous default behavior if FB package level loggers could not be imported
+    from logging import *
+    class RawStreamHandler(StreamHandler):
+        """Exactly like output.StreamHandler except it does no extra formatting
+        before sending logging messages to the stream. This is more compatible with
+        how output has been displayed in ForceBalance. Default stream has also been
+        changed from stderr to stdout"""
+        def __init__(self, stream = sys.stdout):
+            super(RawStreamHandler, self).__init__(stream)
+
+        def emit(self, record):
+            message = record.getMessage()
+            self.stream.write(message)
+            self.flush()
+    # logger=getLogger()
+    # logger.handlers = [RawStreamHandler(sys.stdout)]
+    # LPW: Daniel Smith suggested these changes to improve logger behavior
+    logger = getLogger("NiftyLogger")
+    logger.setLevel(INFO)
+    handler = RawStreamHandler()
+    logger.addHandler(handler)
+
 
 try:
     import bz2

@@ -15,9 +15,6 @@ from ctypes import *
 from datetime import date
 from warnings import warn
 
-import logging
-logger = logging.getLogger(__name__)
-
 import numpy as np
 from numpy import sin, cos, arccos
 from numpy.linalg import multi_dot
@@ -184,6 +181,40 @@ QuantumVariableNames = {'qcrems', 'qctemplate', 'charge', 'mult', 'qcsuf', 'qm_g
 # Superset of all variable names.
 AllVariableNames = QuantumVariableNames | AtomVariableNames | MetaVariableNames | FrameVariableNames
 
+
+#================================#
+#       Set up the logger        #
+#================================#
+if "forcebalance" in __name__:
+    # If this module is part of ForceBalance, use the package level logger
+    from .output import *
+elif "geometric" in __name__:
+    # This ensures logging behavior is consistent with the rest of geomeTRIC
+    import logging
+    logger = logging.getLogger(__name__)
+else:
+    # Previous default behavior if FB package level loggers could not be imported
+    from logging import *
+    class RawStreamHandler(StreamHandler):
+        """Exactly like output.StreamHandler except it does no extra formatting
+        before sending logging messages to the stream. This is more compatible with
+        how output has been displayed in ForceBalance. Default stream has also been
+        changed from stderr to stdout"""
+        def __init__(self, stream = sys.stdout):
+            super(RawStreamHandler, self).__init__(stream)
+
+        def emit(self, record):
+            message = record.getMessage()
+            self.stream.write(message)
+            self.flush()
+    # logger=getLogger()
+    # logger.handlers = [RawStreamHandler(sys.stdout)]
+    # LPW: Daniel Smith suggested the below four lines to improve logger behavior
+    logger = getLogger("MoleculeLogger")
+    logger.setLevel(INFO)
+    handler = RawStreamHandler()
+    logger.addHandler(handler)
+
 module_name = __name__.replace('.molecule','')
 
 # Covalent radii from Cordero et al. 'Covalent radii revisited' Dalton Transactions 2008, 2832-2838.
@@ -286,6 +317,15 @@ elif "geometric" in __name__:
         from .PDB import *
     except ImportError:
         warn('The pdb module cannot be imported (Cannot read/write PDB files)')
+    #==============================#
+    #| OpenMM interface functions |#
+    #==============================#
+    try:
+        from simtk.unit import *
+        from simtk.openmm import *
+        from simtk.openmm.app import *
+    except ImportError:
+        warn('The OpenMM modules cannot be imported (Cannot interface with OpenMM)')
 
 #===========================#
 #| Convenience subroutines |#
@@ -2116,7 +2156,7 @@ class Molecule(object):
         phis = []
         if 'bonds' in self.Data:
             if any(p not in self.bonds for p in [(min(i,j),max(i,j)),(min(j,k),max(j,k)),(min(k,l),max(k,l))]):
-                logger.info([(min(i,j),max(i,j)),(min(j,k),max(j,k)),(min(k,l),max(k,l))])
+                logger.warning([(min(i,j),max(i,j)),(min(j,k),max(j,k)),(min(k,l),max(k,l))])
                 warn("Measuring dihedral angle for four atoms that aren't bonded.  Hope you know what you're doing!")
         else:
             warn("This molecule object doesn't have bonds defined, sanity-checking is off.")
