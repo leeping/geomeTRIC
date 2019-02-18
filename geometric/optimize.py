@@ -1709,7 +1709,13 @@ def main():
         logIni = pkg_resources.resource_filename(geometric.optimize.__name__, logIni) 
     else:
         logIni = args.logFile
-    logConfig.fileConfig(logIni,disable_existing_loggers=False)
+        
+    logfilename = args.prefix
+    inputf = args.get('input')
+    logfilename = logfilename if logfilename is not None else os.path.splitext(inputf)[0]
+    logfilename += '.log'
+    
+    logConfig.fileConfig(logIni,defaults={'logfilename': logfilename},disable_existing_loggers=False)
     
     logger.info('-=# \x1b[1;94m geomeTRIC started. Version: %s \x1b[0m #=-' % geometric.__version__)
     logger.info('geometric-optimize called with the following command line:')
