@@ -944,9 +944,9 @@ class Optimizer(object):
         # Check for differences
         changed = (IC1 != self.IC)
         if changed:
-            print("\x1b[1;94mInternal coordinate system may have changed\x1b[0m")
+            logger.info("\x1b[1;94mInternal coordinate system may have changed\x1b[0m")
             if self.IC.repr_diff(IC1) != "":
-                print(self.IC.repr_diff(IC1))
+                logger.info(self.IC.repr_diff(IC1))
         # Set current ICs to the new one
         if changed or recover or cartesian:
             self.IC = IC1
@@ -1656,7 +1656,7 @@ def run_optimizer(**kwargs):
         if len(CVals) > 1:
             Mfinal.write('scan-final.xyz')
     print_msg()
-    print("Time elapsed since start of run_optimizer: %.3f seconds" % (time.time()-t0))
+    logger.info("Time elapsed since start of run_optimizer: %.3f seconds" % (time.time()-t0))
     return progress
 
 def main():

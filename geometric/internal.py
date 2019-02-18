@@ -1633,12 +1633,12 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                         nnc = (min(a, b), max(a, b)) in noncov
                         nnc += (min(b, c), max(b, c)) in noncov
                         # if nnc >= 2: continue
-                        # print("LPW: cosine of angle", a, b, c, "is", np.abs(np.cos(Ang.value(coords))))
+                        # logger.info("LPW: cosine of angle", a, b, c, "is", np.abs(np.cos(Ang.value(coords))))
                         if np.abs(np.cos(Ang.value(coords))) < LinThre:
                             self.add(Angle(a, b, c))
                             AngDict[b].append(Ang)
                         elif connect or not addcart:
-                            # print("Adding linear angle")
+                            # logger.info("Adding linear angle")
                             # Add linear angle IC's
                             # LPW 2019-02-16: Linear angle ICs work well for "very" linear angles in molecules (e.g. HCCCN)
                             # but do not work well for "almost" linear angles in noncovalent systems (e.g. H2O6).

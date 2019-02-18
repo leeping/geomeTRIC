@@ -350,11 +350,11 @@ class OpenMM(Engine):
                 # If the user has provided an OpenMM system, we can use it directly
                 system = mm.XmlSerializer.deserialize(xmlStr)
                 xmlSystem = True
-                print("Treating the provided xml as a system XML file")
+                logger.info("Treating the provided xml as a system XML file")
             except ValueError:
-                print("Treating the provided xml as a force field XML file")
+                logger.info("Treating the provided xml as a force field XML file")
         else:
-            print("xml file not in the current folder, treating as a force field XML file and setting up in gas phase.")
+            logger.info("xml file not in the current folder, treating as a force field XML file and setting up in gas phase.")
         if not xmlSystem:
             forcefield = app.ForceField(xml)
             system = forcefield.createSystem(pdb.topology, nonbondedMethod=app.NoCutoff, constraints=None, rigidWater=False)
