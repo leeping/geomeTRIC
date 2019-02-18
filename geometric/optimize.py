@@ -1141,7 +1141,7 @@ class Optimizer(object):
 
         ### Check convergence criteria ###
         if Converged_energy and Converged_grms and Converged_drms and Converged_gmax and Converged_dmax and self.conSatisfied:
-            print("Converged! =D")
+            logger.info("Converged! =D")
             self.state = OPT_STATE.CONVERGED
             return
         
