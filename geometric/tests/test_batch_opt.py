@@ -9,7 +9,7 @@ import logging
 import math
 from geometric.molecule import bohr2ang
 
-log = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 from . import addons
 import geometric.optimize as gt 
@@ -103,7 +103,7 @@ class BatchOptimizer(object):
             optimizer = gt.Optimizer(coords, M, IC, engine, tmpDir, self.params)
             optimizer.calcEnergyForce()
             optimizer.prepareFirstStep()
-            log.debug("[AU]: e=%.5f bl=%.5f,%.5f g=%.4f" % (
+            logger.debug("[AU]: e=%.5f bl=%.5f,%.5f g=%.4f" % (
                     optimizer.E, optimizer.X[0],optimizer.X[3], optimizer.gradx[0]))
             optimizers.append(optimizer)
             
@@ -117,7 +117,7 @@ class BatchOptimizer(object):
         for optimizer in optimizers:
             if optimizer.state == gt.OPT_STATE.NEEDS_EVALUATION:
                 optimizer.calcEnergyForce()
-                log.debug("[AU]: e=%.5f bl=%.5f,%.5f g=%.4f" % (
+                logger.debug("[AU]: e=%.5f bl=%.5f,%.5f g=%.4f" % (
                     optimizer.E, optimizer.X[0],optimizer.X[3], optimizer.gradx[0]))
     
     def optimizeMols(self, schemas):
@@ -146,7 +146,7 @@ class BatchOptimizer(object):
                     
                     optimizer.evaluateStep() 
                     if optimizer.state in [gt.OPT_STATE.CONVERGED, gt.OPT_STATE.FAILED]:
-                        log.info("Optmization convereged!")
+                        logger.info("Optmization convereged!")
                         res.append(optimizer.progress)
                         continue
                 nextOptObjs.append(optimizer)

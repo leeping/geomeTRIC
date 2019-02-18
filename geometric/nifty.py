@@ -18,8 +18,8 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import logging
-log = logging.getLogger(__name__)
+from logging import *
+logger = getLogger(__name__)
 
 import filecmp
 import itertools
@@ -46,33 +46,6 @@ import math
 import six # For six.string_types
 from subprocess import PIPE
 from collections import OrderedDict, defaultdict
-
-#================================#
-#       Set up the logger        #
-#================================#
-try:
-    from .output import *
-except ImportError:
-    from logging import *
-    class RawStreamHandler(StreamHandler):
-        """Exactly like output.StreamHandler except it does no extra formatting
-        before sending logging messages to the stream. This is more compatible with
-        how output has been displayed in ForceBalance. Default stream has also been
-        changed from stderr to stdout"""
-        def __init__(self, stream = sys.stdout):
-            super(RawStreamHandler, self).__init__(stream)
-
-        def emit(self, record):
-            message = record.getMessage()
-            self.stream.write(message)
-            self.flush()
-    # logger=getLogger()
-    # logger.handlers = [RawStreamHandler(sys.stdout)]
-    # LPW: Daniel Smith suggested these changes to improve logger behavior
-    logger = getLogger("NiftyLogger")
-    logger.setLevel(INFO)
-    handler = RawStreamHandler()
-    logger.addHandler(handler)
 
 try:
     import bz2
@@ -502,16 +475,16 @@ def monotonic_decreasing(arr, start=None, end=None, verbose=False):
         end = len(arr) - 1
     a0 = arr[start]
     idx = [start]
-    if verbose: log.warning("Starting @ %i : %.6f" % (start, arr[start]))
+    if verbose: logger.info("Starting @ %i : %.6f" % (start, arr[start]))
     if end > start:
         i = start+1
         while i < end:
             if arr[i] < a0:
                 a0 = arr[i]
                 idx.append(i)
-                if verbose: log.warning("Including  %i : %.6f" % (i, arr[i]))
+                if verbose: logger.info("Including  %i : %.6f" % (i, arr[i]))
             else:
-                if verbose: log.warning("Excluding  %i : %.6f" % (i, arr[i]))
+                if verbose: logger.info("Excluding  %i : %.6f" % (i, arr[i]))
             i += 1
     if end < start:
         i = start-1
@@ -519,9 +492,9 @@ def monotonic_decreasing(arr, start=None, end=None, verbose=False):
             if arr[i] < a0:
                 a0 = arr[i]
                 idx.append(i)
-                if verbose: log.warning("Including  %i : %.6f" % (i, arr[i]))
+                if verbose: logger.info("Including  %i : %.6f" % (i, arr[i]))
             else:
-                if verbose: log.warning("Excluding  %i : %.6f" % (i, arr[i]))
+                if verbose: logger.info("Excluding  %i : %.6f" % (i, arr[i]))
             i -= 1
     return np.array(idx)
 
@@ -1081,7 +1054,7 @@ def listfiles(fnms=None, ext=None, err=False, dnm=None):
             raise RuntimeError
         answer = [fnms]
     elif fnms is not None:
-        log.warning(fnms)
+        logger.info(fnms)
         logger.error('First argument to listfiles must be a list, a string, or None')
         raise RuntimeError
     if answer == [] and ext is not None:

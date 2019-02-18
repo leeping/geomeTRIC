@@ -12,7 +12,7 @@ import re
 import os
 
 import logging
-log = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 from .molecule import Molecule
 from .nifty import eqcgmx, fqcgmx, bohr2ang, getWorkQueue, queue_up_src_dest
@@ -445,7 +445,7 @@ class Psi4(Engine):
                 elif line_strip == 'Gradient written.':
                     # this works for CCSD(T) gradients computed by numerical displacements
                     found_num_grad = True
-                    log.warn("found num grad")
+                    logger.info("found num grad")
                 elif found_num_grad is True and line_strip.startswith('------------------------------'):
                     for _ in range(4):
                         line = next(outfile)
@@ -776,7 +776,7 @@ class TeraChem_CI(Engine):
         # Compute objective function and gradient
         Obj = EAvg + self.sigma * Penalty
         ObjGrad = GAvg + self.sigma * (EDif**2 + 2*self.alpha*EDif)/(EDif+self.alpha)**2 * GDif
-        log.warn("EI= % .8f EJ= % .8f S2I= %.4f S2J= %.4f <E>= % .8f Gap= %.8f Pen= %.8f Obj= % .8f" % (EDict[I], EDict[J], SDict[I], SDict[J], EAvg, EDif, Penalty, Obj))
+        logger.info("EI= % .8f EJ= % .8f S2I= %.4f S2J= %.4f <E>= % .8f Gap= %.8f Pen= %.8f Obj= % .8f" % (EDict[I], EDict[J], SDict[I], SDict[J], EAvg, EDif, Penalty, Obj))
         return Obj, ObjGrad
 
     def number_output(self, dirname, calcNum):
