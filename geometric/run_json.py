@@ -103,7 +103,7 @@ def make_constraints_string(constraints_dict):
         for constraint in constraints_list:
 
             # Check keys
-            missing = set(key_args) - constraint.keys()
+            missing = set(key_args) - set(constraint.keys())
             if missing:
                 raise KeyError("Constraint type '%s' requires fields '%s', found '%s'" % (key, key_args,
                                                                                           constraint.keys()))

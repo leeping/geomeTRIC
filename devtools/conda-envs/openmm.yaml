@@ -2,12 +2,7 @@ name: test
 channels:
   - conda-forge
   - omnia
-  - rdkit
 dependencies:
-    # RDKit test depends
-  - rdkit
-  - qcengine
-
     # OpenMM test depends
   - openmm
 
@@ -19,3 +14,6 @@ dependencies:
   - pytest
   - codecov
   - pytest-cov
+
+    # Python 2.7 specific
+  - future

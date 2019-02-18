@@ -34,6 +34,8 @@ using_rdkit = pytest.mark.skipif(
     _plugin_import("rdkit") is False, reason="could not find rdkit. please install the package to enable tests")
 using_qcengine = pytest.mark.skipif(
     _plugin_import("qcengine") is False, reason="could not find qcengine. please install the package to enable tests")
+using_openmm = pytest.mark.skipif(
+    _plugin_import("simtk.openmm") is False, reason="could not find simtk.openmm. please install the package to enable tests")
 
 
 # make tests run in their own folder

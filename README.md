@@ -5,11 +5,12 @@
 This is an open-source geometry optimization code for quantum
 chemistry.  The code works by calling external software for the energy
 and gradient through wrapper functions.  Currently Q-Chem, TeraChem, 
-Psi4, and Molpro are supported.
+Psi4, and Molpro are supported.  MM optimizations are also possible
+using OpenMM and Gromacs.
 
 Authors: Lee-Ping Wang, Chenchen Song
 
-Contributors: Yudong Qiu (Psi4 engine); Sebastian Lee (Molpro engine); Daniel G. A. Smith (Testing framework); Chaya Stern (Travis, Conda)
+Contributors: Yudong Qiu (Psi4 engine); Daniel G. A. Smith (Testing framework, QCEngine JSON API); Sebastian Lee (Molpro engine); Chaya Stern (Travis, Conda); Qiming Sun (Custom engine); Alberto Gobbi (Batch energy/gradient)
 
 Contact Email: leeping@ucdavis.edu
 
@@ -21,15 +22,22 @@ http://dx.doi.org/10.1063/1.4952956
 ## Quick Help
 
 Package dependencies are:
-Python 2.7, 3.6+
+Python 2.7, 3.5+
 NumPy, Scipy, NetworkX
 
-To install the code, run "python setup.py install".
-To execute the geometry optimizer, run "geometric-optimize".
+To install the code from source, run "python setup.py install".
+To install the latest release from pip, run "pip install geometric".
+To install the latest release from conda-forge, run "conda install -c conda-forge geometric".
 
-You will need a .xyz file for the coordinates and one of the supported 
-quantum chemistry software packages.  The supported packages are:
-TeraChem, Q-Chem, and Psi4.  You can also call Gromacs for MM forces.
+To execute the geometry optimizer, run "geometric-optimize".
+Use "-h" to see the list of command line options.
+
+Generally, you will need a .xyz file for the coordinates and 
+one of the supported quantum chemistry software packages installed
+on your system.
+
+Supported QM packages are: TeraChem, Q-Chem, Molpro, and Psi4.
+Supported MM packages are: OpenMM, Gromacs.
 
 Please refer to the example calculations for how to run the code.  
 The commands to execute the code are contained in "command.sh".

@@ -2,11 +2,15 @@ name: test
 channels:
   - defaults
   - psi4
+  - omnia
   - conda-forge
 dependencies:
     # Psi test depends
   - psi4
   - qcengine
+
+    # OpenMM test depends
+  - openmm
 
     # geomeTRIC base depends
   - numpy
