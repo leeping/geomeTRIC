@@ -1711,7 +1711,7 @@ def main():
         logIni = args.logFile
         
     logfilename = args.prefix
-    inputf = args.get('input')
+    inputf = vars(args).get('input')
     logfilename = logfilename if logfilename is not None else os.path.splitext(inputf)[0]
     logfilename += '.log'
     
