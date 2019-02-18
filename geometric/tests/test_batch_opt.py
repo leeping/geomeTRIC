@@ -158,6 +158,8 @@ class BatchOptimizer(object):
         return res
  
 
+@addons.using_qcengine
+@addons.using_rdkit
 def test_rdkit_simple():
 
     schema1 = copy.deepcopy(_base_schema)
@@ -210,6 +212,8 @@ _N2_geo2 = [0.0, 0., 0.,
 
 
 
+@addons.using_qcengine
+@addons.using_rdkit
 def test_rdkit_N2():
 
     schema1 = copy.deepcopy(_N2_schema)
