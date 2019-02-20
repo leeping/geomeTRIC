@@ -1,5 +1,8 @@
 #!/usr/bin/env python
 
+import logging
+logger = logging.getLogger(__name__)
+
 from forcebalance.molecule import *
 import os, sys
 
@@ -33,12 +36,12 @@ for frame in range(1, len(M)):
     Converged_drms = rms_displacement < Convergence_drms
     Converged_dmax = max_displacement < Convergence_dmax
    # Print status
-    print("Step %4i :" % frame),
-    print("Displace = %s%.3e\x1b[0m/%s%.3e\x1b[0m (rms/max)" % ("\x1b[92m" if Converged_drms else "\x1b[0m", rms_displacement, "\x1b[92m" if Converged_dmax else "\x1b[0m", max_displacement)),
-    print("Grad = %s%.3e\x1b[0m/%s%.3e\x1b[0m (rms/max)" % ("\x1b[92m" if Converged_grms else "\x1b[0m", rms_gradient, "\x1b[92m" if Converged_gmax else "\x1b[0m", max_gradient)),
-    print("E (change) = % .10f (%s%+.3e\x1b[0m)" % (E, "\x1b[92m" if Converged_energy else "\x1b[0m", E-Eprev))
+    logger.info("Step %4i :" % frame),
+    logger.info("Displace = %s%.3e\x1b[0m/%s%.3e\x1b[0m (rms/max)" % ("\x1b[92m" if Converged_drms else "\x1b[0m", rms_displacement, "\x1b[92m" if Converged_dmax else "\x1b[0m", max_displacement)),
+    logger.info("Grad = %s%.3e\x1b[0m/%s%.3e\x1b[0m (rms/max)" % ("\x1b[92m" if Converged_grms else "\x1b[0m", rms_gradient, "\x1b[92m" if Converged_gmax else "\x1b[0m", max_gradient)),
+    logger.info("E (change) = % .10f (%s%+.3e\x1b[0m)" % (E, "\x1b[92m" if Converged_energy else "\x1b[0m", E-Eprev))
     if Converged_energy and Converged_grms and Converged_drms and Converged_gmax and Converged_dmax:
-        print("Converged! =D (Q-Chem takes %i)" % (len(M)))
+        logger.info("Converged! =D (Q-Chem takes %i)" % (len(M)))
         sys.exit()
 
-print("Warning: Not Converged!")
+logger.warning("Warning: Not Converged!")

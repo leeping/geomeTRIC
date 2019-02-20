@@ -11,6 +11,9 @@ import numpy as np
 import re
 import os
 
+import logging
+logger = logging.getLogger(__name__)
+
 from .molecule import Molecule
 from .nifty import eqcgmx, fqcgmx, bohr2ang, getWorkQueue, queue_up_src_dest
 
@@ -347,11 +350,11 @@ class OpenMM(Engine):
                 # If the user has provided an OpenMM system, we can use it directly
                 system = mm.XmlSerializer.deserialize(xmlStr)
                 xmlSystem = True
-                print("Treating the provided xml as a system XML file")
+                logger.info("Treating the provided xml as a system XML file")
             except ValueError:
-                print("Treating the provided xml as a force field XML file")
+                logger.info("Treating the provided xml as a force field XML file")
         else:
-            print("xml file not in the current folder, treating as a force field XML file and setting up in gas phase.")
+            logger.info("xml file not in the current folder, treating as a force field XML file and setting up in gas phase.")
         if not xmlSystem:
             forcefield = app.ForceField(xml)
             system = forcefield.createSystem(pdb.topology, nonbondedMethod=app.NoCutoff, constraints=None, rigidWater=False)
@@ -485,7 +488,7 @@ class Psi4(Engine):
                 elif line_strip == 'Gradient written.':
                     # this works for CCSD(T) gradients computed by numerical displacements
                     found_num_grad = True
-                    print("found num grad")
+                    logger.info("found num grad")
                 elif found_num_grad is True and line_strip.startswith('------------------------------'):
                     for _ in range(4):
                         line = next(outfile)
@@ -816,7 +819,7 @@ class TeraChem_CI(Engine):
         # Compute objective function and gradient
         Obj = EAvg + self.sigma * Penalty
         ObjGrad = GAvg + self.sigma * (EDif**2 + 2*self.alpha*EDif)/(EDif+self.alpha)**2 * GDif
-        print("EI= % .8f EJ= % .8f S2I= %.4f S2J= %.4f <E>= % .8f Gap= %.8f Pen= %.8f Obj= % .8f" % (EDict[I], EDict[J], SDict[I], SDict[J], EAvg, EDif, Penalty, Obj))
+        logger.info("EI= % .8f EJ= % .8f S2I= %.4f S2J= %.4f <E>= % .8f Gap= %.8f Pen= %.8f Obj= % .8f" % (EDict[I], EDict[J], SDict[I], SDict[J], EAvg, EDif, Penalty, Obj))
         return Obj, ObjGrad
 
     def number_output(self, dirname, calcNum):
