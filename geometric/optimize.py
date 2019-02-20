@@ -871,7 +871,7 @@ class Optimizer(object):
         # Threshold for "low quality step" which decreases trust radius.
         self.ThreLQ = 0.25
         # Threshold for "high quality step" which increases trust radius.
-        self.ThreHQ = 0.75
+        self.ThreHQ = 0.5
         # If the trust radius is lower than this number, do not reject steps.
         if self.params.meci:
             self.thre_rj = 1e-4
@@ -1025,9 +1025,9 @@ class Optimizer(object):
             v0 = 0.0
         if params.verbose: self.IC.Prims.printRotations()
         if len(Eig) >= 6:
-            logger.debug("Hessian Eigenvalues: %.5e %.5e %.5e ... %.5e %.5e %.5e" % (Eig[0],Eig[1],Eig[2],Eig[-3],Eig[-2],Eig[-1]))
+            logger.info("Hessian Eigenvalues: %.5e %.5e %.5e ... %.5e %.5e %.5e" % (Eig[0],Eig[1],Eig[2],Eig[-3],Eig[-2],Eig[-1]))
         else:
-            logger.debug("Hessian Eigenvalues:", ' '.join("%.5e" % i for i in Eig))
+            logger.info("Hessian Eigenvalues:", ' '.join("%.5e" % i for i in Eig))
         # Are we far from constraint satisfaction?
         self.farConstraints = self.IC.haveConstraints() and self.IC.getConstraintViolation(self.X) > 1e-1
         self.conSatisfied = not self.IC.haveConstraints() or self.IC.getConstraintViolation(self.X) < 1e-2
