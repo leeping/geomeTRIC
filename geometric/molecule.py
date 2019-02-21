@@ -1384,7 +1384,10 @@ class Molecule(object):
                 if type(other.Data[key]) is not list:
                     logger.error('Key %s in other is a FrameKey, it must be a list\n' % key)
                     raise RuntimeError
-                Sum.Data[key] = list(self.Data[key] + other.Data[key])
+                if isinstance(self.Data[key][0], np.ndarray):
+                    Sum.Data[key] = [i.copy() for i in self.Data[key]] + [i.copy() for i in other.Data[key]]
+                else:
+                    Sum.Data[key] = list(self.Data[key] + other.Data[key])
             elif either(self, other, key):
                 # TINKER 6.3 compatibility - catch the specific case that one has a periodic box and the other doesn't.
                 if key == 'boxes':
@@ -1423,7 +1426,10 @@ class Molecule(object):
                 if type(other.Data[key]) is not list:
                     logger.error('Key %s in other is a FrameKey, it must be a list\n' % key)
                     raise RuntimeError
-                self.Data[key] += other.Data[key]
+                if isinstance(self.Data[key][0], np.ndarray):
+                    self.Data[key] += [i.copy() for i in other.Data[key]]
+                else:
+                    self.Data[key] += other.Data[key]
             elif either(self, other, key):
                 # TINKER 6.3 compatibility - catch the specific case that one has a periodic box and the other doesn't.
                 if key == 'boxes':
@@ -2151,6 +2157,28 @@ class Molecule(object):
                                 dihidx.append((a1, a2, a3, a4))
         return dihidx
 
+    def measure_distances(self, i, j):
+        distances = []
+        for s in range(self.ns):
+            x1 = self.xyzs[s][i]
+            x2 = self.xyzs[s][j]
+            distance = np.linalg.norm(x1-x2)
+            distances.append(distance)
+        return distances
+
+    def measure_angles(self, i, j, k):
+        angles = []
+        for s in range(self.ns):
+            x1 = self.xyzs[s][i]
+            x2 = self.xyzs[s][j]
+            x3 = self.xyzs[s][k]
+            v1 = x1-x2
+            v2 = x3-x2
+            n = np.dot(v1,v2)/(np.linalg.norm(v1)*np.linalg.norm(v2))
+            angle = np.arccos(n)
+            angles.append(angle * 180/ np.pi)
+        return angles
+    
     def measure_dihedrals(self, i, j, k, l):
         """ Return a series of dihedral angles, given four atom indices numbered from zero. """
         phis = []

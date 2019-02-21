@@ -37,6 +37,7 @@ using_qcengine = pytest.mark.skipif(
 using_openmm = pytest.mark.skipif(
     _plugin_import("simtk.openmm") is False, reason="could not find simtk.openmm. please install the package to enable tests")
 
+datad = os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), 'data')
 
 # make tests run in their own folder
 @pytest.fixture(scope="function")
