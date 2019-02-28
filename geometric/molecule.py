@@ -281,7 +281,7 @@ if "forcebalance" in __name__:
             have_dcdlib = True
             break
     if not have_dcdlib:
-        warn('The dcdlib module cannot be imported (Cannot read/write DCD files)')
+        logger.info('The dcdlib module cannot be imported (Cannot read/write DCD files)')
 
     #============================#
     #| PDB read/write functions |#
@@ -289,7 +289,7 @@ if "forcebalance" in __name__:
     try:
         from .PDB import *
     except ImportError:
-        warn('The pdb module cannot be imported (Cannot read/write PDB files)')
+        logger.info('The pdb module cannot be imported (Cannot read/write PDB files)')
 
     #=============================#
     #| Mol2 read/write functions |#
@@ -297,7 +297,7 @@ if "forcebalance" in __name__:
     try:
         from . import Mol2
     except ImportError:
-        warn('The Mol2 module cannot be imported (Cannot read/write Mol2 files)')
+        logger.info('The Mol2 module cannot be imported (Cannot read/write Mol2 files)')
 
     #==============================#
     #| OpenMM interface functions |#
@@ -307,7 +307,7 @@ if "forcebalance" in __name__:
         from simtk.openmm import *
         from simtk.openmm.app import *
     except ImportError:
-        warn('The OpenMM modules cannot be imported (Cannot interface with OpenMM)')
+        logger.info('The OpenMM modules cannot be imported (Cannot interface with OpenMM)')
 elif "geometric" in __name__:
     #============================#
     #| PDB read/write functions |#
@@ -315,7 +315,7 @@ elif "geometric" in __name__:
     try:
         from .PDB import *
     except ImportError:
-        warn('The pdb module cannot be imported (Cannot read/write PDB files)')
+        logger.info('The pdb module cannot be imported (Cannot read/write PDB files)')
     #==============================#
     #| OpenMM interface functions |#
     #==============================#
@@ -324,7 +324,7 @@ elif "geometric" in __name__:
         from simtk.openmm import *
         from simtk.openmm.app import *
     except ImportError:
-        warn('The OpenMM modules cannot be imported (Cannot interface with OpenMM)')
+        logger.info('The OpenMM modules cannot be imported (Cannot interface with OpenMM)')
 
 #===========================#
 #| Convenience subroutines |#
@@ -467,7 +467,7 @@ try:
             coors = nx.get_node_attributes(self,'x')
             return np.array([coors[i] for i in self.L()])
 except ImportError:
-    warn("NetworkX cannot be imported (topology tools won't work).  Most functionality should still work though.")
+    logger.warning("NetworkX cannot be imported (topology tools won't work).  Most functionality should still work though.")
 
 def TopEqual(mol1, mol2):
     """ For the nanoreactor project: Determine whether two Molecule objects have the same topologies. """
@@ -1213,7 +1213,7 @@ class Molecule(object):
     def __getattr__(self, key):
         """ Whenever we try to get a class attribute, it first tries to get the attribute from the Data dictionary. """
         if key == 'qm_forces':
-            warn('qm_forces is a deprecated keyword because it actually meant gradients; setting to qm_grads.')
+            logger.warning('qm_forces is a deprecated keyword because it actually meant gradients; setting to qm_grads.')
             key = 'qm_grads'
         if key == 'ns':
             return len(self)
@@ -1253,7 +1253,7 @@ class Molecule(object):
         ## These attributes return a list of attribute names defined in this class, that belong in the chosen category.
         ## For example: self.FrameKeys should return set(['xyzs','boxes']) if xyzs and boxes exist in self.Data
         if key == 'qm_forces':
-            warn('qm_forces is a deprecated keyword because it actually meant gradients; setting to qm_grads.')
+            logger.warning('qm_forces is a deprecated keyword because it actually meant gradients; setting to qm_grads.')
             key = 'qm_grads'
         if key in AllVariableNames:
             self.Data[key] = value
@@ -1516,7 +1516,7 @@ class Molecule(object):
                 if hasattr(self, 'na'):
                     continue
             if arg == 'qm_forces':
-                warn('qm_forces is a deprecated keyword because it actually meant gradients; setting to qm_grads.')
+                logger.warning('qm_forces is a deprecated keyword because it actually meant gradients; setting to qm_grads.')
                 arg = 'qm_grads'
             if arg not in self.Data:
                 logger.error("%s is a required attribute for writing this type of file but it's not present\n" % arg)
@@ -2184,9 +2184,9 @@ class Molecule(object):
         if 'bonds' in self.Data:
             if any(p not in self.bonds for p in [(min(i,j),max(i,j)),(min(j,k),max(j,k)),(min(k,l),max(k,l))]):
                 logger.warning([(min(i,j),max(i,j)),(min(j,k),max(j,k)),(min(k,l),max(k,l))])
-                warn("Measuring dihedral angle for four atoms that aren't bonded.  Hope you know what you're doing!")
+                logger.warning("Measuring dihedral angle for four atoms that aren't bonded.  Hope you know what you're doing!")
         else:
-            warn("This molecule object doesn't have bonds defined, sanity-checking is off.")
+            logger.warning("This molecule object doesn't have bonds defined, sanity-checking is off.")
         for s in range(self.ns):
             x4 = self.xyzs[s][l]
             x3 = self.xyzs[s][k]
@@ -3680,7 +3680,7 @@ class Molecule(object):
             for i in np.where(np.array(conv) == 0)[0]:
                 Answer['qm_grads'].insert(i, Answer['qm_grads'][0]*0.0)
             if len(Answer['qm_grads']) != len(Answer['qm_energies']):
-                warn("Number of energies and gradients is inconsistent (composite jobs?)  Deleting gradients.")
+                logger.warning("Number of energies and gradients is inconsistent (composite jobs?)  Deleting gradients.")
                 del Answer['qm_grads']
         # A strange peculiarity; Q-Chem sometimes prints out the final Mulliken charges a second time, after the geometry optimization.
         if mkchg:
@@ -3843,7 +3843,7 @@ class Molecule(object):
             np.max(self.xyzs[I][:,0]) > xhi or
             np.max(self.xyzs[I][:,1]) > yhi or
             np.max(self.xyzs[I][:,2]) > zhi):
-            warn("Some atom positions are outside the simulation box, be careful")
+            logger.warning("Some atom positions are outside the simulation box, be careful")
         out.append("% .3f % .3f xlo xhi" % (xlo, xhi))
         out.append("% .3f % .3f ylo yhi" % (ylo, yhi))
         out.append("% .3f % .3f zlo zhi" % (zlo, zhi))

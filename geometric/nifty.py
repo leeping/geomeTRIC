@@ -750,7 +750,7 @@ def lp_dump(obj, fnm, protocol=0):
     #     logger.error("lp_dump cannot write to an existing path")
     #     raise IOError
     if os.path.islink(fnm):
-        logger.warn("Trying to write to a symbolic link %s, removing it first\n" % fnm)
+        logger.warning("Trying to write to a symbolic link %s, removing it first\n" % fnm)
         os.unlink(fnm)
     if HaveGZ:
         f = gzip.GzipFile(fnm, 'wb')
@@ -1200,7 +1200,7 @@ def MissingFileInspection(fnm):
 def wopen(dest, binary=False):
     """ If trying to write to a symbolic link, remove it first. """
     if os.path.islink(dest):
-        logger.warn("Trying to write to a symbolic link %s, removing it first\n" % dest)
+        logger.warning("Trying to write to a symbolic link %s, removing it first\n" % dest)
         os.unlink(dest)
     if binary:
         return open(dest,'wb')

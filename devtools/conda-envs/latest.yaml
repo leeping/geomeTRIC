@@ -1,11 +1,12 @@
 name: test
 channels:
-  - conda-forge
+  - defaults
   - psi4
+  - conda-forge
 dependencies:
     # Psi test depends
   - psi4
-  - qcengine
+  - qcengine >= 0.6.*
 
     # geomeTRIC base depends
   - numpy
