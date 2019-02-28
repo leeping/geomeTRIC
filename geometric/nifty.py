@@ -54,6 +54,7 @@ elif "geometric" in __name__:
     # This ensures logging behavior is consistent with the rest of geomeTRIC
     from logging import *
     logger = getLogger(__name__)
+    logger.setLevel(INFO)
 else:
     # Previous default behavior if FB package level loggers could not be imported
     from logging import *

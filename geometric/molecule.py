@@ -190,8 +190,7 @@ if "forcebalance" in __name__:
     from .output import *
 elif "geometric" in __name__:
     # This ensures logging behavior is consistent with the rest of geomeTRIC
-    import logging
-    logger = logging.getLogger(__name__)
+    from .nifty import logger
 else:
     # Previous default behavior if FB package level loggers could not be imported
     from logging import *
@@ -2178,7 +2177,7 @@ class Molecule(object):
             angle = np.arccos(n)
             angles.append(angle * 180/ np.pi)
         return angles
-    
+
     def measure_dihedrals(self, i, j, k, l):
         """ Return a series of dihedral angles, given four atom indices numbered from zero. """
         phis = []

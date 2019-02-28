@@ -11,11 +11,8 @@ import networkx as nx
 import numpy as np
 from numpy.linalg import multi_dot
 
-import logging
-logger = logging.getLogger(__name__)
-
 from geometric.molecule import Elements, Radii
-from geometric.nifty import click, commadash, ang2bohr, bohr2ang
+from geometric.nifty import click, commadash, ang2bohr, bohr2ang, logger
 from geometric.rotate import get_expmap, get_expmap_der, is_linear
 
 

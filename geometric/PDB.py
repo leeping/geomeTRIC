@@ -59,8 +59,7 @@ if "forcebalance" in __name__:
     import forcebalance
     from forcebalance.output import *
 else:
-    import logging
-    logger = logging.getLogger(__name__)
+    from .nifty import logger
 
 class END(object):
     """ END class

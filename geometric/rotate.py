@@ -4,11 +4,8 @@ import sys
 
 import numpy as np
 
-import logging
-logger = logging.getLogger(__name__)
-
 from geometric.molecule import *
-from geometric.nifty import invert_svd
+from geometric.nifty import invert_svd, logger
 
 """
 References

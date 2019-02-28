@@ -11,12 +11,16 @@ def _plugin_import(plug):
     Tests to see if a module is available
     """
     import sys
-    if sys.version_info >= (3, 4):
-        from importlib import util
-        plug_spec = util.find_spec(plug)
-    else:
-        import pkgutil
-        plug_spec = pkgutil.find_loader(plug)
+    try:
+        if sys.version_info >= (3, 4):
+            from importlib import util
+            plug_spec = util.find_spec(plug)
+        else:
+            import pkgutil
+            plug_spec = pkgutil.find_loader(plug)
+    except ModuleNotFoundError:
+        return False
+
     if plug_spec is None:
         return False
     else:
@@ -45,7 +49,7 @@ def in_folder(request):
 
     # Build out a test folder
     cwd = os.path.abspath(os.getcwd())
-    test_folder = os.path.join(cwd, 'test_generated_files', request.function.__name__) 
+    test_folder = os.path.join(cwd, 'test_generated_files', request.function.__name__)
 
     # Build and change to test folder
     if not os.path.exists(test_folder):

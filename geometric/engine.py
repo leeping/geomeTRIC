@@ -11,11 +11,8 @@ import numpy as np
 import re
 import os
 
-import logging
-logger = logging.getLogger(__name__)
-
 from .molecule import Molecule
-from .nifty import eqcgmx, fqcgmx, bohr2ang, getWorkQueue, queue_up_src_dest
+from .nifty import eqcgmx, fqcgmx, bohr2ang, logger, getWorkQueue, queue_up_src_dest
 
 #=============================#
 #| Useful TeraChem functions |#
@@ -330,7 +327,7 @@ class TeraChem(Engine):
         energy = float(open(os.path.join(dirname,'energy.txt')).readlines()[0].strip())
         gradient = np.loadtxt(os.path.join(dirname,'grad.txt')).flatten()
         return energy, gradient
-    
+
 class OpenMM(Engine):
     """
     Run a OpenMM energy and gradient calculation.
@@ -749,6 +746,7 @@ class QCEngineAPI(Engine):
         import qcengine
         new_schema = deepcopy(self.schema)
         new_schema["molecule"]["geometry"] = coords.tolist()
+        new_schema.pop("program", None)
         ret = qcengine.compute(new_schema, self.program, return_dict=True)
 
         # store the schema_traj for run_json to pick up
