@@ -749,7 +749,7 @@ class QCEngineAPI(Engine):
         import qcengine
         new_schema = deepcopy(self.schema)
         new_schema["molecule"]["geometry"] = coords.tolist()
-        ret = qcengine.compute(new_schema, self.program)
+        ret = qcengine.compute(new_schema, self.program, return_dict=True)
 
         # store the schema_traj for run_json to pick up
         self.schema_traj.append(ret)
