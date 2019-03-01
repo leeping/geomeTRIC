@@ -1,2 +1,7 @@
+recursive-include geometric *.py
+recursive-include geometric/data *.pdb
+recursive-include geometric/data *.txt
+recursive-include geometric/data *.gro
+
 include versioneer.py
 include geometric/_version.py
