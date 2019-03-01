@@ -869,7 +869,7 @@ class Optimizer(object):
         # Threshold for "low quality step" which decreases trust radius.
         self.ThreLQ = 0.25
         # Threshold for "high quality step" which increases trust radius.
-        self.ThreHQ = 0.5
+        self.ThreHQ = 0.75
         # If the trust radius is lower than this number, do not reject steps.
         if self.params.meci:
             self.thre_rj = 1e-4
