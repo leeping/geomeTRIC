@@ -1576,16 +1576,22 @@ def run_optimizer(**kwargs):
     # Get the Molecule and engine objects needed for optimization
     M, engine = get_molecule_engine(**kwargs)
 
+    #============================================#
+    #|   Temporary file and folder management   |#
+    #============================================#
+    # LPW: Should this be refactored and moved into get_molecule_engine?
     dirname = prefix+".tmp"
     if not os.path.exists(dirname):
+        # LPW: Some engines do not need the tmp-folder, but the
+        # auxiliary functions might (such as writing out displacements)
         os.makedirs(dirname)
     else:
         logger.info("%s exists ; make sure nothing else is writing to the folder" % dirname)
-        # Remove existing scratch files in ./run.tmp/scr to avoid confusion
+        # TC-specific: Remove existing scratch files in ./run.tmp/scr to avoid confusion
         for f in ['c0', 'ca0', 'cb0']:
             if os.path.exists(os.path.join(dirname, 'scr', f)):
                 os.remove(os.path.join(dirname, 'scr', f))
-
+                
     # QC-specific scratch folder
     qcdir = kwargs.get('qcdir', None) #Provide an initial qchem scratch folder (e.g. supplied initial guess
     qchem = kwargs.get('qchem', False)
@@ -1597,6 +1603,9 @@ def run_optimizer(**kwargs):
         shutil.copytree(qcdir, os.path.join(dirname, "run.d"))
         engine.M.edit_qcrems({'scf_guess':'read'})
         engine.qcdir = True
+    #============================================#
+    #| End temporary file and folder management |#
+    #============================================#
 
     # Get initial coordinates in bohr
     coords = M.xyzs[0].flatten() * ang2bohr
@@ -1625,10 +1634,13 @@ def run_optimizer(**kwargs):
     CoordClass, connect, addcart = CoordSysDict[coordsys.lower()]
 
     IC = CoordClass(M, build=True, connect=connect, addcart=addcart, constraints=Cons, cvals=CVals[0] if CVals is not None else None)
+    #========================================#
+    #| End internal coordinate system setup |#
+    #========================================#
 
-    # Auxiliary functions (will not do optimization)
-    displace = kwargs.get('displace', False) # Write out the displacements of the coordinates.
+    # Auxiliary functions (will not do optimization):
     verbose = kwargs.get('verbose', False)
+    displace = kwargs.get('displace', False) # Write out the displacements of the coordinates.
     if displace:
         WriteDisplacements(coords, M, IC, dirname, verbose)
         return
@@ -1654,7 +1666,7 @@ def run_optimizer(**kwargs):
             xyzout = prefix+".xyz"
         progress = Optimize(coords, M, IC, engine, dirname, params, xyzout)
     else:
-        # Run a constrained geometry optimization
+        # Run a single constrained geometry optimization or scan over a grid of values
         if isinstance(IC, (CartesianCoordinates, PrimitiveInternalCoordinates)):
             raise RuntimeError("Constraints only work with delocalized internal coordinates")
         Mfinal = None
