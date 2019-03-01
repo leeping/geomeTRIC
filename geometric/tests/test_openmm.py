@@ -11,48 +11,7 @@ import pytest
 import itertools
 
 localizer = addons.in_folder
-
-pdb_water3 = """REMARK   1 CREATED WITH FORCEBALANCE 2019-02-17
-HETATM    1  O   HOH A   1       0.856  -1.382   0.317  0.00  0.00           O  
-HETATM    2  H1  HOH A   1       1.675  -1.848   0.486  0.00  0.00           H  
-HETATM    3  H2  HOH A   1       1.118  -0.468   0.206  0.00  0.00           H  
-TER
-HETATM    4  O   HOH A   2      -1.099  -0.858   2.173  0.00  0.00           O  
-HETATM    5  H1  HOH A   2      -0.403  -1.146   1.582  0.00  0.00           H  
-HETATM    6  H2  HOH A   2      -1.085   0.097   2.113  0.00  0.00           H  
-TER
-HETATM    7  O   HOH A   3       1.864   1.220   1.333  0.00  0.00           O  
-HETATM    8  H1  HOH A   3       2.010   1.883   0.658  0.00  0.00           H  
-HETATM    9  H2  HOH A   3       2.642   0.663   1.295  0.00  0.00           H  
-TER
-"""
-
-pdb_water6 = """REMARK   1 CREATED WITH FORCEBALANCE 2019-02-17
-HETATM    1  O   HOH A   1       0.856  -1.382   0.317  0.00  0.00           O  
-HETATM    2  H1  HOH A   1       1.675  -1.848   0.486  0.00  0.00           H  
-HETATM    3  H2  HOH A   1       1.118  -0.468   0.206  0.00  0.00           H  
-TER
-HETATM    4  O   HOH A   2      -1.099  -0.858   2.173  0.00  0.00           O  
-HETATM    5  H1  HOH A   2      -0.403  -1.146   1.582  0.00  0.00           H  
-HETATM    6  H2  HOH A   2      -1.085   0.097   2.113  0.00  0.00           H  
-TER
-HETATM    7  O   HOH A   3       1.864   1.220   1.333  0.00  0.00           O  
-HETATM    8  H1  HOH A   3       2.010   1.883   0.658  0.00  0.00           H  
-HETATM    9  H2  HOH A   3       2.642   0.663   1.295  0.00  0.00           H  
-TER
-HETATM   10  O   HOH A   4       0.436   0.859  -1.799  0.00  0.00           O  
-HETATM   11  H1  HOH A   4       1.295   0.594  -1.471  0.00  0.00           H  
-HETATM   12  H2  HOH A   4       0.136   0.111  -2.315  0.00  0.00           H  
-TER
-HETATM   13  O   HOH A   5      -0.801  -2.091  -1.573  0.00  0.00           O  
-HETATM   14  H1  HOH A   5      -0.220  -1.830  -0.858  0.00  0.00           H  
-HETATM   15  H2  HOH A   5      -0.328  -1.846  -2.368  0.00  0.00           H  
-TER
-HETATM   16  O   HOH A   6      -1.497   2.268  -0.330  0.00  0.00           O  
-HETATM   17  H1  HOH A   6      -0.847   1.694  -0.735  0.00  0.00           H  
-HETATM   18  H2  HOH A   6      -2.325   1.798  -0.427  0.00  0.00           H  
-TER
-"""
+datad = addons.datad
 
 @addons.using_openmm
 def test_dlc_openmm_water3(localizer):
@@ -60,9 +19,7 @@ def test_dlc_openmm_water3(localizer):
     Optimize the geometry of three water molecules using standard delocalized internal coordinates. 
     The coordinate system will break down and have to be rebuilt.
     """
-    with open('water3.pdb', 'w') as f:
-        f.write(pdb_water3)
-    progress = geometric.optimize.run_optimizer(openmm=True, pdb='water3.pdb', coordsys='dlc', input='tip3p.xml')
+    progress = geometric.optimize.run_optimizer(openmm=True, pdb=os.path.join(datad,'water3.pdb'), coordsys='dlc', input='tip3p.xml')
     # The results here are in Angstrom
     # 
     ref = np.array([[ 1.19172917, -1.71174316,  0.79961878],
@@ -93,9 +50,7 @@ def test_tric_openmm_water6(localizer):
     Optimize the geometry of six water molecules using translation-rotation internal coordinates. 
     This optimization should be rather stable.
     """
-    with open('water6.pdb', 'w') as f:
-        f.write(pdb_water6)
-    progress = geometric.optimize.run_optimizer(openmm=True, pdb='water6.pdb', input='tip3p.xml')
+    progress = geometric.optimize.run_optimizer(openmm=True, pdb=os.path.join(datad,'water6.pdb'), input='tip3p.xml')
     ref = np.array([[ 1.32539118, -1.69049000,  0.75057673],
                     [ 1.99955139, -2.21940859,  1.18382539],
                     [ 1.57912690, -0.77129578,  0.98807568],
@@ -126,4 +81,15 @@ def test_tric_openmm_water6(localizer):
     assert rmsd < 0.03
     assert maxd < 0.05
 
-
+@addons.using_openmm
+def test_openmm_ala_scan(localizer):
+    # Requires amber99sb.xml which ships with OpenMM
+    m = geometric.optimize.run_optimizer(openmm=True, enforce=0.1, pdb=os.path.join(datad, 'ala_a99sb_min.pdb'), input='amber99sb.xml',
+                                         constraints=os.path.join(datad, 'ala_constraints.txt'))
+    scan_final = geometric.molecule.Molecule('scan-final.xyz')
+    scan_energies = np.array([float(c.split()[-1]) for c in scan_final.comms])
+    ref_energies = np.array([-0.03368698, -0.03349261])
+    # Check converged energies
+    assert np.allclose(scan_energies, ref_energies, atol=1.e-3)
+    # Check for performance regression (should be done in ~33 cycles)
+    assert len(m) < 50
