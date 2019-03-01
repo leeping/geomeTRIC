@@ -5,8 +5,13 @@ import geometric
 import json
 import traceback
 
+try:
+    from cStringIO import StringIO      # Python 2
+except ImportError:
+    from io import StringIO
+
 import logging
-logger = logging.getLogger(__name__)
+from .nifty import logger
 
 
 def parse_input_json_dict(in_json_dict):
@@ -143,6 +148,10 @@ def make_constraints_string(constraints_dict):
 def geometric_run_json(in_json_dict):
     """ Take a input dictionary loaded from json, and return an output dictionary for json """
 
+    # Set a temporary logger to capture output
+    log_stream = logging.StreamHandler(stream=StringIO())
+    logger.addHandler(log_stream)
+
     input_opts = parse_input_json_dict(in_json_dict)
     M, engine = geometric.optimize.get_molecule_engine(**input_opts)
 
@@ -214,6 +223,11 @@ def geometric_run_json(in_json_dict):
             "error_type": "unknown",
             "error_message": "geomeTRIC run_json error:\n" + traceback.format_exc()
         }
+
+    # Grab logging and pop logger
+    out_json_dict["stdout"] = log_stream.stream.getvalue()
+    log_stream.close()
+    logger.handlers.remove(log_stream)
 
     return out_json_dict
 

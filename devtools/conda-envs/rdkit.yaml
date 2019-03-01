@@ -6,7 +6,7 @@ channels:
 dependencies:
     # RDKit test depends
   - rdkit
-  - qcengine
+  - qcengine >=0.6*
 
     # OpenMM test depends
   - openmm

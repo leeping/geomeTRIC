@@ -7,7 +7,7 @@ channels:
 dependencies:
     # Psi test depends
   - psi4
-  - qcengine
+  - qcengine >=0.6*
 
     # OpenMM test depends
   - openmm

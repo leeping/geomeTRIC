@@ -10,15 +10,13 @@ import time
 import numpy as np
 from numpy.linalg import multi_dot
 
-import logging
 import pkg_resources
-logger = logging.getLogger(__name__)
 
 import geometric
 from .engine import set_tcenv, load_tcin, TeraChem, TeraChem_CI, Psi4, QChem, Gromacs, Molpro, OpenMM, QCEngineAPI
 from .internal import *
 from .molecule import Molecule, Elements
-from .nifty import row, col, flat, invert_svd, uncommadash, isint, bohr2ang, ang2bohr
+from .nifty import row, col, flat, invert_svd, uncommadash, isint, bohr2ang, ang2bohr, logger
 from .rotate import get_rot, sorted_eigh, calc_fac_dfac
 from enum import Enum
 
