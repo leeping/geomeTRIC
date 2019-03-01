@@ -16,7 +16,7 @@ import geometric
 from .engine import set_tcenv, load_tcin, TeraChem, TeraChem_CI, Psi4, QChem, Gromacs, Molpro, OpenMM, QCEngineAPI
 from .internal import *
 from .molecule import Molecule, Elements
-from .nifty import row, col, flat, invert_svd, uncommadash, isint, bohr2ang, ang2bohr, logger
+from .nifty import row, col, flat, invert_svd, uncommadash, isint, bohr2ang, ang2bohr, logger, bak
 from .rotate import get_rot, sorted_eigh, calc_fac_dfac
 from enum import Enum
 
@@ -1536,16 +1536,46 @@ def run_optimizer(**kwargs):
     Run geometry optimization, constrained optimization, or 
     constrained scan job given arguments from command line.
     """
+    #==============================#
+    #|   Log file configuration   |#
+    #==============================#
+    # By default, output should be written to <args.prefix>.log and also printed to the terminal.
+    # This behavior may be changed by editing the log.ini file.
+    # Output will only be written to log files after the 'logConfig' line is called!
+    logIni = 'log.ini'
+    if kwargs.get('logIni') is None:
+        import geometric.optimize
+        logIni = pkg_resources.resource_filename(geometric.optimize.__name__, logIni) 
+    else:
+        logIni = kwargs.get('logIni')
+    logfilename = kwargs.get('prefix')
+    
+    # Input file for optimization; QC input file or OpenMM .xml file
+    inputf = kwargs.get('input')
+    # Get calculation prefix and temporary directory name
+    arg_prefix = kwargs.get('prefix', None) #prefix for output file and temporary directory
+    prefix = arg_prefix if arg_prefix is not None else os.path.splitext(inputf)[0]
+    logfilename = prefix + ".log"
+    # Create a backup if the log file already exists
+    backed_up = bak(logfilename)
+    import logging.config
+    logging.config.fileConfig(logIni,defaults={'logfilename': logfilename},disable_existing_loggers=False)
+    #==============================#
+    #| End log file configuration |#
+    #==============================#
+    
+    logger.info('-=# \x1b[1;94m geomeTRIC started. Version: %s \x1b[0m #=-' % geometric.__version__)
+    logger.info('geometric-optimize called with the following command line:')
+    logger.info(' '.join(sys.argv))
+    if backed_up:
+        logger.info('Backed up existing log file: %s -> %s' % (logfilename, os.path.basename(backed_up)))
+    
     t0 = time.time()
     params = OptParams(**kwargs)
 
     # Get the Molecule and engine objects needed for optimization
     M, engine = get_molecule_engine(**kwargs)
 
-    # Get calculation prefix and temporary directory name
-    arg_prefix = kwargs.get('prefix', None) #prefix for output file and temporary directory
-    inputf = kwargs.get('input') # TeraChem or Q-Chem input file
-    prefix = arg_prefix if arg_prefix is not None else os.path.splitext(inputf)[0]
     dirname = prefix+".tmp"
     if not os.path.exists(dirname):
         os.makedirs(dirname)
@@ -1660,8 +1690,6 @@ def run_optimizer(**kwargs):
 def main():
     """Read user's input"""
 
-    import logging.config as logConfig
-    
     parser = argparse.ArgumentParser()
     parser.add_argument('--coordsys', type=str, default='tric', help='Coordinate system: "cart" for Cartesian, "prim" for Primitive (a.k.a redundant), '
                         '"dlc" for Delocalized Internal Coordinates, "hdlc" for Hybrid Delocalized Internal Coordinates, "tric" for Translation-Rotation'
@@ -1676,14 +1704,14 @@ def main():
     parser.add_argument('--molpro', action='store_true', help='Compute gradients in Molpro.')
     parser.add_argument('--molproexe', type=str, default=None, help='Specify absolute path of Molpro executable.')
     parser.add_argument('--molcnv', action='store_true', help='Use Molpro style convergence criteria instead of the default.')
-    parser.add_argument('--prefix', type=str, default=None, help='Specify a prefix for output file and temporary directory.')
+    parser.add_argument('--prefix', type=str, default=None, help='Specify a prefix for log file and temporary directory.')
     parser.add_argument('--displace', action='store_true', help='Write out the displacements of the coordinates.')
     parser.add_argument('--fdcheck', action='store_true', help='Check internal coordinate gradients using finite difference..')
     parser.add_argument('--enforce', type=float, default=0.0, help='Enforce exact constraints when within provided tolerance (in a.u. and radian)')
     parser.add_argument('--epsilon', type=float, default=1e-5, help='Small eigenvalue threshold.')
     parser.add_argument('--check', type=int, default=0, help='Check coordinates every N steps to see whether it has changed.')
     parser.add_argument('--verbose', action='store_true', help='Write out the displacements.')
-    parser.add_argument('--logINI',  type=str, dest='logFile', help='ini file for logging')
+    parser.add_argument('--logINI',  type=str, dest='logIni', help='ini file for logging')
     parser.add_argument('--reset', action='store_true', help='Reset Hessian when eigenvalues are under epsilon.')
     parser.add_argument('--rfo', action='store_true', help='Use rational function optimization (default is trust-radius Newton Raphson).')
     parser.add_argument('--trust', type=float, default=0.1, help='Starting trust radius.')
@@ -1699,26 +1727,8 @@ def main():
     parser.add_argument('input', type=str, help='TeraChem or Q-Chem input file')
     parser.add_argument('constraints', type=str, nargs='?', help='Constraint input file (optional)')
     args = parser.parse_args(sys.argv[1:])
-    # Run the optimizer.
-    
-    logIni = 'log.ini'
-    if args.logFile is None:
-        import geometric.optimize
-        logIni = pkg_resources.resource_filename(geometric.optimize.__name__, logIni) 
-    else:
-        logIni = args.logFile
-        
-    logfilename = args.prefix
-    inputf = vars(args).get('input')
-    logfilename = logfilename if logfilename is not None else os.path.splitext(inputf)[0]
-    logfilename += '.log'
-    
-    logConfig.fileConfig(logIni,defaults={'logfilename': logfilename},disable_existing_loggers=False)
-    
-    logger.info('-=# \x1b[1;94m geomeTRIC started. Version: %s \x1b[0m #=-' % geometric.__version__)
-    logger.info('geometric-optimize called with the following command line:')
-    logger.info(' '.join(sys.argv))
 
+    # Run the optimizer.
     run_optimizer(**vars(args))
 
 if __name__ == "__main__":
