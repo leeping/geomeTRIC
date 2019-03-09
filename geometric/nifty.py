@@ -47,9 +47,16 @@ from collections import OrderedDict, defaultdict
 #================================#
 #       Set up the logger        #
 #================================#
-try:
+if "forcebalance" in __name__:
+    # If this module is part of ForceBalance, use the package level logger
     from .output import *
-except ImportError:
+elif "geometric" in __name__:
+    # This ensures logging behavior is consistent with the rest of geomeTRIC
+    from logging import *
+    logger = getLogger(__name__)
+    logger.setLevel(INFO)
+else:
+    # Previous default behavior if FB package level loggers could not be imported
     from logging import *
     class RawStreamHandler(StreamHandler):
         """Exactly like output.StreamHandler except it does no extra formatting
@@ -70,6 +77,7 @@ except ImportError:
     logger.setLevel(INFO)
     handler = RawStreamHandler()
     logger.addHandler(handler)
+
 
 try:
     import bz2
@@ -499,16 +507,16 @@ def monotonic_decreasing(arr, start=None, end=None, verbose=False):
         end = len(arr) - 1
     a0 = arr[start]
     idx = [start]
-    if verbose: print("Starting @ %i : %.6f" % (start, arr[start]))
+    if verbose: logger.info("Starting @ %i : %.6f" % (start, arr[start]))
     if end > start:
         i = start+1
         while i < end:
             if arr[i] < a0:
                 a0 = arr[i]
                 idx.append(i)
-                if verbose: print("Including  %i : %.6f" % (i, arr[i]))
+                if verbose: logger.info("Including  %i : %.6f" % (i, arr[i]))
             else:
-                if verbose: print("Excluding  %i : %.6f" % (i, arr[i]))
+                if verbose: logger.info("Excluding  %i : %.6f" % (i, arr[i]))
             i += 1
     if end < start:
         i = start-1
@@ -516,9 +524,9 @@ def monotonic_decreasing(arr, start=None, end=None, verbose=False):
             if arr[i] < a0:
                 a0 = arr[i]
                 idx.append(i)
-                if verbose: print("Including  %i : %.6f" % (i, arr[i]))
+                if verbose: logger.info("Including  %i : %.6f" % (i, arr[i]))
             else:
-                if verbose: print("Excluding  %i : %.6f" % (i, arr[i]))
+                if verbose: logger.info("Excluding  %i : %.6f" % (i, arr[i]))
             i -= 1
     return np.array(idx)
 
@@ -742,7 +750,7 @@ def lp_dump(obj, fnm, protocol=0):
     #     logger.error("lp_dump cannot write to an existing path")
     #     raise IOError
     if os.path.islink(fnm):
-        logger.warn("Trying to write to a symbolic link %s, removing it first\n" % fnm)
+        logger.warning("Trying to write to a symbolic link %s, removing it first\n" % fnm)
         os.unlink(fnm)
     if HaveGZ:
         f = gzip.GzipFile(fnm, 'wb')
@@ -1078,7 +1086,7 @@ def listfiles(fnms=None, ext=None, err=False, dnm=None):
             raise RuntimeError
         answer = [fnms]
     elif fnms is not None:
-        print(fnms)
+        logger.info(fnms)
         logger.error('First argument to listfiles must be a list, a string, or None')
         raise RuntimeError
     if answer == [] and ext is not None:
@@ -1192,7 +1200,7 @@ def MissingFileInspection(fnm):
 def wopen(dest, binary=False):
     """ If trying to write to a symbolic link, remove it first. """
     if os.path.islink(dest):
-        logger.warn("Trying to write to a symbolic link %s, removing it first\n" % dest)
+        logger.warning("Trying to write to a symbolic link %s, removing it first\n" % dest)
         os.unlink(dest)
     if binary:
         return open(dest,'wb')

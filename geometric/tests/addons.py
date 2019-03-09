@@ -11,12 +11,16 @@ def _plugin_import(plug):
     Tests to see if a module is available
     """
     import sys
-    if sys.version_info >= (3, 4):
-        from importlib import util
-        plug_spec = util.find_spec(plug)
-    else:
-        import pkgutil
-        plug_spec = pkgutil.find_loader(plug)
+    try:
+        if sys.version_info >= (3, 4):
+            from importlib import util
+            plug_spec = util.find_spec(plug)
+        else:
+            import pkgutil
+            plug_spec = pkgutil.find_loader(plug)
+    except ModuleNotFoundError:
+        return False
+
     if plug_spec is None:
         return False
     else:
@@ -34,7 +38,11 @@ using_rdkit = pytest.mark.skipif(
     _plugin_import("rdkit") is False, reason="could not find rdkit. please install the package to enable tests")
 using_qcengine = pytest.mark.skipif(
     _plugin_import("qcengine") is False, reason="could not find qcengine. please install the package to enable tests")
+using_openmm = pytest.mark.skipif(
+    _plugin_import("simtk.openmm") is False, reason="could not find simtk.openmm. please install the package to enable tests")
 
+# Points to the folder where the data files are installed.
+datad = os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), 'data')
 
 # make tests run in their own folder
 @pytest.fixture(scope="function")
@@ -42,7 +50,7 @@ def in_folder(request):
 
     # Build out a test folder
     cwd = os.path.abspath(os.getcwd())
-    test_folder = os.path.join(cwd, 'test_generated_files', request.function.__name__) 
+    test_folder = os.path.join(cwd, 'test_generated_files', request.function.__name__)
 
     # Build and change to test folder
     if not os.path.exists(test_folder):

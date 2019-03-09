@@ -4,7 +4,7 @@ A set of tests for using the QCEngine project
 
 import copy
 import numpy as np
-import json, os, shutil
+import json, os, sys, shutil
 from . import addons
 import geometric
 import pytest
@@ -37,6 +37,7 @@ def _build_input(molecule, program="rdkit", method="UFF", basis=None):
     return in_json_dict
 
 
+@pytest.mark.skipif(sys.version_info < (3, 6), reason="requires python3.6 or higher (ordered dict)")
 def test_convert_constraint_dict_full():
     constraint_dict = {
         "freeze": [{
@@ -47,7 +48,7 @@ def test_convert_constraint_dict_full():
             "type": "distance",
             "indices": [1, 0],
             "value": 1.1
-        },{
+        }, {
             "type": "angle",
             "indices": [1, 0, 4],
             "value": 110.0
@@ -175,6 +176,7 @@ def test_run_json_rdkit_hooh_constraint(localizer):
     # The results here are in Bohr
     assert pytest.approx(out_json["energies"][-1], 1.e-4) == 0.0007534925
 
+
 @addons.using_qcengine
 @addons.using_rdkit
 def test_run_json_distance_constraint(localizer):
@@ -203,7 +205,8 @@ def test_run_json_distance_constraint(localizer):
         json.dump(out_json, handle, indent=2)
 
     result_geo = np.array(out_json['final_molecule']['geometry']).reshape(-1, 3)
-    assert pytest.approx(2.4) ==  np.linalg.norm(result_geo[1] - result_geo[2])
+    assert pytest.approx(2.4) == np.linalg.norm(result_geo[1] - result_geo[2])
+    assert "Converged" in out_json["stdout"]
 
 
 @addons.using_qcengine
@@ -239,6 +242,7 @@ def test_run_json_psi4_hydrogen(localizer):
     assert pytest.approx(out_json["energies"][-1], 1.e-4) == -1.1175301889636524
     assert np.allclose(ref, result_geo, atol=1.e-5)
     assert out_json["schema_name"] == "qc_schema_optimization_output"
+    assert "Converged" in out_json["stdout"]
 
 
 @addons.using_qcengine

@@ -71,3 +71,5 @@ energy.txt
 .pytest_cache/
 test_generated_files/
 
+# queuing system logs
+slurm*.out

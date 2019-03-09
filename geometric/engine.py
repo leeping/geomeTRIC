@@ -12,7 +12,7 @@ import re
 import os
 
 from .molecule import Molecule
-from .nifty import eqcgmx, fqcgmx, bohr2ang, getWorkQueue, queue_up_src_dest
+from .nifty import eqcgmx, fqcgmx, bohr2ang, logger, getWorkQueue, queue_up_src_dest
 
 #=============================#
 #| Useful TeraChem functions |#
@@ -328,6 +328,49 @@ class TeraChem(Engine):
         gradient = np.loadtxt(os.path.join(dirname,'grad.txt')).flatten()
         return energy, gradient
 
+class OpenMM(Engine):
+    """
+    Run a OpenMM energy and gradient calculation.
+    """
+    def __init__(self, molecule, pdb, xml):
+        try:
+            import simtk.openmm.app as app
+            import simtk.openmm as mm
+            import simtk.unit as u
+        except ImportError:
+            raise ImportError("OpenMM computation object requires the 'simtk' package. Please pip or conda install 'openmm' from omnia channel.")
+        pdb = app.PDBFile(pdb)
+        xmlSystem = False
+        if os.path.exists(xml):
+            xmlStr = open(xml).read()
+            try:
+                # If the user has provided an OpenMM system, we can use it directly
+                system = mm.XmlSerializer.deserialize(xmlStr)
+                xmlSystem = True
+                logger.info("Treating the provided xml as a system XML file")
+            except ValueError:
+                logger.info("Treating the provided xml as a force field XML file")
+        else:
+            logger.info("xml file not in the current folder, treating as a force field XML file and setting up in gas phase.")
+        if not xmlSystem:
+            forcefield = app.ForceField(xml)
+            system = forcefield.createSystem(pdb.topology, nonbondedMethod=app.NoCutoff, constraints=None, rigidWater=False)
+        integrator = mm.VerletIntegrator(1.0*u.femtoseconds)
+        platform = mm.Platform.getPlatformByName('Reference')
+        self.simulation = app.Simulation(pdb.topology, system, integrator, platform)
+        super(OpenMM, self).__init__(molecule)
+
+    def calc_new(self, coords, dirname):
+        from simtk.openmm import Vec3
+        import simtk.unit as u
+        self.M.xyzs[0] = coords.reshape(-1, 3) * bohr2ang
+        pos = [Vec3(self.M.xyzs[0][i,0]/10, self.M.xyzs[0][i,1]/10, self.M.xyzs[0][i,2]/10) for i in range(self.M.na)]*u.nanometer
+        self.simulation.context.setPositions(pos)
+        state = self.simulation.context.getState(getEnergy=True, getForces=True)
+        energy = state.getPotentialEnergy().value_in_unit(u.kilojoule_per_mole) / eqcgmx
+        gradient = state.getForces(asNumpy=True).flatten() / fqcgmx
+        return energy, gradient
+
 class Psi4(Engine):
     """
     Run a Psi4 energy and gradient calculation.
@@ -442,7 +485,7 @@ class Psi4(Engine):
                 elif line_strip == 'Gradient written.':
                     # this works for CCSD(T) gradients computed by numerical displacements
                     found_num_grad = True
-                    print("found num grad")
+                    logger.info("found num grad")
                 elif found_num_grad is True and line_strip.startswith('------------------------------'):
                     for _ in range(4):
                         line = next(outfile)
@@ -703,7 +746,8 @@ class QCEngineAPI(Engine):
         import qcengine
         new_schema = deepcopy(self.schema)
         new_schema["molecule"]["geometry"] = coords.tolist()
-        ret = qcengine.compute(new_schema, self.program)
+        new_schema.pop("program", None)
+        ret = qcengine.compute(new_schema, self.program, return_dict=True)
 
         # store the schema_traj for run_json to pick up
         self.schema_traj.append(ret)
@@ -773,7 +817,7 @@ class TeraChem_CI(Engine):
         # Compute objective function and gradient
         Obj = EAvg + self.sigma * Penalty
         ObjGrad = GAvg + self.sigma * (EDif**2 + 2*self.alpha*EDif)/(EDif+self.alpha)**2 * GDif
-        print("EI= % .8f EJ= % .8f S2I= %.4f S2J= %.4f <E>= % .8f Gap= %.8f Pen= %.8f Obj= % .8f" % (EDict[I], EDict[J], SDict[I], SDict[J], EAvg, EDif, Penalty, Obj))
+        logger.info("EI= % .8f EJ= % .8f S2I= %.4f S2J= %.4f <E>= % .8f Gap= %.8f Pen= %.8f Obj= % .8f" % (EDict[I], EDict[J], SDict[I], SDict[J], EAvg, EDif, Penalty, Obj))
         return Obj, ObjGrad
 
     def number_output(self, dirname, calcNum):
