@@ -1306,16 +1306,20 @@ def CheckInternalGrad(coords, molecule, IC, engine, dirname, verbose=False):
     # Initial internal coordinates
     q0 = IC.calculate(coords)
     Gq = IC.calcGrad(coords, gradx)
+    logger.info("-=# Now checking energy gradient in internal coordinates vs. finite difference #=-")
+    logger.info("%20s : %14s %14s %14s %14s" % ('IC Name', 'Analytic', 'Numerical', 'Abs-Diff', 'Rel-Diff'))
+    h = 1e-3
     for i in range(len(q0)):
         dq = np.zeros_like(q0)
-        dq[i] += 1e-4
+        dq[i] += h
         x1 = IC.newCartesian(coords, dq, verbose)
         EPlus, _ = engine.calc(x1, dirname)
-        dq[i] -= 2e-4
+        dq[i] -= 2*h
         x1 = IC.newCartesian(coords, dq, verbose)
         EMinus, _ = engine.calc(x1, dirname)
-        fdiff = (EPlus-EMinus)/2e-4
-        logger.info("%s : % .6e % .6e % .6e" % (IC.Internals[i], Gq[i], fdiff, Gq[i]-fdiff))
+        fdiff = (EPlus-EMinus)/(2*h)
+        frac = (Gq[i]-fdiff)/(fdiff if fdiff != 0.0 else 1.0)
+        logger.info("%20s : % 14.6e % 14.6e % 14.6e % 14.6e" % (IC.Internals[i], Gq[i], fdiff, Gq[i]-fdiff, frac))
 
 def CalcInternalHess(coords, molecule, IC, engine, dirname, verbose=False):
     """
@@ -1647,7 +1651,8 @@ def run_optimizer(**kwargs):
 
     fdcheck = kwargs.get('fdcheck', False) # Check internal coordinate gradients using finite difference..
     if fdcheck:
-        IC.Prims.checkFiniteDifference(coords)
+        IC.Prims.checkFiniteDifferenceGrad(coords)
+        IC.Prims.checkFiniteDifferenceHess(coords)
         CheckInternalGrad(coords, M, IC.Prims, engine, dirname, verbose)
         return
 

@@ -808,7 +808,7 @@ class Angle(object):
             return der2
         # cosine and sine of the bond angle
         cq = np.dot(u, v)
-        sq = np.sqrt(1-cqa**2)
+        sq = np.sqrt(1-cq**2)
         uu = np.outer(u, u)
         uv = np.outer(u, v)
         vv = np.outer(v, v)
@@ -817,7 +817,7 @@ class Angle(object):
         term2 = (uv + uv.T - (3*vv - de)*cq)/(v_norm**2*sq)
         term3 = (uu + vv - uv*cq   - de)/(u_norm*v_norm*sq)
         term4 = (uu + vv - uv.T*cq - de)/(u_norm*v_norm*sq)
-        der1 = self.derivatives(xyz)
+        der1 = self.derivative(xyz)
         def zeta(a, m, n):
             return (a==m - a==n)
         for a in [m, n, o]:
@@ -1433,9 +1433,11 @@ class OutOfPlane(object):
         return derivatives
 
     def second_derivative(self, xyz):
-        xyz = xyz.reshape(-1,3)
-        der2 = np.zeros((xyz.shape[0], xyz.shape[1], xyz.shape[0], xyz.shape[1]))
-        return der2
+        raise NotImplementedError("Second derivatives have not been implemented for IC type %s" % self.__name__)
+    # def second_derivative(self, xyz):
+    #     xyz = xyz.reshape(-1,3)
+    #     der2 = np.zeros((xyz.shape[0], xyz.shape[1], xyz.shape[0], xyz.shape[1]))
+    #     return der2
     
 CacheWarning = False
 
@@ -1534,7 +1536,7 @@ class InternalCoordinates(object):
         # print "G-time: %.3f Inv-time: %.3f" % (time_G, time_inv)
         return Gi
 
-    def checkFiniteDifference(self, xyz):
+    def checkFiniteDifferenceGrad(self, xyz):
         xyz = xyz.reshape(-1,3)
         Analytical = self.derivatives(xyz)
         FiniteDifference = np.zeros_like(Analytical)
@@ -1547,9 +1549,10 @@ class InternalCoordinates(object):
                 x2[i,j] -= h
                 PMDiff = self.calcDiff(x1,x2)
                 FiniteDifference[:,i,j] = PMDiff/(2*h)
+        logger.info("-=# Now checking first derivatives of primitive internal coordinates w/r.t. Cartesians #=-")
         for i in range(Analytical.shape[0]):
-            logger.info("IC %i/%i : %s" % (i, Analytical.shape[0], self.Internals[i]))
-            lines = [""]
+            title = "%20s : %20s" % ("IC %i/%i" % (i+1, Analytical.shape[0]), self.Internals[i])
+            lines = [title]
             maxerr = 0.0
             for j in range(Analytical.shape[1]):
                 lines.append("Atom %i" % (j+1))
@@ -1565,9 +1568,44 @@ class InternalCoordinates(object):
             if maxerr > 1e-5:
                 logger.info('\n'.join(lines))
             else:
-                logger.info("Max Error = %.5e" % maxerr)
+                logger.info("%s : Max Error = %.5e" % (title, maxerr))
         logger.info("Finite-difference Finished")
 
+    def checkFiniteDifferenceHess(self, xyz):
+        xyz = xyz.reshape(-1,3)
+        Analytical = self.second_derivatives(xyz)
+        FiniteDifference = np.zeros_like(Analytical)
+        h = 1e-5
+        # for i in range(xyz.shape[0]):
+        #     for j in range(3):
+        #         x1 = xyz.copy()
+        #         x2 = xyz.copy()
+        #         x1[i,j] += h
+        #         x2[i,j] -= h
+        #         PMDiff = self.calcDiff(x1,x2)
+        #         FiniteDifference[:,i,j] = PMDiff/(2*h)
+        # logger.info("-=# Now checking first derivatives of primitive internal coordinates w/r.t. Cartesians #=-")
+        # for i in range(Analytical.shape[0]):
+        #     title = "%20s : %20s" % ("IC %i/%i" % (i+1, Analytical.shape[0]), self.Internals[i])
+        #     lines = [title]
+        #     maxerr = 0.0
+        #     for j in range(Analytical.shape[1]):
+        #         lines.append("Atom %i" % (j+1))
+        #         for k in range(Analytical.shape[2]):
+        #             error = Analytical[i,j,k] - FiniteDifference[i,j,k]
+        #             if np.abs(error) > 1e-5:
+        #                 color = "\x1b[91m"
+        #             else:
+        #                 color = "\x1b[92m"
+        #             lines.append("%s % .5e % .5e %s% .5e\x1b[0m" % ("xyz"[k], Analytical[i,j,k], FiniteDifference[i,j,k], color, Analytical[i,j,k] - FiniteDifference[i,j,k]))
+        #             if maxerr < np.abs(error):
+        #                 maxerr = np.abs(error)
+        #     if maxerr > 1e-5:
+        #         logger.info('\n'.join(lines))
+        #     else:
+        #         logger.info("%s : Max Error = %.5e" % (title, maxerr))
+        # logger.info("Finite-difference Finished")
+        
     def calcGrad(self, xyz, gradx):
         q0 = self.calculate(xyz)
         Ginv = self.GInverse(xyz)
@@ -2151,6 +2189,19 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         # 3) 3
         return np.array(answer)
 
+    def second_derivatives(self, xyz):
+        self.calculate(xyz)
+        answer = []
+        for Internal in self.Internals:
+            answer.append(Internal.second_derivative(xyz))
+        # This array has dimensions:
+        # 1) Number of internal coordinates
+        # 2) Number of atoms
+        # 3) 3
+        # 4) Number of atoms
+        # 5) 3
+        return np.array(answer)
+    
     def calcDiff(self, coord1, coord2):
         """ Calculate difference in internal coordinates, accounting for changes in 2*pi of angles. """
         Q1 = self.calculate(coord1)
