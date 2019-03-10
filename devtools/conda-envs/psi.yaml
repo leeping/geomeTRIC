@@ -8,7 +8,6 @@ dependencies:
     # Psi test depends
   - psi4=1.2
   - qcengine >=0.6*
-  - libint=1.2.1=h87b9b30_4
 
     # OpenMM test depends
   - openmm
