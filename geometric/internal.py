@@ -1622,7 +1622,7 @@ class InternalCoordinates(object):
             WilsonB.append(Der[i].flatten())
         self.stored_wilsonB[xhash] = np.array(WilsonB)
         if len(self.stored_wilsonB) > 1000 and not CacheWarning:
-            logger.warning("\x1b[91mWarning: more than 100 B-matrices stored, memory leaks likely\x1b[0m")
+            logger.warning("\x1b[91mWarning: more than 1000 B-matrices stored, memory leaks likely\x1b[0m")
             CacheWarning = True
         ans = np.array(WilsonB)
         return ans
@@ -1780,6 +1780,22 @@ class InternalCoordinates(object):
         Gq = multi_dot([Ginv, Bmat, gradx.T])
         return Gq.flatten()
 
+    def calcHess(self, xyz, gradx, hessx):
+        """
+        Compute the internal coordinate Hessian. 
+        Expects Cartesian coordinates to be provided in a.u.
+        """
+        xyz = xyz.flatten()
+        q0 = self.calculate(xyz)
+        Ginv = self.GInverse(xyz)
+        Bmat = self.wilsonB(xyz)
+        Gq = self.calcGrad(xyz, gradx)
+        deriv2 = self.second_derivatives(xyz)
+        Bmatp = deriv2.reshape(deriv2.shape[0], xyz.shape[0], xyz.shape[0])
+        Hx_BptGq = hessx - np.einsum('pmn,p->mn',Bmatp,Gq)
+        Hq = np.einsum('ps,sm,mn,nr,rq', Ginv, Bmat, Hx_BptGq, Bmat.T, Ginv, optimize=True)
+        return Hq
+    
     def readCache(self, xyz, dQ):
         if not hasattr(self, 'stored_xyz'):
             return None

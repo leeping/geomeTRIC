@@ -1,0 +1,67 @@
+<?xml version="1.0" ?>
+<System openmmVersion="7.3" type="System" version="1">
+	<PeriodicBoxVectors>
+		<A x="2" y="0" z="0"/>
+		<B x="0" y="2" z="0"/>
+		<C x="0" y="0" z="2"/>
+	</PeriodicBoxVectors>
+	<Particles>
+		<Particle mass="16"/>
+		<Particle mass="1.008"/>
+		<Particle mass="16"/>
+		<Particle mass="1.008"/>
+		<Particle mass="16"/>
+		<Particle mass="1.008"/>
+		<Particle mass="1.008"/>
+	</Particles>
+	<Constraints/>
+	<Forces>
+		<Force forceGroup="0" type="HarmonicBondForce" usesPeriodic="0" version="2">
+			<Bonds>
+				<Bond d=".0973" k="310787.52" p1="2" p2="3"/>
+				<Bond d=".0973" k="310787.52" p1="0" p2="1"/>
+				<Bond d=".0973" k="310787.52" p1="4" p2="5"/>
+				<Bond d=".0973" k="310787.52" p1="4" p2="6"/>
+				<Bond d=".1469" k="284930.4" p1="0" p2="2"/>
+			</Bonds>
+		</Force>
+		<Force forceGroup="0" type="HarmonicAngleForce" usesPeriodic="0" version="2">
+			<Angles>
+				<Angle a="1.72298978" k="412.5424" p1="1" p2="0" p3="2"/>
+				<Angle a="1.72298978" k="412.5424" p1="0" p2="2" p3="3"/>
+				<Angle a="1.85860192" k="348.10880000000003" p1="5" p2="4" p3="6"/>
+			</Angles>
+		</Force>
+		<Force forceGroup="0" type="PeriodicTorsionForce" usesPeriodic="0" version="2">
+			<Torsions>
+				<Torsion k="6.694400000000001" p1="1" p2="0" p3="2" p4="3" periodicity="2" phase="0"/>
+			</Torsions>
+		</Force>
+		<Force alpha="0" cutoff="1" dispersionCorrection="1" ewaldTolerance=".0005" forceGroup="0" ljAlpha="0" ljnx="0" ljny="0" ljnz="0" method="0" nx="0" ny="0" nz="0" recipForceGroup="-1" rfDielectric="78.3" switchingDistance="-1" type="NonbondedForce" useSwitchingFunction="0" version="3">
+			<GlobalParameters/>
+			<ParticleOffsets/>
+			<ExceptionOffsets/>
+			<Particles>
+				<Particle eps=".8803136010405576" q="-.412" sig=".3066473387458142"/>
+				<Particle eps="0" q=".412" sig=".08908987181403394"/>
+				<Particle eps=".8803136010405576" q="-.412" sig=".3066473387458142"/>
+				<Particle eps="0" q=".412" sig=".08908987181403394"/>
+				<Particle eps=".8803136010405576" q="-.7849999999999999" sig=".3066473387458142"/>
+				<Particle eps="0" q=".39199999999999996" sig=".08908987181403394"/>
+				<Particle eps="0" q=".39199999999999996" sig=".08908987181403394"/>
+			</Particles>
+			<Exceptions>
+				<Exception eps="0" p1="1" p2="3" q=".14145333333333332" sig=".08908987181403394"/>
+				<Exception eps="0" p1="0" p2="1" q="0" sig=".1"/>
+				<Exception eps="0" p1="0" p2="2" q="0" sig=".1"/>
+				<Exception eps="0" p1="0" p2="3" q="0" sig=".1"/>
+				<Exception eps="0" p1="1" p2="2" q="0" sig=".1"/>
+				<Exception eps="0" p1="2" p2="3" q="0" sig=".1"/>
+				<Exception eps="0" p1="4" p2="5" q="0" sig=".1"/>
+				<Exception eps="0" p1="4" p2="6" q="0" sig=".1"/>
+				<Exception eps="0" p1="5" p2="6" q="0" sig=".1"/>
+			</Exceptions>
+		</Force>
+		<Force forceGroup="0" frequency="1" type="CMMotionRemover" version="1"/>
+	</Forces>
+</System>
