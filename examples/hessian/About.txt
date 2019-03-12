@@ -1,0 +1,15 @@
+This example calculation will run the checkFiniteDifference functions
+on the provided input (H2O + H2O2).
+
+First, the IC analytic gradient will be calculated, then compared to
+numerical gradients calculated from finite difference on the energy.
+
+Next, the Cartesian Hessian will be calculated numerically using finite
+difference on the Cartesian gradient, then analytically transformed into ICs.
+
+Finally, the IC Hessian will be compared to numerical IC Hessian elements
+calculated from finite difference on the IC gradient.
+
+The system is chosen to be non-redundant in the primitive internal coordinates
+because that improves the stability of numerical gradients. The structure
+is not fully minimized in order to keep contributions from the B't*Gq term.

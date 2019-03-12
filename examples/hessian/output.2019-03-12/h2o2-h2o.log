@@ -1,0 +1,539 @@
+-=# [1;94m geomeTRIC started. Version: 0.9.3+105.g75989d0 [0m #=-
+geometric-optimize called with the following command line:
+/home/leeping/opt/miniconda3/envs/geometric_psi4/bin/geometric-optimize --fdcheck --psi4 h2o2-h2o.psi4in
+Backed up existing log file: h2o2-h2o.log -> h2o2-h2o_2.log
+h2o2-h2o.tmp exists ; make sure nothing else is writing to the folder
+-=# Now checking first derivatives of internal coordinates w/r.t. Cartesians #=-
+             IC 1/21 :         Distance 1-2 : Max Error = 3.35422e-11
+             IC 2/21 :         Distance 1-3 : Max Error = 1.04828e-11
+             IC 3/21 :         Distance 3-4 : Max Error = 8.39581e-12
+             IC 4/21 :         Distance 5-6 : Max Error = 9.13114e-12
+             IC 5/21 :         Distance 5-7 : Max Error = 5.06593e-12
+             IC 6/21 :          Angle 2-1-3 : Max Error = 9.49252e-12
+             IC 7/21 :          Angle 1-3-4 : Max Error = 1.69916e-11
+             IC 8/21 :          Angle 6-5-7 : Max Error = 2.08684e-11
+             IC 9/21 :     Dihedral 2-1-3-4 : Max Error = 1.94560e-11
+            IC 10/21 :    Translation-X 1-4 : Max Error = 1.63780e-12
+            IC 11/21 :    Translation-X 5-7 : Max Error = 2.18375e-12
+            IC 12/21 :    Translation-Y 1-4 : Max Error = 1.27400e-11
+            IC 13/21 :    Translation-Y 5-7 : Max Error = 4.22252e-11
+            IC 14/21 :    Translation-Z 1-4 : Max Error = 1.13778e-12
+            IC 15/21 :    Translation-Z 5-7 : Max Error = 8.91848e-12
+            IC 16/21 :       Rotation-A 1-4 : Max Error = 3.84032e-12
+            IC 17/21 :       Rotation-A 5-7 : Max Error = 2.37989e-11
+            IC 18/21 :       Rotation-B 1-4 : Max Error = 8.36842e-12
+            IC 19/21 :       Rotation-B 5-7 : Max Error = 9.38447e-12
+            IC 20/21 :       Rotation-C 1-4 : Max Error = 5.51043e-12
+            IC 21/21 :       Rotation-C 5-7 : Max Error = 7.06994e-11
+Finite-difference Finished
+-=# Now checking second derivatives of internal coordinates w/r.t. Cartesians #=-
+             IC 1/21 :         Distance 1-2 : Max Error =  3.14648e-09 (0 above threshold)
+             IC 2/21 :         Distance 1-3 : Max Error =  1.25351e-08 (0 above threshold)
+             IC 3/21 :         Distance 3-4 : Max Error =  6.77292e-09 (0 above threshold)
+             IC 4/21 :         Distance 5-6 : Max Error =  8.20677e-09 (0 above threshold)
+             IC 5/21 :         Distance 5-7 : Max Error =  8.29701e-09 (0 above threshold)
+             IC 6/21 :          Angle 2-1-3 : Max Error =  8.54509e-09 (0 above threshold)
+             IC 7/21 :          Angle 1-3-4 : Max Error =  1.18360e-08 (0 above threshold)
+             IC 8/21 :          Angle 6-5-7 : Max Error =  9.50217e-09 (0 above threshold)
+             IC 9/21 :     Dihedral 2-1-3-4 : Max Error =  2.05838e-08 (0 above threshold)
+            IC 10/21 :    Translation-X 1-4 : Max Error =  5.55112e-09 (0 above threshold)
+            IC 11/21 :    Translation-X 5-7 : Max Error =  2.22045e-08 (0 above threshold)
+            IC 12/21 :    Translation-Y 1-4 : Max Error =  1.11022e-08 (0 above threshold)
+            IC 13/21 :    Translation-Y 5-7 : Max Error =  2.22045e-08 (0 above threshold)
+            IC 14/21 :    Translation-Z 1-4 : Max Error =  0.00000e+00 (0 above threshold)
+            IC 15/21 :    Translation-Z 5-7 : Max Error =  5.55112e-09 (0 above threshold)
+            IC 16/21 :       Rotation-A 1-4 : Max Error =  2.07605e-09 (0 above threshold)
+            IC 17/21 :       Rotation-A 5-7 : Max Error =  2.81101e-09 (0 above threshold)
+            IC 18/21 :       Rotation-B 1-4 : Max Error =  6.06871e-09 (0 above threshold)
+            IC 19/21 :       Rotation-B 5-7 : Max Error =  1.87237e-09 (0 above threshold)
+            IC 20/21 :       Rotation-C 1-4 : Max Error =  6.20843e-09 (0 above threshold)
+            IC 21/21 :       Rotation-C 5-7 : Max Error =  1.32544e-08 (0 above threshold)
+Finite-difference Finished
+-=# Now checking gradient of the energy in internal coordinates vs. finite difference #=-
+             IC Name :       Analytic      Numerical       Abs-Diff
+        Distance 1-2 :       0.001189       0.001188       0.000001
+        Distance 1-3 :       0.000895       0.000894       0.000000
+        Distance 3-4 :      -0.000619      -0.000619       0.000000
+        Distance 5-6 :      -0.000287      -0.000287       0.000000
+        Distance 5-7 :       0.000590       0.000590       0.000000
+         Angle 2-1-3 :      -0.002223      -0.002222      -0.000001
+         Angle 1-3-4 :      -0.000849      -0.000849       0.000000
+         Angle 6-5-7 :      -0.000210      -0.000210       0.000000
+    Dihedral 2-1-3-4 :      -0.001300      -0.001300       0.000000
+   Translation-X 1-4 :       0.000332       0.000332      -0.000000
+   Translation-X 5-7 :      -0.000332      -0.000332      -0.000000
+   Translation-Y 1-4 :       0.000053       0.000053       0.000000
+   Translation-Y 5-7 :      -0.000053      -0.000053       0.000000
+   Translation-Z 1-4 :       0.000383       0.000383      -0.000000
+   Translation-Z 5-7 :      -0.000383      -0.000383       0.000000
+      Rotation-A 1-4 :      -0.000318      -0.000318       0.000000
+      Rotation-A 5-7 :      -0.000899      -0.000899       0.000000
+      Rotation-B 1-4 :      -0.000273      -0.000273      -0.000000
+      Rotation-B 5-7 :       0.001356       0.001355       0.000000
+      Rotation-C 1-4 :       0.001202       0.001201       0.000000
+      Rotation-C 5-7 :      -0.000765      -0.000765       0.000000
+Calculating Cartesian Hessian using finite difference on Cartesian gradients
+ coordinate 1/21
+ coordinate 2/21
+ coordinate 3/21
+ coordinate 4/21
+ coordinate 5/21
+ coordinate 6/21
+ coordinate 7/21
+ coordinate 8/21
+ coordinate 9/21
+ coordinate 10/21
+ coordinate 11/21
+ coordinate 12/21
+ coordinate 13/21
+ coordinate 14/21
+ coordinate 15/21
+ coordinate 16/21
+ coordinate 17/21
+ coordinate 18/21
+ coordinate 19/21
+ coordinate 20/21
+ coordinate 21/21
+-=# Now checking Hessian of the energy in internal coordinates using finite difference on gradient #=-
+            IC1 Name             IC2 Name :       Analytic      Numerical       Abs-Diff
+        Distance 1-2         Distance 1-2 :       0.449794       0.449840      -0.000046
+        Distance 1-2         Distance 1-3 :      -0.011186      -0.011172      -0.000014
+        Distance 1-2         Distance 3-4 :      -0.000955      -0.000969       0.000014
+        Distance 1-2         Distance 5-6 :      -0.002750      -0.002790       0.000040
+        Distance 1-2         Distance 5-7 :      -0.002009      -0.002047       0.000037
+        Distance 1-2          Angle 2-1-3 :       0.018160       0.018167      -0.000007
+        Distance 1-2          Angle 1-3-4 :      -0.004476      -0.004467      -0.000008
+        Distance 1-2          Angle 6-5-7 :      -0.000696      -0.000694      -0.000002
+        Distance 1-2     Dihedral 2-1-3-4 :      -0.000382      -0.000383       0.000002
+        Distance 1-2    Translation-X 1-4 :      -0.009087      -0.009085      -0.000001
+        Distance 1-2    Translation-X 5-7 :       0.009087       0.009085       0.000001
+        Distance 1-2    Translation-Y 1-4 :      -0.009659      -0.009655      -0.000004
+        Distance 1-2    Translation-Y 5-7 :       0.009659       0.009655       0.000004
+        Distance 1-2    Translation-Z 1-4 :       0.004110       0.004109       0.000001
+        Distance 1-2    Translation-Z 5-7 :      -0.004110      -0.004109      -0.000001
+        Distance 1-2       Rotation-A 1-4 :      -0.004139      -0.004138      -0.000001
+        Distance 1-2       Rotation-A 5-7 :       0.000619       0.000618       0.000002
+        Distance 1-2       Rotation-B 1-4 :      -0.002251      -0.002248      -0.000003
+        Distance 1-2       Rotation-B 5-7 :       0.002176       0.002174       0.000003
+        Distance 1-2       Rotation-C 1-4 :      -0.013948      -0.013945      -0.000004
+        Distance 1-2       Rotation-C 5-7 :       0.005738       0.005735       0.000003
+        Distance 1-3         Distance 1-2 :      -0.011135      -0.011161       0.000027
+        Distance 1-3         Distance 1-3 :       0.442397       0.442412      -0.000015
+        Distance 1-3         Distance 3-4 :      -0.007104      -0.007037      -0.000068
+        Distance 1-3         Distance 5-6 :       0.000377       0.000363       0.000014
+        Distance 1-3         Distance 5-7 :       0.000419       0.000405       0.000013
+        Distance 1-3          Angle 2-1-3 :       0.078657       0.078655       0.000002
+        Distance 1-3          Angle 1-3-4 :       0.068685       0.068689      -0.000004
+        Distance 1-3          Angle 6-5-7 :      -0.001053      -0.001054       0.000001
+        Distance 1-3     Dihedral 2-1-3-4 :      -0.000589      -0.000591       0.000002
+        Distance 1-3    Translation-X 1-4 :       0.001117       0.001118      -0.000001
+        Distance 1-3    Translation-X 5-7 :      -0.001117      -0.001118       0.000001
+        Distance 1-3    Translation-Y 1-4 :       0.004559       0.004557       0.000002
+        Distance 1-3    Translation-Y 5-7 :      -0.004559      -0.004557      -0.000002
+        Distance 1-3    Translation-Z 1-4 :      -0.000867      -0.000867       0.000000
+        Distance 1-3    Translation-Z 5-7 :       0.000867       0.000867      -0.000000
+        Distance 1-3       Rotation-A 1-4 :      -0.000226      -0.000223      -0.000004
+        Distance 1-3       Rotation-A 5-7 :      -0.000715      -0.000716       0.000000
+        Distance 1-3       Rotation-B 1-4 :       0.000040       0.000045      -0.000005
+        Distance 1-3       Rotation-B 5-7 :      -0.000521      -0.000521      -0.000000
+        Distance 1-3       Rotation-C 1-4 :       0.000541       0.000537       0.000005
+        Distance 1-3       Rotation-C 5-7 :      -0.004549      -0.004545      -0.000003
+        Distance 3-4         Distance 1-2 :      -0.000991      -0.000975      -0.000016
+        Distance 3-4         Distance 1-3 :      -0.007024      -0.007059       0.000034
+        Distance 3-4         Distance 3-4 :       0.533366       0.533570      -0.000204
+        Distance 3-4         Distance 5-6 :       0.000498       0.000514      -0.000016
+        Distance 3-4         Distance 5-7 :       0.000517       0.000532      -0.000015
+        Distance 3-4          Angle 2-1-3 :       0.008386       0.008367       0.000019
+        Distance 3-4          Angle 1-3-4 :       0.008002       0.007985       0.000017
+        Distance 3-4          Angle 6-5-7 :      -0.000470      -0.000474       0.000004
+        Distance 3-4     Dihedral 2-1-3-4 :       0.001051       0.001044       0.000007
+        Distance 3-4    Translation-X 1-4 :       0.001000       0.000998       0.000002
+        Distance 3-4    Translation-X 5-7 :      -0.001000      -0.000998      -0.000002
+        Distance 3-4    Translation-Y 1-4 :       0.004197       0.004190       0.000007
+        Distance 3-4    Translation-Y 5-7 :      -0.004197      -0.004190      -0.000007
+        Distance 3-4    Translation-Z 1-4 :      -0.000830      -0.000828      -0.000001
+        Distance 3-4    Translation-Z 5-7 :       0.000830       0.000828       0.000001
+        Distance 3-4       Rotation-A 1-4 :      -0.000081      -0.000087       0.000006
+        Distance 3-4       Rotation-A 5-7 :      -0.000726      -0.000726      -0.000000
+        Distance 3-4       Rotation-B 1-4 :       0.000001      -0.000007       0.000008
+        Distance 3-4       Rotation-B 5-7 :      -0.000482      -0.000481      -0.000001
+        Distance 3-4       Rotation-C 1-4 :       0.000226       0.000215       0.000011
+        Distance 3-4       Rotation-C 5-7 :      -0.003861      -0.003856      -0.000004
+        Distance 5-6         Distance 1-2 :      -0.002798      -0.002793      -0.000005
+        Distance 5-6         Distance 1-3 :       0.000372       0.000363       0.000010
+        Distance 5-6         Distance 3-4 :       0.000467       0.000515      -0.000047
+        Distance 5-6         Distance 5-6 :       0.546770       0.546910      -0.000141
+        Distance 5-6         Distance 5-7 :      -0.007200      -0.007171      -0.000029
+        Distance 5-6          Angle 2-1-3 :       0.000644       0.000632       0.000012
+        Distance 5-6          Angle 1-3-4 :       0.000368       0.000365       0.000002
+        Distance 5-6          Angle 6-5-7 :       0.037036       0.037025       0.000011
+        Distance 5-6     Dihedral 2-1-3-4 :       0.003881       0.003870       0.000011
+        Distance 5-6    Translation-X 1-4 :      -0.000194      -0.000193      -0.000001
+        Distance 5-6    Translation-X 5-7 :       0.000194       0.000193       0.000001
+        Distance 5-6    Translation-Y 1-4 :       0.001764       0.001761       0.000003
+        Distance 5-6    Translation-Y 5-7 :      -0.001764      -0.001761      -0.000003
+        Distance 5-6    Translation-Z 1-4 :      -0.002794      -0.002794      -0.000000
+        Distance 5-6    Translation-Z 5-7 :       0.002794       0.002794       0.000000
+        Distance 5-6       Rotation-A 1-4 :       0.005434       0.005431       0.000003
+        Distance 5-6       Rotation-A 5-7 :      -0.000115      -0.000115      -0.000000
+        Distance 5-6       Rotation-B 1-4 :      -0.000198      -0.000208       0.000009
+        Distance 5-6       Rotation-B 5-7 :      -0.004527      -0.004529       0.000002
+        Distance 5-6       Rotation-C 1-4 :      -0.000535      -0.000532      -0.000002
+        Distance 5-6       Rotation-C 5-7 :      -0.002811      -0.002808      -0.000003
+        Distance 5-7         Distance 1-2 :      -0.002155      -0.002062      -0.000093
+        Distance 5-7         Distance 1-3 :       0.000453       0.000412       0.000041
+        Distance 5-7         Distance 3-4 :       0.000425       0.000516      -0.000091
+        Distance 5-7         Distance 5-6 :      -0.007188      -0.007182      -0.000006
+        Distance 5-7         Distance 5-7 :       0.545141       0.545276      -0.000135
+        Distance 5-7          Angle 2-1-3 :       0.001092       0.001065       0.000027
+        Distance 5-7          Angle 1-3-4 :       0.000459       0.000428       0.000030
+        Distance 5-7          Angle 6-5-7 :       0.037296       0.037300      -0.000004
+        Distance 5-7     Dihedral 2-1-3-4 :      -0.003799      -0.003790      -0.000009
+        Distance 5-7    Translation-X 1-4 :       0.000814       0.000810       0.000004
+        Distance 5-7    Translation-X 5-7 :      -0.000814      -0.000810      -0.000004
+        Distance 5-7    Translation-Y 1-4 :       0.002562       0.002553       0.000009
+        Distance 5-7    Translation-Y 5-7 :      -0.002562      -0.002553      -0.000009
+        Distance 5-7    Translation-Z 1-4 :       0.002114       0.002116      -0.000002
+        Distance 5-7    Translation-Z 5-7 :      -0.002114      -0.002116       0.000002
+        Distance 5-7       Rotation-A 1-4 :      -0.005266      -0.005276       0.000010
+        Distance 5-7       Rotation-A 5-7 :      -0.001616      -0.001616      -0.000000
+        Distance 5-7       Rotation-B 1-4 :       0.000399       0.000399      -0.000000
+        Distance 5-7       Rotation-B 5-7 :       0.003655       0.003659      -0.000004
+        Distance 5-7       Rotation-C 1-4 :       0.001522       0.001495       0.000027
+        Distance 5-7       Rotation-C 5-7 :      -0.003734      -0.003724      -0.000009
+         Angle 2-1-3         Distance 1-2 :       0.018347       0.018171       0.000176
+         Angle 2-1-3         Distance 1-3 :       0.078592       0.078664      -0.000072
+         Angle 2-1-3         Distance 3-4 :       0.008452       0.008373       0.000080
+         Angle 2-1-3         Distance 5-6 :       0.000677       0.000639       0.000038
+         Angle 2-1-3         Distance 5-7 :       0.001099       0.001064       0.000035
+         Angle 2-1-3          Angle 2-1-3 :       0.294237       0.294278      -0.000041
+         Angle 2-1-3          Angle 1-3-4 :       0.045334       0.045356      -0.000021
+         Angle 2-1-3          Angle 6-5-7 :       0.000711       0.000710       0.000001
+         Angle 2-1-3     Dihedral 2-1-3-4 :       0.006372       0.006373      -0.000000
+         Angle 2-1-3    Translation-X 1-4 :      -0.001836      -0.001827      -0.000008
+         Angle 2-1-3    Translation-X 5-7 :       0.001836       0.001827       0.000008
+         Angle 2-1-3    Translation-Y 1-4 :       0.018827       0.018839      -0.000012
+         Angle 2-1-3    Translation-Y 5-7 :      -0.018827      -0.018839       0.000012
+         Angle 2-1-3    Translation-Z 1-4 :      -0.002014      -0.002018       0.000004
+         Angle 2-1-3    Translation-Z 5-7 :       0.002014       0.002018      -0.000004
+         Angle 2-1-3       Rotation-A 1-4 :      -0.004516      -0.004513      -0.000003
+         Angle 2-1-3       Rotation-A 5-7 :      -0.002929      -0.002930       0.000001
+         Angle 2-1-3       Rotation-B 1-4 :      -0.002319      -0.002319       0.000000
+         Angle 2-1-3       Rotation-B 5-7 :      -0.001469      -0.001471       0.000002
+         Angle 2-1-3       Rotation-C 1-4 :      -0.014663      -0.014635      -0.000027
+         Angle 2-1-3       Rotation-C 5-7 :      -0.015542      -0.015553       0.000010
+         Angle 1-3-4         Distance 1-2 :      -0.004315      -0.004461       0.000146
+         Angle 1-3-4         Distance 1-3 :       0.068611       0.068695      -0.000084
+         Angle 1-3-4         Distance 3-4 :       0.008158       0.007988       0.000169
+         Angle 1-3-4         Distance 5-6 :       0.000477       0.000360       0.000118
+         Angle 1-3-4         Distance 5-7 :       0.000536       0.000423       0.000114
+         Angle 1-3-4          Angle 2-1-3 :       0.045319       0.045353      -0.000033
+         Angle 1-3-4          Angle 1-3-4 :       0.243512       0.243561      -0.000050
+         Angle 1-3-4          Angle 6-5-7 :      -0.003335      -0.003327      -0.000008
+         Angle 1-3-4     Dihedral 2-1-3-4 :       0.002574       0.002569       0.000005
+         Angle 1-3-4    Translation-X 1-4 :       0.004897       0.004904      -0.000006
+         Angle 1-3-4    Translation-X 5-7 :      -0.004897      -0.004904       0.000006
+         Angle 1-3-4    Translation-Y 1-4 :       0.005192       0.005213      -0.000021
+         Angle 1-3-4    Translation-Y 5-7 :      -0.005192      -0.005213       0.000021
+         Angle 1-3-4    Translation-Z 1-4 :      -0.001553      -0.001558       0.000005
+         Angle 1-3-4    Translation-Z 5-7 :       0.001553       0.001558      -0.000005
+         Angle 1-3-4       Rotation-A 1-4 :       0.000875       0.000904      -0.000029
+         Angle 1-3-4       Rotation-A 5-7 :      -0.000602      -0.000605       0.000003
+         Angle 1-3-4       Rotation-B 1-4 :       0.001479       0.001507      -0.000029
+         Angle 1-3-4       Rotation-B 5-7 :      -0.000511      -0.000517       0.000006
+         Angle 1-3-4       Rotation-C 1-4 :       0.007404       0.007424      -0.000020
+         Angle 1-3-4       Rotation-C 5-7 :      -0.002920      -0.002941       0.000021
+         Angle 6-5-7         Distance 1-2 :      -0.000625      -0.000683       0.000058
+         Angle 6-5-7         Distance 1-3 :      -0.001084      -0.001059      -0.000025
+         Angle 6-5-7         Distance 3-4 :      -0.000465      -0.000466       0.000001
+         Angle 6-5-7         Distance 5-6 :       0.037083       0.037033       0.000050
+         Angle 6-5-7         Distance 5-7 :       0.037337       0.037307       0.000030
+         Angle 6-5-7          Angle 2-1-3 :       0.000694       0.000708      -0.000014
+         Angle 6-5-7          Angle 1-3-4 :      -0.003340      -0.003330      -0.000010
+         Angle 6-5-7          Angle 6-5-7 :       0.198053       0.198050       0.000002
+         Angle 6-5-7     Dihedral 2-1-3-4 :       0.000548       0.000551      -0.000003
+         Angle 6-5-7    Translation-X 1-4 :      -0.006467      -0.006464      -0.000003
+         Angle 6-5-7    Translation-X 5-7 :       0.006467       0.006464       0.000003
+         Angle 6-5-7    Translation-Y 1-4 :      -0.006314      -0.006308      -0.000006
+         Angle 6-5-7    Translation-Y 5-7 :       0.006314       0.006308       0.000006
+         Angle 6-5-7    Translation-Z 1-4 :       0.002581       0.002579       0.000002
+         Angle 6-5-7    Translation-Z 5-7 :      -0.002581      -0.002579      -0.000002
+         Angle 6-5-7       Rotation-A 1-4 :      -0.002936      -0.002936      -0.000000
+         Angle 6-5-7       Rotation-A 5-7 :       0.001128       0.001126       0.000001
+         Angle 6-5-7       Rotation-B 1-4 :      -0.001805      -0.001802      -0.000003
+         Angle 6-5-7       Rotation-B 5-7 :       0.001282       0.001281       0.000001
+         Angle 6-5-7       Rotation-C 1-4 :      -0.013469      -0.013459      -0.000010
+         Angle 6-5-7       Rotation-C 5-7 :       0.008552       0.008547       0.000006
+    Dihedral 2-1-3-4         Distance 1-2 :      -0.000369      -0.000383       0.000015
+    Dihedral 2-1-3-4         Distance 1-3 :      -0.000629      -0.000592      -0.000037
+    Dihedral 2-1-3-4         Distance 3-4 :       0.001228       0.001041       0.000187
+    Dihedral 2-1-3-4         Distance 5-6 :       0.003893       0.003876       0.000017
+    Dihedral 2-1-3-4         Distance 5-7 :      -0.003773      -0.003786       0.000013
+    Dihedral 2-1-3-4          Angle 2-1-3 :       0.006344       0.006372      -0.000028
+    Dihedral 2-1-3-4          Angle 1-3-4 :       0.002558       0.002570      -0.000012
+    Dihedral 2-1-3-4          Angle 6-5-7 :       0.000544       0.000549      -0.000005
+    Dihedral 2-1-3-4     Dihedral 2-1-3-4 :       0.015703       0.015714      -0.000011
+    Dihedral 2-1-3-4    Translation-X 1-4 :      -0.003425      -0.003424      -0.000001
+    Dihedral 2-1-3-4    Translation-X 5-7 :       0.003425       0.003424       0.000001
+    Dihedral 2-1-3-4    Translation-Y 1-4 :      -0.000999      -0.000988      -0.000011
+    Dihedral 2-1-3-4    Translation-Y 5-7 :       0.000999       0.000988       0.000011
+    Dihedral 2-1-3-4    Translation-Z 1-4 :      -0.009610      -0.009612       0.000001
+    Dihedral 2-1-3-4    Translation-Z 5-7 :       0.009610       0.009612      -0.000001
+    Dihedral 2-1-3-4       Rotation-A 1-4 :       0.018726       0.018725       0.000002
+    Dihedral 2-1-3-4       Rotation-A 5-7 :       0.005846       0.005845       0.000001
+    Dihedral 2-1-3-4       Rotation-B 1-4 :      -0.002012      -0.002008      -0.000004
+    Dihedral 2-1-3-4       Rotation-B 5-7 :      -0.016086      -0.016085      -0.000001
+    Dihedral 2-1-3-4       Rotation-C 1-4 :      -0.006540      -0.006526      -0.000015
+    Dihedral 2-1-3-4       Rotation-C 5-7 :      -0.000322      -0.000332       0.000010
+   Translation-X 1-4         Distance 1-2 :      -0.009498      -0.009084      -0.000414
+   Translation-X 1-4         Distance 1-3 :       0.001299       0.001118       0.000181
+   Translation-X 1-4         Distance 3-4 :       0.000711       0.000998      -0.000287
+   Translation-X 1-4         Distance 5-6 :      -0.000480      -0.000189      -0.000291
+   Translation-X 1-4         Distance 5-7 :       0.000535       0.000814      -0.000279
+   Translation-X 1-4          Angle 2-1-3 :      -0.001703      -0.001829       0.000127
+   Translation-X 1-4          Angle 1-3-4 :       0.004998       0.004904       0.000094
+   Translation-X 1-4          Angle 6-5-7 :      -0.006441      -0.006464       0.000023
+   Translation-X 1-4     Dihedral 2-1-3-4 :      -0.003397      -0.003425       0.000028
+   Translation-X 1-4    Translation-X 1-4 :       0.016482       0.016465       0.000017
+   Translation-X 1-4    Translation-X 5-7 :      -0.016482      -0.016465      -0.000017
+   Translation-X 1-4    Translation-Y 1-4 :       0.012119       0.012070       0.000048
+   Translation-X 1-4    Translation-Y 5-7 :      -0.012119      -0.012070      -0.000048
+   Translation-X 1-4    Translation-Z 1-4 :      -0.003285      -0.003272      -0.000012
+   Translation-X 1-4    Translation-Z 5-7 :       0.003285       0.003272       0.000012
+   Translation-X 1-4       Rotation-A 1-4 :       0.001785       0.001772       0.000013
+   Translation-X 1-4       Rotation-A 5-7 :      -0.002086      -0.002086      -0.000000
+   Translation-X 1-4       Rotation-B 1-4 :       0.004019       0.004005       0.000015
+   Translation-X 1-4       Rotation-B 5-7 :       0.002853       0.002861      -0.000008
+   Translation-X 1-4       Rotation-C 1-4 :       0.026230       0.026132       0.000098
+   Translation-X 1-4       Rotation-C 5-7 :      -0.002636      -0.002588      -0.000049
+   Translation-X 5-7         Distance 1-2 :       0.009005       0.009087      -0.000081
+   Translation-X 5-7         Distance 1-3 :      -0.001066      -0.001119       0.000053
+   Translation-X 5-7         Distance 3-4 :      -0.001119      -0.001000      -0.000119
+   Translation-X 5-7         Distance 5-6 :       0.000247       0.000194       0.000053
+   Translation-X 5-7         Distance 5-7 :      -0.000747      -0.000807       0.000060
+   Translation-X 5-7          Angle 2-1-3 :       0.001850       0.001828       0.000022
+   Translation-X 5-7          Angle 1-3-4 :      -0.004865      -0.004904       0.000039
+   Translation-X 5-7          Angle 6-5-7 :       0.006447       0.006463      -0.000016
+   Translation-X 5-7     Dihedral 2-1-3-4 :       0.003431       0.003424       0.000007
+   Translation-X 5-7    Translation-X 1-4 :      -0.016464      -0.016465       0.000001
+   Translation-X 5-7    Translation-X 5-7 :       0.016464       0.016465      -0.000001
+   Translation-X 5-7    Translation-Y 1-4 :      -0.012064      -0.012070       0.000007
+   Translation-X 5-7    Translation-Y 5-7 :       0.012064       0.012070      -0.000007
+   Translation-X 5-7    Translation-Z 1-4 :       0.003272       0.003272      -0.000001
+   Translation-X 5-7    Translation-Z 5-7 :      -0.003272      -0.003272       0.000001
+   Translation-X 5-7       Rotation-A 1-4 :      -0.001773      -0.001770      -0.000004
+   Translation-X 5-7       Rotation-A 5-7 :       0.002085       0.002086      -0.000001
+   Translation-X 5-7       Rotation-B 1-4 :      -0.004000      -0.004003       0.000002
+   Translation-X 5-7       Rotation-B 5-7 :      -0.002858      -0.002861       0.000003
+   Translation-X 5-7       Rotation-C 1-4 :      -0.026100      -0.026133       0.000033
+   Translation-X 5-7       Rotation-C 5-7 :       0.002585       0.002588      -0.000003
+   Translation-Y 1-4         Distance 1-2 :      -0.009570      -0.009656       0.000085
+   Translation-Y 1-4         Distance 1-3 :       0.004518       0.004565      -0.000046
+   Translation-Y 1-4         Distance 3-4 :       0.004393       0.004174       0.000219
+   Translation-Y 1-4         Distance 5-6 :       0.001724       0.001750      -0.000026
+   Translation-Y 1-4         Distance 5-7 :       0.002515       0.002540      -0.000025
+   Translation-Y 1-4          Angle 2-1-3 :       0.018824       0.018844      -0.000020
+   Translation-Y 1-4          Angle 1-3-4 :       0.005177       0.005216      -0.000039
+   Translation-Y 1-4          Angle 6-5-7 :      -0.006312      -0.006307      -0.000005
+   Translation-Y 1-4     Dihedral 2-1-3-4 :      -0.001017      -0.000988      -0.000029
+   Translation-Y 1-4    Translation-X 1-4 :       0.012072       0.012071       0.000001
+   Translation-Y 1-4    Translation-X 5-7 :      -0.012072      -0.012071      -0.000001
+   Translation-Y 1-4    Translation-Y 1-4 :       0.020206       0.020215      -0.000009
+   Translation-Y 1-4    Translation-Y 5-7 :      -0.020206      -0.020215       0.000009
+   Translation-Y 1-4    Translation-Z 1-4 :      -0.004171      -0.004172       0.000001
+   Translation-Y 1-4    Translation-Z 5-7 :       0.004171       0.004172      -0.000001
+   Translation-Y 1-4       Rotation-A 1-4 :       0.000469       0.000457       0.000012
+   Translation-Y 1-4       Rotation-A 5-7 :      -0.003938      -0.003938       0.000000
+   Translation-Y 1-4       Rotation-B 1-4 :       0.002129       0.002130      -0.000000
+   Translation-Y 1-4       Rotation-B 5-7 :       0.000572       0.000575      -0.000003
+   Translation-Y 1-4       Rotation-C 1-4 :       0.015042       0.015083      -0.000041
+   Translation-Y 1-4       Rotation-C 5-7 :      -0.014962      -0.014973       0.000011
+   Translation-Y 5-7         Distance 1-2 :       0.009515       0.009656      -0.000142
+   Translation-Y 5-7         Distance 1-3 :      -0.004503      -0.004559       0.000056
+   Translation-Y 5-7         Distance 3-4 :      -0.004307      -0.004189      -0.000118
+   Translation-Y 5-7         Distance 5-6 :      -0.001815      -0.001763      -0.000053
+   Translation-Y 5-7         Distance 5-7 :      -0.002604      -0.002552      -0.000052
+   Translation-Y 5-7          Angle 2-1-3 :      -0.018805      -0.018841       0.000036
+   Translation-Y 5-7          Angle 1-3-4 :      -0.005174      -0.005214       0.000040
+   Translation-Y 5-7          Angle 6-5-7 :       0.006300       0.006309      -0.000008
+   Translation-Y 5-7     Dihedral 2-1-3-4 :       0.000959       0.000989      -0.000031
+   Translation-Y 5-7    Translation-X 1-4 :      -0.012064      -0.012071       0.000007
+   Translation-Y 5-7    Translation-X 5-7 :       0.012064       0.012071      -0.000007
+   Translation-Y 5-7    Translation-Y 1-4 :      -0.020195      -0.020213       0.000018
+   Translation-Y 5-7    Translation-Y 5-7 :       0.020195       0.020213      -0.000018
+   Translation-Y 5-7    Translation-Z 1-4 :       0.004168       0.004172      -0.000004
+   Translation-Y 5-7    Translation-Z 5-7 :      -0.004168      -0.004172       0.000004
+   Translation-Y 5-7       Rotation-A 1-4 :      -0.000416      -0.000456       0.000040
+   Translation-Y 5-7       Rotation-A 5-7 :       0.003936       0.003938      -0.000002
+   Translation-Y 5-7       Rotation-B 1-4 :      -0.002104      -0.002128       0.000024
+   Translation-Y 5-7       Rotation-B 5-7 :      -0.000582      -0.000575      -0.000007
+   Translation-Y 5-7       Rotation-C 1-4 :      -0.015071      -0.015082       0.000011
+   Translation-Y 5-7       Rotation-C 5-7 :       0.014950       0.014971      -0.000020
+   Translation-Z 1-4         Distance 1-2 :       0.003676       0.004104      -0.000428
+   Translation-Z 1-4         Distance 1-3 :      -0.000683      -0.000865       0.000182
+   Translation-Z 1-4         Distance 3-4 :      -0.001108      -0.000828      -0.000280
+   Translation-Z 1-4         Distance 5-6 :      -0.002972      -0.002797      -0.000175
+   Translation-Z 1-4         Distance 5-7 :       0.001943       0.002113      -0.000170
+   Translation-Z 1-4          Angle 2-1-3 :      -0.001880      -0.002017       0.000137
+   Translation-Z 1-4          Angle 1-3-4 :      -0.001485      -0.001558       0.000073
+   Translation-Z 1-4          Angle 6-5-7 :       0.002577       0.002580      -0.000003
+   Translation-Z 1-4     Dihedral 2-1-3-4 :      -0.009645      -0.009613      -0.000033
+   Translation-Z 1-4    Translation-X 1-4 :      -0.003250      -0.003272       0.000022
+   Translation-Z 1-4    Translation-X 5-7 :       0.003250       0.003272      -0.000022
+   Translation-Z 1-4    Translation-Y 1-4 :      -0.004122      -0.004171       0.000050
+   Translation-Z 1-4    Translation-Y 5-7 :       0.004122       0.004171      -0.000050
+   Translation-Z 1-4    Translation-Z 1-4 :       0.010050       0.010062      -0.000012
+   Translation-Z 1-4    Translation-Z 5-7 :      -0.010050      -0.010062       0.000012
+   Translation-Z 1-4       Rotation-A 1-4 :      -0.017135      -0.017164       0.000028
+   Translation-Z 1-4       Rotation-A 5-7 :      -0.005227      -0.005223      -0.000004
+   Translation-Z 1-4       Rotation-B 1-4 :      -0.000223      -0.000224       0.000001
+   Translation-Z 1-4       Rotation-B 5-7 :       0.014491       0.014505      -0.000014
+   Translation-Z 1-4       Rotation-C 1-4 :      -0.003859      -0.003940       0.000081
+   Translation-Z 1-4       Rotation-C 5-7 :       0.001529       0.001575      -0.000046
+   Translation-Z 5-7         Distance 1-2 :      -0.004228      -0.004092      -0.000136
+   Translation-Z 5-7         Distance 1-3 :       0.000984       0.000862       0.000122
+   Translation-Z 5-7         Distance 3-4 :       0.000432       0.000834      -0.000402
+   Translation-Z 5-7         Distance 5-6 :       0.002551       0.002794      -0.000243
+   Translation-Z 5-7         Distance 5-7 :      -0.002301      -0.002111      -0.000190
+   Translation-Z 5-7          Angle 2-1-3 :       0.002102       0.002013       0.000089
+   Translation-Z 5-7          Angle 1-3-4 :       0.001595       0.001557       0.000038
+   Translation-Z 5-7          Angle 6-5-7 :      -0.002563      -0.002579       0.000016
+   Translation-Z 5-7     Dihedral 2-1-3-4 :       0.009605       0.009614      -0.000009
+   Translation-Z 5-7    Translation-X 1-4 :       0.003281       0.003271       0.000010
+   Translation-Z 5-7    Translation-X 5-7 :      -0.003281      -0.003271      -0.000010
+   Translation-Z 5-7    Translation-Y 1-4 :       0.004210       0.004170       0.000040
+   Translation-Z 5-7    Translation-Y 5-7 :      -0.004210      -0.004170      -0.000040
+   Translation-Z 5-7    Translation-Z 1-4 :      -0.010070      -0.010062      -0.000008
+   Translation-Z 5-7    Translation-Z 5-7 :       0.010070       0.010062       0.000008
+   Translation-Z 5-7       Rotation-A 1-4 :       0.017187       0.017162       0.000024
+   Translation-Z 5-7       Rotation-A 5-7 :       0.005218       0.005223      -0.000004
+   Translation-Z 5-7       Rotation-B 1-4 :       0.000240       0.000224       0.000016
+   Translation-Z 5-7       Rotation-B 5-7 :      -0.014512      -0.014504      -0.000008
+   Translation-Z 5-7       Rotation-C 1-4 :       0.003971       0.003938       0.000033
+   Translation-Z 5-7       Rotation-C 5-7 :      -0.001610      -0.001574      -0.000036
+      Rotation-A 1-4         Distance 1-2 :      -0.004272      -0.004140      -0.000132
+      Rotation-A 1-4         Distance 1-3 :      -0.000164      -0.000220       0.000056
+      Rotation-A 1-4         Distance 3-4 :      -0.000205      -0.000076      -0.000130
+      Rotation-A 1-4         Distance 5-6 :       0.005390       0.005425      -0.000035
+      Rotation-A 1-4         Distance 5-7 :      -0.005316      -0.005280      -0.000037
+      Rotation-A 1-4          Angle 2-1-3 :      -0.004475      -0.004511       0.000035
+      Rotation-A 1-4          Angle 1-3-4 :       0.000926       0.000901       0.000025
+      Rotation-A 1-4          Angle 6-5-7 :      -0.002945      -0.002935      -0.000010
+      Rotation-A 1-4     Dihedral 2-1-3-4 :       0.018692       0.018722      -0.000030
+      Rotation-A 1-4    Translation-X 1-4 :       0.001778       0.001770       0.000008
+      Rotation-A 1-4    Translation-X 5-7 :      -0.001778      -0.001770      -0.000008
+      Rotation-A 1-4    Translation-Y 1-4 :       0.000474       0.000457       0.000017
+      Rotation-A 1-4    Translation-Y 5-7 :      -0.000474      -0.000457      -0.000017
+      Rotation-A 1-4    Translation-Z 1-4 :      -0.017169      -0.017163      -0.000006
+      Rotation-A 1-4    Translation-Z 5-7 :       0.017169       0.017163       0.000006
+      Rotation-A 1-4       Rotation-A 1-4 :       0.031810       0.031795       0.000015
+      Rotation-A 1-4       Rotation-A 5-7 :       0.010950       0.010951      -0.000001
+      Rotation-A 1-4       Rotation-B 1-4 :      -0.001310      -0.001303      -0.000008
+      Rotation-A 1-4       Rotation-B 5-7 :      -0.025621      -0.025611      -0.000010
+      Rotation-A 1-4       Rotation-C 1-4 :       0.002144       0.002115       0.000029
+      Rotation-A 1-4       Rotation-C 5-7 :       0.002065       0.002082      -0.000017
+      Rotation-A 5-7         Distance 1-2 :       0.000833       0.000612       0.000220
+      Rotation-A 5-7         Distance 1-3 :      -0.000801      -0.000712      -0.000088
+      Rotation-A 5-7         Distance 3-4 :      -0.000615      -0.000732       0.000117
+      Rotation-A 5-7         Distance 5-6 :       0.000016      -0.000117       0.000133
+      Rotation-A 5-7         Distance 5-7 :      -0.001478      -0.001620       0.000142
+      Rotation-A 5-7          Angle 2-1-3 :      -0.003001      -0.002927      -0.000074
+      Rotation-A 5-7          Angle 1-3-4 :      -0.000639      -0.000605      -0.000034
+      Rotation-A 5-7          Angle 6-5-7 :       0.001121       0.001126      -0.000005
+      Rotation-A 5-7     Dihedral 2-1-3-4 :       0.005855       0.005844       0.000012
+      Rotation-A 5-7    Translation-X 1-4 :      -0.002097      -0.002085      -0.000012
+      Rotation-A 5-7    Translation-X 5-7 :       0.002097       0.002085       0.000012
+      Rotation-A 5-7    Translation-Y 1-4 :      -0.003964      -0.003937      -0.000028
+      Rotation-A 5-7    Translation-Y 5-7 :       0.003964       0.003937       0.000028
+      Rotation-A 5-7    Translation-Z 1-4 :      -0.005215      -0.005223       0.000008
+      Rotation-A 5-7    Translation-Z 5-7 :       0.005215       0.005223      -0.000008
+      Rotation-A 5-7       Rotation-A 1-4 :       0.010938       0.010952      -0.000014
+      Rotation-A 5-7       Rotation-A 5-7 :       0.005035       0.005033       0.000002
+      Rotation-A 5-7       Rotation-B 1-4 :       0.001318       0.001318      -0.000000
+      Rotation-A 5-7       Rotation-B 5-7 :      -0.012324      -0.012333       0.000009
+      Rotation-A 5-7       Rotation-C 1-4 :      -0.002904      -0.002868      -0.000036
+      Rotation-A 5-7       Rotation-C 5-7 :       0.004234       0.004207       0.000027
+      Rotation-B 1-4         Distance 1-2 :      -0.002300      -0.002255      -0.000045
+      Rotation-B 1-4         Distance 1-3 :       0.000057       0.000049       0.000008
+      Rotation-B 1-4         Distance 3-4 :       0.000017      -0.000003       0.000019
+      Rotation-B 1-4         Distance 5-6 :      -0.000166      -0.000220       0.000053
+      Rotation-B 1-4         Distance 5-7 :       0.000437       0.000388       0.000049
+      Rotation-B 1-4          Angle 2-1-3 :      -0.002311      -0.002318       0.000006
+      Rotation-B 1-4          Angle 1-3-4 :       0.001501       0.001507      -0.000007
+      Rotation-B 1-4          Angle 6-5-7 :      -0.001810      -0.001801      -0.000009
+      Rotation-B 1-4     Dihedral 2-1-3-4 :      -0.002018      -0.002010      -0.000009
+      Rotation-B 1-4    Translation-X 1-4 :       0.004006       0.004003       0.000003
+      Rotation-B 1-4    Translation-X 5-7 :      -0.004006      -0.004003      -0.000003
+      Rotation-B 1-4    Translation-Y 1-4 :       0.002129       0.002130      -0.000001
+      Rotation-B 1-4    Translation-Y 5-7 :      -0.002129      -0.002130       0.000001
+      Rotation-B 1-4    Translation-Z 1-4 :      -0.000224      -0.000224      -0.000000
+      Rotation-B 1-4    Translation-Z 5-7 :       0.000224       0.000224       0.000000
+      Rotation-B 1-4       Rotation-A 1-4 :      -0.001303      -0.001298      -0.000005
+      Rotation-B 1-4       Rotation-A 5-7 :       0.001319       0.001319      -0.000000
+      Rotation-B 1-4       Rotation-B 1-4 :       0.002405       0.002411      -0.000006
+      Rotation-B 1-4       Rotation-B 5-7 :      -0.000471      -0.000470      -0.000001
+      Rotation-B 1-4       Rotation-C 1-4 :       0.007082       0.007082      -0.000000
+      Rotation-B 1-4       Rotation-C 5-7 :      -0.000280      -0.000284       0.000004
+      Rotation-B 5-7         Distance 1-2 :       0.001660       0.002179      -0.000520
+      Rotation-B 5-7         Distance 1-3 :      -0.000304      -0.000526       0.000221
+      Rotation-B 5-7         Distance 3-4 :      -0.000827      -0.000473      -0.000354
+      Rotation-B 5-7         Distance 5-6 :      -0.004689      -0.004526      -0.000163
+      Rotation-B 5-7         Distance 5-7 :       0.003439       0.003667      -0.000228
+      Rotation-B 5-7          Angle 2-1-3 :      -0.001317      -0.001474       0.000157
+      Rotation-B 5-7          Angle 1-3-4 :      -0.000409      -0.000520       0.000111
+      Rotation-B 5-7          Angle 6-5-7 :       0.001272       0.001280      -0.000008
+      Rotation-B 5-7     Dihedral 2-1-3-4 :      -0.016100      -0.016085      -0.000015
+      Rotation-B 5-7    Translation-X 1-4 :       0.002888       0.002861       0.000027
+      Rotation-B 5-7    Translation-X 5-7 :      -0.002888      -0.002861      -0.000027
+      Rotation-B 5-7    Translation-Y 1-4 :       0.000630       0.000574       0.000056
+      Rotation-B 5-7    Translation-Y 5-7 :      -0.000630      -0.000574      -0.000056
+      Rotation-B 5-7    Translation-Z 1-4 :       0.014490       0.014505      -0.000015
+      Rotation-B 5-7    Translation-Z 5-7 :      -0.014490      -0.014505       0.000015
+      Rotation-B 5-7       Rotation-A 1-4 :      -0.025575      -0.025612       0.000037
+      Rotation-B 5-7       Rotation-A 5-7 :      -0.012337      -0.012333      -0.000004
+      Rotation-B 5-7       Rotation-B 1-4 :      -0.000457      -0.000470       0.000013
+      Rotation-B 5-7       Rotation-B 5-7 :       0.027541       0.027557      -0.000016
+      Rotation-B 5-7       Rotation-C 1-4 :       0.005971       0.005865       0.000106
+      Rotation-B 5-7       Rotation-C 5-7 :       0.000354       0.000409      -0.000054
+      Rotation-C 1-4         Distance 1-2 :      -0.013799      -0.013949       0.000150
+      Rotation-C 1-4         Distance 1-3 :       0.000431       0.000546      -0.000115
+      Rotation-C 1-4         Distance 3-4 :       0.000481       0.000209       0.000272
+      Rotation-C 1-4         Distance 5-6 :      -0.000349      -0.000535       0.000186
+      Rotation-C 1-4         Distance 5-7 :       0.001667       0.001490       0.000178
+      Rotation-C 1-4          Angle 2-1-3 :      -0.014700      -0.014631      -0.000069
+      Rotation-C 1-4          Angle 1-3-4 :       0.007381       0.007425      -0.000045
+      Rotation-C 1-4          Angle 6-5-7 :      -0.013473      -0.013457      -0.000016
+      Rotation-C 1-4     Dihedral 2-1-3-4 :      -0.006528      -0.006526      -0.000001
+      Rotation-C 1-4    Translation-X 1-4 :       0.026126       0.026133      -0.000007
+      Rotation-C 1-4    Translation-X 5-7 :      -0.026126      -0.026133       0.000007
+      Rotation-C 1-4    Translation-Y 1-4 :       0.015049       0.015083      -0.000034
+      Rotation-C 1-4    Translation-Y 5-7 :      -0.015049      -0.015083       0.000034
+      Rotation-C 1-4    Translation-Z 1-4 :      -0.003934      -0.003942       0.000007
+      Rotation-C 1-4    Translation-Z 5-7 :       0.003934       0.003942      -0.000007
+      Rotation-C 1-4       Rotation-A 1-4 :       0.002087       0.002115      -0.000028
+      Rotation-C 1-4       Rotation-A 5-7 :      -0.002869      -0.002870       0.000001
+      Rotation-C 1-4       Rotation-B 1-4 :       0.007064       0.007081      -0.000017
+      Rotation-C 1-4       Rotation-B 5-7 :       0.005872       0.005867       0.000005
+      Rotation-C 1-4       Rotation-C 1-4 :       0.043258       0.043291      -0.000032
+      Rotation-C 1-4       Rotation-C 5-7 :      -0.000081      -0.000117       0.000036
+      Rotation-C 5-7         Distance 1-2 :       0.005778       0.005740       0.000038
+      Rotation-C 5-7         Distance 1-3 :      -0.004568      -0.004548      -0.000020
+      Rotation-C 5-7         Distance 3-4 :      -0.003804      -0.003856       0.000052
+      Rotation-C 5-7         Distance 5-6 :      -0.002777      -0.002809       0.000032
+      Rotation-C 5-7         Distance 5-7 :      -0.003683      -0.003720       0.000037
+      Rotation-C 5-7          Angle 2-1-3 :      -0.015574      -0.015555      -0.000019
+      Rotation-C 5-7          Angle 1-3-4 :      -0.002948      -0.002941      -0.000007
+      Rotation-C 5-7          Angle 6-5-7 :       0.008540       0.008546      -0.000006
+      Rotation-C 5-7     Dihedral 2-1-3-4 :      -0.000339      -0.000333      -0.000006
+      Rotation-C 5-7    Translation-X 1-4 :      -0.002589      -0.002588      -0.000001
+      Rotation-C 5-7    Translation-X 5-7 :       0.002589       0.002588       0.000001
+      Rotation-C 5-7    Translation-Y 1-4 :      -0.014976      -0.014970      -0.000006
+      Rotation-C 5-7    Translation-Y 5-7 :       0.014976       0.014970       0.000006
+      Rotation-C 5-7    Translation-Z 1-4 :       0.001577       0.001575       0.000001
+      Rotation-C 5-7    Translation-Z 5-7 :      -0.001577      -0.001575      -0.000001
+      Rotation-C 5-7       Rotation-A 1-4 :       0.002088       0.002082       0.000006
+      Rotation-C 5-7       Rotation-A 5-7 :       0.004208       0.004207       0.000001
+      Rotation-C 5-7       Rotation-B 1-4 :      -0.000278      -0.000283       0.000005
+      Rotation-C 5-7       Rotation-B 5-7 :       0.000407       0.000407      -0.000000
+      Rotation-C 5-7       Rotation-C 1-4 :      -0.000129      -0.000115      -0.000014
+      Rotation-C 5-7       Rotation-C 5-7 :       0.016200       0.016196       0.000004
