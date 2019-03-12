@@ -1306,37 +1306,76 @@ def CheckInternalGrad(coords, molecule, IC, engine, dirname, verbose=False):
     # Initial internal coordinates
     q0 = IC.calculate(coords)
     Gq = IC.calcGrad(coords, gradx)
+    logger.info("-=# Now checking gradient of the energy in internal coordinates vs. finite difference #=-")
+    logger.info("%20s : %14s %14s %14s" % ('IC Name', 'Analytic', 'Numerical', 'Abs-Diff'))
+    h = 1e-3
+    Gq_f = np.zeros_like(Gq)
     for i in range(len(q0)):
         dq = np.zeros_like(q0)
-        dq[i] += 1e-4
+        dq[i] += h
         x1 = IC.newCartesian(coords, dq, verbose)
         EPlus, _ = engine.calc(x1, dirname)
-        dq[i] -= 2e-4
+        dq[i] -= 2*h
         x1 = IC.newCartesian(coords, dq, verbose)
         EMinus, _ = engine.calc(x1, dirname)
-        fdiff = (EPlus-EMinus)/2e-4
-        logger.info("%s : % .6e % .6e % .6e" % (IC.Internals[i], Gq[i], fdiff, Gq[i]-fdiff))
+        fdiff = (EPlus-EMinus)/(2*h)
+        logger.info("%20s : % 14.6f % 14.6f % 14.6f" % (IC.Internals[i], Gq[i], fdiff, Gq[i]-fdiff))
+        Gq_f[i] = fdiff
+    return Gq, Gq_f
 
-def CalcInternalHess(coords, molecule, IC, engine, dirname, verbose=False):
-    """
-    Calculate the internal coordinate Hessian using finite difference.
-    Don't remember when was the last time I used it.
-    """
+def CheckInternalHess(coords, molecule, IC, engine, dirname, verbose=False):
+    """ Calculate the Cartesian Hessian using finite difference, 
+    transform to internal coordinates, then check the internal coordinate
+    Hessian using finite difference. """
     # Initial energy and gradient
     E, gradx = engine.calc(coords, dirname)
-    # Initial internal coordinates
+    # Finite difference step
+    h = 1.0e-3
+
+    # Calculate Hessian using finite difference
+    nc = len(coords)
+    Hx = np.zeros((nc, nc), dtype=float)
+    logger.info("Calculating Cartesian Hessian using finite difference on Cartesian gradients")
+    for i in range(nc):
+        logger.info(" coordinate %i/%i" % (i+1, nc))
+        coords[i] += h
+        _, gplus = engine.calc(coords, dirname)
+        coords[i] -= 2*h
+        _, gminus = engine.calc(coords, dirname)
+        coords[i] += h
+        Hx[i] = (gplus-gminus)/(2*h)
+        
+    # Internal coordinate Hessian using analytic transformation
+    Hq = IC.calcHess(coords, gradx, Hx)
+        
+    # Initial internal coordinates and gradient
     q0 = IC.calculate(coords)
+    Gq = IC.calcGrad(coords, gradx)
+
+    Hq_f = np.zeros((len(q0), len(q0)), dtype=float)
+    logger.info("-=# Now checking Hessian of the energy in internal coordinates using finite difference on gradient #=-")
+    logger.info("%20s %20s : %14s %14s %14s" % ('IC1 Name', 'IC2 Name', 'Analytic', 'Numerical', 'Abs-Diff'))
+    h = 1.0e-2
     for i in range(len(q0)):
         dq = np.zeros_like(q0)
-        dq[i] += 1e-4
+        dq[i] += h
         x1 = IC.newCartesian(coords, dq, verbose)
-        EPlus, _ = engine.calc(x1, dirname)
-        dq[i] -= 2e-4
+        qplus = IC.calculate(x1)
+        _, gplus = engine.calc(x1, dirname)
+        gqplus = IC.calcGrad(x1, gplus)
+        dq[i] -= 2*h
         x1 = IC.newCartesian(coords, dq, verbose)
-        EMinus, _ = engine.calc(x1, dirname)
-        fdiff = (EPlus+EMinus-2*E)/1e-6
-        logger.info("%s : % .6e" % (IC.Internals[i], fdiff))
-
+        qminus = IC.calculate(x1)
+        _, gminus = engine.calc(x1, dirname)
+        gqminus = IC.calcGrad(x1, gminus)
+        fdiffg = (gqplus-gqminus)/(2*h)
+        for j in range(len(q0)):
+            fdiff = fdiffg[j]
+            Hq_f[i, j] = fdiff
+            logger.info("%20s %20s : % 14.6f % 14.6f % 14.6f" % (IC.Internals[i], IC.Internals[j], Hq[i, j], fdiff, Hq[i, j]-fdiff))
+        
+    return Hq, Hq_f
+            
 def print_msg():
     print("""
     #==========================================================================#
@@ -1647,8 +1686,10 @@ def run_optimizer(**kwargs):
 
     fdcheck = kwargs.get('fdcheck', False) # Check internal coordinate gradients using finite difference..
     if fdcheck:
-        IC.Prims.checkFiniteDifference(coords)
+        IC.Prims.checkFiniteDifferenceGrad(coords)
+        IC.Prims.checkFiniteDifferenceHess(coords)
         CheckInternalGrad(coords, M, IC.Prims, engine, dirname, verbose)
+        CheckInternalHess(coords, M, IC.Prims, engine, dirname, verbose)
         return
 
     # Print out information about the coordinate system

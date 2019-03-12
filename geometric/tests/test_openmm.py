@@ -93,3 +93,23 @@ def test_openmm_ala_scan(localizer):
     assert np.allclose(scan_energies, ref_energies, atol=1.e-3)
     # Check for performance regression (should be done in ~33 cycles)
     assert len(m) < 50
+
+@addons.using_openmm
+def test_openmm_h2o2_h2o_grad_hess(localizer):
+    M, engine = geometric.optimize.get_molecule_engine(openmm=True, pdb=os.path.join(datad, 'h2o2_h2o.pdb'), input=os.path.join(datad, 'h2o2_h2o_system.xml'))
+    coords = M.xyzs[0].flatten() * geometric.nifty.ang2bohr
+    IC = geometric.internal.DelocalizedInternalCoordinates(M, build=True, connect=False, addcart=False)
+    Gq_ana, Gq_num = geometric.optimize.CheckInternalGrad(coords, M, IC.Prims, engine, 'h2o2_h2o.tmp', False)
+    Hq_ana, Hq_num = geometric.optimize.CheckInternalHess(coords, M, IC.Prims, engine, 'h2o2_h2o.tmp', False)
+    assert np.allclose(Gq_ana, Gq_num, atol=1e-5)
+    assert np.allclose(Hq_ana, Hq_num, atol=1e-5)
+    #                                                    constraints=os.path.join(datad, 'ala_constraints.txt')
+    # m = geometric.optimize.run_optimizer(openmm=True, enforce=0.1, pdb=os.path.join(datad, 'ala_a99sb_min.pdb'), input='amber99sb.xml',
+    #                                      constraints=os.path.join(datad, 'ala_constraints.txt'))
+    # scan_final = geometric.molecule.Molecule('scan-final.xyz')
+    # scan_energies = np.array([float(c.split()[-1]) for c in scan_final.comms])
+    # ref_energies = np.array([-0.03368698, -0.03349261])
+    # # Check converged energies
+    # assert np.allclose(scan_energies, ref_energies, atol=1.e-3)
+    # # Check for performance regression (should be done in ~33 cycles)
+    # assert len(m) < 50
