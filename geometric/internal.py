@@ -2755,6 +2755,11 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
                 constraintSmall = False
         if constraintSmall:
             xyz2 = self.applyConstraints(xyz2)
+            if not self.enforced:
+                logger.info("<<< Enforcing constraint satisfaction >>>")
+            self.enforced = True
+        else:
+            self.enforced = False
         return xyz2
     
     def calcGradProj(self, xyz, gradx):
