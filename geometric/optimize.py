@@ -1027,13 +1027,10 @@ class Optimizer(object):
             logger.info("Hessian Eigenvalues: %.5e %.5e %.5e ... %.5e %.5e %.5e" % (Eig[0],Eig[1],Eig[2],Eig[-3],Eig[-2],Eig[-1]))
         else:
             logger.info("Hessian Eigenvalues:", ' '.join("%.5e" % i for i in Eig))
-        # Are we far from constraint satisfaction?
-        self.farConstraints = self.IC.haveConstraints() and self.IC.getConstraintViolation(self.X) > 1e-1
-        self.conSatisfied = not self.IC.haveConstraints() or self.IC.getConstraintViolation(self.X) < 1e-2
         ### OBTAIN AN OPTIMIZATION STEP ###
         # The trust radius is to be computed in Cartesian coordinates.
         # First take a full-size Newton Raphson step
-        dy, self.expect, _ = self.get_delta_prime(v0)
+        dy, _, __ = self.get_delta_prime(v0)
         # Internal coordinate step size
         inorm = np.linalg.norm(dy)
         # Cartesian coordinate step size
@@ -1081,7 +1078,7 @@ class Optimizer(object):
                 return
             ##### End Rebuild
             # Finally, take an internal coordinate step of the desired length.
-            dy, self.expect = self.trust_step(iopt, v0)
+            dy, _ = self.trust_step(iopt, v0)
             self.cnorm = self.getCartesianNorm(dy)
         ### DONE OBTAINING THE STEP ###
         if isinstance(self.IC, PrimitiveInternalCoordinates):
@@ -1100,8 +1097,13 @@ class Optimizer(object):
         self.Gprev = self.G.copy()
         self.Eprev = self.E
         ### Update the Internal Coordinates ###
-        self.Y += dy
+        X0 = self.X.copy()
         self.newCartesian(dy)
+        ## The "actual" dy may be different from the one passed to newCartesian(),
+        ## for example if we enforce constraints or don't get the step we expect.
+        dy = self.IC.calcDiff(self.X, X0)
+        self.Y += dy
+        self.expect = flat(0.5*multi_dot([row(dy),self.H,col(dy)]))[0] + np.dot(dy,self.G)
         self.state = OPT_STATE.NEEDS_EVALUATION
 
     def evaluateStep(self):
@@ -1125,6 +1127,9 @@ class Optimizer(object):
         # Molpro defaults for convergence
         molpro_converged_gmax = max_gradient < params.molpro_convergence_gmax
         molpro_converged_dmax = max_displacement < params.molpro_convergence_dmax
+        # Are we far from constraint satisfaction?
+        self.farConstraints = self.IC.haveConstraints() and self.IC.getConstraintViolation(self.X) > 1e-1
+        self.conSatisfied = not self.IC.haveConstraints() or self.IC.getConstraintViolation(self.X) < 1e-2
         # Print status
         msg = "Step %4i :" % self.Iteration
         msg += " Displace = %s%.3e\x1b[0m/%s%.3e\x1b[0m (rms/max)" % ("\x1b[92m" if Converged_drms else "\x1b[0m", rms_displacement, "\x1b[92m" if Converged_dmax else "\x1b[0m", max_displacement)
