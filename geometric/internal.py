@@ -2601,6 +2601,8 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         # The DLC contains an instance of primitive internal coordinates.
         self.Prims = PrimitiveInternalCoordinates(molecule, connect=connect, addcart=addcart, constraints=constraints, cvals=cvals)
         self.na = molecule.na
+        # Whether constraints have been enforced previously
+        self.enforced = False
         # Build the DLC's. This takes some time, so we have the option to turn it off.
         xyz = molecule.xyzs[imagenr].flatten() * ang2bohr
         if build:
