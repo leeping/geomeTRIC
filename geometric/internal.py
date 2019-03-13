@@ -2351,13 +2351,13 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
     def printRotations(self, xyz):
         rotNorms = self.getRotatorNorms()
         if len(rotNorms) > 0:
-            logger.info("Rotator Norms: ", " ".join(["% .4f" % i for i in rotNorms]))
+            logger.info("Rotator Norms: " + " ".join(["% .4f" % i for i in rotNorms]))
         rotDots = self.getRotatorDots()
         if len(rotDots) > 0 and np.max(rotDots) > 1e-5:
-            logger.info("Rotator Dots : ", " ".join(["% .4f" % i for i in rotDots]))
+            logger.info("Rotator Dots : " + " ".join(["% .4f" % i for i in rotDots]))
         linAngs = [ic.value(xyz) for ic in self.Internals if type(ic) is LinearAngle]
         if len(linAngs) > 0:
-            logger.info("Linear Angles: ", " ".join(["% .4f" % i for i in linAngs]))
+            logger.info("Linear Angles: " + " ".join(["% .4f" % i for i in linAngs]))
 
     def derivatives(self, xyz):
         self.calculate(xyz)
@@ -2719,7 +2719,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
                 # Look up the index of the DLC that corresponds to the constraint
                 iDLC = self.cDLC[ic]
                 # Calculate the further change needed in this constrained variable
-                dQ[iDLC] = (self.Prims.cVals[ic] - c.value(xyz1))/self.Vecs[iPrim, iDLC]
+                dQ[iDLC] = (self.Prims.cVals[ic] - c.value(xyz1))
                 if c.isPeriodic:
                     Plus2Pi = dQ[iDLC] + 2*np.pi
                     Minus2Pi = dQ[iDLC] - 2*np.pi
@@ -2727,7 +2727,8 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
                         dQ[iDLC] = Plus2Pi
                     if np.abs(dQ[iDLC]) > np.abs(Minus2Pi):
                         dQ[iDLC] = Minus2Pi
-            # print "applyConstraints calling newCartesian (%i), |dQ| = %.3e" % (niter, np.linalg.norm(dQ))
+                dQ[iDLC] /= self.Vecs[iPrim, iDLC]
+            # print("applyConstraints calling newCartesian (%i), |dQ| = %.3e" % (niter, np.linalg.norm(dQ)))
             xyz2 = self.newCartesian(xyz1, dQ, verbose=False)
             if np.linalg.norm(dQ) < 1e-6:
                 return xyz2

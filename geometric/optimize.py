@@ -527,7 +527,7 @@ def get_delta_prime_trm(v, X, G, H, IC, verbose=False):
     # The constrained degrees of freedom should not have anything added to diagonal
     for i in range(len(G), len(GC)):
         HT[i, i] = 0.0
-    if verbose:
+    if verbose >= 2:
         seig = sorted(np.linalg.eig(HT)[0])
         logger.info("sorted(eig) : % .5e % .5e % .5e ... % .5e % .5e % .5e" % (seig[0], seig[1], seig[2], seig[-3], seig[-2], seig[-1]))
     try:
@@ -704,7 +704,8 @@ def trust_step(target, v0, X, G, H, IC, rfo, verbose=False):
         v += (1-ndy/target)*(ndy/dy_prime)
         dy, sol, dy_prime, = get_delta_prime(v, X, G, H, IC, rfo, verbose)
         ndy = np.linalg.norm(dy)
-        if verbose: logger.info("v = %.5f dy -> target = %.5f -> %.5f" % (v, ndy, target))
+        # This is "too" verbose; will enable integer print level later
+        if verbose >= 2: logger.info("v = %.5f dy -> target = %.5f -> %.5f" % (v, ndy, target))
         if np.abs((ndy-target)/target) < 0.001:
             return dy, sol
         # With Lagrange multipliers it may be impossible to go under a target step size
@@ -1021,7 +1022,7 @@ class Optimizer(object):
             v0 = params.epsilon-Emin
         else:
             v0 = 0.0
-        if params.verbose: self.IC.Prims.printRotations()
+        if params.verbose: self.IC.Prims.printRotations(self.X)
         if len(Eig) >= 6:
             logger.info("Hessian Eigenvalues: %.5e %.5e %.5e ... %.5e %.5e %.5e" % (Eig[0],Eig[1],Eig[2],Eig[-3],Eig[-2],Eig[-1]))
         else:
@@ -1239,7 +1240,7 @@ class Optimizer(object):
             ndg = np.array(Dg).flatten()/np.linalg.norm(np.array(Dg))
             nhdy = np.dot(self.H,Dy).flatten()/np.linalg.norm(np.dot(self.H,Dy))
             if params.verbose:
-                msg = "Denoms: %.3e %.3e" % (np.dot(Dg.T,Dy)[0,0], multi_dot(Dy.T,self.H,Dy)[0,0])
+                msg = "Denoms: %.3e %.3e" % (np.dot(Dg.T,Dy)[0,0], multi_dot((Dy.T,self.H,Dy))[0,0])
                 msg +=" Dots: %.3e %.3e" % (np.dot(ndg, ndy), np.dot(ndy, nhdy))
             #H1 = H.copy()
             self.H += Mat1-Mat2
