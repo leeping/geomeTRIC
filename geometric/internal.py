@@ -2603,6 +2603,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         self.na = molecule.na
         # Whether constraints have been enforced previously
         self.enforced = False
+        self.enforce_fail_printed = False
         # Build the DLC's. This takes some time, so we have the option to turn it off.
         xyz = molecule.xyzs[imagenr].flatten() * ang2bohr
         if build:
@@ -2713,6 +2714,8 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         """
         xyz1 = xyz.copy()
         niter = 0
+        xyzs = []
+        ndqs = []
         while True:
             dQ = np.zeros(len(self.Internals), dtype=float)
             for ic, c in enumerate(self.Prims.cPrims):
@@ -2730,12 +2733,18 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
                     if np.abs(dQ[iDLC]) > np.abs(Minus2Pi):
                         dQ[iDLC] = Minus2Pi
                 dQ[iDLC] /= self.Vecs[iPrim, iDLC]
+            xyzs.append(xyz1.copy())
+            ndqs.append(np.linalg.norm(dQ))
             # print("applyConstraints calling newCartesian (%i), |dQ| = %.3e" % (niter, np.linalg.norm(dQ)))
             xyz2 = self.newCartesian(xyz1, dQ, verbose=False)
             if np.linalg.norm(dQ) < 1e-6:
                 return xyz2
             if niter > 1 and np.linalg.norm(dQ) > np.linalg.norm(dQ0):
-                logger.warning("\x1b[1;93mWarning: Failed to apply Constraint\x1b[0m")
+                xyz1 = xyzs[np.argmin(ndqs)]
+                if not self.enforce_fail_printed:
+                    logger.warning("Warning: Failed to enforce exact constraint satisfaction. Please remove possible redundant constraints. See below:")
+                    self.printConstraints(xyz1, thre=0.0)
+                    self.enforce_fail_printed = True
                 return xyz1
             xyz1 = xyz2.copy()
             niter += 1
