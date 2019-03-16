@@ -2280,15 +2280,20 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         return Changed
 
     def repr_diff(self, other):
+        if hasattr(other, 'Prims'):
+            output = ['Primitive -> Delocalized']
+            otherPrims = other.Prims
+        else:
+            output = []
+            otherPrims = other
         alines = ["-- Added: --"]
-        for i in other.Internals:
+        for i in otherPrims.Internals:
             if i not in self.Internals:
                 alines.append(i.__repr__())
         dlines = ["-- Deleted: --"]
         for i in self.Internals:
-            if i not in other.Internals:
+            if i not in otherPrims.Internals:
                 dlines.append(i.__repr__())
-        output = []
         if len(alines) > 1:
             output += alines
         if len(dlines) > 1:
@@ -3035,7 +3040,13 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         return self.GInverse_SVD(xyz)
 
     def repr_diff(self, other):
-        return self.Prims.repr_diff(other.Prims)
+        if hasattr(other, 'Prims'):
+            return self.Prims.repr_diff(other.Prims)
+        else:
+            if self.Prims.repr_diff(other) == '':
+                return 'Delocalized -> Primitive'
+            else:
+                return 'Delocalized -> Primitive\n' + self.Prims.repr_diff(other)
 
     def guess_hessian(self, coords):
         """ Build the guess Hessian, consisting of a diagonal matrix 

@@ -1,5 +1,5 @@
 """
-Tests the geomeTRIC molecule class.
+Tests the geomeTRIC rotate class.
 """
 
 import pytest
