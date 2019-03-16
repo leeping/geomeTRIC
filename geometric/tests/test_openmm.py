@@ -1,5 +1,5 @@
 """
-A set of tests for using the QCEngine project
+A set of tests for using the OpenMM engine
 """
 
 import copy

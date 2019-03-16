@@ -1,5 +1,5 @@
 """
-Tests the geomeTRIC molecule class.
+Tests second derivatives of internal coordinates w/r.t. Cartesians.
 """
 
 import pytest
