@@ -767,20 +767,14 @@ class QCEngineAPI(Engine):
         new_schema = deepcopy(self.schema)
         new_schema["molecule"]["geometry"] = coords.tolist()
         new_schema.pop("program", None)
-        try:
-            ret = qcengine.compute(new_schema, self.program, return_dict=True)
-
-            # store the schema_traj for run_json to pick up
-            self.schema_traj.append(ret)
-
-            if ret["success"] is False:
-                raise ValueError("QCEngineAPI computation did not execute correctly. Message: " + ret["error"]["error_message"])
-
-            # Unpack the erngies and gradient
-            energy = ret["properties"]["return_energy"]
-            gradient = np.array(ret["return_result"])
-        except:
-            raise QCEngineAPIEngineError
+        ret = qcengine.compute(new_schema, self.program, return_dict=True)
+        # store the schema_traj for run_json to pick up
+        self.schema_traj.append(ret)
+        if ret["success"] is False:
+            raise QCEngineAPIEngineError("QCEngineAPI computation did not execute correctly. Message: " + ret["error"]["error_message"])
+        # Unpack the energy and gradient
+        energy = ret["properties"]["return_energy"]
+        gradient = np.array(ret["return_result"])
         return energy, gradient
 
     def calc(self, coords, dirname):
