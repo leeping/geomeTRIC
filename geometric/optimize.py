@@ -19,7 +19,7 @@ from .internal import *
 from .molecule import Molecule, Elements
 from .nifty import row, col, flat, invert_svd, uncommadash, isint, bohr2ang, ang2bohr, logger, bak
 from .rotate import get_rot, sorted_eigh, calc_fac_dfac
-from .errors import EngineError, ConvergeFailedError
+from .errors import EngineError, GeomOptNotConvergedError
 from enum import Enum
 
 
@@ -1274,7 +1274,7 @@ class Optimizer(object):
                 self.calcEnergyForce()
                 self.evaluateStep()
         if self.state == OPT_STATE.FAILED:
-            raise ConvergeFailedError("Optimizer.optimizeGeometry() failed to converge.")
+            raise GeomOptNotConvergedError("Optimizer.optimizeGeometry() failed to converge.")
         return self.progress
 
 def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None):
@@ -1311,7 +1311,7 @@ def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None):
     except EngineError:
         logger.info("EngineError:\n" + traceback.format_exc())
         sys.exit(51)
-    except ConvergeFailedError:
+    except GeomOptNotConvergedError:
         logger.info("Geometry Converge Failed Error:\n" + traceback.format_exc())
         sys.exit(50)
 

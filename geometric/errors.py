@@ -35,5 +35,5 @@ class QCEngineAPIEngineError(EngineError):
 class TeraChem_CIEngineError(EngineError):
     pass
 
-class ConvergeFailedError(Error):
+class GeomOptNotConvergedError(Error):
     pass
