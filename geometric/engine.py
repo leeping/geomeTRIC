@@ -259,7 +259,7 @@ class TeraChem(Engine):
             subprocess.run("awk '/Gradient units are Hartree/,/Net gradient/ {if ($1 ~ /^-?[0-9]/) {print}}' run.out > grad.txt", cwd=dirname, check=True, shell=True)
             energy = float(open(os.path.join(dirname,'energy.txt')).readlines()[0].strip())
             gradient = np.loadtxt(os.path.join(dirname,'grad.txt')).flatten()
-        except (OSError, subprocess.CalledProcessError):
+        except (OSError, IOError, subprocess.CalledProcessError):
             raise TeraChemEngineError
         return energy, gradient
 
@@ -453,7 +453,7 @@ class Psi4(Engine):
             subprocess.run('psi4%s input.dat' % self.nt(), cwd=dirname, check=True, shell=True)
             # Read energy and gradients from Psi4 output
             energy, gradient = self.parse_psi4_output(os.path.join(dirname, 'output.dat'))
-        except (OSError, subprocess.CalledProcessError):
+        except (OSError, IOError, subprocess.CalledProcessError):
             raise Psi4EngineError
         return energy, gradient
 
@@ -544,7 +544,7 @@ class QChem(Engine):
             M1 = Molecule('%s/run.out' % dirname)
             energy = M1.qm_energies[0]
             gradient = M1.qm_grads[0].flatten()
-        except (OSError, subprocess.CalledProcessError):
+        except (OSError, IOError, subprocess.CalledProcessError):
             raise QChemEngineError
         return energy, gradient
 
@@ -595,7 +595,7 @@ class Gromacs(Engine):
             Energy = EF[0, 0] / eqcgmx
             Gradient = EF[0, 1:] / fqcgmx
             os.chdir(cwd)
-        except (OSError, subprocess.CalledProcessError):
+        except (OSError, IOError, subprocess.CalledProcessError):
             raise GromacsEngineError
         return Energy, Gradient
 
@@ -688,7 +688,7 @@ class Molpro(Engine):
             subprocess.run('%s%s run.mol' % (self.molproExe(), self.nt()), cwd=dirname, check=True, shell=True)
             # Read energy and gradients from Molpro output
             energy, gradient = self.parse_molpro_output(os.path.join(dirname, 'run.out'))
-        except (OSError, subprocess.CalledProcessError):
+        except (OSError, IOError, subprocess.CalledProcessError):
             raise MolproEngineError
         return energy, gradient
 
@@ -824,7 +824,7 @@ class TeraChem_CI(Engine):
                 EDict[istate] = float(open(os.path.join(guess_dir,'energy.txt')).readlines()[0].strip())
                 GDict[istate] = np.loadtxt(os.path.join(guess_dir,'grad.txt')).flatten()
                 SDict[istate] = float(open(os.path.join(guess_dir,'s-squared.txt')).readlines()[0].strip())
-        except (OSError, subprocess.CalledProcessError):
+        except (OSError, IOError, subprocess.CalledProcessError):
             raise TeraChem_CIEngineError
         # Determine the higher energy state
         if EDict[2] > EDict[1]:
