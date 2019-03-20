@@ -1273,8 +1273,8 @@ class Optimizer(object):
             if self.state == OPT_STATE.NEEDS_EVALUATION:
                 self.calcEnergyForce()
                 self.evaluateStep()
-            elif self.state == OPT_STATE.FAILED:
-                raise ConvergeFailedError("Optimizer.optimizeGeometry() failed to converge.")
+        if self.state == OPT_STATE.FAILED:
+            raise ConvergeFailedError("Optimizer.optimizeGeometry() failed to converge.")
         return self.progress
 
 def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None):
