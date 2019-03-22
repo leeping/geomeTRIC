@@ -90,4 +90,8 @@ class TestAlaGRO:
         d = self.molecule.find_dihedrals()
         assert len(d) == 97
 
-    
+    def test_remove_tr(self):
+        IC = geometric.internal.DelocalizedInternalCoordinates(self.molecule, build=True, connect=False, addcart=False)
+        IC_TR = geometric.internal.DelocalizedInternalCoordinates(self.molecule, build=True, connect=False, addcart=False, remove_tr=True)
+        assert len(IC.Internals) == self.molecule.na*3
+        assert len(IC_TR.Internals) == (self.molecule.na*3 - 6)

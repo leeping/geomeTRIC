@@ -3100,20 +3100,26 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         TRPrims.append(RotationC(alla, xyz, self.Prims.Rotators, w=rg))
         # If these primitive ICs are already there, then move them to the front
         primorder = []
+        addPrims = []
         for prim in TRPrims:
             if prim in self.Prims.Internals:
                 primorder.append(self.Prims.Internals.index(prim))
+            else:
+                addPrims.append(prim)
         for iprim, prim in enumerate(self.Prims.Internals):
             if prim not in TRPrims:
                 primorder.append(iprim)
-        self.Prims.Internals = [self.Prims.Internals[p] for p in primorder]
-        self.Vecs = self.Vecs[np.array(primorder), :]
+        self.Prims.Internals = addPrims + [self.Prims.Internals[p] for p in primorder]
+        self.Vecs = np.vstack((np.zeros((len(addPrims), self.Vecs.shape[1]), dtype=float), self.Vecs[np.array(primorder), :]))
+        
         self.clearCache()
         # Build DLCs with six extra in the front corresponding to the overall translations and rotations
         subVecs = self.Vecs.copy()
         self.Vecs = np.zeros((self.Vecs.shape[0], self.Vecs.shape[1]+6), dtype=float)
         self.Vecs[:6, :6] = np.eye(6)
         self.Vecs[:, 6:] = subVecs.copy()
+        # pmat2d(self.Vecs, precision=3, format='f')
+        # sys.exit()
         # This is the number of nonredundant DLCs that we expect to see
         G = self.Prims.GMatrix(xyz)
         Expect = np.sum(np.linalg.eigh(G)[0] > 1e-6)
@@ -3124,7 +3130,9 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
             return multi_dot([vi, G, vj])
         V = self.Vecs.copy()
         nv = V.shape[1]
-        Vnorms = np.array([np.sqrt(ov(V[:,ic], V[:, ic])) for ic in range(nv)])
+        Vnorms = np.array([np.sqrt(ov(V[:, ic], V[:, ic])) for ic in range(nv)])
+        # G_tmp = np.array([[ov(V[:, ic], V[:, jc]) for jc in range(nv)] for ic in range(nv)])
+        # pmat2d(G_tmp, precision=3, format='f')
         # U holds the Gram-Schmidt orthogonalized DLCs
         U = np.zeros((V.shape[0], Expect), dtype=float)
         Unorms = np.zeros(Expect, dtype=float)

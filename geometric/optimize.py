@@ -821,8 +821,6 @@ class OptParams(object):
         self.molcnv = kwargs.get('molcnv', False)
         # Use updated constraint algorithm implemented 2019-03-20
         self.conmethod = kwargs.get('conmethod', 0)
-        # Remove overall translation and rotation from the system
-        self.remove_tr = kwargs.get('remove_tr', 0)
         # Convergence criteria in a.u. and Angstrom
         self.Convergence_energy = kwargs.get('convergence_energy', 1e-6)
         self.Convergence_grms = kwargs.get('convergence_grms', 3e-4)
@@ -920,7 +918,6 @@ class Optimizer(object):
         self.IC.resetRotations(self.X)
         if isinstance(self.IC, DelocalizedInternalCoordinates):
             self.IC.build_dlc(self.X)
-            if self.IC.remove_tr: self.IC.remove_TR(self.X)
         # With redefined internal coordinates, the Hessian needs to be rebuilt
         self.H0 = self.IC.guess_hessian(self.coords)
         self.RebuildHessian()
@@ -944,7 +941,7 @@ class Optimizer(object):
                 raise ValueError("Cannot continue a constrained optimization; please implement constrained optimization in Cartesian coordinates")
             IC1 = CartesianCoordinates(newmol)
         else:
-            IC1 = self.IC.__class__(newmol, connect=self.IC.connect, addcart=self.IC.addcart, build=False, conmethod=self.IC.conmethod, remove_tr=self.IC.remove_tr)
+            IC1 = self.IC.__class__(newmol, connect=self.IC.connect, addcart=self.IC.addcart, build=False, conmethod=self.IC.conmethod)
             if self.IC.haveConstraints(): IC1.getConstraints_from(self.IC)
         # Check for differences
         changed = (IC1 != self.IC)
@@ -1685,7 +1682,7 @@ def run_optimizer(**kwargs):
     CoordClass, connect, addcart = CoordSysDict[coordsys.lower()]
 
     IC = CoordClass(M, build=True, connect=connect, addcart=addcart, constraints=Cons, cvals=CVals[0] if CVals is not None else None,
-                    conmethod=params.conmethod, remove_tr=params.remove_tr)
+                    conmethod=params.conmethod)
     #========================================#
     #| End internal coordinate system setup |#
     #========================================#
@@ -1727,7 +1724,7 @@ def run_optimizer(**kwargs):
         for ic, CVal in enumerate(CVals):
             if len(CVals) > 1:
                 logger.info("---=== Scan %i/%i : Constrained Optimization ===---" % (ic+1, len(CVals)))
-            IC = CoordClass(M, build=True, connect=connect, addcart=addcart, constraints=Cons, cvals=CVal, conmethod=params.conmethod, remove_tr=params.remove_tr)
+            IC = CoordClass(M, build=True, connect=connect, addcart=addcart, constraints=Cons, cvals=CVal, conmethod=params.conmethod)
             IC.printConstraints(coords, thre=-1)
             if len(CVals) > 1:
                 xyzout = prefix+"_scan-%03i.xyz" % ic
@@ -1735,7 +1732,10 @@ def run_optimizer(**kwargs):
                 xyzout = prefix+"_optim.xyz"
             else:
                 xyzout = prefix+".xyz"
-            progress = Optimize(coords, M, IC, engine, dirname, params, xyzout)
+            if ic == 0:
+                progress = Optimize(coords, M, IC, engine, dirname, params, xyzout)
+            else:
+                progress += Optimize(coords, M, IC, engine, dirname, params, xyzout)
             # update the structure for next optimization in SCAN (by CNH)
             M.xyzs[0] = progress.xyzs[-1]
             coords = progress.xyzs[-1].flatten() * ang2bohr
@@ -1775,7 +1775,6 @@ def main():
     parser.add_argument('--fdcheck', action='store_true', help='Check internal coordinate gradients using finite difference.')
     parser.add_argument('--enforce', type=float, default=0.0, help='Enforce exact constraints when within provided tolerance (in a.u. and radian)')
     parser.add_argument('--conmethod', type=int, default=0, help='Set to 1 to enable updated constraint algorithm.')
-    parser.add_argument('--remove_tr', action='store_true', help='Remove overall translation and rotation from the system.')
     parser.add_argument('--epsilon', type=float, default=1e-5, help='Small eigenvalue threshold.')
     parser.add_argument('--check', type=int, default=0, help='Check coordinates every N steps to see whether it has changed.')
     parser.add_argument('--verbose', action='store_true', help='Write out the displacements.')
