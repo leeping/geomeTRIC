@@ -13,6 +13,8 @@ import os
 
 from .molecule import Molecule
 from .nifty import eqcgmx, fqcgmx, bohr2ang, logger, getWorkQueue, queue_up_src_dest
+from .errors import Psi4EngineError, QChemEngineError, TeraChemEngineError, TeraChem_CIEngineError, \
+    OpenMMEngineError, GromacsEngineError, MolproEngineError, QCEngineAPIEngineError
 
 #=============================#
 #| Useful TeraChem functions |#
@@ -252,10 +254,13 @@ class TeraChem(Engine):
         # Run TeraChem
         subprocess.call('terachem run.in > run.out', cwd=dirname, shell=True)
         # Extract energy and gradient
-        subprocess.call("awk '/FINAL ENERGY/ {p=$3} /Correlation Energy/ {p+=$5} END {printf \"%.10f\\n\", p}' run.out > energy.txt", cwd=dirname, shell=True)
-        subprocess.call("awk '/Gradient units are Hartree/,/Net gradient/ {if ($1 ~ /^-?[0-9]/) {print}}' run.out > grad.txt", cwd=dirname, shell=True)
-        energy = float(open(os.path.join(dirname,'energy.txt')).readlines()[0].strip())
-        gradient = np.loadtxt(os.path.join(dirname,'grad.txt')).flatten()
+        try:
+            subprocess.run("awk '/FINAL ENERGY/ {p=$3} /Correlation Energy/ {p+=$5} END {printf \"%.10f\\n\", p}' run.out > energy.txt", cwd=dirname, check=True, shell=True)
+            subprocess.run("awk '/Gradient units are Hartree/,/Net gradient/ {if ($1 ~ /^-?[0-9]/) {print}}' run.out > grad.txt", cwd=dirname, check=True, shell=True)
+            energy = float(open(os.path.join(dirname,'energy.txt')).readlines()[0].strip())
+            gradient = np.loadtxt(os.path.join(dirname,'grad.txt')).flatten()
+        except (OSError, IOError, RuntimeError, subprocess.CalledProcessError):
+            raise TeraChemEngineError
         return energy, gradient
 
     def calc_wq_new(self, coords, dirname):
@@ -363,12 +368,15 @@ class OpenMM(Engine):
     def calc_new(self, coords, dirname):
         from simtk.openmm import Vec3
         import simtk.unit as u
-        self.M.xyzs[0] = coords.reshape(-1, 3) * bohr2ang
-        pos = [Vec3(self.M.xyzs[0][i,0]/10, self.M.xyzs[0][i,1]/10, self.M.xyzs[0][i,2]/10) for i in range(self.M.na)]*u.nanometer
-        self.simulation.context.setPositions(pos)
-        state = self.simulation.context.getState(getEnergy=True, getForces=True)
-        energy = state.getPotentialEnergy().value_in_unit(u.kilojoule_per_mole) / eqcgmx
-        gradient = state.getForces(asNumpy=True).flatten() / fqcgmx
+        try:
+            self.M.xyzs[0] = coords.reshape(-1, 3) * bohr2ang
+            pos = [Vec3(self.M.xyzs[0][i,0]/10, self.M.xyzs[0][i,1]/10, self.M.xyzs[0][i,2]/10) for i in range(self.M.na)]*u.nanometer
+            self.simulation.context.setPositions(pos)
+            state = self.simulation.context.getState(getEnergy=True, getForces=True)
+            energy = state.getPotentialEnergy().value_in_unit(u.kilojoule_per_mole) / eqcgmx
+            gradient = state.getForces(asNumpy=True).flatten() / fqcgmx
+        except:
+            raise OpenMMEngineError
         return energy, gradient
 
 class Psi4(Engine):
@@ -440,10 +448,13 @@ class Psi4(Engine):
                         outfile.write("%-7s %13.7f %13.7f %13.7f\n" % (e, c[0], c[1], c[2]))
                 else:
                     outfile.write(line)
-        # Run Psi4
-        subprocess.call('psi4%s input.dat' % self.nt(), cwd=dirname, shell=True)
-        # Read energy and gradients from Psi4 output
-        energy, gradient = self.parse_psi4_output(os.path.join(dirname, 'output.dat'))
+        try:
+            # Run Psi4
+            subprocess.run('psi4%s input.dat' % self.nt(), cwd=dirname, check=True, shell=True)
+            # Read energy and gradients from Psi4 output
+            energy, gradient = self.parse_psi4_output(os.path.join(dirname, 'output.dat'))
+        except (OSError, IOError, RuntimeError, subprocess.CalledProcessError):
+            raise Psi4EngineError
         return energy, gradient
 
     def parse_psi4_output(self, psi4out):
@@ -521,17 +532,20 @@ class QChem(Engine):
         self.M.xyzs[0] = coords.reshape(-1, 3) * bohr2ang
         self.M.edit_qcrems({'jobtype':'force'})
         self.M[0].write(os.path.join(dirname, 'run.in'))
-        # Run Qchem
-        if self.qcdir:
-            subprocess.call('qchem%s run.in run.out run.d > run.log 2>&1' % self.nt(), cwd=dirname, shell=True)
-        else:
-            subprocess.call('qchem%s run.in run.out run.d > run.log 2>&1' % self.nt(), cwd=dirname, shell=True)
-            # Assume reading the SCF guess is desirable
-            self.qcdir = True
-            self.M.edit_qcrems({'scf_guess':'read'})
-        M1 = Molecule('%s/run.out' % dirname)
-        energy = M1.qm_energies[0]
-        gradient = M1.qm_grads[0].flatten()
+        try:
+            # Run Qchem
+            if self.qcdir:
+                subprocess.run('qchem%s run.in run.out run.d > run.log 2>&1' % self.nt(), cwd=dirname, check=True, shell=True)
+            else:
+                subprocess.run('qchem%s run.in run.out run.d > run.log 2>&1' % self.nt(), cwd=dirname, check=True, shell=True)
+                # Assume reading the SCF guess is desirable
+                self.qcdir = True
+                self.M.edit_qcrems({'scf_guess':'read'})
+            M1 = Molecule('%s/run.out' % dirname)
+            energy = M1.qm_energies[0]
+            gradient = M1.qm_grads[0].flatten()
+        except (OSError, IOError, RuntimeError, subprocess.CalledProcessError):
+            raise QChemEngineError
         return energy, gradient
 
     def calc_wq_new(self, coords, dirname):
@@ -568,18 +582,21 @@ class Gromacs(Engine):
         except ImportError:
             raise ImportError("ForceBalance is needed to compute energies and gradients using Gromacs.")
         if not os.path.exists(dirname): os.makedirs(dirname)
-        Gro = Molecule("conf.gro")
-        Gro.xyzs[0] = coords.reshape(-1,3) * bohr2ang
-        cwd = os.getcwd()
-        shutil.copy2("topol.top", dirname)
-        shutil.copy2("shot.mdp", dirname)
-        os.chdir(dirname)
-        Gro.write("coords.gro")
-        G = GMX(coords="coords.gro", gmx_top="topol.top", gmx_mdp="shot.mdp")
-        EF = G.energy_force()
-        Energy = EF[0, 0] / eqcgmx
-        Gradient = EF[0, 1:] / fqcgmx
-        os.chdir(cwd)
+        try:
+            Gro = Molecule("conf.gro")
+            Gro.xyzs[0] = coords.reshape(-1,3) * bohr2ang
+            cwd = os.getcwd()
+            shutil.copy2("topol.top", dirname)
+            shutil.copy2("shot.mdp", dirname)
+            os.chdir(dirname)
+            Gro.write("coords.gro")
+            G = GMX(coords="coords.gro", gmx_top="topol.top", gmx_mdp="shot.mdp")
+            EF = G.energy_force()
+            Energy = EF[0, 0] / eqcgmx
+            Gradient = EF[0, 1:] / fqcgmx
+            os.chdir(cwd)
+        except (OSError, IOError, RuntimeError, subprocess.CalledProcessError):
+            raise GromacsEngineError
         return Energy, Gradient
 
 
@@ -666,10 +683,13 @@ class Molpro(Engine):
                         outfile.write("%s%-7s %13.7f %13.7f %13.7f\n" % (e, lab, c[0], c[1], c[2]))
                 else:
                     outfile.write(line)
-        # Run Molpro
-        subprocess.call('%s%s run.mol' % (self.molproExe(), self.nt()), cwd=dirname, shell=True)
-        # Read energy and gradients from Molpro output
-        energy, gradient = self.parse_molpro_output(os.path.join(dirname, 'run.out'))
+        try:
+            # Run Molpro
+            subprocess.run('%s%s run.mol' % (self.molproExe(), self.nt()), cwd=dirname, check=True, shell=True)
+            # Read energy and gradients from Molpro output
+            energy, gradient = self.parse_molpro_output(os.path.join(dirname, 'run.out'))
+        except (OSError, IOError, RuntimeError, subprocess.CalledProcessError):
+            raise MolproEngineError
         return energy, gradient
 
     def number_output(self, dirname, calcNum):
@@ -748,14 +768,11 @@ class QCEngineAPI(Engine):
         new_schema["molecule"]["geometry"] = coords.tolist()
         new_schema.pop("program", None)
         ret = qcengine.compute(new_schema, self.program, return_dict=True)
-
         # store the schema_traj for run_json to pick up
         self.schema_traj.append(ret)
-
         if ret["success"] is False:
-            raise ValueError("QCEngineAPI computation did not execute correctly. Message: " + ret["error"]["error_message"])
-
-        # Unpack the erngies and gradient
+            raise QCEngineAPIEngineError("QCEngineAPI computation did not execute correctly. Message: " + ret["error"]["error_message"])
+        # Unpack the energy and gradient
         energy = ret["properties"]["return_energy"]
         gradient = np.array(ret["return_result"])
         return energy, gradient
@@ -787,19 +804,22 @@ class TeraChem_CI(Engine):
         # Convert coordinates back to the xyz file
         self.M.xyzs[0] = coords.reshape(-1, 3) * bohr2ang
         self.M[0].write(os.path.join(dirname, 'start.xyz'))
-        for istate, guess_dir, ca, cb in [(1, os.path.join(dirname, 'guess_1'), 'ca1', 'cb1'), (2, os.path.join(dirname, 'guess_2'), 'ca2', 'cb2')]:
-            if not os.path.exists(guess_dir): os.makedirs(guess_dir)
-            shutil.copy2(os.path.join(dirname, 'start.xyz'), guess_dir)
-            shutil.copy2(os.path.join(dirname, 'run.in'), guess_dir)
-            shutil.copy2(ca, os.path.join(guess_dir, 'ca0'))
-            shutil.copy2(cb, os.path.join(guess_dir, 'cb0'))
-            subprocess.call('terachem run.in &> run.out', cwd=guess_dir, shell=True)
-            subprocess.call("awk '/FINAL ENERGY/ {p=$3} /Correlation Energy/ {p+=$5} END {printf \"%.10f\\n\", p}' run.out > energy.txt", cwd=guess_dir, shell=True)
-            subprocess.call("awk '/Gradient units are Hartree/,/Net gradient/ {if ($1 ~ /^-?[0-9]/) {print}}' run.out > grad.txt", cwd=guess_dir, shell=True)
-            subprocess.call("awk 'BEGIN {s=0.0} /SPIN S-SQUARED/ {s=$3} END {printf \"%.6f\\n\",s}' run.out > s-squared.txt", cwd=guess_dir, shell=True)
-            EDict[istate] = float(open(os.path.join(guess_dir,'energy.txt')).readlines()[0].strip())
-            GDict[istate] = np.loadtxt(os.path.join(guess_dir,'grad.txt')).flatten()
-            SDict[istate] = float(open(os.path.join(guess_dir,'s-squared.txt')).readlines()[0].strip())
+        try:
+            for istate, guess_dir, ca, cb in [(1, os.path.join(dirname, 'guess_1'), 'ca1', 'cb1'), (2, os.path.join(dirname, 'guess_2'), 'ca2', 'cb2')]:
+                if not os.path.exists(guess_dir): os.makedirs(guess_dir)
+                shutil.copy2(os.path.join(dirname, 'start.xyz'), guess_dir)
+                shutil.copy2(os.path.join(dirname, 'run.in'), guess_dir)
+                shutil.copy2(ca, os.path.join(guess_dir, 'ca0'))
+                shutil.copy2(cb, os.path.join(guess_dir, 'cb0'))
+                subprocess.run('terachem run.in &> run.out', cwd=guess_dir, check=True, shell=True)
+                subprocess.run("awk '/FINAL ENERGY/ {p=$3} /Correlation Energy/ {p+=$5} END {printf \"%.10f\\n\", p}' run.out > energy.txt", cwd=guess_dir, check=True, shell=True)
+                subprocess.run("awk '/Gradient units are Hartree/,/Net gradient/ {if ($1 ~ /^-?[0-9]/) {print}}' run.out > grad.txt", cwd=guess_dir, check=True, shell=True)
+                subprocess.run("awk 'BEGIN {s=0.0} /SPIN S-SQUARED/ {s=$3} END {printf \"%.6f\\n\",s}' run.out > s-squared.txt", cwd=guess_dir, check=True, shell=True)
+                EDict[istate] = float(open(os.path.join(guess_dir,'energy.txt')).readlines()[0].strip())
+                GDict[istate] = np.loadtxt(os.path.join(guess_dir,'grad.txt')).flatten()
+                SDict[istate] = float(open(os.path.join(guess_dir,'s-squared.txt')).readlines()[0].strip())
+        except (OSError, IOError, RuntimeError, subprocess.CalledProcessError):
+            raise TeraChem_CIEngineError
         # Determine the higher energy state
         if EDict[2] > EDict[1]:
             I = 2

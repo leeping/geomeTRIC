@@ -248,7 +248,6 @@ def test_run_json_psi4_hydrogen(localizer):
 @addons.using_qcengine
 @addons.using_rdkit
 def test_rdkit_run_error(localizer):
-
     molecule = {
         "geometry": [
             0.0,  0.0, -0.5,
@@ -257,10 +256,11 @@ def test_rdkit_run_error(localizer):
         "symbols": ["H", "H"],
         "connectivity": [[0, 1, 1]]
     } # yapf: disable
-
     in_json_dict = _build_input(molecule, method="cookiemonster")
-
-    ret = geometric.run_json.geometric_run_json(in_json_dict)
-
-    assert ret["success"] == False
-    assert "UFF methods" in ret["error"]["error_message"]
+    with pytest.raises(SystemExit) as pytest_wrapped_e:
+        # When EngineError is detected, system will exit with code 51
+        ret = geometric.run_json.geometric_run_json(in_json_dict)
+        assert pytest_wrapped_e.value.code == 51
+        # the below assertion will not run
+        # assert ret["success"] == False
+        # assert "UFF methods" in ret["error"]["error_message"]
