@@ -1,0 +1,9 @@
+coordinates start.xyz
+run minimize
+charge 0
+spinmult 1
+method rhf
+basis 6-31g*
+dispersion no
+threall 1e-18
+

@@ -152,7 +152,6 @@ def pvec1d(vec1d, precision=1, format="e", loglevel=INFO):
     v2a = np.array(vec1d)
     for i in range(v2a.shape[0]):
         logger.log(loglevel, "%% .%i%s " % (precision, format) % v2a[i])
-    logger.log(loglevel, '\n')
 
 def astr(vec1d, precision=4):
     """ Write an array to a string so we can use it to key a dictionary. """
@@ -165,9 +164,7 @@ def pmat2d(mat2d, precision=1, format="e", loglevel=INFO):
     """
     m2a = np.array(mat2d)
     for i in range(m2a.shape[0]):
-        for j in range(m2a.shape[1]):
-            logger.log(loglevel, "%% .%i%s " % (precision, format) % m2a[i][j])
-        logger.log(loglevel, '\n')
+        logger.log(loglevel, ' '.join(["%% .%i%s " % (precision, format) % m2a[i][j] for j in range(m2a[i].shape[0])]))
 
 def grouper(iterable, n):
     """Collect data into fixed-length chunks or blocks"""

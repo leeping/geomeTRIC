@@ -16,7 +16,7 @@ import geometric
 from .engine import set_tcenv, load_tcin, TeraChem, TeraChem_CI, Psi4, QChem, Gromacs, Molpro, OpenMM, QCEngineAPI
 from .internal import *
 from .molecule import Molecule, Elements
-from .nifty import row, col, flat, invert_svd, uncommadash, isint, bohr2ang, ang2bohr, logger, bak
+from .nifty import row, col, flat, invert_svd, uncommadash, isint, bohr2ang, ang2bohr, logger, bak, pmat2d
 from .rotate import get_rot, sorted_eigh, calc_fac_dfac
 from enum import Enum
 
@@ -537,6 +537,7 @@ def get_delta_prime_trm(v, X, G, H, IC, verbose=False):
         return get_delta_prime_trm(v+0.001, X, G, H, IC)
     dyc = flat(-1 * np.dot(Hi,col(GC)))
     dy = dyc[:len(G)]
+
     d_prime = flat(-1 * np.dot(Hi, col(dyc)))[:len(G)]
     dy_prime = np.dot(dy,d_prime)/np.linalg.norm(dy)
     # sol = flat(0.5*row(dy)*np.matrix(H)*col(dy))[0] + np.dot(dy,G)
@@ -818,6 +819,10 @@ class OptParams(object):
         self.qccnv = kwargs.get('qccnv', False)
         # Molpro style convergence criteria
         self.molcnv = kwargs.get('molcnv', False)
+        # Use updated constraint algorithm implemented 2019-03-20
+        self.conmethod = kwargs.get('conmethod', 0)
+        # Remove overall translation and rotation from the system
+        self.remove_tr = kwargs.get('remove_tr', 0)
         # Convergence criteria in a.u. and Angstrom
         self.Convergence_energy = kwargs.get('convergence_energy', 1e-6)
         self.Convergence_grms = kwargs.get('convergence_grms', 3e-4)
@@ -915,6 +920,7 @@ class Optimizer(object):
         self.IC.resetRotations(self.X)
         if isinstance(self.IC, DelocalizedInternalCoordinates):
             self.IC.build_dlc(self.X)
+            if self.IC.remove_tr: self.IC.remove_TR(self.X)
         # With redefined internal coordinates, the Hessian needs to be rebuilt
         self.H0 = self.IC.guess_hessian(self.coords)
         self.RebuildHessian()
@@ -938,7 +944,7 @@ class Optimizer(object):
                 raise ValueError("Cannot continue a constrained optimization; please implement constrained optimization in Cartesian coordinates")
             IC1 = CartesianCoordinates(newmol)
         else:
-            IC1 = self.IC.__class__(newmol, connect=self.IC.connect, addcart=self.IC.addcart, build=False)
+            IC1 = self.IC.__class__(newmol, connect=self.IC.connect, addcart=self.IC.addcart, build=False, conmethod=self.IC.conmethod, remove_tr=self.IC.remove_tr)
             if self.IC.haveConstraints(): IC1.getConstraints_from(self.IC)
         # Check for differences
         changed = (IC1 != self.IC)
@@ -1027,6 +1033,8 @@ class Optimizer(object):
             logger.info("Hessian Eigenvalues: %.5e %.5e %.5e ... %.5e %.5e %.5e" % (Eig[0],Eig[1],Eig[2],Eig[-3],Eig[-2],Eig[-1]))
         else:
             logger.info("Hessian Eigenvalues:", ' '.join("%.5e" % i for i in Eig))
+        # Are we far from constraint satisfaction?
+        self.farConstraints = self.IC.haveConstraints() and self.IC.getConstraintViolation(self.X) > 1e-1
         ### OBTAIN AN OPTIMIZATION STEP ###
         # The trust radius is to be computed in Cartesian coordinates.
         # First take a full-size Newton Raphson step
@@ -1127,8 +1135,6 @@ class Optimizer(object):
         # Molpro defaults for convergence
         molpro_converged_gmax = max_gradient < params.molpro_convergence_gmax
         molpro_converged_dmax = max_displacement < params.molpro_convergence_dmax
-        # Are we far from constraint satisfaction?
-        self.farConstraints = self.IC.haveConstraints() and self.IC.getConstraintViolation(self.X) > 1e-1
         self.conSatisfied = not self.IC.haveConstraints() or self.IC.getConstraintViolation(self.X) < 1e-2
         # Print status
         msg = "Step %4i :" % self.Iteration
@@ -1678,7 +1684,8 @@ def run_optimizer(**kwargs):
     coordsys = kwargs.get('coordsys', 'tric')
     CoordClass, connect, addcart = CoordSysDict[coordsys.lower()]
 
-    IC = CoordClass(M, build=True, connect=connect, addcart=addcart, constraints=Cons, cvals=CVals[0] if CVals is not None else None)
+    IC = CoordClass(M, build=True, connect=connect, addcart=addcart, constraints=Cons, cvals=CVals[0] if CVals is not None else None,
+                    conmethod=params.conmethod, remove_tr=params.remove_tr)
     #========================================#
     #| End internal coordinate system setup |#
     #========================================#
@@ -1720,7 +1727,7 @@ def run_optimizer(**kwargs):
         for ic, CVal in enumerate(CVals):
             if len(CVals) > 1:
                 logger.info("---=== Scan %i/%i : Constrained Optimization ===---" % (ic+1, len(CVals)))
-            IC = CoordClass(M, build=True, connect=connect, addcart=addcart, constraints=Cons, cvals=CVal)
+            IC = CoordClass(M, build=True, connect=connect, addcart=addcart, constraints=Cons, cvals=CVal, conmethod=params.conmethod, remove_tr=params.remove_tr)
             IC.printConstraints(coords, thre=-1)
             if len(CVals) > 1:
                 xyzout = prefix+"_scan-%03i.xyz" % ic
@@ -1765,8 +1772,10 @@ def main():
     parser.add_argument('--molcnv', action='store_true', help='Use Molpro style convergence criteria instead of the default.')
     parser.add_argument('--prefix', type=str, default=None, help='Specify a prefix for log file and temporary directory.')
     parser.add_argument('--displace', action='store_true', help='Write out the displacements of the coordinates.')
-    parser.add_argument('--fdcheck', action='store_true', help='Check internal coordinate gradients using finite difference..')
+    parser.add_argument('--fdcheck', action='store_true', help='Check internal coordinate gradients using finite difference.')
     parser.add_argument('--enforce', type=float, default=0.0, help='Enforce exact constraints when within provided tolerance (in a.u. and radian)')
+    parser.add_argument('--conmethod', type=int, default=0, help='Set to 1 to enable updated constraint algorithm.')
+    parser.add_argument('--remove_tr', action='store_true', help='Remove overall translation and rotation from the system.')
     parser.add_argument('--epsilon', type=float, default=1e-5, help='Small eigenvalue threshold.')
     parser.add_argument('--check', type=int, default=0, help='Check coordinates every N steps to see whether it has changed.')
     parser.add_argument('--verbose', action='store_true', help='Write out the displacements.')
