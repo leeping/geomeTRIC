@@ -544,7 +544,7 @@ class QChem(Engine):
             M1 = Molecule('%s/run.out' % dirname)
             energy = M1.qm_energies[0]
             gradient = M1.qm_grads[0].flatten()
-        except (OSError, IOError, RuntimeError, RuntimeError, subprocess.CalledProcessError):
+        except (OSError, IOError, RuntimeError, subprocess.CalledProcessError):
             raise QChemEngineError
         return energy, gradient
 
