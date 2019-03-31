@@ -67,6 +67,7 @@ else:
             message = record.getMessage()
             self.stream.write(message)
             self.flush()
+
     class RawFileHandler(FileHandler):
         """
         Exactly like FileHandler, except no newline character is printed at the end of each message.
@@ -79,7 +80,9 @@ else:
         def emit(self, record):
             if self.stream is None:
                 self.stream = self._open()
-            RawStreamHandler.emit(self, record)
+            message = record.getMessage()
+            self.stream.write(message)
+            self.flush()
             
     if "geometric" in __name__:
         # This ensures logging behavior is consistent with the rest of geomeTRIC
@@ -91,7 +94,7 @@ else:
         logger.setLevel(INFO)
         handler = RawStreamHandler()
         logger.addHandler(handler)
-        package="nifty.py"
+        package="LPW-nifty.py"
 
 try:
     import bz2

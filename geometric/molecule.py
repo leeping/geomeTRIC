@@ -215,7 +215,7 @@ else:
     logger.setLevel(INFO)
     handler = RawStreamHandler()
     logger.addHandler(handler)
-    package = "molecule.py"
+    package = "LPW-molecule.py"
 
 module_name = __name__.replace('.molecule','')
 
