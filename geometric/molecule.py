@@ -215,7 +215,10 @@ else:
     logger.setLevel(INFO)
     handler = RawStreamHandler()
     logger.addHandler(handler)
-    package = "LPW-molecule.py"
+    if __name__ == "__main__":
+        package = "LPW-molecule.py"
+    else:
+        package = __name__.split('.')[0]
 
 module_name = __name__.replace('.molecule','')
 
@@ -1441,7 +1444,7 @@ class Molecule(object):
                 Sum.Data[key] = self.Data[key]
             elif diff(self, other, key):
                 for i, j in zip(self.Data[key], other.Data[key]):
-                    logger.info(i, j, i==j)
+                    logger.info("%s %s %s" % (i, j, str(i==j)))
                 logger.error('The data member called %s is not the same for these two objects\n' % key)
                 raise RuntimeError
             elif key in self.Data:
@@ -1483,7 +1486,7 @@ class Molecule(object):
             if key in ['fnm', 'ftype', 'bonds', 'molecules', 'topology']: pass
             elif diff(self, other, key):
                 for i, j in zip(self.Data[key], other.Data[key]):
-                    logger.info(i, j, i==j)
+                    logger.info("%s %s %s" % (i, j, str(i==j)))
                 logger.error('The data member called %s is not the same for these two objects\n' % key)
                 raise RuntimeError
             # Information from the other class is added to this class (if said info doesn't exist.)

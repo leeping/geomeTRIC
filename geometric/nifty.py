@@ -94,7 +94,10 @@ else:
         logger.setLevel(INFO)
         handler = RawStreamHandler()
         logger.addHandler(handler)
-        package="LPW-nifty.py"
+        if __name__ == "__main__":
+            package = "LPW-nifty.py"
+        else:
+            package = __name__.split('.')[0]
 
 try:
     import bz2
