@@ -114,20 +114,6 @@ def d_nucross(a, b):
     return np.dot(d_unit_vector(a), d_ncross(ev, b))
 ## End vector calculus functions
 
-def logArray(mat, precision=3, fmt="f"):
-    fmt="%% .%i%s" % (precision, fmt)
-    if len(mat.shape) == 1:
-        for i in range(mat.shape[0]):
-            logger.info(fmt % mat[i]),
-        print
-    elif len(mat.shape) == 2:
-        for i in range(mat.shape[0]):
-            for j in range(mat.shape[1]):
-                logger.info(fmt % mat[i,j]),
-            print
-    else:
-        raise RuntimeError("One or two dimensional arrays only")
-
 class CartesianX(object):
     def __init__(self, a, w=1.0):
         self.a = a
@@ -143,7 +129,7 @@ class CartesianX(object):
         if type(self) is not type(other): return False
         eq = self.a == other.a
         if eq and self.w != other.w:
-            logger.warning("Warning: CartesianX same atoms, different weights (%.4f %.4f)" % (self.w, other.w))
+            logger.warning("Warning: CartesianX same atoms, different weights (%.4f %.4f)\n" % (self.w, other.w))
         return eq
 
     def __ne__(self, other):
@@ -180,7 +166,7 @@ class CartesianY(object):
         if type(self) is not type(other): return False
         eq = self.a == other.a
         if eq and self.w != other.w:
-            logger.warning("Warning: CartesianY same atoms, different weights (%.4f %.4f)" % (self.w, other.w))
+            logger.warning("Warning: CartesianY same atoms, different weights (%.4f %.4f)\n" % (self.w, other.w))
         return eq
 
     def __ne__(self, other):
@@ -217,7 +203,7 @@ class CartesianZ(object):
         if type(self) is not type(other): return False
         eq = self.a == other.a
         if eq and self.w != other.w:
-            logger.warning("Warning: CartesianZ same atoms, different weights (%.4f %.4f)" % (self.w, other.w))
+            logger.warning("Warning: CartesianZ same atoms, different weights (%.4f %.4f)\n" % (self.w, other.w))
         return eq
 
     def __ne__(self, other):
@@ -255,7 +241,7 @@ class TranslationX(object):
         if type(self) is not type(other): return False
         eq = set(self.a) == set(other.a)
         if eq and np.sum((self.w-other.w)**2) > 1e-6:
-            logger.warning("Warning: TranslationX same atoms, different weights")
+            logger.warning("Warning: TranslationX same atoms, different weights\n")
             eq = False
         return eq
 
@@ -295,7 +281,7 @@ class TranslationY(object):
         if type(self) is not type(other): return False
         eq = set(self.a) == set(other.a)
         if eq and np.sum((self.w-other.w)**2) > 1e-6:
-            logger.warning("Warning: TranslationY same atoms, different weights")
+            logger.warning("Warning: TranslationY same atoms, different weights\n")
             eq = False
         return eq
 
@@ -335,7 +321,7 @@ class TranslationZ(object):
         if type(self) is not type(other): return False
         eq = set(self.a) == set(other.a)
         if eq and np.sum((self.w-other.w)**2) > 1e-6:
-            logger.warning("Warning: TranslationZ same atoms, different weights")
+            logger.warning("Warning: TranslationZ same atoms, different weights\n")
             eq = False
         return eq
 
@@ -399,7 +385,7 @@ class Rotator(object):
         if type(self) is not type(other): return False
         eq = set(self.a) == set(other.a)
         if eq and np.sum((self.x0-other.x0)**2) > 1e-6:
-            logger.warning("Warning: Rotator same atoms, different reference positions")
+            logger.warning("Warning: Rotator same atoms, different reference positions\n")
         return eq
 
     def __repr__(self):
@@ -1492,7 +1478,7 @@ class OutOfPlane(object):
         if self.a == other.a:
             if {self.b, self.c, self.d} == {other.b, other.c, other.d}:
                 if [self.b, self.c, self.d] != [other.b, other.c, other.d]:
-                    logger.warning("Warning: OutOfPlane atoms are the same, ordering is different")
+                    logger.warning("Warning: OutOfPlane atoms are the same, ordering is different\n")
                 return True
         #     if self.b == other.b:
         #         if self.c == other.c:
@@ -1622,7 +1608,7 @@ class InternalCoordinates(object):
             WilsonB.append(Der[i].flatten())
         self.stored_wilsonB[xhash] = np.array(WilsonB)
         if len(self.stored_wilsonB) > 1000 and not CacheWarning:
-            logger.warning("\x1b[91mWarning: more than 1000 B-matrices stored, memory leaks likely\x1b[0m")
+            logger.warning("\x1b[91mWarning: more than 1000 B-matrices stored, memory leaks likely\x1b[0m\n")
             CacheWarning = True
         ans = np.array(WilsonB)
         return ans
@@ -1648,7 +1634,7 @@ class InternalCoordinates(object):
                 U, S, VT = np.linalg.svd(G)
                 time_svd = click()
             except np.linalg.LinAlgError:
-                logger.warning("\x1b[1;91m SVD fails, perturbing coordinates and trying again\x1b[0m")
+                logger.warning("\x1b[1;91m SVD fails, perturbing coordinates and trying again\x1b[0m\n")
                 xyz = xyz + 1e-2*np.random.random(xyz.shape)
                 loops += 1
                 if loops == 10:
@@ -1693,7 +1679,7 @@ class InternalCoordinates(object):
                 x2[i,j] -= h
                 PMDiff = self.calcDiff(x1,x2)
                 FiniteDifference[:,i,j] = PMDiff/(2*h)
-        logger.info("-=# Now checking first derivatives of internal coordinates w/r.t. Cartesians #=-")
+        logger.info("-=# Now checking first derivatives of internal coordinates w/r.t. Cartesians #=-\n")
         for i in range(Analytical.shape[0]):
             title = "%20s : %20s" % ("IC %i/%i" % (i+1, Analytical.shape[0]), self.Internals[i])
             lines = [title]
@@ -1710,9 +1696,9 @@ class InternalCoordinates(object):
                     if maxerr < np.abs(error):
                         maxerr = np.abs(error)
             if maxerr > 1e-5:
-                logger.info('\n'.join(lines))
-            logger.info("%s : Max Error = %.5e" % (title, maxerr))
-        logger.info("Finite-difference Finished")
+                logger.info('\n'.join(lines)+'\n')
+            logger.info("%s : Max Error = %.5e\n" % (title, maxerr))
+        logger.info("Finite-difference Finished\n")
         return FiniteDifference
 
     def checkFiniteDifferenceHess(self, xyz):
@@ -1721,7 +1707,7 @@ class InternalCoordinates(object):
         FiniteDifference = np.zeros_like(Analytical)
         h = 1e-4
         verbose = False
-        logger.info("-=# Now checking second derivatives of internal coordinates w/r.t. Cartesians #=-")
+        logger.info("-=# Now checking second derivatives of internal coordinates w/r.t. Cartesians #=-\n")
         for j in range(xyz.shape[0]):
             for m in range(3):
                 for k in range(xyz.shape[0]):
@@ -1746,7 +1732,7 @@ class InternalCoordinates(object):
         for i in range(Analytical.shape[0]):
             title = "%20s : %20s" % ("IC %i/%i" % (i+1, Analytical.shape[0]), self.Internals[i])
             lines = [title]
-            if verbose: logger.info(title)
+            if verbose: logger.info(title+'\n')
             maxerr = 0.0
             numerr = 0
             for j in range(Analytical.shape[1]):
@@ -1761,14 +1747,14 @@ class InternalCoordinates(object):
                             if np.abs(error)>1e-5:
                                 numerr += 1
                             if (ana != 0.0 or fin != 0.0) and verbose:
-                                logger.info(message)
+                                logger.info(message+'\n')
                             lines.append(message)
                             if maxerr < np.abs(error):
                                 maxerr = np.abs(error)
             if maxerr > 1e-5 and not verbose:
-                logger.info('\n'.join(lines))
-            logger.info("%s : Max Error = % 12.5e (%i above threshold)" % (title, maxerr, numerr))
-        logger.info("Finite-difference Finished")
+                logger.info('\n'.join(lines)+'\n')
+            logger.info("%s : Max Error = % 12.5e (%i above threshold)\n" % (title, maxerr, numerr))
+        logger.info("Finite-difference Finished\n")
         return FiniteDifference
         
     def calcGrad(self, xyz, gradx):
@@ -1831,14 +1817,14 @@ class InternalCoordinates(object):
         # Function to exit from loop
         def finish(microiter, rmsdt, ndqt, xyzsave, xyz_iter1):
             if ndqt > 1e-1:
-                if verbose: logger.info("Failed to obtain coordinates after %i microiterations (rmsd = %.3e |dQ| = %.3e)" % (microiter, rmsdt, ndqt))
+                if verbose: logger.info("Failed to obtain coordinates after %i microiterations (rmsd = %.3e |dQ| = %.3e)\n" % (microiter, rmsdt, ndqt))
                 self.bork = True
                 self.writeCache(xyz, dQ, xyz_iter1)
                 return xyz_iter1.flatten()
             elif ndqt > 1e-3:
-                if verbose: logger.info("Approximate coordinates obtained after %i microiterations (rmsd = %.3e |dQ| = %.3e)" % (microiter, rmsdt, ndqt))
+                if verbose: logger.info("Approximate coordinates obtained after %i microiterations (rmsd = %.3e |dQ| = %.3e)\n" % (microiter, rmsdt, ndqt))
             else:
-                if verbose: logger.info("Cartesian coordinates obtained after %i microiterations (rmsd = %.3e |dQ| = %.3e)" % (microiter, rmsdt, ndqt))
+                if verbose: logger.info("Cartesian coordinates obtained after %i microiterations (rmsd = %.3e |dQ| = %.3e)\n" % (microiter, rmsdt, ndqt))
             self.writeCache(xyz, dQ, xyzsave)
             return xyzsave.flatten()
         fail_counter = 0
@@ -1858,19 +1844,19 @@ class InternalCoordinates(object):
             ndq = np.linalg.norm(dQ1-dQ_actual)
             if len(ndqs) > 0:
                 if ndq > ndqt:
-                    if verbose: logger.info("Iter: %i Err-dQ (Best) = %.5e (%.5e) RMSD: %.5e Damp: %.5e (Bad)" % (microiter, ndq, ndqt, rmsd, damp))
+                    if verbose: logger.info("Iter: %i Err-dQ (Best) = %.5e (%.5e) RMSD: %.5e Damp: %.5e (Bad)\n" % (microiter, ndq, ndqt, rmsd, damp))
                     damp /= 2
                     fail_counter += 1
                     # xyz2 = xyz1.copy()
                 else:
-                    if verbose: logger.info("Iter: %i Err-dQ (Best) = %.5e (%.5e) RMSD: %.5e Damp: %.5e (Good)" % (microiter, ndq, ndqt, rmsd, damp))
+                    if verbose: logger.info("Iter: %i Err-dQ (Best) = %.5e (%.5e) RMSD: %.5e Damp: %.5e (Good)\n" % (microiter, ndq, ndqt, rmsd, damp))
                     fail_counter = 0
                     damp = min(damp*1.2, 1.0)
                     rmsdt = rmsd
                     ndqt = ndq
                     xyzsave = xyz2.copy()
             else:
-                if verbose: logger.info("Iter: %i Err-dQ = %.5e RMSD: %.5e Damp: %.5e" % (microiter, ndq, rmsd, damp))
+                if verbose: logger.info("Iter: %i Err-dQ = %.5e RMSD: %.5e Damp: %.5e\n" % (microiter, ndq, rmsd, damp))
                 rmsdt = rmsd
                 ndqt = ndq
             ndqs.append(ndq)
@@ -2258,14 +2244,14 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                 else:
                     i.inactive = 0
                 if i.inactive == 1:
-                    logger.info("Deleting:", i)
+                    logger.info("Deleting:" + str(i) + "\n")
                     self.Internals.remove(i)
                     Changed = True
             else:
                 i.inactive = 0
         for i in other.Internals:
             if i not in self.Internals:
-                logger.info("Adding:  ", i)
+                logger.info("Adding:  " + str(i) + "\n")
                 self.Internals.append(i)
                 Changed = True
         return Changed
@@ -2274,7 +2260,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         Changed = False
         for i in other.Internals:
             if i not in self.Internals:
-                logger.info("Adding:  ", i)
+                logger.info("Adding:  " + str(i) + "\n")
                 self.Internals.append(i)
                 Changed = True
         return Changed
@@ -2356,13 +2342,13 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
     def printRotations(self, xyz):
         rotNorms = self.getRotatorNorms()
         if len(rotNorms) > 0:
-            logger.info("Rotator Norms: " + " ".join(["% .4f" % i for i in rotNorms]))
+            logger.info("Rotator Norms: " + " ".join(["% .4f" % i for i in rotNorms]) + "\n")
         rotDots = self.getRotatorDots()
         if len(rotDots) > 0 and np.max(rotDots) > 1e-5:
-            logger.info("Rotator Dots : " + " ".join(["% .4f" % i for i in rotDots]))
+            logger.info("Rotator Dots : " + " ".join(["% .4f" % i for i in rotDots]) + "\n")
         linAngs = [ic.value(xyz) for ic in self.Internals if type(ic) is LinearAngle]
         if len(linAngs) > 0:
-            logger.info("Linear Angles: " + " ".join(["% .4f" % i for i in linAngs]))
+            logger.info("Linear Angles: " + " ".join(["% .4f" % i for i in linAngs]) + "\n")
 
     def derivatives(self, xyz):
         self.calculate(xyz)
@@ -2426,7 +2412,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         if cPrim in self.cPrims:
             iPrim = self.cPrims.index(cPrim)
             if np.abs(cVal - self.cVals[iPrim]) > 1e-6:
-                logger.info("Updating constraint value to %.4e" % cVal)
+                logger.info("Updating constraint value to %.4e\n" % cVal)
             self.cVals[iPrim] = cVal
         else:
             if cPrim not in self.Internals:
@@ -2498,11 +2484,10 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
             if np.abs(diff*factor) > thre:
                 out_lines.append("%-30s  % 10.5f  % 10.5f  % 10.5f" % (str(c), current*factor, reference*factor, diff*factor))
         if len(out_lines) > 0:
-            logger.info(header)
-            logger.info('\n'.join(out_lines))
+            logger.info(header + "\n")
+            logger.info('\n'.join(out_lines) + "\n")
             # if type(c) in [RotationA, RotationB, RotationC]:
             #     print c, c.value(xyz)
-            #     logArray(c.x0)
 
     def getConstraintTargetVals(self):
         nc = len(self.cPrims)
@@ -2764,7 +2749,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
             if niter > 1 and np.linalg.norm(dQ) > np.linalg.norm(dQ0):
                 xyz1 = xyzs[np.argmin(ndqs)]
                 if not self.enforce_fail_printed:
-                    logger.warning("Warning: Failed to enforce exact constraint satisfaction. Please remove possible redundant constraints. See below:")
+                    logger.warning("Warning: Failed to enforce exact constraint satisfaction. Please remove possible redundant constraints. See below:\n")
                     self.printConstraints(xyz1, thre=0.0)
                     self.enforce_fail_printed = True
                 return xyz1
@@ -2789,7 +2774,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         if constraintSmall:
             xyz2 = self.applyConstraints(xyz2)
             if not self.enforced:
-                logger.info("<<< Enforcing constraint satisfaction >>>")
+                logger.info("<<< Enforcing constraint satisfaction >>>\n")
             self.enforced = True
         else:
             self.enforced = False
@@ -3032,7 +3017,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
                 ui = U[:, ic]
                 Unorms[ic] = np.sqrt(ov(ui, ui))
                 if Unorms[ic]/Vnorms[ic] < 0.1:
-                    logger.warning("Constraint %i is almost redundant; after projection norm is %.3f of original" % (ic, Unorms[ic]/Vnorms[ic]))
+                    logger.warning("Constraint %i is almost redundant; after projection norm is %.3f of original\n" % (ic, Unorms[ic]/Vnorms[ic]))
                 V0 = V.copy()
                 # Project out newest U column from all remaining V columns.
                 for jc in range(ic+1, nv):
@@ -3144,7 +3129,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
             ui = U[:, ic]
             Unorms[ic] = np.sqrt(ov(ui, ui))
             if Unorms[ic]/Vnorms[ic] < 0.1:
-                logger.warning("Constraint %i is almost redundant; after projection norm is %.3f of original" % (ic-6, Unorms[ic]/Vnorms[ic]))
+                logger.warning("Constraint %i is almost redundant; after projection norm is %.3f of original\n" % (ic-6, Unorms[ic]/Vnorms[ic]))
             V0 = V.copy()
             # Project out newest U column from all remaining V columns.
             for jc in range(ic+1, nv):
