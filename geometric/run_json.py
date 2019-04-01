@@ -4,6 +4,7 @@ import copy
 import geometric
 import json
 import traceback
+import pkg_resources
 
 try:
     from cStringIO import StringIO      # Python 2
@@ -11,7 +12,7 @@ except ImportError:
     from io import StringIO
 
 import logging
-from .nifty import logger
+from .nifty import logger, RawStreamHandler
 
 
 def parse_input_json_dict(in_json_dict):
@@ -148,8 +149,13 @@ def make_constraints_string(constraints_dict):
 def geometric_run_json(in_json_dict):
     """ Take a input dictionary loaded from json, and return an output dictionary for json """
 
+    # Default logger configuration (prevents extra newline from being printed)
+    logIni = pkg_resources.resource_filename(geometric.optimize.__name__, 'logJson.ini')
+    import logging.config
+    logging.config.fileConfig(logIni,disable_existing_loggers=False)
+
     # Set a temporary logger to capture output
-    log_stream = logging.StreamHandler(stream=StringIO())
+    log_stream = RawStreamHandler(stream=StringIO())
     logger.addHandler(log_stream)
 
     input_opts = parse_input_json_dict(in_json_dict)
@@ -189,10 +195,11 @@ def geometric_run_json(in_json_dict):
 
     # Print out information about the coordinate system
     if isinstance(IC, geometric.internal.CartesianCoordinates):
-        logger.info("%i Cartesian coordinates being used" % (3 * M.na))
+        logger.info("%i Cartesian coordinates being used\n" % (3 * M.na))
     else:
-        logger.info("%i internal coordinates being used (instead of %i Cartesians)" % (len(IC.Internals), 3 * M.na))
+        logger.info("%i internal coordinates being used (instead of %i Cartesians)\n" % (len(IC.Internals), 3 * M.na))
     logger.info(IC)
+    logger.info("\n")
 
     params = geometric.optimize.OptParams(**input_opts)
 
@@ -208,7 +215,7 @@ def geometric_run_json(in_json_dict):
                 raise RuntimeError("Constraints only work with delocalized internal coordinates")
             for ic, CVal in enumerate(CVals):
                 if len(CVals) > 1:
-                    logger.info("---=== Scan %i/%i : Constrained Optimization ===---" % (ic + 1, len(CVals)))
+                    logger.info("---=== Scan %i/%i : Constrained Optimization ===---\n" % (ic + 1, len(CVals)))
                 IC = CoordClass(M, build=True, connect=connect, addcart=addcart, constraints=Cons, cvals=CVal)
                 IC.printConstraints(coords, thre=-1)
                 geometric.optimize.Optimize(coords, M, IC, engine, None, params)
@@ -238,7 +245,7 @@ def main():
     parser.add_argument('in_json', help='Input json file name')
     parser.add_argument('-o', '--out_json', default='out.json', help='Output Json file name')
     args = parser.parse_args()
-    logger.info(' '.join(sys.argv))
+    logger.info(' '.join(sys.argv)+"\n")
 
     in_json_dict = json.load(open(args.in_json))
     out_json_dict = geometric_run_json(in_json_dict)

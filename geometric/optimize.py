@@ -22,7 +22,6 @@ from .rotate import get_rot, sorted_eigh, calc_fac_dfac
 from .errors import EngineError, GeomOptNotConvergedError
 from enum import Enum
 
-
 def RebuildHessian(IC, H0, coord_seq, grad_seq, params):
     """
     Rebuild the Hessian after making a change to the internal coordinate system.
@@ -57,7 +56,7 @@ def RebuildHessian(IC, H0, coord_seq, grad_seq, params):
         history += 1
     if history < 1:
         return H0.copy()
-    logger.info("Rebuilding Hessian using %i gradients" % history)
+    logger.info("Rebuilding Hessian using %i gradients\n" % history)
     y_seq = [IC.calculate(i) for i in coord_seq[-history-1:]]
     g_seq = [IC.calcGrad(i, j) for i, j in zip(coord_seq[-history-1:],grad_seq[-history-1:])]
     Yprev = y_seq[0]
@@ -77,7 +76,7 @@ def RebuildHessian(IC, H0, coord_seq, grad_seq, params):
         Hstor = H.copy()
         H += Mat1-Mat2
     if np.min(np.linalg.eigh(H)[0]) < params.epsilon and params.reset:
-        logger.info("Eigenvalues below %.4e (%.4e) - returning guess" % (params.epsilon, np.min(np.linalg.eigh(H)[0])))
+        logger.info("Eigenvalues below %.4e (%.4e) - returning guess\n" % (params.epsilon, np.min(np.linalg.eigh(H)[0])))
         return H0.copy()
     return H
 
@@ -226,7 +225,7 @@ def brent_wiki(f, a, b, rel, cvg=0.1, obj=None, verbose=False):
         # Convergence failure - interval becomes
         # smaller than threshold
         if np.abs(b-a) < epsilon:
-            if verbose: logger.info("returning because interval is too small")
+            if verbose: logger.info("returning because interval is too small\n")
             if obj is not None: obj.brentFailed = True
             return s
         # Exit before converging when
@@ -244,11 +243,6 @@ def brent_wiki(f, a, b, rel, cvg=0.1, obj=None, verbose=False):
             # Swap if |f(a)| < |f(b)|
             a, b = b, a
             fa, fb = fb, fa
-
-def ftest(x):
-    answer = (x+3)*(x-1)**2
-    logger.info("(x, y) = ", x, answer)
-    return answer
 
 def OneDScan(init, final, steps):
     """
@@ -327,7 +321,7 @@ def ParseConstraints(molecule, constraints_string):
         # This is a list-of-lists. The intention is to create a multidimensional grid
         # of constraint values if necessary.
         if len(line) == 0: continue
-        logger.info(line)
+        logger.info(line+'\n')
         if line.startswith("$"):
             mode = line.replace("$","")
         else:
@@ -455,7 +449,7 @@ def ParseConstraints(molecule, constraints_string):
                     # Get the angle
                     theta1 = float(s[5]) * np.pi / 180
                     if np.abs(theta1) > np.pi * 0.9:
-                        logger.info("Large rotation: Your constraint may not work")
+                        logger.info("Large rotation: Your constraint may not work\n")
                     if mode == "set":
                         c = np.cos(theta1/2.0)
                         s = np.sin(theta1/2.0)
@@ -468,7 +462,7 @@ def ParseConstraints(molecule, constraints_string):
                     elif mode == "scan":
                         theta2 = float(s[6]) * np.pi / 180
                         if np.abs(theta2) > np.pi * 0.9:
-                            logger.info("Large rotation: Your constraint may not work")
+                            logger.info("Large rotation: Your constraint may not work\n")
                         steps = int(s[7])
                         # To alleviate future confusion:
                         # There is one group of three constraints that we are going to scan over in one dimension.
@@ -531,11 +525,11 @@ def get_delta_prime_trm(v, X, G, H, IC, verbose=False):
         HT[i, i] = 0.0
     if verbose >= 2:
         seig = sorted(np.linalg.eig(HT)[0])
-        logger.info("sorted(eig) : % .5e % .5e % .5e ... % .5e % .5e % .5e" % (seig[0], seig[1], seig[2], seig[-3], seig[-2], seig[-1]))
+        logger.info("sorted(eig) : % .5e % .5e % .5e ... % .5e % .5e % .5e\n" % (seig[0], seig[1], seig[2], seig[-3], seig[-2], seig[-1]))
     try:
         Hi = invert_svd(HT)
     except:
-        logger.info("\x1b[1;91mSVD Error - increasing v by 0.001 and trying again\x1b[0m")
+        logger.info("\x1b[1;91mSVD Error - increasing v by 0.001 and trying again\x1b[0m\n")
         return get_delta_prime_trm(v+0.001, X, G, H, IC)
     dyc = flat(-1 * np.dot(Hi,col(GC)))
     dy = dyc[:len(G)]
@@ -708,7 +702,7 @@ def trust_step(target, v0, X, G, H, IC, rfo, verbose=False):
         dy, sol, dy_prime, = get_delta_prime(v, X, G, H, IC, rfo, verbose)
         ndy = np.linalg.norm(dy)
         # This is "too" verbose; will enable integer print level later
-        if verbose >= 2: logger.info("v = %.5f dy -> target = %.5f -> %.5f" % (v, ndy, target))
+        if verbose >= 2: logger.info("v = %.5f dy -> target = %.5f -> %.5f\n" % (v, ndy, target))
         if np.abs((ndy-target)/target) < 0.001:
             return dy, sol
         # With Lagrange multipliers it may be impossible to go under a target step size
@@ -722,10 +716,10 @@ def trust_step(target, v0, X, G, H, IC, rfo, verbose=False):
             m_sol = sol
         # Break out of infinite oscillation loops
         if niter%100 == 99:
-            logger.info("trust_step hit niter = 100, randomizing")
+            logger.info("trust_step hit niter = 100, randomizing\n")
             v += np.random.random() * niter / 100
         if niter%1000 == 999:
-            logger.info("trust_step hit niter = 1000, giving up")
+            logger.info("trust_step hit niter = 1000, giving up\n")
             return m_dy, m_sol
 
 class Froot(object):
@@ -789,7 +783,7 @@ class Froot(object):
                 if self.stored_val is None or cnorm > self.stored_val:
                     self.stored_arg = trial
                     self.stored_val = cnorm
-            if self.params.verbose: logger.info("dy(i): %.4f dy(c) -> target: %.4f -> %.4f%s" % (trial, cnorm, self.target, " (done)" if self.from_above else ""))
+            if self.params.verbose: logger.info("dy(i): %.4f dy(c) -> target: %.4f -> %.4f%s\n" % (trial, cnorm, self.target, " (done)" if self.from_above else ""))
             return cnorm-self.target
 
 class OptParams(object):
@@ -948,9 +942,9 @@ class Optimizer(object):
         # Check for differences
         changed = (IC1 != self.IC)
         if changed:
-            logger.info("\x1b[1;94mInternal coordinate system may have changed\x1b[0m")
+            logger.info("\x1b[1;94mInternal coordinate system may have changed\x1b[0m\n")
             if self.IC.repr_diff(IC1) != "":
-                logger.info(self.IC.repr_diff(IC1))
+                logger.info(self.IC.repr_diff(IC1)+'\n')
         # Set current ICs to the new one
         if changed or recover or cartesian:
             self.IC = IC1
@@ -999,7 +993,7 @@ class Optimizer(object):
         # Print initial iteration
         rms_gradient, max_gradient = self.calcGradNorm()
         msg = "Step %4i :" % self.Iteration
-        logger.info(msg + " Gradient = %.3e/%.3e (rms/max) Energy = % .10f" % (rms_gradient, max_gradient, self.E))
+        logger.info(msg + " Gradient = %.3e/%.3e (rms/max) Energy = % .10f\n" % (rms_gradient, max_gradient, self.E))
         # Initial history
         self.X_hist = [self.X]
         self.Gx_hist = [self.gradx]
@@ -1029,9 +1023,9 @@ class Optimizer(object):
             v0 = 0.0
         if params.verbose: self.IC.Prims.printRotations(self.X)
         if len(Eig) >= 6:
-            logger.info("Hessian Eigenvalues: %.5e %.5e %.5e ... %.5e %.5e %.5e" % (Eig[0],Eig[1],Eig[2],Eig[-3],Eig[-2],Eig[-1]))
+            logger.info("Hessian Eigenvalues: %.5e %.5e %.5e ... %.5e %.5e %.5e\n" % (Eig[0],Eig[1],Eig[2],Eig[-3],Eig[-2],Eig[-1]))
         else:
-            logger.info("Hessian Eigenvalues:", ' '.join("%.5e" % i for i in Eig))
+            logger.info("Hessian Eigenvalues: " + ' '.join("%.5e" % i for i in Eig) + '\n')
         # Are we far from constraint satisfaction?
         self.farConstraints = self.IC.haveConstraints() and self.IC.getConstraintViolation(self.X) > 1e-1
         ### OBTAIN AN OPTIMIZATION STEP ###
@@ -1042,7 +1036,7 @@ class Optimizer(object):
         inorm = np.linalg.norm(dy)
         # Cartesian coordinate step size
         self.cnorm = self.getCartesianNorm(dy)
-        if params.verbose: logger.info("dy(i): %.4f dy(c) -> target: %.4f -> %.4f" % (inorm, self.cnorm, self.trust))
+        if params.verbose: logger.info("dy(i): %.4f dy(c) -> target: %.4f -> %.4f\n" % (inorm, self.cnorm, self.trust))
         # If the step is above the trust radius in Cartesian coordinates, then
         # do the following to reduce the step length:
         if self.cnorm > 1.1 * self.trust:
@@ -1054,31 +1048,31 @@ class Optimizer(object):
             iopt = brent_wiki(froot.evaluate, 0.0, inorm, self.trust, cvg=0.1, obj=froot, verbose=params.verbose)
             if froot.brentFailed and froot.stored_arg is not None:
                 # If Brent fails but we obtained an IC step that is smaller than the Cartesian trust radius, use it
-                if params.verbose: logger.info("\x1b[93mUsing stored solution at %.3e\x1b[0m" % froot.stored_val)
+                if params.verbose: logger.info("\x1b[93mUsing stored solution at %.3e\x1b[0m\n" % froot.stored_val)
                 iopt = froot.stored_arg
             elif self.IC.bork:
                 # Decrease the target Cartesian step size and try again
                 for i in range(3):
                     froot.target /= 2
-                    if params.verbose: logger.info("\x1b[93mReducing target to %.3e\x1b[0m" % froot.target)
+                    if params.verbose: logger.info("\x1b[93mReducing target to %.3e\x1b[0m\n" % froot.target)
                     froot.above_flag = True # Stop at any valid step between current target step size and trust radius
                     iopt = brent_wiki(froot.evaluate, 0.0, iopt, froot.target, cvg=0.1, verbose=params.verbose)
                     if not self.IC.bork: break
             LastForce = self.ForceRebuild
             self.ForceRebuild = False
             if self.IC.bork:
-                logger.info("\x1b[91mInverse iteration for Cartesians failed\x1b[0m")
+                logger.info("\x1b[91mInverse iteration for Cartesians failed\x1b[0m\n")
                 # This variable is added because IC.bork is unset later.
                 self.ForceRebuild = True
             else:
-                if params.verbose: logger.info("\x1b[93mBrent algorithm requires %i evaluations\x1b[0m" % froot.counter)
+                if params.verbose: logger.info("\x1b[93mBrent algorithm requires %i evaluations\x1b[0m\n" % froot.counter)
             ##### If IC failed to produce valid Cartesian step, it is "borked" and we need to rebuild it.
             if self.ForceRebuild:
                 # Force a rebuild of the coordinate system and skip the energy / gradient and evaluation steps.
                 if LastForce:
-                    logger.warning("\x1b[1;91mFailed twice in a row to rebuild the coordinate system; continuing in Cartesian coordinates\x1b[0m")
+                    logger.warning("\x1b[1;91mFailed twice in a row to rebuild the coordinate system; continuing in Cartesian coordinates\x1b[0m\n")
                 self.checkCoordinateSystem(recover=True, cartesian=LastForce)
-                logger.info("\x1b[1;93mSkipping optimization step\x1b[0m")
+                logger.info("\x1b[1;93mSkipping optimization step\x1b[0m\n")
                 self.Iteration -= 1
                 self.state = OPT_STATE.SKIP_EVALUATION
                 return
@@ -1140,31 +1134,31 @@ class Optimizer(object):
         msg += " Trust = %.3e (%s)" % (self.trust, self.trustprint)
         msg += " Grad%s = %s%.3e\x1b[0m/%s%.3e\x1b[0m (rms/max)" % ("_T" if self.IC.haveConstraints() else "", "\x1b[92m" if Converged_grms else "\x1b[0m", rms_gradient, "\x1b[92m" if Converged_gmax else "\x1b[0m", max_gradient)
         # print "Dy.G = %.3f" % Dot,
-        logger.info(msg + " E (change) = % .10f (%s%+.3e\x1b[0m) Quality = %s%.3f\x1b[0m" % (self.E, "\x1b[91m" if BadStep else ("\x1b[92m" if Converged_energy else "\x1b[0m"), self.E-self.Eprev, "\x1b[91m" if BadStep else "\x1b[0m", Quality))
+        logger.info(msg + " E (change) = % .10f (%s%+.3e\x1b[0m) Quality = %s%.3f\x1b[0m" % (self.E, "\x1b[91m" if BadStep else ("\x1b[92m" if Converged_energy else "\x1b[0m"), self.E-self.Eprev, "\x1b[91m" if BadStep else "\x1b[0m", Quality) + "\n")
 
         if self.IC is not None and self.IC.haveConstraints():
             self.IC.printConstraints(self.X, thre=1e-3)
         if isinstance(self.IC, PrimitiveInternalCoordinates):
-            logger.info(self.prim_msg)
+            logger.info(self.prim_msg + '\n')
 
         ### Check convergence criteria ###
         if Converged_energy and Converged_grms and Converged_drms and Converged_gmax and Converged_dmax and self.conSatisfied:
-            logger.info("Converged! =D")
+            logger.info("Converged! =D\n")
             self.state = OPT_STATE.CONVERGED
             return
 
         if self.Iteration > params.maxiter:
-            logger.info("Maximum iterations reached (%i); increase --maxiter for more" % params.maxiter)
+            logger.info("Maximum iterations reached (%i); increase --maxiter for more\n" % params.maxiter)
             self.state = OPT_STATE.FAILED
             return
 
         if params.qccnv and Converged_grms and (Converged_drms or Converged_energy) and self.conSatisfied:
-            logger.info("Converged! (Q-Chem style criteria requires grms and either drms or energy)")
+            logger.info("Converged! (Q-Chem style criteria requires grms and either drms or energy)\n")
             self.state = OPT_STATE.CONVERGED
             return
 
         if params.molcnv and molpro_converged_gmax and (molpro_converged_dmax or Converged_energy) and self.conSatisfied:
-            logger.info("Converged! (Molpro style criteria requires gmax and either dmax or energy) This is approximate since convergence checks are done in cartesian coordinates.")
+            logger.info("Converged! (Molpro style criteria requires gmax and either dmax or energy) This is approximate since convergence checks are done in cartesian coordinates.\n")
             self.state = OPT_STATE.CONVERGED
             return
 
@@ -1206,9 +1200,9 @@ class Optimizer(object):
         # This is because some systems (e.g. formate) have discontinuities on the
         # potential surface that can cause an infinite loop
         if Quality < -1:
-            if self.trust < self.thre_rj: logger.info("\x1b[93mNot rejecting step - trust below %.3e\x1b[0m" % self.thre_rj)
-            elif self.E < self.Eprev: logger.info("\x1b[93mNot rejecting step - energy decreases\x1b[0m")
-            elif self.farConstraints: logger.info("\x1b[93mNot rejecting step - far from constraint satisfaction\x1b[0m")
+            if self.trust < self.thre_rj: logger.info("\x1b[93mNot rejecting step - trust below %.3e\x1b[0m\n" % self.thre_rj)
+            elif self.E < self.Eprev: logger.info("\x1b[93mNot rejecting step - energy decreases\x1b[0m\n")
+            elif self.farConstraints: logger.info("\x1b[93mNot rejecting step - far from constraint satisfaction\x1b[0m\n")
 
         # Append steps to history (for rebuilding Hessian)
         self.X_hist.append(self.X)
@@ -1217,16 +1211,16 @@ class Optimizer(object):
         ### Rebuild Coordinate System if Necessary ###
         UpdateHessian = True
         if self.IC.bork:
-            logger.info("Failed inverse iteration - checking coordinate system")
+            logger.info("Failed inverse iteration - checking coordinate system\n")
             self.checkCoordinateSystem(recover=True)
             UpdateHessian = False
         elif self.CoordCounter == (params.check - 1):
-            logger.info("Checking coordinate system as requested every %i cycles" % params.check)
+            logger.info("Checking coordinate system as requested every %i cycles\n" % params.check)
             if self.checkCoordinateSystem(): UpdateHessian = False
         else:
             self.CoordCounter += 1
         if self.IC.largeRots():
-            logger.info("Large rotations - refreshing Rotator reference points and DLC vectors")
+            logger.info("Large rotations - refreshing Rotator reference points and DLC vectors\n")
             self.refreshCoordinates()
             UpdateHessian = False
         self.G = self.IC.calcGrad(self.X, self.gradx).flatten()
@@ -1257,9 +1251,9 @@ class Optimizer(object):
             Eig1.sort()
             if params.verbose:
                 msg += " Eig-ratios: %.5e ... %.5e" % (np.min(Eig1)/np.min(Eig), np.max(Eig1)/np.max(Eig))
-                logger.info(msg)
+                logger.info(msg+'\n')
             if np.min(Eig1) <= params.epsilon and params.reset:
-                logger.info("Eigenvalues below %.4e (%.4e) - returning guess" % (params.epsilon, np.min(Eig1)))
+                logger.info("Eigenvalues below %.4e (%.4e) - returning guess\n" % (params.epsilon, np.min(Eig1)))
                 self.H = self.IC.guess_hessian(self.coords)
         # Then it's on to the next loop iteration!
         return
@@ -1325,8 +1319,8 @@ def CheckInternalGrad(coords, molecule, IC, engine, dirname, verbose=False):
     # Initial internal coordinates
     q0 = IC.calculate(coords)
     Gq = IC.calcGrad(coords, gradx)
-    logger.info("-=# Now checking gradient of the energy in internal coordinates vs. finite difference #=-")
-    logger.info("%20s : %14s %14s %14s" % ('IC Name', 'Analytic', 'Numerical', 'Abs-Diff'))
+    logger.info("-=# Now checking gradient of the energy in internal coordinates vs. finite difference #=-\n")
+    logger.info("%20s : %14s %14s %14s\n" % ('IC Name', 'Analytic', 'Numerical', 'Abs-Diff'))
     h = 1e-3
     Gq_f = np.zeros_like(Gq)
     for i in range(len(q0)):
@@ -1338,7 +1332,7 @@ def CheckInternalGrad(coords, molecule, IC, engine, dirname, verbose=False):
         x1 = IC.newCartesian(coords, dq, verbose)
         EMinus, _ = engine.calc(x1, dirname)
         fdiff = (EPlus-EMinus)/(2*h)
-        logger.info("%20s : % 14.6f % 14.6f % 14.6f" % (IC.Internals[i], Gq[i], fdiff, Gq[i]-fdiff))
+        logger.info("%20s : % 14.6f % 14.6f % 14.6f\n" % (IC.Internals[i], Gq[i], fdiff, Gq[i]-fdiff))
         Gq_f[i] = fdiff
     return Gq, Gq_f
 
@@ -1354,9 +1348,9 @@ def CheckInternalHess(coords, molecule, IC, engine, dirname, verbose=False):
     # Calculate Hessian using finite difference
     nc = len(coords)
     Hx = np.zeros((nc, nc), dtype=float)
-    logger.info("Calculating Cartesian Hessian using finite difference on Cartesian gradients")
+    logger.info("Calculating Cartesian Hessian using finite difference on Cartesian gradients\n")
     for i in range(nc):
-        logger.info(" coordinate %i/%i" % (i+1, nc))
+        logger.info(" coordinate %i/%i\n" % (i+1, nc))
         coords[i] += h
         _, gplus = engine.calc(coords, dirname)
         coords[i] -= 2*h
@@ -1372,8 +1366,8 @@ def CheckInternalHess(coords, molecule, IC, engine, dirname, verbose=False):
     Gq = IC.calcGrad(coords, gradx)
 
     Hq_f = np.zeros((len(q0), len(q0)), dtype=float)
-    logger.info("-=# Now checking Hessian of the energy in internal coordinates using finite difference on gradient #=-")
-    logger.info("%20s %20s : %14s %14s %14s" % ('IC1 Name', 'IC2 Name', 'Analytic', 'Numerical', 'Abs-Diff'))
+    logger.info("-=# Now checking Hessian of the energy in internal coordinates using finite difference on gradient #=-\n")
+    logger.info("%20s %20s : %14s %14s %14s\n" % ('IC1 Name', 'IC2 Name', 'Analytic', 'Numerical', 'Abs-Diff'))
     h = 1.0e-2
     for i in range(len(q0)):
         dq = np.zeros_like(q0)
@@ -1391,7 +1385,7 @@ def CheckInternalHess(coords, molecule, IC, engine, dirname, verbose=False):
         for j in range(len(q0)):
             fdiff = fdiffg[j]
             Hq_f[i, j] = fdiff
-            logger.info("%20s %20s : % 14.6f % 14.6f % 14.6f" % (IC.Internals[i], IC.Internals[j], Hq[i, j], fdiff, Hq[i, j]-fdiff))
+            logger.info("%20s %20s : % 14.6f % 14.6f % 14.6f\n" % (IC.Internals[i], IC.Internals[j], Hq[i, j], fdiff, Hq[i, j]-fdiff))
 
     return Hq, Hq_f
 
@@ -1441,7 +1435,7 @@ def WriteDisplacements(coords, M, IC, dirname, verbose):
             else:
                 dx = 0.0
             x.append((coords+dx).reshape(-1,3) * bohr2ang)
-            logger.info(i, j, "Displacement (rms/max) = %.5f / %.5f" % (rms_displacement, max_displacement), "(Bork)" if IC.bork else "(Good)")
+            logger.info("%i %.1f Displacement (rms/max) = %.5f / %.5f %s\n" % (i, j, rms_displacement, max_displacement, "(Bork)" if IC.bork else "(Good)"))
         M.xyzs = x
         M.write("%s/ic_%03i.xyz" % (dirname, i))
 
@@ -1607,7 +1601,6 @@ def run_optimizer(**kwargs):
     else:
         logIni = kwargs.get('logIni')
     logfilename = kwargs.get('prefix')
-
     # Input file for optimization; QC input file or OpenMM .xml file
     inputf = kwargs.get('input')
     # Get calculation prefix and temporary directory name
@@ -1622,11 +1615,12 @@ def run_optimizer(**kwargs):
     #| End log file configuration |#
     #==============================#
 
-    logger.info('-=# \x1b[1;94m geomeTRIC started. Version: %s \x1b[0m #=-' % geometric.__version__)
-    logger.info('geometric-optimize called with the following command line:')
-    logger.info(' '.join(sys.argv))
+    import geometric
+    logger.info('-=# \x1b[1;94m geomeTRIC started. Version: %s \x1b[0m #=-\n' % geometric.__version__)
+    logger.info('geometric-optimize called with the following command line:\n')
+    logger.info(' '.join(sys.argv)+'\n')
     if backed_up:
-        logger.info('Backed up existing log file: %s -> %s' % (logfilename, os.path.basename(backed_up)))
+        logger.info('Backed up existing log file: %s -> %s\n' % (logfilename, os.path.basename(backed_up)))
 
     t0 = time.time()
     params = OptParams(**kwargs)
@@ -1644,7 +1638,7 @@ def run_optimizer(**kwargs):
         # auxiliary functions might (such as writing out displacements)
         os.makedirs(dirname)
     else:
-        logger.info("%s exists ; make sure nothing else is writing to the folder" % dirname)
+        logger.info("%s exists ; make sure nothing else is writing to the folder\n" % dirname)
         # TC-specific: Remove existing scratch files in ./run.tmp/scr to avoid confusion
         for f in ['c0', 'ca0', 'cb0']:
             if os.path.exists(os.path.join(dirname, 'scr', f)):
@@ -1714,10 +1708,11 @@ def run_optimizer(**kwargs):
 
     # Print out information about the coordinate system
     if isinstance(IC, CartesianCoordinates):
-        logger.info("%i Cartesian coordinates being used" % (3*M.na))
+        logger.info("%i Cartesian coordinates being used\n" % (3*M.na))
     else:
-        logger.info("%i internal coordinates being used (instead of %i Cartesians)" % (len(IC.Internals), 3*M.na))
+        logger.info("%i internal coordinates being used (instead of %i Cartesians)\n" % (len(IC.Internals), 3*M.na))
     logger.info(IC)
+    logger.info("\n")
 
     if Cons is None:
         # Run a standard geometry optimization
@@ -1733,7 +1728,7 @@ def run_optimizer(**kwargs):
         Mfinal = None
         for ic, CVal in enumerate(CVals):
             if len(CVals) > 1:
-                logger.info("---=== Scan %i/%i : Constrained Optimization ===---" % (ic+1, len(CVals)))
+                logger.info("---=== Scan %i/%i : Constrained Optimization ===---\n" % (ic+1, len(CVals)))
             IC = CoordClass(M, build=True, connect=connect, addcart=addcart, constraints=Cons, cvals=CVal, conmethod=params.conmethod)
             IC.printConstraints(coords, thre=-1)
             if len(CVals) > 1:
@@ -1760,7 +1755,7 @@ def run_optimizer(**kwargs):
         if len(CVals) > 1:
             Mfinal.write('scan-final.xyz')
     print_msg()
-    logger.info("Time elapsed since start of run_optimizer: %.3f seconds" % (time.time()-t0))
+    logger.info("Time elapsed since start of run_optimizer: %.3f seconds\n" % (time.time()-t0))
     return progress
 
 def main():

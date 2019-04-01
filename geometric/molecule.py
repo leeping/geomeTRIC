@@ -37,7 +37,7 @@ except NameError:
 # |              Chemical file format conversion module                |#
 # |                                                                    |#
 # |                Lee-Ping Wang (leeping@ucdavis.edu)                 |#
-# |                     Last updated June 6, 2018                      |#
+# |                    Last updated March 31, 2019                     |#
 # |                                                                    |#
 # |   This code is part of geomeTRIC and is covered under the          |#
 # |   geomeTRIC copyright notice and MIT license.                      |#
@@ -188,9 +188,11 @@ AllVariableNames = QuantumVariableNames | AtomVariableNames | MetaVariableNames 
 if "forcebalance" in __name__:
     # If this module is part of ForceBalance, use the package level logger
     from .output import *
+    package = "ForceBalance"
 elif "geometric" in __name__:
     # This ensures logging behavior is consistent with the rest of geomeTRIC
     from .nifty import logger
+    package = "geomeTRIC"
 else:
     # Previous default behavior if FB package level loggers could not be imported
     from logging import *
@@ -213,6 +215,10 @@ else:
     logger.setLevel(INFO)
     handler = RawStreamHandler()
     logger.addHandler(handler)
+    if __name__ == "__main__":
+        package = "LPW-molecule.py"
+    else:
+        package = __name__.split('.')[0]
 
 module_name = __name__.replace('.molecule','')
 
@@ -956,18 +962,22 @@ def AtomContact(xyz, pairs, box=None, displace=False):
     Parameters
     ----------
     xyz : np.ndarray
-        Nx3 array of atom positions
+        N_frames*N_atoms*3 (3D) array of atomic positions
+        If you only have a single set of positions, pass in xyz[np.newaxis, :]
     pairs : list
         List of 2-tuples of atom indices
     box : np.ndarray, optional
-        An array of three numbers (xyz box vectors).
+        N_frames*3 (2D) array of periodic box vectors
+        If you only have a single set of positions, pass in box[np.newaxis, :]
+    displace : bool
+        If True, also return N_frames*N_pairs*3 array of displacement vectors
 
     Returns
     -------
     np.ndarray
-        A Npairs-length array of minimum image convention distances
+        N_pairs*N_frames (2D) array of minimum image convention distances
     np.ndarray (optional)
-        if displace=True, return a Npairsx3 array of displacement vectors
+        if displace=True, N_frames*N_pairs*3 array of displacement vectors
     """
     # Obtain atom selections for atom pairs
     parray = np.array(pairs)
@@ -975,43 +985,96 @@ def AtomContact(xyz, pairs, box=None, displace=False):
     sel2 = parray[:,1]
     xyzpbc = xyz.copy()
     # Minimum image convention: Place all atoms in the box
-    # [-xbox/2, +xbox/2); [-ybox/2, +ybox/2); [-zbox/2, +zbox/2)
+    # [0, xbox); [0, ybox); [0, zbox)
     if box is not None:
-        xbox = box[0]
-        ybox = box[1]
-        zbox = box[2]
-        while any(xyzpbc[:,0] < -0.5*xbox):
-            xyzpbc[:,0] += (xyzpbc[:,0] < -0.5*xbox)*xbox
-        while any(xyzpbc[:,1] < -0.5*ybox):
-            xyzpbc[:,1] += (xyzpbc[:,1] < -0.5*ybox)*ybox
-        while any(xyzpbc[:,2] < -0.5*zbox):
-            xyzpbc[:,2] += (xyzpbc[:,2] < -0.5*zbox)*zbox
-        while any(xyzpbc[:,0] >= 0.5*xbox):
-            xyzpbc[:,0] -= (xyzpbc[:,0] >= 0.5*xbox)*xbox
-        while any(xyzpbc[:,1] >= 0.5*ybox):
-            xyzpbc[:,1] -= (xyzpbc[:,1] >= 0.5*ybox)*ybox
-        while any(xyzpbc[:,2] >= 0.5*zbox):
-            xyzpbc[:,2] -= (xyzpbc[:,2] >= 0.5*zbox)*zbox
+        xyzpbc /= box[:,np.newaxis,:]
+        xyzpbc = xyzpbc % 1.0
     # Obtain atom selections for the pairs to be computed
     # These are typically longer than N but shorter than N^2.
-    xyzsel1 = xyzpbc[sel1]
-    xyzsel2 = xyzpbc[sel2]
+    xyzsel1 = xyzpbc[:,sel1,:]
+    xyzsel2 = xyzpbc[:,sel2,:]
     # Calculate xyz displacement
     dxyz = xyzsel2-xyzsel1
     # Apply minimum image convention to displacements
     if box is not None:
-        dxyz[:,0] += (dxyz[:,0] < -0.5*xbox)*xbox
-        dxyz[:,1] += (dxyz[:,1] < -0.5*ybox)*ybox
-        dxyz[:,2] += (dxyz[:,2] < -0.5*zbox)*zbox
-        dxyz[:,0] -= (dxyz[:,0] >= 0.5*xbox)*xbox
-        dxyz[:,1] -= (dxyz[:,1] >= 0.5*ybox)*ybox
-        dxyz[:,2] -= (dxyz[:,2] >= 0.5*zbox)*zbox
-    dr2 = np.sum(dxyz**2,axis=1)
+        dxyz = np.mod(dxyz+0.5, 1.0) - 0.5
+        dxyz *= box[:,np.newaxis,:]
+    dr2 = np.sum(dxyz**2,axis=2)
     dr = np.sqrt(dr2)
     if displace:
         return dr, dxyz
     else:
         return dr
+
+#===================================#
+#| Rotation subroutine 2018-10-28  |#
+#| Copied from geomeTRIC.rotate    |#
+#===================================#
+
+def form_rot(q):
+    """
+    Given a quaternion p, form a rotation matrix from it.
+    
+    Parameters
+    ----------
+    q : numpy.ndarray
+        1D array with 3 elements representing the rotation quaterion.
+        Elements of quaternion are : [cos(a/2), sin(a/2)*axis[0..2]]
+    
+    Returns
+    -------
+    numpy.array
+        3x3 rotation matrix
+    """
+    assert q.ndim == 1
+    assert q.shape[0] == 4
+    # Take the "complex conjugate"
+    qc = np.zeros_like(q)
+    qc[0] =  q[0]
+    qc[1] = -q[1]
+    qc[2] = -q[2]
+    qc[3] = -q[3]
+    # Form al_q and al_qc matrices
+    al_q = np.array([[ q[0], -q[1], -q[2], -q[3]],
+                     [ q[1],  q[0], -q[3],  q[2]],
+                     [ q[2],  q[3],  q[0], -q[1]],
+                     [ q[3], -q[2],  q[1],  q[0]]])
+    ar_qc = np.array([[ qc[0], -qc[1], -qc[2], -qc[3]],
+                      [ qc[1],  qc[0],  qc[3], -qc[2]],
+                      [ qc[2], -qc[3],  qc[0],  qc[1]],
+                      [ qc[3],  qc[2], -qc[1],  qc[0]]])
+    # Multiply matrices
+    R4 = np.dot(al_q,ar_qc)
+    return R4[1:, 1:]
+
+def axis_angle(axis, angle):
+    """
+    Given a rotation axis and angle, return the corresponding
+    3x3 rotation matrix, which will rotate a (Nx3) array of
+    xyz coordinates as x0_rot = np.dot(R, x0.T).T
+
+    Parameters
+    ----------
+    axis : numpy.ndarray
+        1D array with 3 elements representing the rotation axis
+    angle : float
+        The angle of the rotation
+    
+    Returns
+    -------
+    numpy.array
+        3x3 rotation matrix
+    """
+    assert axis.ndim == 1
+    assert axis.shape[0] == 3
+    axis /= np.linalg.norm(axis)
+    # Make quaternion
+    ct2 = np.cos(angle/2)
+    st2 = np.sin(angle/2)
+    q = np.array([ct2, st2*axis[0], st2*axis[1], st2*axis[2]])
+    # Form rotation matrix
+    R = form_rot(q)
+    return R
 
 class Molecule(object):
     """ Lee-Ping's general file format conversion class.
@@ -1368,7 +1431,7 @@ class Molecule(object):
                 Sum.Data[key] = self.Data[key]
             elif diff(self, other, key):
                 for i, j in zip(self.Data[key], other.Data[key]):
-                    logger.info(i, j, i==j)
+                    logger.info("%s %s %s" % (i, j, str(i==j)))
                 logger.error('The data member called %s is not the same for these two objects\n' % key)
                 raise RuntimeError
             elif key in self.Data:
@@ -1410,7 +1473,7 @@ class Molecule(object):
             if key in ['fnm', 'ftype', 'bonds', 'molecules', 'topology']: pass
             elif diff(self, other, key):
                 for i, j in zip(self.Data[key], other.Data[key]):
-                    logger.info(i, j, i==j)
+                    logger.info("%s %s %s" % (i, j, str(i==j)))
                 logger.error('The data member called %s is not the same for these two objects\n' % key)
                 raise RuntimeError
             # Information from the other class is added to this class (if said info doesn't exist.)
@@ -1540,10 +1603,10 @@ class Molecule(object):
             ftype = os.path.splitext(fnm)[1][1:]
         ## Fill in comments.
         if 'comms' not in self.Data:
-            self.comms = ['Generated by ForceBalance from %s: Frame %i of %i' % (fnm, i+1, self.ns) for i in range(self.ns)]
+            self.comms = ['Generated by %s from %s: Frame %i of %i' % (package, fnm, i+1, self.ns) for i in range(self.ns)]
         if 'xyzs' in self.Data and len(self.comms) < len(self.xyzs):
             for i in range(len(self.comms), len(self.xyzs)):
-                self.comms.append("Frame %i: generated by ForceBalance" % i)
+                self.comms.append("Frame %i: generated by %s" % (i, package))
         ## I needed to add in this line because the DCD writer requires the file name,
         ## but the other methods don't.
         self.fout = fnm
@@ -1645,7 +1708,7 @@ class Molecule(object):
                     self.Data[key] = val
             ## Create a list of comment lines if we don't already have them from reading the file.
             if 'comms' not in self.Data:
-                self.comms = ['Generated by ForceBalance from %s: Frame %i of %i' % (fnm, i+1, self.ns) for i in range(self.ns)]
+                self.comms = ['Generated by %s from %s: Frame %i of %i' % (package, fnm, i+1, self.ns) for i in range(self.ns)]
             else:
                 self.comms = [i.expandtabs() for i in self.comms]
 
@@ -1998,9 +2061,9 @@ class Molecule(object):
         BondThresh = (BT0+BT1) * Fac
         BondThresh = (BondThresh > mindist) * BondThresh + (BondThresh < mindist) * mindist
         if hasattr(self, 'boxes') and toppbc:
-            dxij = AtomContact(self.xyzs[sn], AtomIterator, box=np.array([self.boxes[sn].a, self.boxes[sn].b, self.boxes[sn].c]))
+            dxij = AtomContact(self.xyzs[sn][np.newaxis, :], AtomIterator, box=np.array([[self.boxes[sn].a, self.boxes[sn].b, self.boxes[sn].c]]))[0]
         else:
-            dxij = AtomContact(self.xyzs[sn], AtomIterator)
+            dxij = AtomContact(self.xyzs[sn][np.newaxis, :], AtomIterator)[0]
 
         # Update topology settings with what we learned
         self.top_settings['toppbc'] = toppbc
@@ -2082,28 +2145,256 @@ class Molecule(object):
 
     def distance_matrix(self, pbc=True):
         """ Obtain distance matrix between all pairs of atoms. """
-        AtomIterator = np.ascontiguousarray(np.vstack((np.fromiter(itertools.chain(*[[i]*(self.na-i-1) for i in range(self.na)]),dtype=np.int32), np.fromiter(itertools.chain(*[range(i+1,self.na) for i in range(self.na)]),dtype=np.int32))).T)
-        drij = []
-        for sn in range(len(self)):
-            if hasattr(self, 'boxes') and pbc:
-                drij.append(AtomContact(self.xyzs[sn],AtomIterator,box=np.array([self.boxes[sn].a, self.boxes[sn].b, self.boxes[sn].c])))
-            else:
-                drij.append(AtomContact(self.xyzs[sn],AtomIterator))
-        return AtomIterator, drij
+        AtomIterator = np.ascontiguousarray(np.vstack((np.fromiter(itertools.chain(*[[i]*(self.na-i-1) for i in range(self.na)]),dtype=np.int32),
+                                                       np.fromiter(itertools.chain(*[range(i+1,self.na) for i in range(self.na)]),dtype=np.int32))).T)
+        if hasattr(self, 'boxes') and pbc:
+            boxes = np.array([[self.boxes[i].a, self.boxes[i].b, self.boxes[i].c] for i in range(len(self))])
+            drij = AtomContact(np.array(self.xyzs), AtomIterator, box=boxes)
+        else:
+            drij = AtomContact(np.array(self.xyzs), AtomIterator)
+        return AtomIterator, list(drij)
 
     def distance_displacement(self):
         """ Obtain distance matrix and displacement vectors between all pairs of atoms. """
-        AtomIterator = np.ascontiguousarray(np.vstack((np.fromiter(itertools.chain(*[[i]*(self.na-i-1) for i in range(self.na)]),dtype=np.int32), np.fromiter(itertools.chain(*[range(i+1,self.na) for i in range(self.na)]),dtype=np.int32))).T)
-        drij = []
-        dxij = []
-        for sn in range(len(self)):
-            if hasattr(self, 'boxes') and pbc:
-                drij_i, dxij_i = AtomContact(self.xyzs[sn],AtomIterator,box=np.array([self.boxes[sn].a, self.boxes[sn].b, self.boxes[sn].c]),displace=True)
-            else:
-                drij_i, dxij_i = AtomContact(self.xyzs[sn],AtomIterator,box=None,displace=True)
-            drij.append(drij_i)
-            dxij.append(dxij_i)
-        return AtomIterator, drij, dxij
+        AtomIterator = np.ascontiguousarray(np.vstack((np.fromiter(itertools.chain(*[[i]*(self.na-i-1) for i in range(self.na)]),dtype=np.int32),
+                                                       np.fromiter(itertools.chain(*[range(i+1,self.na) for i in range(self.na)]),dtype=np.int32))).T)
+        if hasattr(self, 'boxes') and pbc:
+            boxes = np.array([[self.boxes[i].a, self.boxes[i].b, self.boxes[i].c] for i in range(len(self))])
+            drij, dxij = AtomContact(np.array(self.xyzs), AtomIterator, box=boxes, displace=True)
+        else:
+            drij, dxij = AtomContact(np.array(self.xyzs), AtomIterator, box=None, displace=True)
+        return AtomIterator, list(drij), list(dxij)
+
+    def rotate_bond(self, frame, aj, ak, increment=15):
+        """ 
+        Return a new Molecule object containing the selected frame
+        plus a number of frames where the selected dihedral angle is rotated
+        in steps of 'increment' given in degrees.
+        
+        This function is designed to be called by Molecule.rotate_check_clash().
+
+        Parameters
+        ----------
+        frame : int
+            Structure number of the current Molecule to be rotated
+        aj, ak : int
+            Atom numbers of the bond to be rotated
+        increment : float
+            Degrees of the rotation increment
+        
+        Returns
+        -------
+        Molecule
+            New Molecule object containing the rotated structures
+        """
+        # Select the single frame containing the structure to be rotated.
+        M = self[frame]
+
+        # Delete the connection between atoms to be rotated in order
+        # to determine the rotation fragments.
+        delBonds = []
+        for ibond, bond in enumerate(M.bonds):
+            if bond == (aj, ak) or bond == (ak, aj):
+                delBonds.append(bond)
+        if len(delBonds) > 1:
+            raise RuntimeError('Expected only one bond to be deleted')
+        if len(M.molecules) != 1:
+            raise RuntimeError('Expected a single molecule')
+        M.bonds.remove(delBonds[0])
+        M.top_settings['read_bonds']=True
+        M.build_topology(force_bonds=False)
+        if len(M.molecules) != 2:
+            raise RuntimeError('Expected two molecules after removing a bond')
+
+        # gAtoms contains the set of atoms to be rotated
+        # oAtoms contains the "other" atoms
+        if len(M.molecules[0].L()) < len(M.molecules[1].L()):
+            gAtoms = M.molecules[0].L()
+            oAtoms = M.molecules[1].L()
+        else:
+            gAtoms = M.molecules[1].L()
+            oAtoms = M.molecules[0].L()
+
+        # atom2 is the "reference atom" on the group being rotated
+        # and will be moved to the origin during the rotation operation
+        if aj in gAtoms:
+            atom1 = ak
+            atom2 = aj
+        else:
+            atom1 = aj
+            atom2 = ak
+        M.bonds.append(delBonds[0])
+        
+        # Rotation axis
+        axis = M.xyzs[0][atom2] - M.xyzs[0][atom1]
+    
+        # Move the "reference atom" to the origin
+        x0 = M.xyzs[0][gAtoms]
+        x0_ref = M.xyzs[0][atom2]
+        x0 -= x0_ref
+    
+        # Create grid in rotation angle
+        # and the rotated structures
+        for thetaDeg in np.arange(increment, 360, increment):
+            theta = np.pi * thetaDeg / 180
+            # Make quaternion
+            R = axis_angle(axis, theta)
+            # Get rotated coordinates
+            x0_rot = np.dot(R, x0.T).T
+            # Copy old coordinates to new
+            xnew = M.xyzs[0].copy()
+            # Write rotated positions into new coordinates;
+            # shift back to original positions
+            xnew[gAtoms] = x0_rot + x0_ref
+            # Append new coordinates to our Molecule object
+            M.xyzs.append(xnew)
+            M.comms.append("Rotated by %.2f degrees" % increment)
+        return M, (gAtoms, oAtoms)
+
+    def find_clashes(self, thre=0.0, pbc=True, groups=None):
+        """ 
+        Obtain a list of atoms that 'clash' (i.e. are more than
+        3 bonds apart and are closer than the provided threshold.)
+
+        Parameters
+        ----------
+        thre : float
+            Create a sorted-list of all non-bonded atom pairs 
+            with distance below this threshold
+        pbc : bool
+            Whether to use PBC when computing interatomic distances
+        filt : tuple (group1, group2)
+            If not None, only compute distances between atoms in 'group1'
+            and atoms in 'group2'. For example this could be [gAtoms, oAtoms]
+            from rotate_bond
+
+        Returns
+        -------
+        minPair_frames : list of tuples
+           The closest pair of non-bonded atoms in each frame
+        minDist_frames : list of tuples
+           The distance between the closest pair of non-bonded atoms in each frame
+        clashPairs_frames : list of lists
+           Pairs of non-bonded atoms with distance below the threshold in each frame
+        clashDists_frames : list of lists
+           Distances between pairs of non-bonded atoms below the threshold in each frame
+        """
+        if groups is not None:
+            AtomIterator = np.ascontiguousarray([[min(g), max(g)] for g in itertools.product(groups[0], groups[1])])
+        else:
+            AtomIterator = np.ascontiguousarray(np.vstack((np.fromiter(itertools.chain(*[[i]*(self.na-i-1) for i in range(self.na)]),dtype=np.int32),
+                                                           np.fromiter(itertools.chain(*[range(i+1,self.na) for i in range(self.na)]),dtype=np.int32))).T)
+        ang13 = [(min(a[0], a[2]), max(a[0], a[2])) for a in self.find_angles()]
+        dih14 = [(min(d[0], d[3]), max(d[0], d[3])) for d in self.find_dihedrals()]
+        bondedPairs = np.where([tuple(aPair) in (self.bonds+ang13+dih14) for aPair in AtomIterator])[0]
+        AtomIterator_nb = np.delete(AtomIterator, bondedPairs, axis=0)
+
+        minPair_frames = []
+        minDist_frames = []
+        clashPairs_frames = []
+        clashDists_frames = []
+        if hasattr(self, 'boxes') and pbc:
+            boxes = np.array([[self.boxes[i].a, self.boxes[i].b, self.boxes[i].c] for i in range(len(self))])
+            drij = AtomContact(np.array(self.xyzs), AtomIterator_nb, box=boxes)
+        else:
+            drij = AtomContact(np.array(self.xyzs), AtomIterator_nb)
+        for frame in range(len(self)):
+            clashPairIdx = np.where(drij[frame] < thre)[0]
+            clashPairs = AtomIterator_nb[clashPairIdx]
+            clashDists = drij[frame, clashPairIdx]
+            sorter = np.argsort(clashDists)
+            clashPairs = clashPairs[sorter]
+            clashDists = clashDists[sorter]
+            minIdx = np.argmin(drij[frame])
+            minPair = AtomIterator_nb[minIdx]
+            minDist = drij[frame, minIdx]
+            minPair_frames.append(minPair)
+            minDist_frames.append(minDist)
+            clashPairs_frames.append(clashPairs.copy())
+            clashDists_frames.append(clashDists.copy())
+        return minPair_frames, minDist_frames, clashPairs_frames, clashDists_frames
+
+    def rotate_check_clash(self, frame, rotate_index, thresh_hyd=1.4, thresh_hvy=1.8, printLevel=1):
+        """ 
+        Return a new Molecule object containing the selected frame 
+        plus a number of frames where the selected dihedral angle is rotated
+        in steps of 'increment' given in degrees.  Additionally, check for
+        if pairs of non-bonded atoms "clash" i.e. approach below the specified
+        thresholds.
+
+        Parameters
+        ----------
+        frame : int
+            Structure number of the current Molecule to be rotated
+            (if only a single frame, this number should be 0)
+        rotate_index : tuple
+            4 atom indices (ai, aj, ak, al) representing the dihedral angle to be rotated.
+            The first and last indices are used to measure the dihedral angle.
+        thresh_hyd : float
+            Clash threshold for hydrogen atoms.  Reasonable values are in between 1.3 and 2.0.
+        thresh_hvy : float
+            Clash threshold for heavy atoms.  Reasonable values are in between 1.7 and 2.5.
+        printLevel: int
+            Sets the amount of printout (larger = more printout)
+        
+        Returns
+        -------
+        Molecule
+            New Molecule object containing the rotated structures
+        Success : bool
+            True if no clashes
+        """
+        if not hasattr(self, 'atomname'):
+            raise RuntimeError("Please add atom names before calling rotate_check_clash().")
+        ai, aj, ak, al = rotate_index
+        Success = False
+        # Create grid of rotated structures
+        M_rot_H, frags = self.rotate_bond(frame, aj, ak, 15)
+        phis = M_rot_H.measure_dihedrals(*rotate_index)
+        for i in range(len(M_rot_H)):
+            M_rot_H.comms[i] = ('Rigid scan: atomname %s, serial %s, dihedral %.3f' 
+                                % ('-'.join([self.atomname[i] for i in rotate_index]), 
+                                   '-'.join(["%i" % (i+1) for i in rotate_index]), phis[i]))
+        heavyIdx = [i for i in range(self.na) if self.elem[i] != 'H']
+        heavy_frags = [[],[]]
+        for iHeavy, iAll in enumerate(heavyIdx):
+            if iAll in frags[0]:
+                heavy_frags[0].append(iHeavy)
+            if iAll in frags[1]:
+                heavy_frags[1].append(iHeavy)
+        M_rot_C = M_rot_H.atom_select(heavyIdx)
+        minPair_H_frames, minDist_H_frames, clashPairs_H_frames, clashDists_H_frames = M_rot_H.find_clashes(thre=thresh_hyd, groups=frags)
+        minPair_C_frames, minDist_C_frames, clashPairs_C_frames, clashDists_C_frames = M_rot_C.find_clashes(thre=thresh_hvy, groups=heavy_frags)
+        # Get the following information: (1) Whether a clash exists, (2) the frame with the smallest distance,
+        # (3) the pair of atoms with the smallest distance, (4) the smallest distance
+        haveClash_H = any([len(c) > 0 for c in clashPairs_H_frames])
+        minFrame_H = np.argmin(minDist_H_frames)
+        minAtoms_H = minPair_H_frames[minFrame_H]
+        minDist_H = minDist_H_frames[minFrame_H]
+        haveClash_C = any([len(c) > 0 for c in clashPairs_C_frames])
+        minFrame_C = np.argmin(minDist_C_frames)
+        minAtoms_C = minPair_C_frames[minFrame_C]
+        minDist_C = minDist_C_frames[minFrame_C]
+        if not (haveClash_H or haveClash_C):
+            if printLevel >= 1: 
+                print("\n    \x1b[1;92mSuccess - no clashes. Thresh(H, Hvy) = (%.2f, %.2f)\x1b[0m" % (thresh_hyd, thresh_hvy))
+                mini = M_rot_H.atomname[minAtoms_H[0]]
+                minj = M_rot_H.atomname[minAtoms_H[1]]
+                print("    Closest (Hyd) : rot-frame %i atoms %s-%s %.2f" % (minFrame_H, mini, minj, minDist_H))
+                mini = M_rot_C.atomname[minAtoms_C[0]]
+                minj = M_rot_C.atomname[minAtoms_C[1]]
+                print("    Closest (Hvy) : rot-frame %i atoms %s-%s %.2f" % (minFrame_C, mini, minj, minDist_C))
+            Success = True
+        else:
+            if haveClash_H:
+                mini = M_rot_H.atomname[minAtoms_H[0]]
+                minj = M_rot_H.atomname[minAtoms_H[1]]
+                if printLevel >= 2: print("    Clash (Hyd) : rot-frame %i atoms %s-%s %.2f" % (minFrame_H, mini, minj, minDist_H))
+            if haveClash_C:
+                mini = M_rot_C.atomname[minAtoms_C[0]]
+                minj = M_rot_C.atomname[minAtoms_C[1]]
+                if printLevel >= 2: print("    Clash (Hvy) : rot-frame %i atoms %s-%s %.2f" % (minFrame_C, mini, minj, minDist_C))
+        return M_rot_H, Success
 
     def find_angles(self):
 
@@ -3291,7 +3582,8 @@ class Molecule(object):
                     conect_B_list.append(int(line_rest[:5]) - 1)
                     line_rest = line_rest[5:]
                 for conect_B in conect_B_list:
-                    bonds.append([conect_A, conect_B])
+                    bond = (min((conect_A, conect_B)), max((conect_A, conect_B)))
+                    bonds.append(bond)
 
         Answer={"xyzs":XYZList, "chain":list(ChainID), "altloc":list(AltLoc), "icode":list(ICode),
                 "atomname":[str(i) for i in AtomNames], "resid":list(ResidueID), "resname":list(ResidueNames),
@@ -3881,7 +4173,7 @@ class Molecule(object):
     def write_mdcrd(self, selection, **kwargs):
         self.require('xyzs')
         # In mdcrd files, there is only one comment line
-        out = ['mdcrd file generated using ForceBalance']
+        out = ['mdcrd file generated using %s' % package]
         for I in selection:
             xyz = self.xyzs[I]
             out += [''.join(["%8.3f" % i for i in g]) for g in grouper(10, list(xyz.flatten()))]
@@ -3955,7 +4247,6 @@ class Molecule(object):
             xyzwrite = xyz.copy()
             xyzwrite /= 10.0 # GROMACS uses nanometers
             out.append(self.comms[I])
-            #out.append("Generated by ForceBalance from %s" % self.fnm)
             out.append("%5i" % self.na)
             for an, line in enumerate(xyzwrite):
                 out.append(format_gro_coord(self.resid[an],self.resname[an],atomname[an],an+1,xyzwrite[an]))
@@ -4056,7 +4347,7 @@ class Molecule(object):
 
         out = []
         # Create the PDB header.
-        out.append("REMARK   1 CREATED WITH FORCEBALANCE %s" % (str(date.today())))
+        out.append("REMARK   1 CREATED WITH %s %s" % (package.upper(), str(date.today())))
         if 'boxes' in self.Data:
             a = self.boxes[0].a
             b = self.boxes[0].b
@@ -4080,10 +4371,14 @@ class Molecule(object):
                 resId = resIds[i]
                 coords = self.xyzs[sn][i]
                 symbol = self.elem[i]
+                if hasattr(self, 'partial_charge'):
+                    bfactor = self.partial_charge[i]
+                else:
+                    bfactor = 0.0
                 atomIndices[i] = atomIndex
-                line = "%s%5d %-4s %3s %s%4s    %s%s%s  1.00  0.00          %2s  " % (
+                line = "%s%5d %-4s %3s %s%4s    %s%s%s %5.2f  0.00          %2s  " % (
                     recordName, atomIndex%100000, atomName, resName, chainName, resId, _format_83(coords[0]),
-                    _format_83(coords[1]), _format_83(coords[2]), symbol)
+                    _format_83(coords[1]), _format_83(coords[2]), bfactor, symbol)
                 assert len(line) == 80, 'Fixed width overflow detected'
                 out.append(line)
                 atomIndex += 1
