@@ -961,8 +961,9 @@ def AtomContact(xyz, pairs, box=None, displace=False):
 
     Parameters
     ----------
-    xyz : np.ndarray
-        Nx3 array of atom positions
+    xyz : list or np.ndarray
+        If a list, must be a list of N_atoms*3 arrays of atom positions.
+        If an array, must be either a N_atoms*3 (2D) or N_frames*N_atoms*3 (3D).
     pairs : list
         List of 2-tuples of atom indices
     box : np.ndarray, optional
@@ -975,45 +976,42 @@ def AtomContact(xyz, pairs, box=None, displace=False):
     np.ndarray (optional)
         if displace=True, return a Npairsx3 array of displacement vectors
     """
+    if type(xyz) is list:
+        xyz = np.array(xyz)
     # Obtain atom selections for atom pairs
     parray = np.array(pairs)
     sel1 = parray[:,0]
     sel2 = parray[:,1]
-    xyzpbc = xyz.copy()
+    if len(xyz.shape) not in (2, 3):
+        raise RuntimeError("Only provide positions in dimension (traj_length, N_atoms, 3) or (N_atoms, 3)")
+    single = (len(xyz.shape) == 2)
+    if single:
+        xyzpbc = xyz[np.newaxis,:,:].copy()
+        if box is not None:
+            box = box[np.newaxis,:].copy()
+    else:
+        xyzpbc = xyz.copy()
     # Minimum image convention: Place all atoms in the box
-    # [-xbox/2, +xbox/2); [-ybox/2, +ybox/2); [-zbox/2, +zbox/2)
+    # [0, xbox); [0, ybox); [0, zbox)
     if box is not None:
-        xbox = box[0]
-        ybox = box[1]
-        zbox = box[2]
-        while any(xyzpbc[:,0] < -0.5*xbox):
-            xyzpbc[:,0] += (xyzpbc[:,0] < -0.5*xbox)*xbox
-        while any(xyzpbc[:,1] < -0.5*ybox):
-            xyzpbc[:,1] += (xyzpbc[:,1] < -0.5*ybox)*ybox
-        while any(xyzpbc[:,2] < -0.5*zbox):
-            xyzpbc[:,2] += (xyzpbc[:,2] < -0.5*zbox)*zbox
-        while any(xyzpbc[:,0] >= 0.5*xbox):
-            xyzpbc[:,0] -= (xyzpbc[:,0] >= 0.5*xbox)*xbox
-        while any(xyzpbc[:,1] >= 0.5*ybox):
-            xyzpbc[:,1] -= (xyzpbc[:,1] >= 0.5*ybox)*ybox
-        while any(xyzpbc[:,2] >= 0.5*zbox):
-            xyzpbc[:,2] -= (xyzpbc[:,2] >= 0.5*zbox)*zbox
+        box = box[:,np.newaxis,:]
+        xyzpbc /= box
+        xyzpbc = xyzpbc % 1.0
     # Obtain atom selections for the pairs to be computed
     # These are typically longer than N but shorter than N^2.
-    xyzsel1 = xyzpbc[sel1]
-    xyzsel2 = xyzpbc[sel2]
+    xyzsel1 = xyzpbc[:,sel1,:]
+    xyzsel2 = xyzpbc[:,sel2,:]
     # Calculate xyz displacement
     dxyz = xyzsel2-xyzsel1
     # Apply minimum image convention to displacements
     if box is not None:
-        dxyz[:,0] += (dxyz[:,0] < -0.5*xbox)*xbox
-        dxyz[:,1] += (dxyz[:,1] < -0.5*ybox)*ybox
-        dxyz[:,2] += (dxyz[:,2] < -0.5*zbox)*zbox
-        dxyz[:,0] -= (dxyz[:,0] >= 0.5*xbox)*xbox
-        dxyz[:,1] -= (dxyz[:,1] >= 0.5*ybox)*ybox
-        dxyz[:,2] -= (dxyz[:,2] >= 0.5*zbox)*zbox
-    dr2 = np.sum(dxyz**2,axis=1)
+        dxyz = np.mod(dxyz+0.5, 1.0) - 0.5
+        dxyz *= box
+    dr2 = np.sum(dxyz**2,axis=2)
     dr = np.sqrt(dr2)
+    if single:
+        dr = dr[0]
+        dxyz = dxyz[0]
     if displace:
         return dr, dxyz
     else:
@@ -2158,28 +2156,25 @@ class Molecule(object):
 
     def distance_matrix(self, pbc=True):
         """ Obtain distance matrix between all pairs of atoms. """
-        AtomIterator = np.ascontiguousarray(np.vstack((np.fromiter(itertools.chain(*[[i]*(self.na-i-1) for i in range(self.na)]),dtype=np.int32), np.fromiter(itertools.chain(*[range(i+1,self.na) for i in range(self.na)]),dtype=np.int32))).T)
-        drij = []
-        for sn in range(len(self)):
-            if hasattr(self, 'boxes') and pbc:
-                drij.append(AtomContact(self.xyzs[sn],AtomIterator,box=np.array([self.boxes[sn].a, self.boxes[sn].b, self.boxes[sn].c])))
-            else:
-                drij.append(AtomContact(self.xyzs[sn],AtomIterator))
-        return AtomIterator, drij
+        AtomIterator = np.ascontiguousarray(np.vstack((np.fromiter(itertools.chain(*[[i]*(self.na-i-1) for i in range(self.na)]),dtype=np.int32),
+                                                       np.fromiter(itertools.chain(*[range(i+1,self.na) for i in range(self.na)]),dtype=np.int32))).T)
+        if hasattr(self, 'boxes') and pbc:
+            boxes = np.array([[self.boxes[i].a, self.boxes[i].b, self.boxes[i].c] for i in range(len(self))])
+            drij = AtomContact(self.xyzs, AtomIterator, box=boxes)
+        else:
+            drij = AtomContact(self.xyzs, AtomIterator)
+        return AtomIterator, list(drij)
 
     def distance_displacement(self):
         """ Obtain distance matrix and displacement vectors between all pairs of atoms. """
-        AtomIterator = np.ascontiguousarray(np.vstack((np.fromiter(itertools.chain(*[[i]*(self.na-i-1) for i in range(self.na)]),dtype=np.int32), np.fromiter(itertools.chain(*[range(i+1,self.na) for i in range(self.na)]),dtype=np.int32))).T)
-        drij = []
-        dxij = []
-        for sn in range(len(self)):
-            if hasattr(self, 'boxes') and pbc:
-                drij_i, dxij_i = AtomContact(self.xyzs[sn],AtomIterator,box=np.array([self.boxes[sn].a, self.boxes[sn].b, self.boxes[sn].c]),displace=True)
-            else:
-                drij_i, dxij_i = AtomContact(self.xyzs[sn],AtomIterator,box=None,displace=True)
-            drij.append(drij_i)
-            dxij.append(dxij_i)
-        return AtomIterator, drij, dxij
+        AtomIterator = np.ascontiguousarray(np.vstack((np.fromiter(itertools.chain(*[[i]*(self.na-i-1) for i in range(self.na)]),dtype=np.int32),
+                                                       np.fromiter(itertools.chain(*[range(i+1,self.na) for i in range(self.na)]),dtype=np.int32))).T)
+        if hasattr(self, 'boxes') and pbc:
+            boxes = np.array([[self.boxes[i].a, self.boxes[i].b, self.boxes[i].c] for i in range(len(self))])
+            drij, dxij = AtomContact(self.xyzs, AtomIterator, box=boxes, displace=True)
+        else:
+            drij, dxij = AtomContact(self.xyzs, AtomIterator, box=None, displace=True)
+        return AtomIterator, list(drij), list(dxij)
 
     def rotate_bond(self, frame, aj, ak, increment=15):
         """ 
@@ -2309,21 +2304,21 @@ class Molecule(object):
         minDist_frames = []
         clashPairs_frames = []
         clashDists_frames = []
+        if hasattr(self, 'boxes') and pbc:
+            boxes = np.array([[self.boxes[i].a, self.boxes[i].b, self.boxes[i].c] for i in range(len(self))])
+            drij = AtomContact(self.xyzs, AtomIterator_nb, box=boxes)
+        else:
+            drij = AtomContact(self.xyzs, AtomIterator_nb)
         for frame in range(len(self)):
-            if hasattr(self, 'boxes') and pbc:
-                box=np.array([self.boxes[frame].a, self.boxes[frame].b, self.boxes[frame].c])
-                drij = AtomContact(self.xyzs[frame],AtomIterator_nb,box=box)
-            else:
-                drij = AtomContact(self.xyzs[frame],AtomIterator_nb)
-            clashPairIdx = np.where(drij < thre)[0]
+            clashPairIdx = np.where(drij[frame] < thre)[0]
             clashPairs = AtomIterator_nb[clashPairIdx]
-            clashDists = drij[clashPairIdx]
+            clashDists = drij[frame, clashPairIdx]
             sorter = np.argsort(clashDists)
             clashPairs = clashPairs[sorter]
             clashDists = clashDists[sorter]
-            minIdx = np.argmin(drij)
+            minIdx = np.argmin(drij[frame])
             minPair = AtomIterator_nb[minIdx]
-            minDist = drij[minIdx]
+            minDist = drij[frame, minIdx]
             minPair_frames.append(minPair)
             minDist_frames.append(minDist)
             clashPairs_frames.append(clashPairs.copy())
