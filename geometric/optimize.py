@@ -793,6 +793,18 @@ class OptParams(object):
     but this was dropped in order to call Optimize() from another script.
     """
     def __init__(self, **kwargs):
+
+        # convergence dictionary to store criteria stored in order of energy, grms, gmax, drms, dmax
+        convergence_types = {'GAU': [1e-6, 3e-4, 4.5e-4, 1.2e-3, 1.8e-3],
+                             'NWCHEM_LOOSE': [1e-6, 3e-3, 4.5e-3, 3.6e-3, 5.4e-3],
+                             'GAU_LOOSE': [1e-6, 1.7e-3, 2.5e-3, 6.7e-3, 1e-2],
+                             'TURBOMOLE': [1e-6, 5e-4, 1e-3, 5.0e-4, 1e-3],
+                             'INTERFRAG_TIGHT': [1e-6, 1e-5, 1.5e-5, 4.0e-4, 6.0e-4],
+                             'GAU_TIGHT': [1e-6, 1e-5, 1.5e-5, 4e-5, 6e-5],
+                             'GAU_VERYTIGHT': [1e-6, 1e-6, 2e-6, 4e-6, 6e-6],
+                             }
+
+
         # Threshold (in a.u. / rad) for activating alternative algorithm that enforces precise constraint satisfaction
         self.enforce = kwargs.get('enforce', 0.0)
         # Small eigenvalue threshold
@@ -817,12 +829,23 @@ class OptParams(object):
         self.molcnv = kwargs.get('molcnv', False)
         # Use updated constraint algorithm implemented 2019-03-20
         self.conmethod = kwargs.get('conmethod', 0)
-        # Convergence criteria in a.u. and Angstrom
-        self.Convergence_energy = kwargs.get('convergence_energy', 1e-6)
-        self.Convergence_grms = kwargs.get('convergence_grms', 3e-4)
-        self.Convergence_gmax = kwargs.get('convergence_gmax', 4.5e-4)
-        self.Convergence_drms = kwargs.get('convergence_drms', 1.2e-3)
-        self.Convergence_dmax = kwargs.get('convergence_dmax', 1.8e-3)
+        # Convergence level
+        self.converge = kwargs.get('converge', None)
+
+        if self.converge:
+            self.Convergence_energy = convergence_types[self.converge][0]
+            self.Convergence_grms = convergence_types[self.converge][1]
+            self.Convergence_gmax = convergence_types[self.converge][2]
+            self.Convergence_drms = convergence_types[self.converge][3]
+            self.Convergence_dmax = convergence_types[self.converge][4]
+
+        else:
+            # Convergence criteria in a.u. and Angstrom
+            self.Convergence_energy = kwargs.get('convergence_energy', 1e-6)
+            self.Convergence_grms = kwargs.get('convergence_grms', 3e-4)
+            self.Convergence_gmax = kwargs.get('convergence_gmax', 4.5e-4)
+            self.Convergence_drms = kwargs.get('convergence_drms', 1.2e-3)
+            self.Convergence_dmax = kwargs.get('convergence_dmax', 1.8e-3)
         self.molpro_convergence_gmax = kwargs.get('molpro_convergence_gmax', 3e-4)
         self.molpro_convergence_dmax = kwargs.get('molpro_convergence_dmax', 1.2e-3)
         # CI optimizations sometimes require tiny steps
@@ -1480,6 +1503,8 @@ def get_molecule_engine(**kwargs):
     meci_sigma = kwargs.get('meci_sigma')
     meci_alpha = kwargs.get('meci_alpha')
     nt = kwargs.get('nt', None)
+    # get the combination rules
+    combination = kwargs.get('combination', None)
 
     if sum([qchem, psi4, gmx, molpro, qcengine, openmm]) > 1:
         raise RuntimeError("Do not specify more than one of --qchem, --psi4, --gmx, --molpro, --qcengine, --openmm")
@@ -1514,7 +1539,7 @@ def get_molecule_engine(**kwargs):
         M = Molecule(pdb, radii=radii, fragment=frag)
         if 'boxes' in M.Data:
             del M.Data['boxes']
-        engine = OpenMM(M, pdb, inputf)
+        engine = OpenMM(M, pdb, inputf, combination)
         if nt is not None:
             raise RuntimeError("--nt not configured to work with --openmm yet")
     elif psi4:
@@ -1798,6 +1823,12 @@ def main():
     parser.add_argument('--nt', type=int, help='Specify number of threads for running in parallel (for TeraChem this should be number of GPUs)')
     parser.add_argument('input', type=str, help='TeraChem or Q-Chem input file')
     parser.add_argument('constraints', type=str, nargs='?', help='Constraint input file (optional)')
+    parser.add_argument('--combination', type=str, default='amber', choices=['amber', 'opls'], help='Specify which combination rules should be used when using OpenMM.')
+    parser.add_argument('--convergance', type=str, default=None,
+                        help='Set the convergance criteria to one of the predefined choices',
+                        choices=['NWCHEM_LOOSE', 'GAU_LOOSE', 'TURBOMOLE', 'GAU', 'INTERFRAG_TIGHT', 'GAU_TIGHT', 'GAU_VERYTIGHT'])
+
+
     args = parser.parse_args(sys.argv[1:])
 
     # Run the optimizer.

@@ -1,0 +1,1 @@
+Here we compare the effect of the combination rule used in OpenMM when optimising captan from the freesolve database. The parameters in the xml file are from the ligpargen server and therefore intended to be used with the OPLS rule.
