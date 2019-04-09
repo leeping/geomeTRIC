@@ -333,11 +333,13 @@ class TeraChem(Engine):
         gradient = np.loadtxt(os.path.join(dirname,'grad.txt')).flatten()
         return energy, gradient
 
+
 class OpenMM(Engine):
     """
     Run a OpenMM energy and gradient calculation.
     """
-    def __init__(self, molecule, pdb, xml):
+
+    def __init__(self, molecule, pdb, xml, combination='amber'):
         try:
             import simtk.openmm.app as app
             import simtk.openmm as mm
@@ -360,6 +362,9 @@ class OpenMM(Engine):
         if not xmlSystem:
             forcefield = app.ForceField(xml)
             system = forcefield.createSystem(pdb.topology, nonbondedMethod=app.NoCutoff, constraints=None, rigidWater=False)
+        # apply opls combination rule if we are using it
+        if combination == 'opls':
+            system = self.opls(system)
         integrator = mm.VerletIntegrator(1.0*u.femtoseconds)
         platform = mm.Platform.getPlatformByName('Reference')
         self.simulation = app.Simulation(pdb.topology, system, integrator, platform)
@@ -378,6 +383,48 @@ class OpenMM(Engine):
         except:
             raise OpenMMEngineError
         return energy, gradient
+
+
+    @staticmethod
+    def opls(system):
+        """Apply the opls combination rule to the system."""
+
+        from numpy import sqrt
+        import simtk.openmm as mm
+
+        # get system information from the openmm system
+        forces = {system.getForce(index).__class__.__name__: system.getForce(index) for index in
+                  range(system.getNumForces())}
+        # use the nondonded_force tp get the same rules
+        nonbonded_force = forces['NonbondedForce']
+        lorentz = mm.CustomNonbondedForce(
+            'epsilon*((sigma/r)^12-(sigma/r)^6); sigma=sqrt(sigma1*sigma2); epsilon=sqrt(epsilon1*epsilon2)*4.0')
+        lorentz.setNonbondedMethod(mm.CustomNonbondedForce.NoCutoff)
+        lorentz.addPerParticleParameter('sigma')
+        lorentz.addPerParticleParameter('epsilon')
+        lorentz.setCutoffDistance(nonbonded_force.getCutoffDistance())
+        system.addForce(lorentz)
+        ljset = {}
+        # Now for each particle calculate the combination list again
+        for index in range(nonbonded_force.getNumParticles()):
+            charge, sigma, epsilon = nonbonded_force.getParticleParameters(index)
+            # print(nonbonded_force.getParticleParameters(index))
+            ljset[index] = (sigma, epsilon)
+            lorentz.addParticle([sigma, epsilon])
+            nonbonded_force.setParticleParameters(
+                index, charge, 0, 0)
+        for i in range(nonbonded_force.getNumExceptions()):
+            (p1, p2, q, sig, eps) = nonbonded_force.getExceptionParameters(i)
+            # ALL THE 12,13 and 14 interactions are EXCLUDED FROM CUSTOM NONBONDED
+            # FORCE
+            lorentz.addExclusion(p1, p2)
+            if eps._value != 0.0:
+                sig14 = sqrt(ljset[p1][0] * ljset[p2][0])
+                eps14 = sqrt(ljset[p1][1] * ljset[p2][1])
+                nonbonded_force.setExceptionParameters(i, p1, p2, q, sig14, eps14)
+
+        return system
+
 
 class Psi4(Engine):
     """
