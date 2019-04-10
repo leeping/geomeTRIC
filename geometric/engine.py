@@ -415,13 +415,13 @@ class OpenMM(Engine):
                 index, charge, 0, 0)
         for i in range(nonbonded_force.getNumExceptions()):
             (p1, p2, q, sig, eps) = nonbonded_force.getExceptionParameters(i)
-            # ALL THE 12,13 and 14 interactions are EXCLUDED FROM CUSTOM NONBONDED
-            # FORCE
+            # ALL THE 12,13 interactions are EXCLUDED FROM CUSTOM NONBONDED FORCE
+            # All 1,4 are scaled by the amount in the xml file
             lorentz.addExclusion(p1, p2)
             if eps._value != 0.0:
+                # combine sigma using the geometric combination rule 
                 sig14 = sqrt(ljset[p1][0] * ljset[p2][0])
-                eps14 = sqrt(ljset[p1][1] * ljset[p2][1])
-                nonbonded_force.setExceptionParameters(i, p1, p2, q, sig14, eps14)
+                nonbonded_force.setExceptionParameters(i, p1, p2, q, sig14, eps)
 
         return system
 
