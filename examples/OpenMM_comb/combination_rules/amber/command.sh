@@ -1,1 +1,1 @@
-geometric-optimize --pdb captan.pdb --combination amber --openmm state.xml
+geometric-optimize --pdb captan.pdb --openmm state.xml

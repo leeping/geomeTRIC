@@ -237,7 +237,7 @@
 <Improper class1="C811" class2="C804" class3="N810" class4="O812" k1="0.000000" k2="43.932000" k3="0.000000" k4="0.000000" periodicity1="1" periodicity2="2" periodicity3="3" periodicity4="4" phase1="0.00" phase2="3.141592653589793" phase3="0.00" phase4="3.141592653589793"/>
 <Improper class1="N810" class2="C808" class3="C811" class4="S813" k1="0.000000" k2="0.000000" k3="0.000000" k4="0.000000" periodicity1="1" periodicity2="2" periodicity3="3" periodicity4="4" phase1="0.00" phase2="3.141592653589793" phase3="0.00" phase4="3.141592653589793"/>
 </PeriodicTorsionForce>
-<NonbondedForce coulomb14scale="0.5" lj14scale="0.5">
+<NonbondedForce coulomb14scale="0.5" lj14scale="0.5" combination="opls">
 <Atom type="opls_820" charge="0.153400" sigma="0.242000" epsilon="0.125520" />
 <Atom type="opls_819" charge="0.121200" sigma="0.250000" epsilon="0.125520" />
 <Atom type="opls_815" charge="-0.060200" sigma="0.340000" epsilon="1.255200" />

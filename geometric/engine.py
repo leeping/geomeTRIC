@@ -6,6 +6,7 @@ import shutil
 import subprocess
 from collections import OrderedDict
 from copy import deepcopy
+import xml.etree.ElementTree as ET
 
 import numpy as np
 import re
@@ -339,7 +340,7 @@ class OpenMM(Engine):
     Run a OpenMM energy and gradient calculation.
     """
 
-    def __init__(self, molecule, pdb, xml, combination='amber'):
+    def __init__(self, molecule, pdb, xml):
         try:
             import simtk.openmm.app as app
             import simtk.openmm as mm
@@ -348,8 +349,16 @@ class OpenMM(Engine):
             raise ImportError("OpenMM computation object requires the 'simtk' package. Please pip or conda install 'openmm' from omnia channel.")
         pdb = app.PDBFile(pdb)
         xmlSystem = False
+        self.combination = None
         if os.path.exists(xml):
             xmlStr = open(xml).read()
+            # check if we have opls combination rules if the xml is present
+            try:
+                self.combination = ET.fromstring(xmlStr).find('NonbondedForce').attrib['combination']
+            except AttributeError:
+                pass
+            except KeyError:
+                pass
             try:
                 # If the user has provided an OpenMM system, we can use it directly
                 system = mm.XmlSerializer.deserialize(xmlStr)
@@ -363,7 +372,8 @@ class OpenMM(Engine):
             forcefield = app.ForceField(xml)
             system = forcefield.createSystem(pdb.topology, nonbondedMethod=app.NoCutoff, constraints=None, rigidWater=False)
         # apply opls combination rule if we are using it
-        if combination == 'opls':
+        if self.combination == 'opls':
+            print('Using opls combination rules')
             system = self.opls(system)
         integrator = mm.VerletIntegrator(1.0*u.femtoseconds)
         platform = mm.Platform.getPlatformByName('Reference')
@@ -419,7 +429,7 @@ class OpenMM(Engine):
             # All 1,4 are scaled by the amount in the xml file
             lorentz.addExclusion(p1, p2)
             if eps._value != 0.0:
-                # combine sigma using the geometric combination rule 
+                # combine sigma using the geometric combination rule
                 sig14 = sqrt(ljset[p1][0] * ljset[p2][0])
                 nonbonded_force.setExceptionParameters(i, p1, p2, q, sig14, eps)
 
