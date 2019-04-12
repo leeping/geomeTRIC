@@ -1127,13 +1127,6 @@ class Optimizer(object):
         self.expect = flat(0.5*multi_dot([row(dy),self.H,col(dy)]))[0] + np.dot(dy,self.G)
         self.state = OPT_STATE.NEEDS_EVALUATION
 
-    def print_final(self):
-        """Print the final xyz coords to a file if the optimization converges."""
-        self.progress.xyzs = [self.progress.xyzs[-1]]
-        self.progress.qm_energies = [self.progress.qm_energies[-1]]
-        self.progress.comms = [self.progress.comms[-1]]
-        self.progress.write('opt.xyz')
-
     def evaluateStep(self):
         ### At this point, the state should be NEEDS_EVALUATION
         assert self.state == OPT_STATE.NEEDS_EVALUATION
@@ -1172,7 +1165,6 @@ class Optimizer(object):
         ### Check convergence criteria ###
         if Converged_energy and Converged_grms and Converged_drms and Converged_gmax and Converged_dmax and self.conSatisfied:
             logger.info("Converged! =D\n")
-            self.print_final()
             self.state = OPT_STATE.CONVERGED
             return
 
@@ -1183,13 +1175,11 @@ class Optimizer(object):
 
         if params.qccnv and Converged_grms and (Converged_drms or Converged_energy) and self.conSatisfied:
             logger.info("Converged! (Q-Chem style criteria requires grms and either drms or energy)\n")
-            self.print_final()
             self.state = OPT_STATE.CONVERGED
             return
 
         if params.molcnv and molpro_converged_gmax and (molpro_converged_dmax or Converged_energy) and self.conSatisfied:
             logger.info("Converged! (Molpro style criteria requires gmax and either dmax or energy) This is approximate since convergence checks are done in cartesian coordinates.\n")
-            self.print_final()
             self.state = OPT_STATE.CONVERGED
             return
 

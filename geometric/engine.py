@@ -373,7 +373,7 @@ class OpenMM(Engine):
             system = forcefield.createSystem(pdb.topology, nonbondedMethod=app.NoCutoff, constraints=None, rigidWater=False)
         # apply opls combination rule if we are using it
         if self.combination == 'opls':
-            print('Using opls combination rules')
+            logger.info("\nUsing geometric combination rules\n")
             system = self.opls(system)
         integrator = mm.VerletIntegrator(1.0*u.femtoseconds)
         platform = mm.Platform.getPlatformByName('Reference')
