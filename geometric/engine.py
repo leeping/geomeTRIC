@@ -219,6 +219,17 @@ class TeraChem(Engine):
     """
     def __init__(self, molecule, tcin):
         self.tcin = tcin.copy()
+        if 'guess' in self.tcin:
+            guessVal = self.tcin['guess'].split()
+            if guessVal[0] == 'frag':
+                self.guessMode = 'frag'
+                self.fragFile = guessVal[1]
+                if not os.path.exists(self.fragFile):
+                    raise TeraChemEngineError('%s fragment file is missing' % self.fragFile)
+            else:
+                self.guessMode = 'file'
+        else:
+            self.guessMode = 'none'
         super(TeraChem, self).__init__(molecule)
 
     def calc_new(self, coords, dirname):
@@ -231,7 +242,7 @@ class TeraChem(Engine):
                 have_guess = True
         # This is for when we start geometry optimizations
         # and we have a guess prepped and ready to go.
-        if not have_guess and 'guess' in self.tcin:
+        if not have_guess and self.guessMode == 'file':
             for f in self.tcin['guess'].split():
                 if os.path.exists(f):
                     shutil.copy2(f, dirname)
@@ -241,10 +252,13 @@ class TeraChem(Engine):
                     del self.tcin['guess']
                     have_guess = False
                     break
+        if self.guessMode == 'frag':
+            shutil.copy2(self.fragFile, dirname)
         self.tcin['coordinates'] = 'start.xyz'
         self.tcin['run'] = 'gradient'
         if have_guess:
-            self.tcin['guess'] = ' '.join(guesses)
+            if self.guessMode == 'file':
+                self.tcin['guess'] = ' '.join(guesses)
             self.tcin['purify'] = 'no'
             self.tcin['mixguess'] = "0.0"
         edit_tcin(fout="%s/run.in" % dirname, options=self.tcin)
@@ -303,7 +317,8 @@ class TeraChem(Engine):
         # For queueing up jobs, delete GPU key and let the worker decide
         self.tcin['gpus'] = None
         if have_guess:
-            self.tcin['guess'] = ' '.join(guesses)
+            if self.guessMode == 'file':
+                self.tcin['guess'] = ' '.join(guesses)
             self.tcin['purify'] = 'no'
             self.tcin['mixguess'] = "0.0"
         tcopts = edit_tcin(fout="%s/run.in" % dirname, options=self.tcin)
@@ -312,9 +327,11 @@ class TeraChem(Engine):
         self.M[0].write(os.path.join(dirname, 'start.xyz'))
         in_files = [('%s/run.in' % dirname, 'run.in'), ('%s/start.xyz' % dirname, 'start.xyz')]
         out_files = [('%s/run.out' % dirname, 'run.out')]
-        if have_guess:
+        if have_guess and self.guessMode == 'file':
             for g in guesses:
                 in_files.append((os.path.join(dirname, g), g))
+        if self.guessMode == 'frag':
+            in_files.append((os.path.join(dirname, self.fragFile), self.fragFile))
         for g in guessfnms:
             out_files.append((os.path.join(dirname, 'scr', g), os.path.join('scr', g)))
         queue_up_src_dest(wq, "%s/runtc run.in &> run.out" % rootdir, in_files, out_files, verbose=False)
@@ -837,7 +854,7 @@ class TeraChem_CI(Engine):
         # Compute objective function and gradient
         Obj = EAvg + self.sigma * Penalty
         ObjGrad = GAvg + self.sigma * (EDif**2 + 2*self.alpha*EDif)/(EDif+self.alpha)**2 * GDif
-        logger.info("EI= % .8f EJ= % .8f S2I= %.4f S2J= %.4f <E>= % .8f Gap= %.8f Pen= %.8f Obj= % .8f" % (EDict[I], EDict[J], SDict[I], SDict[J], EAvg, EDif, Penalty, Obj))
+        logger.info("EI= % .8f EJ= % .8f S2I= %.4f S2J= %.4f <E>= % .8f Gap= %.8f Pen= %.8f Obj= % .8f\n" % (EDict[I], EDict[J], SDict[I], SDict[J], EAvg, EDif, Penalty, Obj))
         return Obj, ObjGrad
 
     def number_output(self, dirname, calcNum):
