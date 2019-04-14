@@ -809,6 +809,7 @@ class OptParams(object):
         self.trust = kwargs.get('trust', 0.1)
         # Maximum value of trust radius
         self.tmax = kwargs.get('tmax', 0.3)
+        self.trust = min(self.tmax, self.trust)
         # Maximum number of optimization cycles
         self.maxiter = kwargs.get('maxiter', 300)
         # Q-Chem style convergence criteria
@@ -823,8 +824,9 @@ class OptParams(object):
         self.Convergence_gmax = kwargs.get('convergence_gmax', 4.5e-4)
         self.Convergence_drms = kwargs.get('convergence_drms', 1.2e-3)
         self.Convergence_dmax = kwargs.get('convergence_dmax', 1.8e-3)
-        self.molpro_convergence_gmax = kwargs.get('molpro_convergence_gmax', 3e-4)
-        self.molpro_convergence_dmax = kwargs.get('molpro_convergence_dmax', 1.2e-3)
+        # Convergence criteria that are only used if molconv is set to True
+        self.Convergence_molpro_gmax = kwargs.get('convergence_molpro_gmax', 3e-4)
+        self.Convergence_molpro_dmax = kwargs.get('convergence_molpro_dmax', 1.2e-3)
         # CI optimizations sometimes require tiny steps
         self.meci = kwargs.get('meci', False)
 
@@ -1125,8 +1127,8 @@ class Optimizer(object):
         Converged_dmax = max_displacement < params.Convergence_dmax
         BadStep = Quality < 0
         # Molpro defaults for convergence
-        molpro_converged_gmax = max_gradient < params.molpro_convergence_gmax
-        molpro_converged_dmax = max_displacement < params.molpro_convergence_dmax
+        Converged_molpro_gmax = max_gradient < params.Convergence_molpro_gmax
+        Converged_molpro_dmax = max_displacement < params.Convergence_molpro_dmax
         self.conSatisfied = not self.IC.haveConstraints() or self.IC.getConstraintViolation(self.X) < 1e-2
         # Print status
         msg = "Step %4i :" % self.Iteration
@@ -1157,8 +1159,8 @@ class Optimizer(object):
             self.state = OPT_STATE.CONVERGED
             return
 
-        if params.molcnv and molpro_converged_gmax and (molpro_converged_dmax or Converged_energy) and self.conSatisfied:
-            logger.info("Converged! (Molpro style criteria requires gmax and either dmax or energy) This is approximate since convergence checks are done in cartesian coordinates.\n")
+        if params.molcnv and Converged_molpro_gmax and (Converged_molpro_dmax or Converged_energy) and self.conSatisfied:
+            logger.info("Converged! (Molpro style criteria requires gmax and either dmax or energy)\nThis is approximate since convergence checks are done in cartesian coordinates.\n")
             self.state = OPT_STATE.CONVERGED
             return
 
@@ -1173,7 +1175,7 @@ class Optimizer(object):
         if Quality <= self.ThreLQ:
             # For bad steps, the trust radius is reduced
             if not self.farConstraints:
-                self.trust = max(0.0 if params.meci else params.Convergence_drms, self.trust/2)
+                self.trust = max(0.0 if params.meci else min(1.2e-3, params.Convergence_drms), self.trust/2)
                 self.trustprint = "\x1b[91m-\x1b[0m"
             else:
                 self.trustprint = "="
@@ -1188,7 +1190,7 @@ class Optimizer(object):
             self.trustprint = "="
         if Quality < -1 and rejectOk:
             # Reject the step and take a smaller one from the previous iteration
-            self.trust = max(0.0 if params.meci else params.Convergence_drms, min(self.trust, self.cnorm/2))
+            self.trust = max(0.0 if params.meci else min(1.2e-3, params.Convergence_drms), min(self.trust, self.cnorm/2))
             self.trustprint = "\x1b[1;91mx\x1b[0m"
             self.Y = self.Yprev.copy()
             self.X = self.Xprev.copy()
@@ -1567,7 +1569,7 @@ def get_molecule_engine(**kwargs):
             engine = TeraChem_CI(M, tcin, meci_sigma, meci_alpha)
         else:
             engine = TeraChem(M, tcin)
-            if 'guess' in tcin:
+            if engine.guessMode == 'file':
                 for f in tcin['guess'].split():
                     if not os.path.exists(f):
                         raise RuntimeError("TeraChem input file specifies guess %s but it does not exist\nPlease include this file in the same folder as your input" % f)
@@ -1623,6 +1625,16 @@ def run_optimizer(**kwargs):
         logger.info('Backed up existing log file: %s -> %s\n' % (logfilename, os.path.basename(backed_up)))
 
     t0 = time.time()
+    # Custom convergence criteria
+    criteria = kwargs.get('converge', [])
+    if len(criteria)%2 != 0:
+        raise RuntimeError('Please pass an even number of options to --converge')
+    for i in range(int(len(criteria)/2)):
+        key = 'convergence_' + criteria[2*i].lower()
+        val = float(criteria[2*i+1])
+        kwargs[key] = val
+        logger.info('Using convergence criteria: %s %.2e\n' % (key, val))
+
     params = OptParams(**kwargs)
 
     # Get the Molecule and engine objects needed for optimization
@@ -1795,6 +1807,7 @@ def main():
     parser.add_argument('--frag', action='store_true', help='Fragment the internal coordinate system by deleting bonds between residues.')
     parser.add_argument('--qcdir', type=str, help='Provide an initial qchem scratch folder (e.g. supplied initial guess).')
     parser.add_argument('--qccnv', action='store_true', help='Use Q-Chem style convergence criteria instead of the default.')
+    parser.add_argument('--converge', type=str, nargs="+", default=[], help='Custom convergence criteria as pairs of values, such as: energy 1e-6 grms 3e-4 molpro_dmax 1.8e-3')
     parser.add_argument('--nt', type=int, help='Specify number of threads for running in parallel (for TeraChem this should be number of GPUs)')
     parser.add_argument('input', type=str, help='TeraChem or Q-Chem input file')
     parser.add_argument('constraints', type=str, nargs='?', help='Constraint input file (optional)')
