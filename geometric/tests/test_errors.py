@@ -6,7 +6,7 @@ import pytest
 
 import geometric
 from geometric.errors import EngineError, GeomOptNotConvergedError
-from geometric.errors import Psi4EngineError, QChemEngineError, TeraChemEngineError, TeraChem_CIEngineError, \
+from geometric.errors import Psi4EngineError, QChemEngineError, TeraChemEngineError, ConicalIntersectionEngineError, \
     OpenMMEngineError, GromacsEngineError, MolproEngineError, QCEngineAPIEngineError
 
 from . import addons
@@ -25,7 +25,7 @@ def test_error_types():
     with pytest.raises(EngineError):
         raise TeraChemEngineError
     with pytest.raises(EngineError):
-        raise TeraChem_CIEngineError
+        raise ConicalIntersectionEngineError
     with pytest.raises(EngineError):
         raise OpenMMEngineError
     with pytest.raises(EngineError):

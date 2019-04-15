@@ -31,7 +31,7 @@ class CustomEngine(geometric.engine.Engine):
 
     def calc_new(self, coords, dirname):
         energy, gradient = model(coords.reshape(-1,3))
-        return energy, gradient.ravel()
+        return {'energy': energy, 'gradient': gradient.ravel()}
 
 
 def test_customengine():

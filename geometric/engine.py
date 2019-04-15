@@ -479,7 +479,9 @@ class Psi4(Engine):
             # Run Psi4
             subprocess.run('psi4%s input.dat' % self.nt(), cwd=dirname, check=True, shell=True)
             # Read energy and gradients from Psi4 output
-            energy, gradient = self.parse_psi4_output(os.path.join(dirname, 'output.dat'))
+            parsed = self.parse_psi4_output(os.path.join(dirname, 'output.dat'))
+            energy = parsed['energy']
+            gradient = parsed['gradient']
         except (OSError, IOError, RuntimeError, subprocess.CalledProcessError):
             raise Psi4EngineError
         return {'energy':energy, 'gradient':gradient}

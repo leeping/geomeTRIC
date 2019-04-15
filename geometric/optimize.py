@@ -1483,7 +1483,7 @@ def get_molecule_engine(**kwargs):
     inputf = kwargs.get('input')
     
     ## MECI calculations create a custom engine that contains two other engines.
-    if kwargs['meci']:
+    if kwargs.get('meci', None):
         if sum([psi4, gmx, molpro, qcengine, openmm]) >= 1 or customengine:
             logger.warning("MECI optimizations are not tested with engines: psi4, gmx, molpro, qcegine, openmm, customengine. Be Careful!")
         meci_sigma = kwargs.get('meci_sigma')
