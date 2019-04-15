@@ -1660,11 +1660,11 @@ def run_optimizer(**kwargs):
     # Get the Molecule and engine objects needed for optimization
     M, engine = get_molecule_engine(**kwargs)
 
-    #============================================#
-    #|   Temporary file and folder management   |#
-    #============================================#
+    # ============================================#
+    # |   Temporary file and folder management   |#
+    # ============================================#
     # LPW: Should this be refactored and moved into get_molecule_engine?
-    dirname = prefix+".tmp"
+    dirname = prefix + ".tmp"
     if not os.path.exists(dirname):
         # LPW: Some engines do not need the tmp-folder, but the
         # auxiliary functions might (such as writing out displacements)

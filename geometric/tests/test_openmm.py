@@ -16,12 +16,12 @@ datad = addons.datad
 @addons.using_openmm
 def test_dlc_openmm_water3(localizer):
     """
-    Optimize the geometry of three water molecules using standard delocalized internal coordinates. 
+    Optimize the geometry of three water molecules using standard delocalized internal coordinates.
     The coordinate system will break down and have to be rebuilt.
     """
     progress = geometric.optimize.run_optimizer(openmm=True, pdb=os.path.join(datad,'water3.pdb'), coordsys='dlc', input='tip3p.xml')
     # The results here are in Angstrom
-    # 
+    #
     ref = np.array([[ 1.19172917, -1.71174316,  0.79961878],
                     [ 1.73335403, -2.33032763,  0.30714483],
                     [ 1.52818406, -0.83992919,  0.51498083],
@@ -47,7 +47,7 @@ def test_dlc_openmm_water3(localizer):
 @addons.using_openmm
 def test_tric_openmm_water6(localizer):
     """
-    Optimize the geometry of six water molecules using translation-rotation internal coordinates. 
+    Optimize the geometry of six water molecules using translation-rotation internal coordinates.
     This optimization should be rather stable.
     """
     progress = geometric.optimize.run_optimizer(openmm=True, pdb=os.path.join(datad,'water6.pdb'), input='tip3p.xml')
@@ -69,7 +69,7 @@ def test_tric_openmm_water6(localizer):
                     [-0.55553348,  1.72499233,  0.21519466],
                     [-0.41554802,  1.52125570, -0.73793694],
                     [-1.23114402,  2.40806579,  0.18635652]])
-    
+
     e_ref = -0.0777452561
     xdiff = (progress.xyzs[-1] - ref).flatten()
     rmsd, maxd = geometric.optimize.calc_drms_dmax(progress.xyzs[-1], ref, align=True)
@@ -126,3 +126,42 @@ def test_openmm_h2o2_h2o_grad_hess(localizer):
     # assert np.allclose(scan_energies, ref_energies, atol=1.e-3)
     # # Check for performance regression (should be done in ~33 cycles)
     # assert len(m) < 50
+
+@addons.using_openmm
+def test_combination_detection(localizer):
+    """Read in opls combination xml and make sure we find this to apply the combination rules"""
+    M, engine = geometric.optimize.get_molecule_engine(openmm=True, pdb=os.path.join(datad, 'captan.pdb'), input=os.path.join(datad, 'captan.xml'))
+    assert engine.combination == 'opls'
+
+@addons.using_openmm
+def test_opls_energy(localizer):
+    """Test the opls energy evaluation of the molecule."""
+    M, engine = geometric.optimize.get_molecule_engine(openmm=True, pdb=os.path.join(datad, 'captan.pdb'),input=os.path.join(datad, 'captan.xml'))
+    coords = M.xyzs[0].flatten() * geometric.nifty.ang2bohr
+    energy, grad = engine.calc_new(coords, None)
+    opls_grad = np.array([-6.65563678e-03, -6.96108403e-03,  1.01219046e-02,
+                           4.77186620e-03, -5.49923425e-03,  9.53944858e-03,
+                           1.17318037e-02,  5.86619214e-03,  1.81590580e-03,
+                           7.15324951e-03,  7.06591336e-03, -1.12101836e-02,
+                           7.20033397e-03, -6.20852571e-03, -5.99141556e-04,
+                          -7.09984632e-04,  6.16316713e-03, -6.55172883e-04,
+                           3.58227761e-03,  5.81687632e-03,  8.24485640e-03,
+                          -1.31141176e-03, -5.47527256e-03, -5.37463226e-05,
+                          -4.62548834e-03,  1.16761467e-02, -1.22248256e-02,
+                          -8.53129864e-03, -1.30094941e-03,  7.47111969e-04,
+                           2.25825354e-02, -1.24891299e-02,  1.86977395e-02,
+                          -1.40115259e-02, -6.63094157e-03, -2.94487154e-04,
+                          -1.26591523e-03, -7.25662329e-04, -8.52036580e-03,
+                          -7.91408908e-03,  1.17595326e-02, -1.00261913e-02,
+                          -1.35293365e-02,  8.43635350e-03, -8.37737799e-03,
+                           1.09957936e-03, -3.30495796e-03,  1.57696265e-03,
+                           5.18478170e-03, -5.18710840e-03, -9.56596407e-05,
+                           1.11783982e-03, -3.04045733e-03,  5.08006606e-03,
+                          -6.20394358e-05,  2.60492060e-03, -9.76388473e-04,
+                           2.88278170e-04, -2.18571329e-03, -1.84135131e-03,
+                           8.43061547e-04,  5.81041130e-03, -4.49180435e-03,
+                          -4.24613924e-03, -5.87608806e-03,  2.10134309e-03,
+                          -9.18018280e-04, -2.62134372e-03,  4.31330813e-04,
+                          -1.77472314e-03,  2.30695485e-03,  1.01002642e-03])
+    assert energy == -0.004563862119216744
+    assert grad.all() == opls_grad.all()
