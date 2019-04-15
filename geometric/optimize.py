@@ -802,7 +802,7 @@ class OptParams(object):
                              'TURBOMOLE': [1e-6, 5e-4, 1e-3, 5.0e-4, 1e-3],
                              'INTERFRAG_TIGHT': [1e-6, 1e-5, 1.5e-5, 4.0e-4, 6.0e-4],
                              'GAU_TIGHT': [1e-6, 1e-5, 1.5e-5, 4e-5, 6e-5],
-                             'GAU_VERYTIGHT': [1e-6, 1e-6, 2e-6, 4e-6, 6e-6],
+                             'GAU_VERYTIGHT': [1e-6, 1e-6, 2e-6, 4e-6, 6e-6]
                              }
 
         # Threshold (in a.u. / rad) for activating alternative algorithm that enforces precise constraint satisfaction
@@ -830,34 +830,18 @@ class OptParams(object):
         self.molcnv = kwargs.get('molcnv', False)
         # Use updated constraint algorithm implemented 2019-03-20
         self.conmethod = kwargs.get('conmethod', 0)
+        # Check if there is a convergence set passed else use the default
+        convergence_set = kwargs.get('convergence_set', 'GAU')
+        # If we have extra keywords apply them here else use the set
         # Convergence criteria in a.u. and Angstrom
-        self.Convergence_energy = kwargs.get('convergence_energy', 1e-6)
-        self.Convergence_grms = kwargs.get('convergence_grms', 3e-4)
-        self.Convergence_gmax = kwargs.get('convergence_gmax', 4.5e-4)
-        self.Convergence_drms = kwargs.get('convergence_drms', 1.2e-3)
-        self.Convergence_dmax = kwargs.get('convergence_dmax', 1.8e-3)
+        self.Convergence_energy = kwargs.get('convergence_energy', convergence_types[convergence_set][0])
+        self.Convergence_grms = kwargs.get('convergence_grms', convergence_types[convergence_set][1])
+        self.Convergence_gmax = kwargs.get('convergence_gmax', convergence_types[convergence_set][2])
+        self.Convergence_drms = kwargs.get('convergence_drms', convergence_types[convergence_set][3])
+        self.Convergence_dmax = kwargs.get('convergence_dmax', convergence_types[convergence_set][4])
         # Convergence criteria that are only used if molconv is set to True
         self.Convergence_molpro_gmax = kwargs.get('convergence_molpro_gmax', 3e-4)
         self.Convergence_molpro_dmax = kwargs.get('convergence_molpro_dmax', 1.2e-3)
-        # Convergence level
-        self.converge = kwargs.get('converge', None)
-
-        if self.converge:
-            self.Convergence_energy = convergence_types[self.converge][0]
-            self.Convergence_grms = convergence_types[self.converge][1]
-            self.Convergence_gmax = convergence_types[self.converge][2]
-            self.Convergence_drms = convergence_types[self.converge][3]
-            self.Convergence_dmax = convergence_types[self.converge][4]
-
-        else:
-            # Convergence criteria in a.u. and Angstrom
-            self.Convergence_energy = kwargs.get('convergence_energy', 1e-6)
-            self.Convergence_grms = kwargs.get('convergence_grms', 3e-4)
-            self.Convergence_gmax = kwargs.get('convergence_gmax', 4.5e-4)
-            self.Convergence_drms = kwargs.get('convergence_drms', 1.2e-3)
-            self.Convergence_dmax = kwargs.get('convergence_dmax', 1.8e-3)
-        self.molpro_convergence_gmax = kwargs.get('molpro_convergence_gmax', 3e-4)
-        self.molpro_convergence_dmax = kwargs.get('molpro_convergence_dmax', 1.2e-3)
         # CI optimizations sometimes require tiny steps
         self.meci = kwargs.get('meci', False)
 
@@ -1662,9 +1646,14 @@ def run_optimizer(**kwargs):
         raise RuntimeError('Please pass an even number of options to --converge')
     for i in range(int(len(criteria)/2)):
         key = 'convergence_' + criteria[2*i].lower()
-        val = float(criteria[2*i+1])
+        try:
+            val = float(criteria[2*i+1])
+            logger.info('Using convergence criteria: %s %.2e\n' % (key, val))
+        except ValueError:
+            # This must be a set
+            val = str(criteria[2*i+1])
+            logger.info('Using convergence criteria set: %s %s\n' % (key, val))
         kwargs[key] = val
-        logger.info('Using convergence criteria: %s %.2e\n' % (key, val))
 
     params = OptParams(**kwargs)
 
@@ -1838,7 +1827,7 @@ def main():
     parser.add_argument('--frag', action='store_true', help='Fragment the internal coordinate system by deleting bonds between residues.')
     parser.add_argument('--qcdir', type=str, help='Provide an initial qchem scratch folder (e.g. supplied initial guess).')
     parser.add_argument('--qccnv', action='store_true', help='Use Q-Chem style convergence criteria instead of the default.')
-    parser.add_argument('--converge', type=str, nargs="+", default=[], help='Custom convergence criteria as pairs of values, such as: energy 1e-6 grms 3e-4 molpro_dmax 1.8e-3')
+    parser.add_argument('--converge', type=str, nargs="+", default=[], help='Custom convergence criteria as pairs of values, such as: set GAU_loose energy 1e-6 grms 3e-4 molpro_dmax 1.8e-3')
     parser.add_argument('--nt', type=int, help='Specify number of threads for running in parallel (for TeraChem this should be number of GPUs)')
     parser.add_argument('input', type=str, help='TeraChem or Q-Chem input file')
     parser.add_argument('constraints', type=str, nargs='?', help='Constraint input file (optional)')
