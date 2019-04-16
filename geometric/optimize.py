@@ -14,7 +14,7 @@ from numpy.linalg import multi_dot
 import pkg_resources
 
 import geometric
-from .engine import set_tcenv, load_tcin, TeraChem, TeraChem_CI, Psi4, QChem, Gromacs, Molpro, OpenMM, QCEngineAPI
+from .engine import set_tcenv, load_tcin, TeraChem, ConicalIntersection, Psi4, QChem, Gromacs, Molpro, OpenMM, QCEngineAPI
 from .internal import *
 from .molecule import Molecule, Elements
 from .nifty import row, col, flat, invert_svd, uncommadash, isint, bohr2ang, ang2bohr, logger, bak, pmat2d
@@ -978,7 +978,10 @@ class Optimizer(object):
         Calculate the energy and Cartesian gradients of the current structure.
         """
         ### Calculate Energy and Gradient ###
-        self.E, self.gradx = self.engine.calc(self.X, self.dirname)
+        # Dictionary containing single point properties (energy, gradient)
+        spcalc = self.engine.calc(self.X, self.dirname)
+        self.E = spcalc['energy']
+        self.gradx = spcalc['gradient']
         # Add new Cartesian coordinates and gradients to history
         self.progress.xyzs.append(self.X.reshape(-1,3) * bohr2ang)
         self.progress.qm_energies.append(self.E)
@@ -1317,7 +1320,9 @@ def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None):
 def CheckInternalGrad(coords, molecule, IC, engine, dirname, verbose=False):
     """ Check the internal coordinate gradient using finite difference. """
     # Initial energy and gradient
-    E, gradx = engine.calc(coords, dirname)
+    spcalc = engine.calc(coords, dirname)
+    E = spcalc['energy']
+    gradx = spcalc['gradient']
     # Initial internal coordinates
     q0 = IC.calculate(coords)
     Gq = IC.calcGrad(coords, gradx)
@@ -1329,10 +1334,10 @@ def CheckInternalGrad(coords, molecule, IC, engine, dirname, verbose=False):
         dq = np.zeros_like(q0)
         dq[i] += h
         x1 = IC.newCartesian(coords, dq, verbose)
-        EPlus, _ = engine.calc(x1, dirname)
+        EPlus = engine.calc(x1, dirname)['energy']
         dq[i] -= 2*h
         x1 = IC.newCartesian(coords, dq, verbose)
-        EMinus, _ = engine.calc(x1, dirname)
+        EMinus = engine.calc(x1, dirname)['energy']
         fdiff = (EPlus-EMinus)/(2*h)
         logger.info("%20s : % 14.6f % 14.6f % 14.6f\n" % (IC.Internals[i], Gq[i], fdiff, Gq[i]-fdiff))
         Gq_f[i] = fdiff
@@ -1343,7 +1348,9 @@ def CheckInternalHess(coords, molecule, IC, engine, dirname, verbose=False):
     transform to internal coordinates, then check the internal coordinate
     Hessian using finite difference. """
     # Initial energy and gradient
-    E, gradx = engine.calc(coords, dirname)
+    spcalc = engine.calc(coords, dirname)
+    E = spcalc['energy']
+    gradx = spcalc['gradient']
     # Finite difference step
     h = 1.0e-3
 
@@ -1354,9 +1361,9 @@ def CheckInternalHess(coords, molecule, IC, engine, dirname, verbose=False):
     for i in range(nc):
         logger.info(" coordinate %i/%i\n" % (i+1, nc))
         coords[i] += h
-        _, gplus = engine.calc(coords, dirname)
+        gplus = engine.calc(coords, dirname)['gradient']
         coords[i] -= 2*h
-        _, gminus = engine.calc(coords, dirname)
+        gminus = engine.calc(coords, dirname)['gradient']
         coords[i] += h
         Hx[i] = (gplus-gminus)/(2*h)
 
@@ -1376,12 +1383,12 @@ def CheckInternalHess(coords, molecule, IC, engine, dirname, verbose=False):
         dq[i] += h
         x1 = IC.newCartesian(coords, dq, verbose)
         qplus = IC.calculate(x1)
-        _, gplus = engine.calc(x1, dirname)
+        gplus = engine.calc(x1, dirname)['gradient']
         gqplus = IC.calcGrad(x1, gplus)
         dq[i] -= 2*h
         x1 = IC.newCartesian(coords, dq, verbose)
         qminus = IC.calculate(x1)
-        _, gminus = engine.calc(x1, dirname)
+        gminus = engine.calc(x1, dirname)['gradient']
         gqminus = IC.calcGrad(x1, gminus)
         fdiffg = (gqplus-gqminus)/(2*h)
         for j in range(len(q0)):
@@ -1455,6 +1462,43 @@ def get_molecule_engine(**kwargs):
     Engine
         Engine object containing methods for calculating energy and gradient
     """
+    ### Set up based on which quantum chemistry code we're using.
+    qchem = kwargs.get('qchem', False)
+    psi4 = kwargs.get('psi4', False)
+    gmx = kwargs.get('gmx', False)
+    molpro = kwargs.get('molpro', False)
+    openmm = kwargs.get('openmm', False)
+    qcengine = kwargs.get('qcengine', False)
+    customengine = kwargs.get('customengine', None)
+    # Path to Molpro executable (used if molpro=True)
+    molproexe = kwargs.get('molproexe', None)
+    # PDB file will be read for residue IDs to make TRICs for fragments
+    # and provide starting coordinates in the case of OpenMM
+    pdb = kwargs.get('pdb', None)
+    # if frag=True, do not add a bond between residues.
+    frag = kwargs.get('frag', False)
+    # Number of threads to use (engine-dependent)
+    nt = kwargs.get('nt', None)
+    # Name of the input file.
+    inputf = kwargs.get('input')
+    
+    ## MECI calculations create a custom engine that contains two other engines.
+    if kwargs.get('meci', None):
+        if sum([psi4, gmx, molpro, qcengine, openmm]) >= 1 or customengine:
+            logger.warning("MECI optimizations are not tested with engines: psi4, gmx, molpro, qcegine, openmm, customengine. Be Careful!")
+        meci_sigma = kwargs.get('meci_sigma')
+        meci_alpha = kwargs.get('meci_alpha')
+        sub_engines = {}
+        for state in [1, 2]:
+            sub_kwargs = kwargs.copy()
+            if state == 2:
+                sub_kwargs['input'] = kwargs['meci']
+            sub_kwargs['meci'] = None
+            M, sub_engine = get_molecule_engine(**sub_kwargs)
+            sub_engines[state] = sub_engine
+        engine = ConicalIntersection(M, sub_engines[1], sub_engines[2], meci_sigma, meci_alpha)
+        return M, engine
+    
     ## Read radii from the command line.
     # Ions should have radii of zero.
     arg_radii = kwargs.get('radii', ["Na","0.0","Cl","0.0","K","0.0"])
@@ -1466,27 +1510,8 @@ def get_molecule_engine(**kwargs):
     for i in range(nrad):
         radii[arg_radii[2*i].capitalize()] = float(arg_radii[2*i+1])
 
-    ### Set up based on which quantum chemistry code we're using.
-    qchem = kwargs.get('qchem', False)
-    psi4 = kwargs.get('psi4', False)
-    gmx = kwargs.get('gmx', False)
-    molpro = kwargs.get('molpro', False)
-    openmm = kwargs.get('openmm', False)
-    qcengine = kwargs.get('qcengine', False)
-    customengine = kwargs.get('customengine', None)
-    molproexe = kwargs.get('molproexe', None)
-    pdb = kwargs.get('pdb', None)
-    frag = kwargs.get('frag', False)
-    inputf = kwargs.get('input')
-    meci = kwargs.get('meci', False)
-    meci_sigma = kwargs.get('meci_sigma')
-    meci_alpha = kwargs.get('meci_alpha')
-    nt = kwargs.get('nt', None)
-
     if sum([qchem, psi4, gmx, molpro, qcengine, openmm]) > 1:
         raise RuntimeError("Do not specify more than one of --qchem, --psi4, --gmx, --molpro, --qcengine, --openmm")
-    if sum([qchem, psi4, gmx, molpro, qcengine, openmm, meci]) > 1:
-        raise RuntimeError("Do not specify --qchem, --psi4, --gmx, --molpro, --qcengine, --openmm with --meci")
     if qchem:
         # The file from which we make the Molecule object
         if pdb is not None:
@@ -1565,14 +1590,7 @@ def get_molecule_engine(**kwargs):
             M = Molecule(tcin['coordinates'], radii=radii, fragment=frag)
         M.charge = tcin['charge']
         M.mult = tcin.get('spinmult',1)
-        if meci:
-            engine = TeraChem_CI(M, tcin, meci_sigma, meci_alpha)
-        else:
-            engine = TeraChem(M, tcin)
-            if engine.guessMode == 'file':
-                for f in tcin['guess'].split():
-                    if not os.path.exists(f):
-                        raise RuntimeError("TeraChem input file specifies guess %s but it does not exist\nPlease include this file in the same folder as your input" % f)
+        engine = TeraChem(M, tcin)
         if nt is not None:
             raise RuntimeError("--nt not configured to work with terachem yet")
 
@@ -1644,6 +1662,8 @@ def run_optimizer(**kwargs):
     #|   Temporary file and folder management   |#
     #============================================#
     # LPW: Should this be refactored and moved into get_molecule_engine?
+    # Probably not .. get_molecule_engine is independent of dirname.
+    # We may implement Engine.initialize(dirname) in the future.
     dirname = prefix+".tmp"
     if not os.path.exists(dirname):
         # LPW: Some engines do not need the tmp-folder, but the
@@ -1657,7 +1677,7 @@ def run_optimizer(**kwargs):
                 os.remove(os.path.join(dirname, 'scr', f))
 
     # QC-specific scratch folder
-    qcdir = kwargs.get('qcdir', None) #Provide an initial qchem scratch folder (e.g. supplied initial guess
+    qcdir = kwargs.get('qcdir', None) # Provide an initial qchem scratch folder (e.g. supplied initial guess
     qchem = kwargs.get('qchem', False)
     if qcdir is not None:
         if not qchem:
@@ -1781,7 +1801,8 @@ def main():
     parser.add_argument('--psi4', action='store_true', help='Compute gradients in Psi4.')
     parser.add_argument('--openmm', action='store_true', help='Compute gradients in OpenMM. Provide state.xml as input, and --pdb is required.')
     parser.add_argument('--gmx', action='store_true', help='Compute gradients in Gromacs (requires conf.gro, topol.top, shot.mdp).')
-    parser.add_argument('--meci', action='store_true', help='Compute minimum-energy conical intersection or crossing point between two SCF solutions (TeraChem only).')
+    parser.add_argument('--meci', type=str, default=None, help='Provide second input file and search for minimum-energy conical '
+                        'intersection or crossing point between two SCF solutions (TeraChem and Q-Chem supported).')
     parser.add_argument('--meci_sigma', type=float, default=3.5, help='Sigma parameter for MECI optimization.')
     parser.add_argument('--meci_alpha', type=float, default=0.025, help='Alpha parameter for MECI optimization.')
     parser.add_argument('--molpro', action='store_true', help='Compute gradients in Molpro.')
@@ -1807,7 +1828,8 @@ def main():
     parser.add_argument('--frag', action='store_true', help='Fragment the internal coordinate system by deleting bonds between residues.')
     parser.add_argument('--qcdir', type=str, help='Provide an initial qchem scratch folder (e.g. supplied initial guess).')
     parser.add_argument('--qccnv', action='store_true', help='Use Q-Chem style convergence criteria instead of the default.')
-    parser.add_argument('--converge', type=str, nargs="+", default=[], help='Custom convergence criteria as pairs of values, such as: energy 1e-6 grms 3e-4 molpro_dmax 1.8e-3')
+    parser.add_argument('--converge', type=str, nargs="+", default=[], help='Custom convergence criteria as pairs of values, such as: '
+                        'energy 1e-6 grms 3e-4 molpro_dmax 1.8e-3')
     parser.add_argument('--nt', type=int, help='Specify number of threads for running in parallel (for TeraChem this should be number of GPUs)')
     parser.add_argument('input', type=str, help='TeraChem or Q-Chem input file')
     parser.add_argument('constraints', type=str, nargs='?', help='Constraint input file (optional)')

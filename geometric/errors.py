@@ -32,7 +32,7 @@ class MolproEngineError(EngineError):
 class QCEngineAPIEngineError(EngineError):
     pass
 
-class TeraChem_CIEngineError(EngineError):
+class ConicalIntersectionEngineError(EngineError):
     pass
 
 class GeomOptNotConvergedError(Error):
