@@ -6,6 +6,7 @@ import shutil
 import subprocess
 from collections import OrderedDict
 from copy import deepcopy
+import xml.etree.ElementTree as ET
 
 import numpy as np
 import re
@@ -367,8 +368,16 @@ class OpenMM(Engine):
             raise ImportError("OpenMM computation object requires the 'simtk' package. Please pip or conda install 'openmm' from omnia channel.")
         pdb = app.PDBFile(pdb)
         xmlSystem = False
+        self.combination = None
         if os.path.exists(xml):
             xmlStr = open(xml).read()
+            # check if we have opls combination rules if the xml is present
+            try:
+                self.combination = ET.fromstring(xmlStr).find('NonbondedForce').attrib['combination']
+            except AttributeError:
+                pass
+            except KeyError:
+                pass
             try:
                 # If the user has provided an OpenMM system, we can use it directly
                 system = mm.XmlSerializer.deserialize(xmlStr)
@@ -381,6 +390,10 @@ class OpenMM(Engine):
         if not xmlSystem:
             forcefield = app.ForceField(xml)
             system = forcefield.createSystem(pdb.topology, nonbondedMethod=app.NoCutoff, constraints=None, rigidWater=False)
+        # apply opls combination rule if we are using it
+        if self.combination == 'opls':
+            logger.info("\nUsing geometric combination rules\n")
+            system = self.opls(system)
         integrator = mm.VerletIntegrator(1.0*u.femtoseconds)
         platform = mm.Platform.getPlatformByName('Reference')
         self.simulation = app.Simulation(pdb.topology, system, integrator, platform)
@@ -399,6 +412,45 @@ class OpenMM(Engine):
         except:
             raise OpenMMEngineError
         return {'energy':energy, 'gradient':gradient}
+
+    @staticmethod
+    def opls(system):
+        """Apply the opls combination rule to the system."""
+
+        from numpy import sqrt
+        import simtk.openmm as mm
+
+        # get system information from the openmm system
+        forces = {system.getForce(index).__class__.__name__: system.getForce(index) for index in
+                  range(system.getNumForces())}
+        # use the nondonded_force tp get the same rules
+        nonbonded_force = forces['NonbondedForce']
+        lorentz = mm.CustomNonbondedForce(
+            'epsilon*((sigma/r)^12-(sigma/r)^6); sigma=sqrt(sigma1*sigma2); epsilon=sqrt(epsilon1*epsilon2)*4.0')
+        lorentz.setNonbondedMethod(mm.CustomNonbondedForce.NoCutoff)
+        lorentz.addPerParticleParameter('sigma')
+        lorentz.addPerParticleParameter('epsilon')
+        lorentz.setCutoffDistance(nonbonded_force.getCutoffDistance())
+        system.addForce(lorentz)
+        ljset = {}
+        # Now for each particle calculate the combination list again
+        for index in range(nonbonded_force.getNumParticles()):
+            charge, sigma, epsilon = nonbonded_force.getParticleParameters(index)
+            # print(nonbonded_force.getParticleParameters(index))
+            ljset[index] = (sigma, epsilon)
+            lorentz.addParticle([sigma, epsilon])
+            nonbonded_force.setParticleParameters(
+                index, charge, 0, 0)
+        for i in range(nonbonded_force.getNumExceptions()):
+            (p1, p2, q, sig, eps) = nonbonded_force.getExceptionParameters(i)
+            # ALL THE 12,13 interactions are EXCLUDED FROM CUSTOM NONBONDED FORCE
+            # All 1,4 are scaled by the amount in the xml file
+            lorentz.addExclusion(p1, p2)
+            if eps._value != 0.0:
+                # combine sigma using the geometric combination rule
+                sig14 = sqrt(ljset[p1][0] * ljset[p2][0])
+                nonbonded_force.setExceptionParameters(i, p1, p2, q, sig14, eps)
+        return system
 
 class Psi4(Engine):
     """
