@@ -795,6 +795,7 @@ class OptParams(object):
     def __init__(self, **kwargs):
 
         # convergence dictionary to store criteria stored in order of energy, grms, gmax, drms, dmax
+        # 'GAU' contains the default convergence criteria that are used when nothing is passed.
         convergence_sets = {'GAU': [1e-6, 3e-4, 4.5e-4, 1.2e-3, 1.8e-3],
                             'NWCHEM_LOOSE': [1e-6, 3e-3, 4.5e-3, 3.6e-3, 5.4e-3],
                             'GAU_LOOSE': [1e-6, 1.7e-3, 2.5e-3, 6.7e-3, 1e-2],
