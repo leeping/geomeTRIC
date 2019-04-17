@@ -138,7 +138,9 @@ def test_opls_energy(localizer):
     """Test the opls energy evaluation of the molecule."""
     M, engine = geometric.optimize.get_molecule_engine(openmm=True, pdb=os.path.join(datad, 'captan.pdb'),input=os.path.join(datad, 'captan.xml'))
     coords = M.xyzs[0].flatten() * geometric.nifty.ang2bohr
-    energy, grad = engine.calc_new(coords, None)
+    spcalc = engine.calc_new(coords, None)
+    energy = spcalc['energy']
+    grad = spcalc['gradient']
     opls_grad = np.array([-6.65563678e-03, -6.96108403e-03,  1.01219046e-02,
                            4.77186620e-03, -5.49923425e-03,  9.53944858e-03,
                            1.17318037e-02,  5.86619214e-03,  1.81590580e-03,
