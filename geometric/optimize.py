@@ -813,7 +813,7 @@ class OptParams(object):
         # More verbose printout
         self.verbose = kwargs.get('verbose', False)
         # Reset Hessian to guess whenever eigenvalues drop below epsilon
-        self.reset = kwargs.get('reset', False)
+        self.reset = kwargs.get('reset', True)
         # Rational function optimization (experimental)
         self.rfo = kwargs.get('rfo', False)
         # Starting value of the trust radius
@@ -1672,6 +1672,20 @@ def run_optimizer(**kwargs):
             logger.info('Using convergence criteria set: %s %s\n' % (key, val))
         kwargs[key] = val
 
+    # LPW 2019-04-20: Changed the default behavior of "reset" to True.
+    # When users pass '--no_reset' via the CLI, that will result in
+    # passing OptParams(reset=False) to the constructor.
+    # After a suitable amount of time, remove '--reset' from the CLI.
+    if kwargs.get('no_reset', False):
+        if kwargs.get('reset', False):
+            raise RuntimeError('Do not provide both --reset and --no_reset')
+        kwargs['reset'] = False
+    else:
+        if kwargs.get('reset', False):
+            logger.info('The --reset option defaults to True and will be removed soon from the CLI.')
+        kwargs['reset'] = True
+    if 'no_reset' in kwargs: del kwargs['no_reset']
+
     params = OptParams(**kwargs)
 
     # Get the Molecule and engine objects needed for optimization
@@ -1836,7 +1850,8 @@ def main():
     parser.add_argument('--check', type=int, default=0, help='Check coordinates every N steps to see whether it has changed.')
     parser.add_argument('--verbose', action='store_true', help='Write out the displacements.')
     parser.add_argument('--logINI',  type=str, dest='logIni', help='ini file for logging')
-    parser.add_argument('--reset', action='store_true', help='Reset Hessian when eigenvalues are under epsilon.')
+    parser.add_argument('--reset', action='store_true', help='Reset Hessian when eigenvalues are under epsilon. (Deprecated; now does this by default.)')
+    parser.add_argument('--no_reset', action='store_true', help='Do not reset Hessian when eigenvalues are under epsilon.')
     parser.add_argument('--rfo', action='store_true', help='Use rational function optimization (default is trust-radius Newton Raphson).')
     parser.add_argument('--trust', type=float, default=0.1, help='Starting trust radius.')
     parser.add_argument('--tmax', type=float, default=0.3, help='Maximum trust radius.')
