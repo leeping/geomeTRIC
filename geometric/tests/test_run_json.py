@@ -69,7 +69,7 @@ def test_convert_constraint_dict_full():
     }
     constraint_string = geometric.run_json.make_constraints_string(constraint_dict)
     assert constraint_string == """$freeze
-xyz 1 2 3 4 5
+xyz 1-5
 $set
 distance 2 1 0.582094931
 angle 2 1 5 110.0

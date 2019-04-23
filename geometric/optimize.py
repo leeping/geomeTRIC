@@ -1684,7 +1684,7 @@ def run_optimizer(**kwargs):
         kwargs['reset'] = False
     else:
         if kwargs.get('reset', False):
-            logger.info('The --reset option defaults to True and will be deprecated soon in the CLI and JSON API.')
+            logger.info('The --reset option defaults to True and will be removed soon from the CLI.')
         kwargs['reset'] = True
     if 'no_reset' in kwargs: del kwargs['no_reset']
 
