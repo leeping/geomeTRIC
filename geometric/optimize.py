@@ -14,6 +14,7 @@ from numpy.linalg import multi_dot
 import pkg_resources
 
 import geometric
+from .logo import printLogo
 from .engine import set_tcenv, load_tcin, TeraChem, ConicalIntersection, Psi4, QChem, Gromacs, Molpro, OpenMM, QCEngineAPI
 from .internal import *
 from .molecule import Molecule, Elements
@@ -1650,6 +1651,7 @@ def run_optimizer(**kwargs):
     #==============================#
 
     import geometric
+    printLogo(logger)
     logger.info('-=# \x1b[1;94m geomeTRIC started. Version: %s \x1b[0m #=-\n' % geometric.__version__)
     logger.info('geometric-optimize called with the following command line:\n')
     logger.info(' '.join(sys.argv)+'\n')
