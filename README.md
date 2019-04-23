@@ -1,4 +1,4 @@
-![Logo](https://user-images.githubusercontent.com/1441560/56543928-c97c3080-6527-11e9-95c6-fe503d5a15ac.png){:width="36px"}
+<img src="https://user-images.githubusercontent.com/1441560/56543928-c97c3080-6527-11e9-95c6-fe503d5a15ac.png" width="480" />
 # GeomeTRIC
 [![Build Status](https://travis-ci.org/leeping/geomeTRIC.svg?branch=master)](https://travis-ci.org/leeping/geomeTRIC)
 [![codecov](https://codecov.io/gh/leeping/geometric/branch/master/graph/badge.svg)](https://codecov.io/gh/leeping/geometric)
