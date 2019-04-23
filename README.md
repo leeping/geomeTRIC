@@ -3,11 +3,12 @@
 [![Build Status](https://travis-ci.org/leeping/geomeTRIC.svg?branch=master)](https://travis-ci.org/leeping/geomeTRIC)
 [![codecov](https://codecov.io/gh/leeping/geometric/branch/master/graph/badge.svg)](https://codecov.io/gh/leeping/geometric)
 
-This is an open-source geometry optimization code for quantum
-chemistry.  The code works by calling external software for the energy
-and gradient through wrapper functions.  Currently Q-Chem, TeraChem, 
-Psi4, and Molpro are supported.  MM optimizations are also possible
-using OpenMM and Gromacs.
+This is a geometry optimization code for molecular structures.
+The code works by calling external software for the energy and 
+gradient through wrapper functions.  Currently Q-Chem, TeraChem, 
+Psi4, and Molpro are supported quantum chemistry codes.  PySCF
+also provides an interface to optimizations using geomeTRIC.
+MM optimizations are possible using OpenMM and Gromacs.
 
 Authors: Lee-Ping Wang, Chenchen Song
 
