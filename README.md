@@ -1,4 +1,4 @@
-![geomeTRIC](https://user-images.githubusercontent.com/1441560/56544284-dd746200-6528-11e9-9ae7-3c69fc65569b.png)
+![geomeTRIC](https://user-images.githubusercontent.com/1441560/56555299-600d1980-6549-11e9-9f05-b1e8b899a292.png)
 
 [![Build Status](https://travis-ci.org/leeping/geomeTRIC.svg?branch=master)](https://travis-ci.org/leeping/geomeTRIC)
 [![codecov](https://codecov.io/gh/leeping/geometric/branch/master/graph/badge.svg)](https://codecov.io/gh/leeping/geometric)
