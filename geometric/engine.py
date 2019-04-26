@@ -6,6 +6,7 @@ import shutil
 import subprocess
 from collections import OrderedDict
 from copy import deepcopy
+import xml.etree.ElementTree as ET
 
 import numpy as np
 import re
@@ -13,7 +14,7 @@ import os
 
 from .molecule import Molecule
 from .nifty import eqcgmx, fqcgmx, bohr2ang, logger, getWorkQueue, queue_up_src_dest
-from .errors import Psi4EngineError, QChemEngineError, TeraChemEngineError, TeraChem_CIEngineError, \
+from .errors import EngineError, Psi4EngineError, QChemEngineError, TeraChemEngineError, ConicalIntersectionEngineError, \
     OpenMMEngineError, GromacsEngineError, MolproEngineError, QCEngineAPIEngineError
 
 #=============================#
@@ -159,13 +160,12 @@ class Engine(object):
     def calc(self, coords, dirname):
         coord_hash = hash(coords.tostring())
         if coord_hash in self.stored_calcs:
-            energy = self.stored_calcs[coord_hash]['energy']
-            gradient = self.stored_calcs[coord_hash]['gradient']
+            result = self.stored_calcs[coord_hash]['result']
         else:
             if not os.path.exists(dirname): os.makedirs(dirname)
-            energy, gradient = self.calc_new(coords, dirname)
-            self.stored_calcs[coord_hash] = {'coords':coords,'energy':energy,'gradient':gradient}
-        return energy, gradient
+            result = self.calc_new(coords, dirname)
+            self.stored_calcs[coord_hash] = {'coords':coords, 'result':result}
+        return result
 
     def clearCalcs(self):
         self.stored_calcs = OrderedDict()
@@ -186,14 +186,13 @@ class Engine(object):
     def read_wq(self, coords, dirname):
         coord_hash = hash(coords.tostring())
         if coord_hash in self.stored_calcs:
-            energy = self.stored_calcs[coord_hash]['energy']
-            gradient = self.stored_calcs[coord_hash]['gradient']
+            result = self.stored_calcs[coord_hash]['result']
         else:
             if not os.path.exists(dirname):
                 raise RuntimeError("In read_wq, %s doesn't exist" % dirname)
-            energy, gradient = self.read_wq_new(coords, dirname)
-            self.stored_calcs[coord_hash] = {'coords':coords,'energy':energy,'gradient':gradient}
-        return energy, gradient
+            result = self.read_wq_new(coords, dirname)
+            self.stored_calcs[coord_hash] = {'coords':coords, 'result':result}
+        return result
 
     def read_wq_new(self, coords, dirname):
         raise NotImplementedError("Work Queue is not implemented for this class")
@@ -211,7 +210,7 @@ class Blank(Engine):
     def calc_new(self, coords, dirname):
         energy = 0.0
         gradient = np.zeros(len(coords), dtype=float)
-        return energy, gradient
+        return {'energy':energy, 'gradient':gradient}
 
 class TeraChem(Engine):
     """
@@ -219,104 +218,125 @@ class TeraChem(Engine):
     """
     def __init__(self, molecule, tcin):
         self.tcin = tcin.copy()
+        if 'scrdir' in self.tcin:
+            self.scr = self.tcin['scrdir']
+        else:
+            self.scr = 'scr'
+        if 'guess' in self.tcin:
+            guessVal = self.tcin['guess'].split()
+            if guessVal[0] == 'frag':
+                self.guessMode = 'frag'
+                self.fragFile = guessVal[1]
+                if not os.path.exists(self.fragFile):
+                    raise TeraChemEngineError('%s fragment file is missing' % self.fragFile)
+            else:
+                self.guessMode = 'file'
+                for f in guessVal:
+                    if not os.path.exists(f):
+                        raise TeraChemEngineError('%s guess file is missing' % f)
+        else:
+            self.guessMode = 'none'
         super(TeraChem, self).__init__(molecule)
 
+    def manage_guess(self, dirname):
+        """
+        Management of guess files in TeraChem calculations.
+        This function make sure the correct guess files are in the temp-folder
+        given by "dirname" and sets the corresponding options in self.tcin.
+
+        Returns
+        -------
+        fileNames : list
+            The list of guess files that the TeraChem calculation will require,
+            whether it is a MO coefficient file or a text file specifying fragments.
+        """
+        # These are files that may be produced in a previous energy/grad calc
+        # (This may be changed if non-single-reference calcs start to be used)
+        unrestricted = self.tcin['method'][0] == 'u'
+        if unrestricted:
+            scrFiles = ['ca0', 'cb0']
+        else:
+            scrFiles = ['c0']
+        # Copy fragment guess file if applicable. It will be used in every energy/grad calc
+        if self.guessMode == 'frag':
+            shutil.copy2(self.fragFile, dirname)
+            return [self.fragFile]
+        # If guess is not set and orbital files are in temp/scr from a previous energy/grad calc,
+        # then set guess mode to use files.
+        if self.guessMode == 'none':
+            guessFiles = []
+            for f in scrFiles:
+                if os.path.exists(os.path.join(dirname, self.scr, f)):
+                    guessFiles.append(f)
+            if guessFiles:
+                self.tcin['guess'] = ' '.join(guessFiles)
+                self.guessMode = 'file'
+            else:
+                return []
+        # If using guess files (including from the above if-block), copy the guess files into the temp-dir.
+        # Use files in temp/scr if they exist; otherwise, use files in the base dir.
+        if self.guessMode != 'file':
+            raise TeraChemEngineError("Guess mode should be 'file' at this point in the code: currently %s" % self.guessMode)
+        guessFiles = self.tcin['guess'].split()
+        for f in guessFiles:
+            if f in scrFiles and os.path.exists(os.path.join(dirname, self.scr, f)):
+                shutil.copy2(os.path.join(dirname, self.scr, f), os.path.join(dirname, f))
+            elif not os.path.exists(os.path.join(dirname, f)):
+                shutil.copy2(f, dirname)
+            if not os.path.exists(os.path.join(dirname, f)):
+                raise TeraChemEngineError("%s guess file is missing and this code shouldn't be called" % f)
+        # When guess files are provided, turn off purify and mix.
+        self.tcin['purify'] = 'no'
+        self.tcin['mixguess'] = "0.0"
+        return guessFiles
+            
     def calc_new(self, coords, dirname):
-        guesses = []
-        have_guess = False
-        for f in ['c0', 'ca0', 'cb0']:
-            if os.path.exists(os.path.join(dirname, 'scr', f)):
-                shutil.copy2(os.path.join(dirname, 'scr', f), os.path.join(dirname, f))
-                guesses.append(f)
-                have_guess = True
-        # This is for when we start geometry optimizations
-        # and we have a guess prepped and ready to go.
-        if not have_guess and 'guess' in self.tcin:
-            for f in self.tcin['guess'].split():
-                if os.path.exists(f):
-                    shutil.copy2(f, dirname)
-                    guesses.append(f)
-                    have_guess = True
-                else:
-                    del self.tcin['guess']
-                    have_guess = False
-                    break
+        # Ensure guess files are in the correct locations
+        self.manage_guess(dirname)
+        # Set other needed options
         self.tcin['coordinates'] = 'start.xyz'
         self.tcin['run'] = 'gradient'
-        if have_guess:
-            self.tcin['guess'] = ' '.join(guesses)
-            self.tcin['purify'] = 'no'
-            self.tcin['mixguess'] = "0.0"
+        # Write the TeraChem input file
         edit_tcin(fout="%s/run.in" % dirname, options=self.tcin)
         # Convert coordinates back to the xyz file
         self.M.xyzs[0] = coords.reshape(-1, 3) * bohr2ang
         self.M[0].write(os.path.join(dirname, 'start.xyz'))
         # Run TeraChem
-        subprocess.call('terachem run.in > run.out', cwd=dirname, shell=True)
+        subprocess.check_call('terachem run.in > run.out', cwd=dirname, shell=True)
         # Extract energy and gradient
         try:
             subprocess.run("awk '/FINAL ENERGY/ {p=$3} /Correlation Energy/ {p+=$5} END {printf \"%.10f\\n\", p}' run.out > energy.txt", cwd=dirname, check=True, shell=True)
             subprocess.run("awk '/Gradient units are Hartree/,/Net gradient/ {if ($1 ~ /^-?[0-9]/) {print}}' run.out > grad.txt", cwd=dirname, check=True, shell=True)
+            subprocess.run("awk 'BEGIN {s=0} /SPIN S-SQUARED/ {s=$3} END {printf \"%.6f\\n\", s}' run.out > s-squared.txt", cwd=dirname, check=True, shell=True)
             energy = float(open(os.path.join(dirname,'energy.txt')).readlines()[0].strip())
             gradient = np.loadtxt(os.path.join(dirname,'grad.txt')).flatten()
+            s2 = float(open(os.path.join(dirname,'s-squared.txt')).readlines()[0].strip())
         except (OSError, IOError, RuntimeError, subprocess.CalledProcessError):
             raise TeraChemEngineError
-        return energy, gradient
+        return {'energy':energy, 'gradient':gradient, 's2':s2}
 
     def calc_wq_new(self, coords, dirname):
-        # Run TeraChem
         wq = getWorkQueue()
         if not os.path.exists(dirname): os.makedirs(dirname)
-        scrdir = os.path.join(dirname, 'scr')
+        scrdir = os.path.join(dirname, self.scr)
         if not os.path.exists(scrdir): os.makedirs(scrdir)
-        guesses = []
-        have_guess = False
-        unrestricted = self.tcin['method'][0] == 'u'
-        if unrestricted:
-            guessfnms = ['ca0', 'cb0']
-        else:
-            guessfnms = ['c0']
-        for f in ['c0', 'ca0', 'cb0']:
-            if f not in guessfnms: continue
-            if os.path.exists(os.path.join(dirname, 'scr', f)):
-                shutil.move(os.path.join(dirname, 'scr', f), os.path.join(dirname, f))
-                guesses.append(f)
-            if os.path.exists(os.path.join(dirname, f)):
-                if f not in guesses: guesses.append(f)
-        # Check if all the appropriate guess files have been found
-        # and moved to "dirname"
-        have_guess = (guesses == guessfnms)
-        # This is for when we start geometry optimizations
-        # and we have a guess prepped and ready to go.
-        if not have_guess and 'guess' in self.tcin:
-            for f in self.tcin['guess'].split():
-                if os.path.exists(f):
-                    shutil.copy2(f, dirname)
-                    guesses.append(f)
-                    have_guess = True
-                else:
-                    del self.tcin['guess']
-                    have_guess = False
-                    break
+        guessfnms = self.manage_guess(dirname)
         self.tcin['coordinates'] = 'start.xyz'
         self.tcin['run'] = 'gradient'
         # For queueing up jobs, delete GPU key and let the worker decide
         self.tcin['gpus'] = None
-        if have_guess:
-            self.tcin['guess'] = ' '.join(guesses)
-            self.tcin['purify'] = 'no'
-            self.tcin['mixguess'] = "0.0"
         tcopts = edit_tcin(fout="%s/run.in" % dirname, options=self.tcin)
         # Convert coordinates back to the xyz file
         self.M.xyzs[0] = coords.reshape(-1, 3) * bohr2ang
         self.M[0].write(os.path.join(dirname, 'start.xyz'))
         in_files = [('%s/run.in' % dirname, 'run.in'), ('%s/start.xyz' % dirname, 'start.xyz')]
         out_files = [('%s/run.out' % dirname, 'run.out')]
-        if have_guess:
-            for g in guesses:
-                in_files.append((os.path.join(dirname, g), g))
-        for g in guessfnms:
-            out_files.append((os.path.join(dirname, 'scr', g), os.path.join('scr', g)))
+        for f in guessfnms:
+            in_files.append((os.path.join(dirname, f), f))
+        out_scr = ['ca0', 'cb0'] if unrestricted else ['c0']
+        out_scr += ['mullpop']
+        for f in out_scr:
+            out_files.append((os.path.join(dirname, self.scr, f), os.path.join(self.scr, f)))
         queue_up_src_dest(wq, "%s/runtc run.in &> run.out" % rootdir, in_files, out_files, verbose=False)
 
     def number_output(self, dirname, calcNum):
@@ -329,9 +349,11 @@ class TeraChem(Engine):
         # Extract energy and gradient
         subprocess.call("awk '/FINAL ENERGY/ {p=$3} /Correlation Energy/ {p+=$5} END {printf \"%.10f\\n\", p}' run.out > energy.txt", cwd=dirname, shell=True)
         subprocess.call("awk '/Gradient units are Hartree/,/Net gradient/ {if ($1 ~ /^-?[0-9]/) {print}}' run.out > grad.txt", cwd=dirname, shell=True)
+        subprocess.run("awk 'BEGIN {s=0} /SPIN S-SQUARED/ {s=$3} END {printf \"%.6f\\n\", s}' run.out > s-squared.txt", cwd=dirname, check=True, shell=True)
         energy = float(open(os.path.join(dirname,'energy.txt')).readlines()[0].strip())
         gradient = np.loadtxt(os.path.join(dirname,'grad.txt')).flatten()
-        return energy, gradient
+        s2 = float(open(os.path.join(dirname,'s-squared.txt')).readlines()[0].strip())
+        return {'energy':energy, 'gradient':gradient, 's2':s2}
 
 class OpenMM(Engine):
     """
@@ -346,8 +368,16 @@ class OpenMM(Engine):
             raise ImportError("OpenMM computation object requires the 'simtk' package. Please pip or conda install 'openmm' from omnia channel.")
         pdb = app.PDBFile(pdb)
         xmlSystem = False
+        self.combination = None
         if os.path.exists(xml):
             xmlStr = open(xml).read()
+            # check if we have opls combination rules if the xml is present
+            try:
+                self.combination = ET.fromstring(xmlStr).find('NonbondedForce').attrib['combination']
+            except AttributeError:
+                pass
+            except KeyError:
+                pass
             try:
                 # If the user has provided an OpenMM system, we can use it directly
                 system = mm.XmlSerializer.deserialize(xmlStr)
@@ -360,6 +390,10 @@ class OpenMM(Engine):
         if not xmlSystem:
             forcefield = app.ForceField(xml)
             system = forcefield.createSystem(pdb.topology, nonbondedMethod=app.NoCutoff, constraints=None, rigidWater=False)
+        # apply opls combination rule if we are using it
+        if self.combination == 'opls':
+            logger.info("\nUsing geometric combination rules\n")
+            system = self.opls(system)
         integrator = mm.VerletIntegrator(1.0*u.femtoseconds)
         platform = mm.Platform.getPlatformByName('Reference')
         self.simulation = app.Simulation(pdb.topology, system, integrator, platform)
@@ -377,7 +411,46 @@ class OpenMM(Engine):
             gradient = state.getForces(asNumpy=True).flatten() / fqcgmx
         except:
             raise OpenMMEngineError
-        return energy, gradient
+        return {'energy':energy, 'gradient':gradient}
+
+    @staticmethod
+    def opls(system):
+        """Apply the opls combination rule to the system."""
+
+        from numpy import sqrt
+        import simtk.openmm as mm
+
+        # get system information from the openmm system
+        forces = {system.getForce(index).__class__.__name__: system.getForce(index) for index in
+                  range(system.getNumForces())}
+        # use the nondonded_force tp get the same rules
+        nonbonded_force = forces['NonbondedForce']
+        lorentz = mm.CustomNonbondedForce(
+            'epsilon*((sigma/r)^12-(sigma/r)^6); sigma=sqrt(sigma1*sigma2); epsilon=sqrt(epsilon1*epsilon2)*4.0')
+        lorentz.setNonbondedMethod(mm.CustomNonbondedForce.NoCutoff)
+        lorentz.addPerParticleParameter('sigma')
+        lorentz.addPerParticleParameter('epsilon')
+        lorentz.setCutoffDistance(nonbonded_force.getCutoffDistance())
+        system.addForce(lorentz)
+        ljset = {}
+        # Now for each particle calculate the combination list again
+        for index in range(nonbonded_force.getNumParticles()):
+            charge, sigma, epsilon = nonbonded_force.getParticleParameters(index)
+            # print(nonbonded_force.getParticleParameters(index))
+            ljset[index] = (sigma, epsilon)
+            lorentz.addParticle([sigma, epsilon])
+            nonbonded_force.setParticleParameters(
+                index, charge, 0, 0)
+        for i in range(nonbonded_force.getNumExceptions()):
+            (p1, p2, q, sig, eps) = nonbonded_force.getExceptionParameters(i)
+            # ALL THE 12,13 interactions are EXCLUDED FROM CUSTOM NONBONDED FORCE
+            # All 1,4 are scaled by the amount in the xml file
+            lorentz.addExclusion(p1, p2)
+            if eps._value != 0.0:
+                # combine sigma using the geometric combination rule
+                sig14 = sqrt(ljset[p1][0] * ljset[p2][0])
+                nonbonded_force.setExceptionParameters(i, p1, p2, q, sig14, eps)
+        return system
 
 class Psi4(Engine):
     """
@@ -406,6 +479,7 @@ class Psi4(Engine):
         """ Psi4 input file parser, only support xyz coordinates for now """
         coords = []
         elems = []
+        fragn = []
         found_molecule, found_geo, found_gradient = False, False, False
         psi4_temp = [] # store a template of the input file for generating new ones
         for line in open(psi4in):
@@ -421,6 +495,8 @@ class Psi4(Engine):
                     # parse the xyz format
                     elems.append(ls[0])
                     coords.append(ls[1:4])
+                elif '--' in line:
+                    fragn.append(len(elems))
                 else:
                     psi4_temp.append(line)
                     if '}' in line:
@@ -435,6 +511,7 @@ class Psi4(Engine):
         self.M.elem = elems
         self.M.xyzs = [np.array(coords, dtype=np.float64)]
         self.psi4_temp = psi4_temp
+        self.fragn = fragn
 
     def calc_new(self, coords, dirname):
         if not os.path.exists(dirname): os.makedirs(dirname)
@@ -444,7 +521,9 @@ class Psi4(Engine):
         with open(os.path.join(dirname, 'input.dat'), 'w') as outfile:
             for line in self.psi4_temp:
                 if line == '$!geometry@here':
-                    for e, c in zip(self.M.elem, self.M.xyzs[0]):
+                    for i, (e, c) in enumerate(zip(self.M.elem, self.M.xyzs[0])):
+                        if i in self.fragn:
+                            outfile.write('--\n')
                         outfile.write("%-7s %13.7f %13.7f %13.7f\n" % (e, c[0], c[1], c[2]))
                 else:
                     outfile.write(line)
@@ -452,10 +531,12 @@ class Psi4(Engine):
             # Run Psi4
             subprocess.run('psi4%s input.dat' % self.nt(), cwd=dirname, check=True, shell=True)
             # Read energy and gradients from Psi4 output
-            energy, gradient = self.parse_psi4_output(os.path.join(dirname, 'output.dat'))
+            parsed = self.parse_psi4_output(os.path.join(dirname, 'output.dat'))
+            energy = parsed['energy']
+            gradient = parsed['gradient']
         except (OSError, IOError, RuntimeError, subprocess.CalledProcessError):
             raise Psi4EngineError
-        return energy, gradient
+        return {'energy':energy, 'gradient':gradient}
 
     def parse_psi4_output(self, psi4out):
         """ read an output file from Psi4 """
@@ -507,9 +588,7 @@ class Psi4(Engine):
         if gradient is None:
             raise RuntimeError("Psi4 gradient is not found in %s, please check." % psi4out)
         gradient = np.array(gradient, dtype=np.float64).ravel()
-        return energy, gradient
-
-
+        return {'energy':energy, 'gradient':gradient}
 
 class QChem(Engine):
     def __init__(self, molecule):
@@ -542,11 +621,17 @@ class QChem(Engine):
                 self.qcdir = True
                 self.M.edit_qcrems({'scf_guess':'read'})
             M1 = Molecule('%s/run.out' % dirname)
-            energy = M1.qm_energies[0]
-            gradient = M1.qm_grads[0].flatten()
+            # In the case of multi-stage jobs, the last energy and gradient is what we want.
+            energy = M1.qm_energies[-1]
+            gradient = M1.qm_grads[-1].flatten()
+            # Assume that the last occurence of "S^2" is what we want.
+            s2 = 0.0
+            for line in open('%s/run.out' % dirname):
+                if "<S^2>" in line:
+                    s2 = float(line.split()[-1])
         except (OSError, IOError, RuntimeError, subprocess.CalledProcessError):
             raise QChemEngineError
-        return energy, gradient
+        return {'energy':energy, 'gradient':gradient, 's2':s2}
 
     def calc_wq_new(self, coords, dirname):
         wq = getWorkQueue()
@@ -568,9 +653,15 @@ class QChem(Engine):
 
     def read_wq_new(self, coords, dirname):
         M1 = Molecule('%s/run.out' % dirname)
-        energy = M1.qm_energies[0]
-        gradient = M1.qm_grads[0].flatten()
-        return energy, gradient
+        # In the case of multi-stage jobs, the last energy and gradient is what we want.
+        energy = M1.qm_energies[-1]
+        gradient = M1.qm_grads[-1].flatten()
+        # Assume that the last occurence of "S^2" is what we want.
+        s2 = 0.0
+        for line in open('%s/run.out' % dirname):
+            if "<S^2>" in line:
+                s2 = float(line.split()[-1])
+        return {'energy':energy, 'gradient':gradient, 's2':s2}
 
 class Gromacs(Engine):
     def __init__(self, molecule):
@@ -597,7 +688,7 @@ class Gromacs(Engine):
             os.chdir(cwd)
         except (OSError, IOError, RuntimeError, subprocess.CalledProcessError):
             raise GromacsEngineError
-        return Energy, Gradient
+        return {'energy':Energy, 'gradient':Gradient}
 
 
 class Molpro(Engine):
@@ -690,7 +781,7 @@ class Molpro(Engine):
             energy, gradient = self.parse_molpro_output(os.path.join(dirname, 'run.out'))
         except (OSError, IOError, RuntimeError, subprocess.CalledProcessError):
             raise MolproEngineError
-        return energy, gradient
+        return {'energy':energy, 'gradient':gradient}
 
     def number_output(self, dirname, calcNum):
         if not os.path.exists(os.path.join(dirname, 'run.out')):
@@ -733,7 +824,7 @@ class Molpro(Engine):
         if gradient is None:
             raise RuntimeError("Molpro gradient is not found in %s, please check." % molpro_out)
         gradient = np.array(gradient, dtype=np.float64).ravel()
-        return energy, gradient
+        return {'energy':energy, 'gradient':gradient}
 
 class QCEngineAPI(Engine):
     def __init__(self, schema, program):
@@ -775,51 +866,37 @@ class QCEngineAPI(Engine):
         # Unpack the energy and gradient
         energy = ret["properties"]["return_energy"]
         gradient = np.array(ret["return_result"])
-        return energy, gradient
+        return {'energy':energy, 'gradient':gradient}
 
     def calc(self, coords, dirname):
         # overwrites the calc method of base class to skip caching and creating folders
         return self.calc_new(coords, dirname)
 
-class TeraChem_CI(Engine):
+class ConicalIntersection(Engine):
     """
-    Run a TeraChem energy and gradient calculation.
+    Compute conical intersection objective function with penalty constraint.
+    Implements the theory from Levine, Coe and Martinez, J. Phys. Chem. B 2008.
     """
-    def __init__(self, molecule, tcin, sigma, alpha):
-        self.tcin = tcin.copy()
+    def __init__(self, molecule, engine1, engine2, sigma, alpha):
+        self.engines = {1: engine1, 2: engine2}
         self.sigma = sigma
         self.alpha = alpha
-        super(TeraChem_CI, self).__init__(molecule)
+        super(ConicalIntersection, self).__init__(molecule)
 
     def calc_new(self, coords, dirname):
-        self.tcin['coordinates'] = 'start.xyz'
-        self.tcin['run'] = 'gradient'
-        self.tcin['guess'] = 'ca0 cb0'
-        self.tcin['purify'] = 'no'
-        self.tcin['mixguess'] = "0.0"
-        edit_tcin(fout="%s/run.in" % dirname, options=self.tcin)
-        GDict = OrderedDict()
         EDict = OrderedDict()
+        GDict = OrderedDict()
         SDict = OrderedDict()
-        # Convert coordinates back to the xyz file
-        self.M.xyzs[0] = coords.reshape(-1, 3) * bohr2ang
-        self.M[0].write(os.path.join(dirname, 'start.xyz'))
-        try:
-            for istate, guess_dir, ca, cb in [(1, os.path.join(dirname, 'guess_1'), 'ca1', 'cb1'), (2, os.path.join(dirname, 'guess_2'), 'ca2', 'cb2')]:
-                if not os.path.exists(guess_dir): os.makedirs(guess_dir)
-                shutil.copy2(os.path.join(dirname, 'start.xyz'), guess_dir)
-                shutil.copy2(os.path.join(dirname, 'run.in'), guess_dir)
-                shutil.copy2(ca, os.path.join(guess_dir, 'ca0'))
-                shutil.copy2(cb, os.path.join(guess_dir, 'cb0'))
-                subprocess.run('terachem run.in &> run.out', cwd=guess_dir, check=True, shell=True)
-                subprocess.run("awk '/FINAL ENERGY/ {p=$3} /Correlation Energy/ {p+=$5} END {printf \"%.10f\\n\", p}' run.out > energy.txt", cwd=guess_dir, check=True, shell=True)
-                subprocess.run("awk '/Gradient units are Hartree/,/Net gradient/ {if ($1 ~ /^-?[0-9]/) {print}}' run.out > grad.txt", cwd=guess_dir, check=True, shell=True)
-                subprocess.run("awk 'BEGIN {s=0.0} /SPIN S-SQUARED/ {s=$3} END {printf \"%.6f\\n\",s}' run.out > s-squared.txt", cwd=guess_dir, check=True, shell=True)
-                EDict[istate] = float(open(os.path.join(guess_dir,'energy.txt')).readlines()[0].strip())
-                GDict[istate] = np.loadtxt(os.path.join(guess_dir,'grad.txt')).flatten()
-                SDict[istate] = float(open(os.path.join(guess_dir,'s-squared.txt')).readlines()[0].strip())
-        except (OSError, IOError, RuntimeError, subprocess.CalledProcessError):
-            raise TeraChem_CIEngineError
+        for istate in [1, 2]:
+            state_dnm = os.path.join(dirname, 'state_%i' % istate)
+            if not os.path.exists(state_dnm): os.makedirs(state_dnm)
+            try:
+                spcalc = self.engines[istate].calc(coords, state_dnm)
+            except EngineError:
+                raise ConicalIntersectionEngineError
+            EDict[istate] = spcalc['energy']
+            GDict[istate] = spcalc['gradient']
+            SDict[istate] = spcalc.get('s2', 0.0)
         # Determine the higher energy state
         if EDict[2] > EDict[1]:
             I = 2
@@ -832,17 +909,17 @@ class TeraChem_CI(Engine):
         EDif = EDict[I]-EDict[J]
         GAvg = 0.5*(GDict[I]+GDict[J])
         GDif = GDict[I]-GDict[J]
+        GAng = np.dot(GDict[I], GDict[J])/(np.linalg.norm(GDict[I])*np.linalg.norm(GDict[J]))
         # Compute penalty function
         Penalty = EDif**2 / (EDif + self.alpha)
         # Compute objective function and gradient
         Obj = EAvg + self.sigma * Penalty
         ObjGrad = GAvg + self.sigma * (EDif**2 + 2*self.alpha*EDif)/(EDif+self.alpha)**2 * GDif
-        logger.info("EI= % .8f EJ= % .8f S2I= %.4f S2J= %.4f <E>= % .8f Gap= %.8f Pen= %.8f Obj= % .8f" % (EDict[I], EDict[J], SDict[I], SDict[J], EAvg, EDif, Penalty, Obj))
-        return Obj, ObjGrad
+        logger.info("EI= % .8f EJ= % .8f S2I= %.4f S2J= %.4f CosGrad= % .4f <E>= % .8f Gap= %.8f Pen= %.8f Obj= % .8f\n"
+                    % (EDict[I], EDict[J], SDict[I], SDict[J], GAng, EAvg, EDif, Penalty, Obj))
+        return {'energy':Obj, 'gradient':ObjGrad}
 
     def number_output(self, dirname, calcNum):
-        for istate, guess_dir in [(1, os.path.join(dirname, 'guess_1')), (2, os.path.join(dirname, 'guess_2'))]:
-            if not os.path.exists(os.path.join(guess_dir, 'run.out')):
-                raise RuntimeError('%s/run.out does not exist' % guess_dir)
-            shutil.copy2(os.path.join(guess_dir,'start.xyz'), os.path.join(guess_dir,'start_%03i.xyz' % calcNum))
-            shutil.copy2(os.path.join(guess_dir,'run.out'), os.path.join(guess_dir,'run_%03i.out' % calcNum))
+        for istate in [1, 2]:
+            state_dnm = os.path.join(dirname, 'state_%i' % istate)
+            self.engines[istate].number_output(state_dnm, calcNum)

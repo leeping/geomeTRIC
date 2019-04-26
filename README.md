@@ -1,16 +1,18 @@
-# GeomeTRIC
+![geomeTRIC](https://user-images.githubusercontent.com/1441560/56555299-600d1980-6549-11e9-9f05-b1e8b899a292.png)
+
 [![Build Status](https://travis-ci.org/leeping/geomeTRIC.svg?branch=master)](https://travis-ci.org/leeping/geomeTRIC)
 [![codecov](https://codecov.io/gh/leeping/geometric/branch/master/graph/badge.svg)](https://codecov.io/gh/leeping/geometric)
 
-This is an open-source geometry optimization code for quantum
-chemistry.  The code works by calling external software for the energy
-and gradient through wrapper functions.  Currently Q-Chem, TeraChem, 
-Psi4, and Molpro are supported.  MM optimizations are also possible
-using OpenMM and Gromacs.
+This is a geometry optimization code for molecular structures.
+The code works by calling external software for the energy and 
+gradient through wrapper functions.  Currently Q-Chem, TeraChem, 
+Psi4, and Molpro are supported quantum chemistry codes.  PySCF
+also provides an interface to optimizations using geomeTRIC.
+MM optimizations are possible using OpenMM and Gromacs.
 
 Authors: Lee-Ping Wang, Chenchen Song
 
-Contributors: Yudong Qiu (Psi4 engine); Daniel G. A. Smith (Testing framework, QCEngine JSON API); Sebastian Lee (Molpro engine); Chaya Stern (Travis, Conda); Qiming Sun (Custom engine); Alberto Gobbi (Batch energy/gradient)
+Contributors: Yudong Qiu (Psi4 engine, error handling); Daniel G. A. Smith (Testing framework, QCEngine JSON API); Sebastian Lee (Molpro engine); Chaya Stern (Travis, Conda); Qiming Sun (Custom engine); Alberto Gobbi (Batch energy/gradient, logging); Josh Horton (convergence criteria)
 
 Contact Email: leeping@ucdavis.edu
 

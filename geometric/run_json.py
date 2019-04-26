@@ -12,7 +12,7 @@ except ImportError:
     from io import StringIO
 
 import logging
-from .nifty import logger, RawStreamHandler
+from .nifty import logger, RawStreamHandler, commadash
 
 
 def parse_input_json_dict(in_json_dict):
@@ -134,8 +134,12 @@ def make_constraints_string(constraints_dict):
 
             # Get base values
             const_rep = [constraint_type]
-            # Add one to make it consistent with normal input
-            const_rep.extend([x + 1 for x in constraint["indices"]])
+            if constraint["type"] == "xyz":
+                # the "xyz" type expects one index block with no spaces
+                const_rep.append(commadash(constraint["indices"]))
+            else:
+                # Add one to make it consistent with normal input
+                const_rep.extend([x + 1 for x in constraint["indices"]])
             for k in key_args[1:]:
                 const_rep.append(constraint[k])
 
