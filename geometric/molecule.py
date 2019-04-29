@@ -2988,7 +2988,7 @@ class Molecule(object):
     def read_qdata(self, fnm, **kwargs):
         xyzs     = []
         energies = []
-        forces   = []
+        grads   = []
         espxyzs  = []
         espvals  = []
         interaction = []
@@ -2996,8 +2996,8 @@ class Molecule(object):
             line = line.strip().expandtabs()
             if 'COORDS' in line:
                 xyzs.append(np.array([float(i) for i in line.split()[1:]]).reshape(-1,3))
-            elif 'FORCES' in line:
-                forces.append(np.array([float(i) for i in line.split()[1:]]).reshape(-1,3))
+            elif 'FORCES' in line or 'GRADIENT' in line: # 'FORCES' is from an earlier version and a misnomer
+                grads.append(np.array([float(i) for i in line.split()[1:]]).reshape(-1,3))
             elif 'ESPXYZ' in line:
                 espxyzs.append(np.array([float(i) for i in line.split()[1:]]).reshape(-1,3))
             elif 'ESPVAL' in line:
@@ -3013,8 +3013,8 @@ class Molecule(object):
             Answer['qm_energies'] = energies
         if len(interaction) > 0:
             Answer['qm_interaction'] = interaction
-        if len(forces) > 0:
-            Answer['qm_grads'] = forces
+        if len(grads) > 0:
+            Answer['qm_grads'] = grads
         if len(espxyzs) > 0:
             Answer['qm_espxyzs'] = espxyzs
         if len(espvals) > 0:
@@ -4434,7 +4434,7 @@ class Molecule(object):
             if 'mm_energies' in self.Data:
                 out.append("EMD0   % .12e" % self.mm_energies[I])
             if 'qm_grads' in self.Data:
-                out.append("FORCES"+pvec(self.qm_grads[I]))
+                out.append("GRADIENT"+pvec(self.qm_grads[I]))
             if 'qm_espxyzs' in self.Data and 'qm_espvals' in self.Data:
                 out.append("ESPXYZ"+pvec(self.qm_espxyzs[I]))
                 out.append("ESPVAL"+pvec(self.qm_espvals[I]))
