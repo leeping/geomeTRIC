@@ -7,7 +7,7 @@ This is a geometry optimization code for molecular structures.
 The code works by calling external software for the energy and 
 gradient through wrapper functions.  Currently Q-Chem, TeraChem, 
 Psi4, and Molpro are supported quantum chemistry codes.  PySCF
-also provides an interface to optimizations using geomeTRIC.
+and QCArchive provide interfaces to geomeTRIC for optimization.
 MM optimizations are possible using OpenMM and Gromacs.
 
 Authors: Lee-Ping Wang, Chenchen Song
