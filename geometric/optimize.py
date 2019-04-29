@@ -844,6 +844,12 @@ class OptParams(object):
         self.Convergence_molpro_dmax = kwargs.get('convergence_molpro_dmax', 1.2e-3)
         # CI optimizations sometimes require tiny steps
         self.meci = kwargs.get('meci', False)
+        # Output .xyz file name may be set separately in
+        # run_optimizer() prior to calling Optimize().
+        self.xyzout = kwargs.get('xyzout', None)
+        # Name of the qdata.txt file to be written.
+        # The CLI is designed so the user passes true/false instead of the file name.
+        self.qdata = 'qdata.txt' if kwargs.get('qdata', False) else None
 
 class OPT_STATE(object):
     """ This describes the state of an OptObject during the optimization process
@@ -854,7 +860,7 @@ class OPT_STATE(object):
     FAILED           = 3  # optimization failed with no recovery option
 
 class Optimizer(object):
-    def __init__(self, coords, molecule, IC, engine, dirname, params, xyzout=None):
+    def __init__(self, coords, molecule, IC, engine, dirname, params):
         """
         Object representing the geometry optimization of a molecular system.
 
@@ -872,8 +878,7 @@ class Optimizer(object):
             Directory name for files to be written
         params : OptParams object
             Contains optimization parameters (really just a struct)
-        xyzout : str, optional
-            Output file name for writing the progress of the optimization.
+            Includes xyzout and qdata output file names (written if not None)
         """
         # Copies of data passed into constructor
         self.coords = coords
@@ -882,7 +887,6 @@ class Optimizer(object):
         self.engine = engine
         self.dirname = dirname
         self.params = params
-        self.xyzout = xyzout
         # Threshold for "low quality step" which decreases trust radius.
         self.ThreLQ = 0.25
         # Threshold for "high quality step" which increases trust radius.
@@ -898,6 +902,7 @@ class Optimizer(object):
         self.progress = deepcopy(self.molecule)
         self.progress.xyzs = []
         self.progress.qm_energies = []
+        self.progress.qm_grads = []
         self.progress.comms = []
         # Initial Hessian
         self.H0 = self.IC.guess_hessian(self.coords)
@@ -997,9 +1002,10 @@ class Optimizer(object):
         spcalc = self.engine.calc(self.X, self.dirname)
         self.E = spcalc['energy']
         self.gradx = spcalc['gradient']
-        # Add new Cartesian coordinates and gradients to history
+        # Add new Cartesian coordinates, energies, and gradients to history
         self.progress.xyzs.append(self.X.reshape(-1,3) * bohr2ang)
         self.progress.qm_energies.append(self.E)
+        self.progress.qm_grads.append(self.gradx.copy())
         self.progress.comms.append('Iteration %i Energy % .8f' % (self.Iteration, self.E))
 
     def prepareFirstStep(self):
@@ -1132,7 +1138,8 @@ class Optimizer(object):
         # Shorthand for self.params
         params = self.params
         # Write current optimization trajectory to file
-        if self.xyzout is not None: self.progress.write(self.xyzout)
+        if self.params.xyzout is not None: self.progress.write(self.params.xyzout)
+        if self.params.qdata is not None: self.progress.write(self.params.qdata, ftype='qdata')
         # Project out the degrees of freedom that are constrained
         rms_gradient, max_gradient = self.calcGradNorm()
         rms_displacement, max_displacement = calc_drms_dmax(self.X, self.Xprev)
@@ -1294,7 +1301,7 @@ class Optimizer(object):
             raise GeomOptNotConvergedError("Optimizer.optimizeGeometry() failed to converge.")
         return self.progress
 
-def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None):
+def Optimize(coords, molecule, IC, engine, dirname, params):
     """
     Optimize the geometry of a molecule. This function used contain the whole
     optimization loop, which has since been moved to the Optimizer() class;
@@ -1314,15 +1321,13 @@ def Optimize(coords, molecule, IC, engine, dirname, params, xyzout=None):
         Directory name for files to be written
     params : OptParams object
         Contains optimization parameters (really just a struct)
-    xyzout : str, optional
-        Output file name for writing the progress of the optimization.
 
     Returns
     -------
     progress: Molecule
         A molecule object for opt trajectory and energies
     """
-    optimizer = Optimizer(coords, molecule, IC, engine, dirname, params, xyzout)
+    optimizer = Optimizer(coords, molecule, IC, engine, dirname, params)
     try:
         return optimizer.optimizeGeometry()
     except EngineError:
@@ -1784,10 +1789,10 @@ def run_optimizer(**kwargs):
     if Cons is None:
         # Run a standard geometry optimization
         if prefix == os.path.splitext(inputf)[0]:
-            xyzout = prefix+"_optim.xyz"
+            params.xyzout = prefix+"_optim.xyz"
         else:
-            xyzout = prefix+".xyz"
-        progress = Optimize(coords, M, IC, engine, dirname, params, xyzout)
+            params.xyzout = prefix+".xyz"
+        progress = Optimize(coords, M, IC, engine, dirname, params)
     else:
         # Run a single constrained geometry optimization or scan over a grid of values
         if isinstance(IC, (CartesianCoordinates, PrimitiveInternalCoordinates)):
@@ -1799,15 +1804,17 @@ def run_optimizer(**kwargs):
             IC = CoordClass(M, build=True, connect=connect, addcart=addcart, constraints=Cons, cvals=CVal, conmethod=params.conmethod)
             IC.printConstraints(coords, thre=-1)
             if len(CVals) > 1:
-                xyzout = prefix+"_scan-%03i.xyz" % ic
+                params.xyzout = prefix+"_scan-%03i.xyz" % ic
+                # In the special case of a constraint scan, we write out multiple qdata.txt files
+                if params.qdata is not None: params.qdata = 'qdata_scan-%03i.txt' % ic
             elif prefix == os.path.splitext(kwargs['input'])[0]:
-                xyzout = prefix+"_optim.xyz"
+                params.xyzout = prefix+"_optim.xyz"
             else:
-                xyzout = prefix+".xyz"
+                params.xyzout = prefix+".xyz"
             if ic == 0:
-                progress = Optimize(coords, M, IC, engine, dirname, params, xyzout)
+                progress = Optimize(coords, M, IC, engine, dirname, params)
             else:
-                progress += Optimize(coords, M, IC, engine, dirname, params, xyzout)
+                progress += Optimize(coords, M, IC, engine, dirname, params)
             # update the structure for next optimization in SCAN (by CNH)
             M.xyzs[0] = progress.xyzs[-1]
             coords = progress.xyzs[-1].flatten() * ang2bohr
@@ -1821,6 +1828,7 @@ def run_optimizer(**kwargs):
             #print
         if len(CVals) > 1:
             Mfinal.write('scan-final.xyz')
+            if params.qdata is not None: Mfinal.write('qdata-final.txt')
     print_msg()
     logger.info("Time elapsed since start of run_optimizer: %.3f seconds\n" % (time.time()-t0))
     return progress
@@ -1864,6 +1872,7 @@ def main():
     parser.add_argument('--frag', action='store_true', help='Fragment the internal coordinate system by deleting bonds between residues.')
     parser.add_argument('--qcdir', type=str, help='Provide an initial qchem scratch folder (e.g. supplied initial guess).')
     parser.add_argument('--qccnv', action='store_true', help='Use Q-Chem style convergence criteria instead of the default.')
+    parser.add_argument('--qdata', action='store_true', help='Write qdata.txt containing coordinates, energies, gradients for each structure in optimization.')
     parser.add_argument('--converge', type=str, nargs="+", default=[], help='Custom convergence criteria as key/value pairs.'
                         'Provide the name of a criteria set as "set GAU_LOOSE" or "set TURBOMOLE", and/or set specific criteria using "energy 1e-5" or "grms 1e-3')
     parser.add_argument('--nt', type=int, help='Specify number of threads for running in parallel (for TeraChem this should be number of GPUs)')
