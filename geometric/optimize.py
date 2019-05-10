@@ -1328,14 +1328,7 @@ def Optimize(coords, molecule, IC, engine, dirname, params):
         A molecule object for opt trajectory and energies
     """
     optimizer = Optimizer(coords, molecule, IC, engine, dirname, params)
-    try:
-        return optimizer.optimizeGeometry()
-    except EngineError:
-        logger.info("EngineError:\n" + traceback.format_exc())
-        sys.exit(51)
-    except GeomOptNotConvergedError:
-        logger.info("Geometry Converge Failed Error:\n" + traceback.format_exc())
-        sys.exit(50)
+    return optimizer.optimizeGeometry()
 
 def CheckInternalGrad(coords, molecule, IC, engine, dirname, verbose=False):
     """ Check the internal coordinate gradient using finite difference. """
@@ -1501,7 +1494,7 @@ def get_molecule_engine(**kwargs):
     nt = kwargs.get('nt', None)
     # Name of the input file.
     inputf = kwargs.get('input')
-    
+
     ## MECI calculations create a custom engine that contains two other engines.
     if kwargs.get('meci', None):
         if sum([psi4, gmx, molpro, qcengine, openmm]) >= 1 or customengine:
@@ -1518,7 +1511,7 @@ def get_molecule_engine(**kwargs):
             sub_engines[state] = sub_engine
         engine = ConicalIntersection(M, sub_engines[1], sub_engines[2], meci_sigma, meci_alpha)
         return M, engine
-    
+
     ## Read radii from the command line.
     # Ions should have radii of zero.
     arg_radii = kwargs.get('radii', ["Na","0.0","Cl","0.0","K","0.0"])
@@ -1881,7 +1874,14 @@ def main():
     args = parser.parse_args(sys.argv[1:])
 
     # Run the optimizer.
-    run_optimizer(**vars(args))
+    try:
+        run_optimizer(**vars(args))
+    except EngineError:
+        logger.info("EngineError:\n" + traceback.format_exc())
+        sys.exit(51)
+    except GeomOptNotConvergedError:
+        logger.info("Geometry Converge Failed Error:\n" + traceback.format_exc())
+        sys.exit(50)
 
 if __name__ == "__main__":
     main()

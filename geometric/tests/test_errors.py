@@ -93,12 +93,10 @@ gradient('hf')
     M, engine = geometric.optimize.get_molecule_engine(**input_opts)
     IC = geometric.internal.DelocalizedInternalCoordinates(M, build=True)
     params = geometric.optimize.OptParams(**input_opts)
-    # When EngineError is detected, system will should with code 51
-    with pytest.raises(SystemExit) as pytest_wrapped_e:
+    # EngineError
+    with pytest.raises(EngineError):
         # run the test optimization
         geometric.optimize.Optimize(M.xyzs[0].flatten(), M, IC, engine, 'tmp', params)
-        # engine error should exit with code 51
-        assert pytest_wrapped_e.value.code == 51
 
 @addons.using_psi4
 def test_optimizer_not_converge_error(localizer):
@@ -128,9 +126,7 @@ gradient('hf')
     M, engine = geometric.optimize.get_molecule_engine(**input_opts)
     IC = geometric.internal.DelocalizedInternalCoordinates(M, build=True)
     params = geometric.optimize.OptParams(**input_opts)
-    # When GeomOptNotConvergedError is detected, system should exit with code 50
-    with pytest.raises(SystemExit) as pytest_wrapped_e:
+    # GeomOptNotConvergedError
+    with pytest.raises(GeomOptNotConvergedError):
         # run the test optimization
         geometric.optimize.Optimize(M.xyzs[0].flatten(), M, IC, engine, 'tmp', params)
-        # GeomOptNotConvergedError should exit with code 50
-        assert pytest_wrapped_e.value.code == 50
