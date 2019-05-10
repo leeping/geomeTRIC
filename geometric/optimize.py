@@ -1882,6 +1882,9 @@ def main():
     except GeomOptNotConvergedError:
         logger.info("Geometry Converge Failed Error:\n" + traceback.format_exc())
         sys.exit(50)
+    except:
+        logger.info("Unknown Error:\n" + traceback.format_exc())
+        raise
 
 if __name__ == "__main__":
     main()
