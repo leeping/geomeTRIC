@@ -40,7 +40,7 @@ except NameError:
 # |                    Last updated March 31, 2019                     |#
 # |                                                                    |#
 # |   This code is part of geomeTRIC and is covered under the          |#
-# |   geomeTRIC copyright notice and MIT license.                      |#
+# |   geomeTRIC copyright notice and BSD 3-clause license.             |#
 # |   Please see https://github.com/leeping/geomeTRIC for details.     |#
 # |                                                                    |#
 # |   Special note:                                                    |#
@@ -287,7 +287,7 @@ if "forcebalance" in __name__:
             have_dcdlib = True
             break
     if not have_dcdlib:
-        logger.info('The dcdlib module cannot be imported (Cannot read/write DCD files)')
+        logger.debug('The dcdlib module cannot be imported (Cannot read/write DCD files)')
 
     #============================#
     #| PDB read/write functions |#
@@ -295,7 +295,7 @@ if "forcebalance" in __name__:
     try:
         from .PDB import *
     except ImportError:
-        logger.info('The pdb module cannot be imported (Cannot read/write PDB files)')
+        logger.debug('The pdb module cannot be imported (Cannot read/write PDB files)')
 
     #=============================#
     #| Mol2 read/write functions |#
@@ -303,7 +303,7 @@ if "forcebalance" in __name__:
     try:
         from . import Mol2
     except ImportError:
-        logger.info('The Mol2 module cannot be imported (Cannot read/write Mol2 files)')
+        logger.debug('The Mol2 module cannot be imported (Cannot read/write Mol2 files)')
 
     #==============================#
     #| OpenMM interface functions |#
@@ -313,7 +313,7 @@ if "forcebalance" in __name__:
         from simtk.openmm import *
         from simtk.openmm.app import *
     except ImportError:
-        logger.info('The OpenMM modules cannot be imported (Cannot interface with OpenMM)')
+        logger.debug('The OpenMM modules cannot be imported (Cannot interface with OpenMM)')
 elif "geometric" in __name__:
     #============================#
     #| PDB read/write functions |#
@@ -321,7 +321,7 @@ elif "geometric" in __name__:
     try:
         from .PDB import *
     except ImportError:
-        logger.info('The pdb module cannot be imported (Cannot read/write PDB files)')
+        logger.debug('The pdb module cannot be imported (Cannot read/write PDB files)')
     #==============================#
     #| OpenMM interface functions |#
     #==============================#
@@ -330,7 +330,7 @@ elif "geometric" in __name__:
         from simtk.openmm import *
         from simtk.openmm.app import *
     except ImportError:
-        logger.info('The OpenMM modules cannot be imported (Cannot interface with OpenMM)')
+        logger.debug('The OpenMM modules cannot be imported (Cannot interface with OpenMM)')
 
 #===========================#
 #| Convenience subroutines |#
