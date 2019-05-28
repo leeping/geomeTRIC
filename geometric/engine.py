@@ -845,7 +845,7 @@ class QCEngineAPI(Engine):
         self.M.xyzs = [geom]
 
         # Use or build connectivity
-        if "connectivity" in schema["molecule"]:
+        if schema["molecule"].get("connectivity", None) is not None:
             self.M.Data["bonds"] = sorted((x[0], x[1]) for x in schema["molecule"]["connectivity"])
             self.M.built_bonds = True
         else:
