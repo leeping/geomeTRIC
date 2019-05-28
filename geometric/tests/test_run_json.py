@@ -112,6 +112,7 @@ def test_run_json_scan_rejection(localizer):
 
     with pytest.raises(KeyError) as excinfo:
         out_json = geometric.run_json.geometric_run_json(in_json_dict)
+        print(out_json['stdout'])
 
     assert "'scan' keyword" in str(excinfo.value)
 
@@ -134,6 +135,7 @@ def test_run_json_rdkit_water(localizer):
     with open('in.json', 'w') as handle:
         json.dump(in_json_dict, handle, indent=2)
     out_json = geometric.run_json.geometric_run_json(in_json_dict)
+    print(out_json['stdout'])
 
     with open('out.json', 'w') as handle:
         json.dump(out_json, handle, indent=2)
@@ -167,6 +169,7 @@ def test_run_json_rdkit_hooh_constraint(localizer):
     with open('in.json', 'w') as handle:
         json.dump(in_json_dict, handle, indent=2)
     out_json = geometric.run_json.geometric_run_json(in_json_dict)
+    print(out_json['stdout'])
 
     with open('out.json', 'w') as handle:
         json.dump(out_json, handle, indent=2)
@@ -200,6 +203,7 @@ def test_run_json_distance_constraint(localizer):
         json.dump(in_json_dict, handle, indent=2)
 
     out_json = geometric.run_json.geometric_run_json(in_json_dict)
+    print(out_json['stdout'])
 
     with open('out.json', 'w') as handle:
         json.dump(out_json, handle, indent=2)
@@ -228,6 +232,7 @@ def test_run_json_psi4_hydrogen(localizer):
         json.dump(in_json_dict, handle, indent=2)
 
     out_json = geometric.run_json.geometric_run_json(in_json_dict)
+    print(out_json['stdout'])
 
     with open('out.json', 'w') as handle:
         json.dump(out_json, handle, indent=2)
@@ -259,5 +264,6 @@ def test_rdkit_run_error(localizer):
     in_json_dict = _build_input(molecule, method="cookiemonster")
     # an error should be caught in the ret
     ret = geometric.run_json.geometric_run_json(in_json_dict)
+    print(ret['stdout'])
     assert ret["success"] == False
     assert "UFF methods" in ret["error"]["error_message"]
