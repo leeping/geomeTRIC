@@ -832,6 +832,8 @@ class OptParams(object):
         self.conmethod = kwargs.get('conmethod', 0)
         # Check if there is a convergence set passed else use the default
         set_name = kwargs.get('convergence_set', 'GAU').upper()
+        # Write Hessian matrix at optimized structure to text file
+        self.write_cart_hess = kwargs.get('write_cart_hess', None)
         # If we have extra keywords apply them here else use the set
         # Convergence criteria in a.u. and Angstrom
         self.Convergence_energy = kwargs.get('convergence_energy', convergence_sets[set_name][0])
@@ -1254,36 +1256,40 @@ class Optimizer(object):
 
         ### Update the Hessian ###
         if UpdateHessian:
-            # BFGS Hessian update
-            Dy   = col(self.Y - self.Yprev)
-            Dg   = col(self.G - self.Gprev)
-            # Catch some abnormal cases of extremely small changes.
-            if np.linalg.norm(Dg) < 1e-6: return
-            if np.linalg.norm(Dy) < 1e-6: return
-            # Mat1 = (Dg*Dg.T)/(Dg.T*Dy)[0,0]
-            # Mat2 = ((self.H*Dy)*(self.H*Dy).T)/(Dy.T*self.H*Dy)[0,0]
-            Mat1 = np.dot(Dg,Dg.T)/np.dot(Dg.T,Dy)[0,0]
-            Mat2 = np.dot(np.dot(self.H,Dy), np.dot(self.H,Dy).T)/multi_dot([Dy.T,self.H,Dy])[0,0]
-            Eig = np.linalg.eigh(self.H)[0]
-            Eig.sort()
-            ndy = np.array(Dy).flatten()/np.linalg.norm(np.array(Dy))
-            ndg = np.array(Dg).flatten()/np.linalg.norm(np.array(Dg))
-            nhdy = np.dot(self.H,Dy).flatten()/np.linalg.norm(np.dot(self.H,Dy))
-            if params.verbose:
-                msg = "Denoms: %.3e %.3e" % (np.dot(Dg.T,Dy)[0,0], multi_dot((Dy.T,self.H,Dy))[0,0])
-                msg +=" Dots: %.3e %.3e" % (np.dot(ndg, ndy), np.dot(ndy, nhdy))
-            #H1 = H.copy()
-            self.H += Mat1-Mat2
-            Eig1 = np.linalg.eigh(self.H)[0]
-            Eig1.sort()
-            if params.verbose:
-                msg += " Eig-ratios: %.5e ... %.5e" % (np.min(Eig1)/np.min(Eig), np.max(Eig1)/np.max(Eig))
-                logger.info(msg+'\n')
-            if np.min(Eig1) <= params.epsilon and params.reset:
-                logger.info("Eigenvalues below %.4e (%.4e) - returning guess\n" % (params.epsilon, np.min(Eig1)))
-                self.H = self.IC.guess_hessian(self.coords)
+            self.UpdateHessian()
         # Then it's on to the next loop iteration!
         return
+
+    def UpdateHessian(self):
+        params = self.params
+        # BFGS Hessian update
+        Dy   = col(self.Y - self.Yprev)
+        Dg   = col(self.G - self.Gprev)
+        # Catch some abnormal cases of extremely small changes.
+        if np.linalg.norm(Dg) < 1e-6: return
+        if np.linalg.norm(Dy) < 1e-6: return
+        # Mat1 = (Dg*Dg.T)/(Dg.T*Dy)[0,0]
+        # Mat2 = ((self.H*Dy)*(self.H*Dy).T)/(Dy.T*self.H*Dy)[0,0]
+        Mat1 = np.dot(Dg,Dg.T)/np.dot(Dg.T,Dy)[0,0]
+        Mat2 = np.dot(np.dot(self.H,Dy), np.dot(self.H,Dy).T)/multi_dot([Dy.T,self.H,Dy])[0,0]
+        Eig = np.linalg.eigh(self.H)[0]
+        Eig.sort()
+        ndy = np.array(Dy).flatten()/np.linalg.norm(np.array(Dy))
+        ndg = np.array(Dg).flatten()/np.linalg.norm(np.array(Dg))
+        nhdy = np.dot(self.H,Dy).flatten()/np.linalg.norm(np.dot(self.H,Dy))
+        if params.verbose:
+            msg = "Denoms: %.3e %.3e" % (np.dot(Dg.T,Dy)[0,0], multi_dot((Dy.T,self.H,Dy))[0,0])
+            msg +=" Dots: %.3e %.3e" % (np.dot(ndg, ndy), np.dot(ndy, nhdy))
+        #H1 = H.copy()
+        self.H += Mat1-Mat2
+        Eig1 = np.linalg.eigh(self.H)[0]
+        Eig1.sort()
+        if params.verbose:
+            msg += " Eig-ratios: %.5e ... %.5e" % (np.min(Eig1)/np.min(Eig), np.max(Eig1)/np.max(Eig))
+            logger.info(msg+'\n')
+        if np.min(Eig1) <= params.epsilon and params.reset:
+            logger.info("Eigenvalues below %.4e (%.4e) - returning guess\n" % (params.epsilon, np.min(Eig1)))
+            self.H = self.IC.guess_hessian(self.coords)
 
     def optimizeGeometry(self):
         """
@@ -1299,6 +1305,13 @@ class Optimizer(object):
                 self.evaluateStep()
         if self.state == OPT_STATE.FAILED:
             raise GeomOptNotConvergedError("Optimizer.optimizeGeometry() failed to converge.")
+        # If we want to save the Hessian used by the optimizer (in Cartesian coordinates)
+        if self.params.write_cart_hess:
+            # One last Hessian update before writing it out
+            self.UpdateHessian()
+            logger.info("Saving current approximate Hessian (Cartesian coordinates) to %s" % self.params.write_cart_hess)
+            Hx = self.IC.calcHessCart(self.X, self.G, self.H)
+            np.savetxt(self.params.write_cart_hess, Hx, fmt='% 14.10f')
         return self.progress
 
 def Optimize(coords, molecule, IC, engine, dirname, params):
@@ -1849,6 +1862,7 @@ def main():
     parser.add_argument('--fdcheck', action='store_true', help='Check internal coordinate gradients using finite difference.')
     parser.add_argument('--enforce', type=float, default=0.0, help='Enforce exact constraints when within provided tolerance (in a.u. and radian)')
     parser.add_argument('--conmethod', type=int, default=0, help='Set to 1 to enable updated constraint algorithm.')
+    parser.add_argument('--write_cart_hess', type=str, default=None, help='Write approximate Hessian matrix at optimized geometry to specified file (Cartesian coords.)')
     parser.add_argument('--epsilon', type=float, default=1e-5, help='Small eigenvalue threshold.')
     parser.add_argument('--check', type=int, default=0, help='Check coordinates every N steps to see whether it has changed.')
     parser.add_argument('--verbose', action='store_true', help='Write out the displacements.')

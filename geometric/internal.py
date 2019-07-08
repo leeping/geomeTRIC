@@ -1781,6 +1781,24 @@ class InternalCoordinates(object):
         Hx_BptGq = hessx - np.einsum('pmn,p->mn',Bmatp,Gq)
         Hq = np.einsum('ps,sm,mn,nr,rq', Ginv, Bmat, Hx_BptGq, Bmat.T, Ginv, optimize=True)
         return Hq
+
+    def calcHessCart(self, xyz, gradq, hessq):
+        """
+        Compute the Cartesian Hessian given internal coordinate gradient and Hessian. 
+        Returns the answer in a.u.
+        """
+        # xyz = xyz.flatten()
+        # q0 = self.calculate(xyz)
+        # Ginv = self.GInverse(xyz)
+        Bmat = self.wilsonB(xyz)
+        Hx = np.einsum('ai,ab,bj->ij', Bmat, hessq, Bmat, optimize=True)
+        Hx += np.einsum('ji,j->i', Bmat, gradq, optimize=True)
+        # Gq = self.calcGrad(xyz, gradx)
+        # deriv2 = self.second_derivatives(xyz)
+        # Bmatp = deriv2.reshape(deriv2.shape[0], xyz.shape[0], xyz.shape[0])
+        # Hx_BptGq = hessx - np.einsum('pmn,p->mn',Bmatp,Gq)
+        # Hq = np.einsum('ps,sm,mn,nr,rq', Ginv, Bmat, Hx_BptGq, Bmat.T, Ginv, optimize=True)
+        return Hx
     
     def readCache(self, xyz, dQ):
         if not hasattr(self, 'stored_xyz'):
