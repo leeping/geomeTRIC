@@ -1462,14 +1462,8 @@ def WriteDisplacements(coords, M, IC, dirname, verbose):
                 x1 = IC.newCartesian(coords, dq, verbose=verbose)
             else:
                 x1 = coords.copy()
-            displacement = np.sqrt(np.sum((((x1-coords) * bohr2ang).reshape(-1,3))**2, axis=1))
-            rms_displacement = np.sqrt(np.mean(displacement**2))
-            max_displacement = np.max(displacement)
-            if j != 0:
-                dx = (x1-coords)*np.abs(j)*2/max_displacement
-            else:
-                dx = 0.0
-            x.append((coords+dx).reshape(-1,3) * bohr2ang)
+            rms_displacement, max_displacement = calc_drms_dmax(x1, coords, align=False)
+            x.append(x1.reshape(-1,3) * bohr2ang)
             logger.info("%i %.1f Displacement (rms/max) = %.5f / %.5f %s\n" % (i, j, rms_displacement, max_displacement, "(Bork)" if IC.bork else "(Good)"))
         M.xyzs = x
         M.write("%s/ic_%03i.xyz" % (dirname, i))
@@ -1865,7 +1859,7 @@ def main():
     parser.add_argument('--write_cart_hess', type=str, default=None, help='Write approximate Hessian matrix at optimized geometry to specified file (Cartesian coords.)')
     parser.add_argument('--epsilon', type=float, default=1e-5, help='Small eigenvalue threshold.')
     parser.add_argument('--check', type=int, default=0, help='Check coordinates every N steps to see whether it has changed.')
-    parser.add_argument('--verbose', action='store_true', help='Write out the displacements.')
+    parser.add_argument('--verbose', action='store_true', help='More verbose printouts.')
     parser.add_argument('--logINI',  type=str, dest='logIni', help='ini file for logging')
     parser.add_argument('--reset', action='store_true', help='Reset Hessian when eigenvalues are under epsilon. (Deprecated; now does this by default.)')
     parser.add_argument('--no_reset', action='store_true', help='Do not reset Hessian when eigenvalues are under epsilon.')
