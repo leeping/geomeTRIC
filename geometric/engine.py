@@ -289,7 +289,7 @@ class TeraChem(Engine):
         self.tcin['purify'] = 'no'
         self.tcin['mixguess'] = "0.0"
         return guessFiles
-            
+
     def calc_new(self, coords, dirname):
         # Ensure guess files are in the correct locations
         self.manage_guess(dirname)
@@ -838,7 +838,7 @@ class QCEngineAPI(Engine):
         self.schema["driver"] = "gradient"
 
         self.M = Molecule()
-        self.M.elem = schema["molecule"]["symbols"]
+        self.M.elem = list(schema["molecule"]["symbols"])
 
         # Geometry in (-1, 3) array in angstroms
         geom = np.array(schema["molecule"]["geometry"], dtype=np.float64).reshape(-1, 3) * bohr2ang
