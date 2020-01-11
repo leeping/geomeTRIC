@@ -286,8 +286,8 @@ class TeraChem(Engine):
             if not os.path.exists(os.path.join(dirname, f)):
                 raise TeraChemEngineError("%s guess file is missing and this code shouldn't be called" % f)
         # When guess files are provided, turn off purify and mix.
-        self.tcin['purify'] = 'no'
-        self.tcin['mixguess'] = "0.0"
+        if 'purify' not in self.tcin: self.tcin['purify'] = 'no'
+        if 'mixguess' not in self.tcin: self.tcin['mixguess'] = "0.0"
         return guessFiles
 
     def calc_new(self, coords, dirname):
