@@ -319,8 +319,8 @@ class TeraChem(Engine):
         # Extract energy and gradient
         try:
             subprocess.call("awk '/FINAL ENERGY/ {p=$3} /Correlation Energy/ {p+=$5} /FINAL Target State Energy/ {p=$5} END {printf \"%.10f\\n\", p}' run.out > energy.txt", cwd=dirname, shell=True)
-            subprocess.run("awk '/Gradient units are Hartree/,/Net gradient/ {if ($1 ~ /^-?[0-9]/) {print}}' run.out > grad.txt", cwd=dirname, check=True, shell=True)
-            subprocess.run("awk 'BEGIN {s=0} /SPIN S-SQUARED/ {s=$3} END {printf \"%.6f\\n\", s}' run.out > s-squared.txt", cwd=dirname, check=True, shell=True)
+            subprocess.call("awk '/Gradient units are Hartree/,/Net gradient/ {if ($1 ~ /^-?[0-9]/) {print}}' run.out > grad.txt", cwd=dirname, shell=True)
+            subprocess.call("awk 'BEGIN {s=0} /SPIN S-SQUARED/ {s=$3} END {printf \"%.6f\\n\", s}' run.out > s-squared.txt", cwd=dirname, shell=True)
             energy = float(open(os.path.join(dirname,'energy.txt')).readlines()[0].strip())
             gradient = np.loadtxt(os.path.join(dirname,'grad.txt')).flatten()
             s2 = float(open(os.path.join(dirname,'s-squared.txt')).readlines()[0].strip())
@@ -362,7 +362,7 @@ class TeraChem(Engine):
         # Extract energy and gradient
         subprocess.call("awk '/FINAL ENERGY/ {p=$3} /Correlation Energy/ {p+=$5} /FINAL Target State Energy/ {p=$5} END {printf \"%.10f\\n\", p}' run.out > energy.txt", cwd=dirname, shell=True)
         subprocess.call("awk '/Gradient units are Hartree/,/Net gradient/ {if ($1 ~ /^-?[0-9]/) {print}}' run.out > grad.txt", cwd=dirname, shell=True)
-        subprocess.run("awk 'BEGIN {s=0} /SPIN S-SQUARED/ {s=$3} END {printf \"%.6f\\n\", s}' run.out > s-squared.txt", cwd=dirname, check=True, shell=True)
+        subprocess.call("awk 'BEGIN {s=0} /SPIN S-SQUARED/ {s=$3} END {printf \"%.6f\\n\", s}' run.out > s-squared.txt", cwd=dirname, shell=True)
         energy = float(open(os.path.join(dirname,'energy.txt')).readlines()[0].strip())
         gradient = np.loadtxt(os.path.join(dirname,'grad.txt')).flatten()
         s2 = float(open(os.path.join(dirname,'s-squared.txt')).readlines()[0].strip())
@@ -542,7 +542,7 @@ class Psi4(Engine):
                     outfile.write(line)
         try:
             # Run Psi4
-            subprocess.run('psi4%s input.dat' % self.nt(), cwd=dirname, check=True, shell=True)
+            subprocess.check_call('psi4%s input.dat' % self.nt(), cwd=dirname, shell=True)
             # Read energy and gradients from Psi4 output
             parsed = self.parse_psi4_output(os.path.join(dirname, 'output.dat'))
             energy = parsed['energy']
@@ -627,9 +627,9 @@ class QChem(Engine):
         try:
             # Run Qchem
             if self.qcdir:
-                subprocess.run('qchem%s run.in run.out run.d > run.log 2>&1' % self.nt(), cwd=dirname, check=True, shell=True)
+                subprocess.check_call('qchem%s run.in run.out run.d > run.log 2>&1' % self.nt(), cwd=dirname, shell=True)
             else:
-                subprocess.run('qchem%s run.in run.out run.d > run.log 2>&1' % self.nt(), cwd=dirname, check=True, shell=True)
+                subprocess.check_call('qchem%s run.in run.out run.d > run.log 2>&1' % self.nt(), cwd=dirname, shell=True)
                 # Assume reading the SCF guess is desirable
                 self.qcdir = True
                 self.M.edit_qcrems({'scf_guess':'read'})
@@ -789,7 +789,7 @@ class Molpro(Engine):
                     outfile.write(line)
         try:
             # Run Molpro
-            subprocess.run('%s%s run.mol' % (self.molproExe(), self.nt()), cwd=dirname, check=True, shell=True)
+            subprocess.check_call('%s%s run.mol' % (self.molproExe(), self.nt()), cwd=dirname, shell=True)
             # Read energy and gradients from Molpro output
             energy, gradient = self.parse_molpro_output(os.path.join(dirname, 'run.out'))
         except (OSError, IOError, RuntimeError, subprocess.CalledProcessError):
