@@ -257,6 +257,10 @@ class TeraChem(Engine):
             scrFiles = ['ca0', 'cb0']
         else:
             scrFiles = ['c0']
+        if self.tcin['casscf'].lower() == 'yes':
+            is_casscf = True
+            scrFiles += ['c0.casscf']
+        else: is_casscf = False
         # Copy fragment guess file if applicable. It will be used in every energy/grad calc
         if self.guessMode == 'frag':
             shutil.copy2(self.fragFile, dirname)
@@ -269,7 +273,8 @@ class TeraChem(Engine):
                 if os.path.exists(os.path.join(dirname, self.scr, f)):
                     guessFiles.append(f)
             if guessFiles:
-                self.tcin['guess'] = ' '.join(guessFiles)
+                self.tcin['guess'] = ' '.join([f for f in guessFiles if 'casscf' not in f])
+                if 'c0.casscf' in guessFiles and is_casscf: self.tcin['casguess'] = 'c0.casscf'
                 self.guessMode = 'file'
             else:
                 return []
@@ -280,6 +285,14 @@ class TeraChem(Engine):
         guessFiles = self.tcin['guess'].split()
         for f in guessFiles:
             if f in scrFiles and os.path.exists(os.path.join(dirname, self.scr, f)):
+                shutil.copy2(os.path.join(dirname, self.scr, f), os.path.join(dirname, f))
+            elif not os.path.exists(os.path.join(dirname, f)):
+                shutil.copy2(f, dirname)
+            if not os.path.exists(os.path.join(dirname, f)):
+                raise TeraChemEngineError("%s guess file is missing and this code shouldn't be called" % f)
+        if is_casscf:
+            f = 'c0.casscf'
+            if os.path.exists(os.path.join(dirname, self.scr, f)):
                 shutil.copy2(os.path.join(dirname, self.scr, f), os.path.join(dirname, f))
             elif not os.path.exists(os.path.join(dirname, f)):
                 shutil.copy2(f, dirname)
@@ -305,9 +318,9 @@ class TeraChem(Engine):
         subprocess.check_call('terachem run.in > run.out', cwd=dirname, shell=True)
         # Extract energy and gradient
         try:
-            subprocess.run("awk '/FINAL ENERGY/ {p=$3} /Correlation Energy/ {p+=$5} END {printf \"%.10f\\n\", p}' run.out > energy.txt", cwd=dirname, check=True, shell=True)
-            subprocess.run("awk '/Gradient units are Hartree/,/Net gradient/ {if ($1 ~ /^-?[0-9]/) {print}}' run.out > grad.txt", cwd=dirname, check=True, shell=True)
-            subprocess.run("awk 'BEGIN {s=0} /SPIN S-SQUARED/ {s=$3} END {printf \"%.6f\\n\", s}' run.out > s-squared.txt", cwd=dirname, check=True, shell=True)
+            subprocess.call("awk '/FINAL ENERGY/ {p=$3} /Correlation Energy/ {p+=$5} /FINAL Target State Energy/ {p=$5} END {printf \"%.10f\\n\", p}' run.out > energy.txt", cwd=dirname, shell=True)
+            subprocess.call("awk '/Gradient units are Hartree/,/Net gradient/ {if ($1 ~ /^-?[0-9]/) {print}}' run.out > grad.txt", cwd=dirname, shell=True)
+            subprocess.call("awk 'BEGIN {s=0} /SPIN S-SQUARED/ {s=$3} END {printf \"%.6f\\n\", s}' run.out > s-squared.txt", cwd=dirname, shell=True)
             energy = float(open(os.path.join(dirname,'energy.txt')).readlines()[0].strip())
             gradient = np.loadtxt(os.path.join(dirname,'grad.txt')).flatten()
             s2 = float(open(os.path.join(dirname,'s-squared.txt')).readlines()[0].strip())
@@ -347,9 +360,9 @@ class TeraChem(Engine):
 
     def read_wq_new(self, coords, dirname):
         # Extract energy and gradient
-        subprocess.call("awk '/FINAL ENERGY/ {p=$3} /Correlation Energy/ {p+=$5} END {printf \"%.10f\\n\", p}' run.out > energy.txt", cwd=dirname, shell=True)
+        subprocess.call("awk '/FINAL ENERGY/ {p=$3} /Correlation Energy/ {p+=$5} /FINAL Target State Energy/ {p=$5} END {printf \"%.10f\\n\", p}' run.out > energy.txt", cwd=dirname, shell=True)
         subprocess.call("awk '/Gradient units are Hartree/,/Net gradient/ {if ($1 ~ /^-?[0-9]/) {print}}' run.out > grad.txt", cwd=dirname, shell=True)
-        subprocess.run("awk 'BEGIN {s=0} /SPIN S-SQUARED/ {s=$3} END {printf \"%.6f\\n\", s}' run.out > s-squared.txt", cwd=dirname, check=True, shell=True)
+        subprocess.call("awk 'BEGIN {s=0} /SPIN S-SQUARED/ {s=$3} END {printf \"%.6f\\n\", s}' run.out > s-squared.txt", cwd=dirname, shell=True)
         energy = float(open(os.path.join(dirname,'energy.txt')).readlines()[0].strip())
         gradient = np.loadtxt(os.path.join(dirname,'grad.txt')).flatten()
         s2 = float(open(os.path.join(dirname,'s-squared.txt')).readlines()[0].strip())
@@ -529,7 +542,7 @@ class Psi4(Engine):
                     outfile.write(line)
         try:
             # Run Psi4
-            subprocess.run('psi4%s input.dat' % self.nt(), cwd=dirname, check=True, shell=True)
+            subprocess.check_call('psi4%s input.dat' % self.nt(), cwd=dirname, shell=True)
             # Read energy and gradients from Psi4 output
             parsed = self.parse_psi4_output(os.path.join(dirname, 'output.dat'))
             energy = parsed['energy']
@@ -614,9 +627,9 @@ class QChem(Engine):
         try:
             # Run Qchem
             if self.qcdir:
-                subprocess.run('qchem%s run.in run.out run.d > run.log 2>&1' % self.nt(), cwd=dirname, check=True, shell=True)
+                subprocess.check_call('qchem%s run.in run.out run.d > run.log 2>&1' % self.nt(), cwd=dirname, shell=True)
             else:
-                subprocess.run('qchem%s run.in run.out run.d > run.log 2>&1' % self.nt(), cwd=dirname, check=True, shell=True)
+                subprocess.check_call('qchem%s run.in run.out run.d > run.log 2>&1' % self.nt(), cwd=dirname, shell=True)
                 # Assume reading the SCF guess is desirable
                 self.qcdir = True
                 self.M.edit_qcrems({'scf_guess':'read'})
@@ -776,7 +789,7 @@ class Molpro(Engine):
                     outfile.write(line)
         try:
             # Run Molpro
-            subprocess.run('%s%s run.mol' % (self.molproExe(), self.nt()), cwd=dirname, check=True, shell=True)
+            subprocess.check_call('%s%s run.mol' % (self.molproExe(), self.nt()), cwd=dirname, shell=True)
             # Read energy and gradients from Molpro output
             energy, gradient = self.parse_molpro_output(os.path.join(dirname, 'run.out'))
         except (OSError, IOError, RuntimeError, subprocess.CalledProcessError):
