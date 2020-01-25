@@ -34,7 +34,7 @@ _base_schema = {
 def test_rdkit_simple(localizer):
 
     schema = copy.deepcopy(_base_schema)
-    opts = {"qcengine": True, "qcschema": schema, "input": "tmp_data", "qce_program": "rdkit"}
+    opts = {"engine": "qcengine", "qcschema": schema, "input": "tmp_data", "qce_program": "rdkit"}
 
     ret = geometric.optimize.run_optimizer(**opts)
 

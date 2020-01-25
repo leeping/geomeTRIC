@@ -174,12 +174,15 @@ def form_rot(q):
     R4 = np.dot(al(q),ar(qc))
     return R4[1:, 1:]
 
-def sorted_eigh(mat, b=None, asc=False):
-    """ Return eigenvalues of a symmetric matrix in descending order and associated eigenvectors """
-    if b is not None:
-        L, Q = np.linalg.eigh(mat, b)
-    else:
-        L, Q = np.linalg.eigh(mat)
+def sorted_eigh(mat, asc=False):
+    """ 
+    Return eigenvalues and eigenvectors of a symmetric matrix 
+    in descending order and associated eigenvectors. 
+
+    This is just a convenience function to get eigenvectors
+    in descending or ascending order as desired.
+    """
+    L, Q = np.linalg.eigh(mat)
     if asc:
         idx = L.argsort()
     else:

@@ -542,11 +542,12 @@ def get_delta_prime_trm(v, X, G, H, IC, verbose=False):
     dy_prime : float
         Derivative of the internal coordinate step size w/r.t. v
     """
-    Gs, Hs = image_gradient_hessian(G, H, [0])
+    # LPW 2020-01-24 Testing whether the image potential can be combined with NR for transition state optimization
+    # Gs, Hs = image_gradient_hessian(G, H, [0])
     if IC is not None:
-        GC, HC = IC.augmentGH(X, GI, HI) if IC.haveConstraints() else (Gs, Hs)
+        GC, HC = IC.augmentGH(X, GI, HI) if IC.haveConstraints() else (G, H)
     else:
-        GC, HC = (Gs, Hs)
+        GC, HC = (G, H)
     HT = HC + v*np.eye(len(HC))
     # The constrained degrees of freedom should not have anything added to diagonal
     for i in range(len(G), len(GC)):
@@ -567,6 +568,135 @@ def get_delta_prime_trm(v, X, G, H, IC, verbose=False):
     # sol = flat(0.5*row(dy)*np.matrix(H)*col(dy))[0] + np.dot(dy,G)
     sol = flat(0.5*multi_dot([row(dy),H,col(dy)]))[0] + np.dot(dy,G)
     return dy, sol, dy_prime
+
+def rfo_gen_evp(M, a):
+    """
+    Solve the generalized eigenvalue problem often encountered
+    in restricted step RFO, given by:
+
+    M * v = l * A * v
+
+    where M is any matrix (always symmetric in our case),
+    v and l are the desired eigenvectors,
+    and A is a scaling matrix with the form:
+
+    [[ 1  0  ]
+     [ 0 a*I ]]
+    """
+    # Values on the diagonal of the matrix
+    av = np.ones(M.shape[0])
+    av[1:] = a
+    # A to the -1/2 power
+    Amh = np.diag(av**-0.5)
+    # Form A^-1/2 * M * A^-1/2
+    Mp = multi_dot(Amh, M, Amh)
+    # Solve for eigenvalues and eigenvectors, which are actually v' = (A^1/2)*v
+    eigvals, eigvecsp = sorted_eigh(Mp, asc=True)
+    # Get the eigenvectors of the generalized EVP as v = (A^-1/2) v'
+    eigvecs = np.dot(Amh, eigvecsp)
+    return eigvals, eigvecs
+
+def get_delta_prime_rs_p_rfo(alpha, X, G, H, IC, verbose=False):
+    """
+    Return the restricted-step rational functional optimization
+    step, given a particular value of alpha. The step is given by:
+    1) Solving the generalized eigenvalue problem
+    [[0 G]  = lambda * [[1 0] * vec ,
+     [G H]]             [0 S]]
+       where the LHS matrix is called the augmented Hessian,
+       and S is alpha times the identity (starting value 1.0).
+    2) Dividing vec through by the 0th element, and keeping the rest
+    This function also calculates the derivative of the norm of the step
+    with respect to alpha, which allows trust_step() to rapidly find
+    the RS-RFO step that satisfies a desired step length.
+
+    Currently does not work with constraints, and gives equivalent performance
+    to the trust radius method.
+
+    Parameters
+    ----------
+    alpha : float
+        Multiple of the identity in the S-matrix
+    X : np.ndarray
+        Flat array of Cartesian coordinates in atomic units
+    G : np.ndarray
+        Flat array containing internal gradient
+    H : np.ndarray
+        Square array containing internal Hessian
+    IC : InternalCoordinates
+        Object describing the internal coordinate system
+    verbose : bool
+        Print diagnostic messages
+
+    Returns
+    -------
+    dy : np.ndarray
+        The internal coordinate step
+    expect : float
+        Expected change of the objective function
+    dy_prime : float
+        Derivative of the internal coordinate step size w/r.t. v
+    """
+    if IC.haveConstraints():
+        raise RuntimeError("Rational function optimization does not support constraints")
+
+    # Sorted eigenvalues and corresponding eigenvectors of the Hessian
+    Hvals, Hvecs = sorted_eigh(H, asc=True)
+
+    # Projection of gradient along the Hessian eigenvectors
+    Gproj = np.dot(Hvecs.T, G)
+
+    # Indices of the transition vector (which forms the small RFO partition) and the other vectors
+    tv = 0
+    ot = numpy.array([i for i in range(H.shape[0]) if i != tv])
+
+    if Hvals[tv] < 0 or (Hvals[ot] > 0).any():
+        logger.info("Hessian eigenvalues are not in the expected ranges from a transition state search : \n")
+        if Hvals[tv] < 0:
+            logger.info("  Eig[%i] = % .5f\n" % (tv, Hvals[tv]))
+        for i in ot:
+            if Hvals[i] > 0:
+                logger.info("  Eig[%i] = % .5f\n" % (i, Hvals[i]))
+    
+    # The P-RFO matrices follow the convention of Bofill (1998)
+    # with the "extra" row in the upper left.
+    # Form the small P-RFO matrix, which is a 2x2 matrix
+    prfo_tv = np.array([[0, Gproj[tv]], [Gproj[tv], Hvals[tv]]])
+    # Form the large P-RFO matrix, which is the same size as H itself
+    prfo_ot = np.zeros_like(H)
+    # Fill matrix (except top left) with the non-'tv' eigenvalues
+    prfo_ot[1:, 1:] = np.diag(Hvals[ot])
+    # Fill the top row and left column with the non-'tv' gradient components
+    prfo_ot[0, 1:] = Gproj[ot]
+    prfo_ot[1:, 0] = Gproj[ot]
+
+    # Solve the generalized eigenvector problems
+    tv_vals, tv_vecs = rfo_gen_evp(prfo_tv)
+    ot_vals, ot_vecs = rfo_gen_evp(prfo_ot)
+
+    ## Form the P-RFO step.
+    dy = np.zeros_like(G)
+    # Get the eigenvector corresponding to the largest eigenvalue of the small 2x2 P-RFO matrix,
+    # normalize by the first element, and assign the second element to the correct position in dy.
+    one_dy_tv = tv_vecs[:, -1].copy()
+    one_dy_tv /= one_dy_tv[0]
+    dy[tv] = one_dy_tv[1]
+    # Compute transition vector contribution |dy|^2/d(alpha)
+    dy2_prime_tv = 2 * (tv_vals[-1]/(1+alpha*dy[tv]**2)) * (Gproj[tv]**2/(Hvals[tv]-tv_vals[-1]*alpha)**3)
+    # Do the same, but for the smallest eigenvalue of the large P-RFO matrix.
+    one_dy_ot = ot_vecs[:, 0].copy()
+    one_dy_ot /= one_dy_ot[0]
+    dy[ot] = one_dy_ot[1:]
+    # Compute other vectors' contribution |dy|^2/d(alpha)
+    dy2_prime_ot = 0.0
+    for i in ot:
+        dy2_prime_ot += Gproj[i]**2/(Hvals[i]-ot_vals[0]*alpha)**3
+    dy2_prime_ot *= 2 * (ot_vals[0]/(1+alpha*np.dot(dy[ot],dy[ot])))
+    dy2_prime = dy2_prime_tv + dy2_prime_ot
+    # Derivative of the norm of the step w/r.t. alpha
+    dy_prime = dy2_prime/(2*np.linalg.norm(dy))
+    expect = (tv_vals[-1]/tv_vecs[0,-1]**2 + ot_vals[0]/ot_vecs[0,0]**2) / 2
+    return dy, expect, dy_prime
 
 def get_delta_prime_rfo(alpha, X, G, H, IC, verbose=False):
     """
@@ -726,15 +856,20 @@ def trust_step(target, v0, X, G, H, IC, rfo, verbose=False):
     m_dy = dy.copy()
     m_sol = sol
     while True:
-        v += (1-ndy/target)*(ndy/dy_prime)
+        # LPW 2020-01-24 : I think this was a bug, but since it was in the code for 3 years,
+        # we need to keep our eyes open
+        v += (1-ndy/target)*(ndy/dy_prime) # The correct (new) version
+        # v += (target/ndy-1)*(ndy/dy_prime) # The incorrect (old) version
         dy, sol, dy_prime, = get_delta_prime(v, X, G, H, IC, rfo, verbose)
         ndy = np.linalg.norm(dy)
         # This is "too" verbose; will enable integer print level later
-        if verbose >= 2: logger.info("v = %.5f dy -> target = %.5f -> %.5f\n" % (v, ndy, target))
+        if verbose >= 2: logger.info("v = %.5f dy -> target = %.5f ---> %.5f\n" % (v, ndy, target))
         if np.abs((ndy-target)/target) < 0.001:
+            if verbose: logger.info("trust_step : niter = %4i, v = %.5f, dy on target:   %.5f ---> %.5f\n" % (niter, v, ndy, target))
             return dy, sol
         # With Lagrange multipliers it may be impossible to go under a target step size
         elif niter > 10 and np.abs(ndy_last-ndy)/ndy < 0.001:
+            if verbose: logger.info("trust_step : niter = %4i, v = %.5f, dy over target: %.5f -x-> %.5f\n" % (niter, v, ndy, target))
             return dy, sol
         niter += 1
         ndy_last = ndy
@@ -747,88 +882,8 @@ def trust_step(target, v0, X, G, H, IC, rfo, verbose=False):
             logger.info("trust_step hit niter = 100, randomizing\n")
             v += np.random.random() * niter / 100
         if niter%1000 == 999:
-            logger.info("trust_step hit niter = 1000, giving up\n")
+            if verbose: logger.info("trust_step : niter = %4i, v = %.5f, dy at max-iter: %.5f -x-> %.5f\n" % (niter, v, ndy, target))
             return m_dy, m_sol
-
-def get_prfo_step(G, H, verbose=True):
-    # Sorted eigenvalues and corresponding eigenvectors of the Hessian
-    Hvals, Hvecs = sorted_eigh(H, asc=True)
-
-    # Projection of gradient along the Hessian eigenvectors
-    Gproj = np.dot(Hvecs.T, G)
-
-    # The selected mode to be treated differently from the rest
-    kmode = 0
-
-    # The step to be taken in internal coordinates
-    dy = np.zeros_like(G)
-    dy_coeffs = np.zeros_like(G)
-
-    # The other modes that were not selected
-    not_k = np.array([i for i in range(G.shape[0]) if i != kmode])
-
-    # Form the small P-RFO matrix
-    prfo_sm = np.array([[Hvals[kmode], Gproj[kmode]], [Gproj[kmode], 0]])
-    prfo_sm_vals, prfo_sm_vecs = sorted_eigh(prfo_sm, asc=True)
-    
-    # Form the vector [h_k, 1] by dividing the eigenvector corresponding to the largest eigenvalue
-    # by its last (2nd) component, thus ensuring that the last component is equal to 1.0
-    # hk_vec = prfo_sm_vecs[:,-1] / prfo_sm_vecs[-1,-1]
-
-
-    # Allocate the 1st component of [h_k, 1] into the h vector
-    lambda_p = prfo_sm_vals[-1]
-    dy_coeffs[kmode] = -1.0/(Hvals[kmode]-lambda_p)
-    dy -= Gproj[kmode]*Hvecs[:,kmode]/(Hvals[kmode]-lambda_p)
-
-    # Form the large P-RFO matrix, which is the same size as H itself
-    prfo_lg = np.zeros_like(H)
-    
-    # Fill matrix (except bottom and right column) with the non-'k' eigenvalues
-    prfo_lg[:-1, :-1] = np.diag(Hvals[not_k])
-    # Fill the bottom row and right column with the projections
-    prfo_lg[-1, :-1] = Gproj[not_k]
-    prfo_lg[:-1, -1] = Gproj[not_k]
-    # Diagonalize the large P-RFO matrix
-    prfo_lg_vals, prfo_lg_vecs = sorted_eigh(prfo_lg, asc=True)
-    # Form the vector [h_2, .. h_n] (assuming k=1 in comments)
-    # by dividing the eigenvector corresponding to the smallest eigenvalue by its last component,
-    # thus ensuring that the last component is equal to 1.0
-    # h_vec = prfo_lg_vecs[:, 0] / prfo_lg_vecs[-1, 0]
-    lambda_n = prfo_lg_vals[0]
-    for i in not_k:
-        dy_coeffs[i] = -1.0/(Hvals[i]-lambda_n-1e-5)
-        dy -= Gproj[i]*Hvecs[:,i]/(Hvals[i]-lambda_n-1e-5)
-
-    # Map the elements (not including the last) of h_vec into the desired step
-    # dy[not_k] = h_vec[:-1]
-
-    if verbose:
-        logger.info("P-RFO method\n")
-        # logger.info(" Small P-RFO matrix:\n")
-        # pmat2d(prfo_sm, precision=5, format='f')
-        logger.info(" Eigenvalues of Hessian matrix:\n")
-        pvec1d(Hvals, precision=5, format='f')
-        logger.info(" Lambda-p, largest  eigval of small P-RFO matrix: % .5f\n" % lambda_p)
-        logger.info(" Lambda-n, smallest eigval of large P-RFO matrix: % .5f\n" % lambda_n)
-        # logger.info(" Eigenvalues of small P-RFO matrix:\n")
-        # pvec1d(prfo_sm_vals, precision=5, format='f')
-        # logger.info(" Using %i-th element of this eigenvector:\n" % (kmode))
-        # pvec1d(hk_vec)
-        logger.info(" Large P-RFO matrix:\n")
-        pmat2d(prfo_lg, precision=5, format='f')
-        logger.info(" Eigenvalues of large P-RFO matrix:\n")
-        pvec1d(prfo_lg_vals, precision=5, format='f')
-        # logger.info(" Eigenvector of smallest eigenvalue of large P-RFO matrix:\n")
-        # pvec1d(prfo_lg_vecs[:,0], precision=5, format='f')
-        # logger.info(" Using non-%i-th element of this eigenvector:\n" % (kmode))
-        # pvec1d(h_vec)
-        logger.info(" Coefficients of P-RFO step along each mode:\n")
-        pvec1d(dy_coeffs)
-        logger.info(" Step obtained from P-RFO method:\n")
-        pvec1d(dy)
-        
-    return dy
         
 class Froot(object):
     """
@@ -901,17 +956,10 @@ class OptParams(object):
     but this was dropped in order to call Optimize() from another script.
     """
     def __init__(self, **kwargs):
-
-        # convergence dictionary to store criteria stored in order of energy, grms, gmax, drms, dmax
-        # 'GAU' contains the default convergence criteria that are used when nothing is passed.
-        convergence_sets = {'GAU': [1e-6, 3e-4, 4.5e-4, 1.2e-3, 1.8e-3],
-                            'NWCHEM_LOOSE': [1e-6, 3e-3, 4.5e-3, 3.6e-3, 5.4e-3],
-                            'GAU_LOOSE': [1e-6, 1.7e-3, 2.5e-3, 6.7e-3, 1e-2],
-                            'TURBOMOLE': [1e-6, 5e-4, 1e-3, 5.0e-4, 1e-3],
-                            'INTERFRAG_TIGHT': [1e-6, 1e-5, 1.5e-5, 4.0e-4, 6.0e-4],
-                            'GAU_TIGHT': [1e-6, 1e-5, 1.5e-5, 4e-5, 6e-5],
-                            'GAU_VERYTIGHT': [1e-6, 1e-6, 2e-6, 4e-6, 6e-6]}
-
+        # Whether we are optimizing for a transition state. This changes a number of default parameters.
+        self.transition = kwargs.get('transition', False)
+        # Handle convergence criteria; this edits the kwargs
+        self.convergence_criteria(**kwargs)
         # Threshold (in a.u. / rad) for activating alternative algorithm that enforces precise constraint satisfaction
         self.enforce = kwargs.get('enforce', 0.0)
         # Small eigenvalue threshold
@@ -921,7 +969,7 @@ class OptParams(object):
         # More verbose printout
         self.verbose = kwargs.get('verbose', False)
         # Reset Hessian to guess whenever eigenvalues drop below epsilon
-        self.reset = kwargs.get('reset', True)
+        self.reset = kwargs.get('reset', not self.transition)
         # Rational function optimization (experimental)
         self.rfo = kwargs.get('rfo', False)
         # Starting value of the trust radius
@@ -931,16 +979,65 @@ class OptParams(object):
         self.trust = min(self.tmax, self.trust)
         # Maximum number of optimization cycles
         self.maxiter = kwargs.get('maxiter', 300)
-        # Q-Chem style convergence criteria
-        self.qccnv = kwargs.get('qccnv', False)
-        # Molpro style convergence criteria
-        self.molcnv = kwargs.get('molcnv', False)
         # Use updated constraint algorithm implemented 2019-03-20
         self.conmethod = kwargs.get('conmethod', 0)
-        # Check if there is a convergence set passed else use the default
-        set_name = kwargs.get('convergence_set', 'GAU').upper()
         # Write Hessian matrix at optimized structure to text file
         self.write_cart_hess = kwargs.get('write_cart_hess', None)
+        # CI optimizations sometimes require tiny steps
+        self.meci = kwargs.get('meci', False)
+        # Output .xyz file name may be set separately in
+        # run_optimizer() prior to calling Optimize().
+        self.xyzout = kwargs.get('xyzout', None)
+        # Name of the qdata.txt file to be written.
+        # The CLI is designed so the user passes true/false instead of the file name.
+        self.qdata = 'qdata.txt' if kwargs.get('qdata', False) else None
+        # Whether to calculate or read a Hessian matrix.
+        self.hessian = kwargs.get('hessian', None)
+        if self.hessian is None:
+            # Default is to calculate Hessian in the first step if searching for a transition state.
+            # Otherwise the default is to never calculate the Hessian.
+            if self.transition: self.hessian = 'first'
+            else: self.hessian = 'never'
+        if self.hessian.startswith('file:'):
+            if os.path.exists(self.hessian[5:]):
+                # If a path is provided for reading a Hessian file, read it now.
+                self.hess_data = np.loadtxt(self.hessian[5:])
+            else:
+                raise IOError("No Hessian data file found at %s" % self.hessian)
+        elif self.hessian.lower() in ['never', 'first', 'each', 'exit']:
+            self.hessian = self.hessian.lower()
+        else:
+            RuntimeError("Hessian command line argument can only be never, first, each, exit, or file:<path>")
+
+    def convergence_criteria(self, **kwargs):
+        criteria = kwargs.get('converge', [])
+        if len(criteria)%2 != 0:
+            raise RuntimeError('Please pass an even number of options to --converge')
+        for i in range(int(len(criteria)/2)):
+            key = 'convergence_' + criteria[2*i].lower()
+            try:
+                val = float(criteria[2*i+1])
+                logger.info('Using convergence criteria: %s %.2e\n' % (key, val))
+            except ValueError:
+                # This must be a set
+                val = str(criteria[2*i+1])
+                logger.info('Using convergence criteria set: %s %s\n' % (key, val))
+            kwargs[key] = val
+        # convergence dictionary to store criteria stored in order of energy, grms, gmax, drms, dmax
+        # 'GAU' contains the default convergence criteria that are used when nothing is passed.
+        convergence_sets = {'GAU': [1e-6, 3e-4, 4.5e-4, 1.2e-3, 1.8e-3],
+                            'NWCHEM_LOOSE': [1e-6, 3e-3, 4.5e-3, 3.6e-3, 5.4e-3],
+                            'GAU_LOOSE': [1e-6, 1.7e-3, 2.5e-3, 6.7e-3, 1e-2],
+                            'TURBOMOLE': [1e-6, 5e-4, 1e-3, 5.0e-4, 1e-3],
+                            'INTERFRAG_TIGHT': [1e-6, 1e-5, 1.5e-5, 4.0e-4, 6.0e-4],
+                            'GAU_TIGHT': [1e-6, 1e-5, 1.5e-5, 4e-5, 6e-5],
+                            'GAU_VERYTIGHT': [1e-6, 1e-6, 2e-6, 4e-6, 6e-6]}
+        # Q-Chem style convergence criteria (i.e. gradient and either energy or displacement)
+        self.qccnv = kwargs.get('qccnv', False)
+        # Molpro style convergence criteria (i.e. gradient and either energy or displacement, with different defaults)
+        self.molcnv = kwargs.get('molcnv', False)
+        # Check if there is a convergence set passed else use the default
+        set_name = kwargs.get('convergence_set', 'GAU').upper()
         # If we have extra keywords apply them here else use the set
         # Convergence criteria in a.u. and Angstrom
         self.Convergence_energy = kwargs.get('convergence_energy', convergence_sets[set_name][0])
@@ -951,17 +1048,6 @@ class OptParams(object):
         # Convergence criteria that are only used if molconv is set to True
         self.Convergence_molpro_gmax = kwargs.get('convergence_molpro_gmax', 3e-4)
         self.Convergence_molpro_dmax = kwargs.get('convergence_molpro_dmax', 1.2e-3)
-        # CI optimizations sometimes require tiny steps
-        self.meci = kwargs.get('meci', False)
-        # Output .xyz file name may be set separately in
-        # run_optimizer() prior to calling Optimize().
-        self.xyzout = kwargs.get('xyzout', None)
-        # Name of the qdata.txt file to be written.
-        # The CLI is designed so the user passes true/false instead of the file name.
-        self.qdata = 'qdata.txt' if kwargs.get('qdata', False) else None
-        # Compute the Cartesian Hessian via finite difference at each optimization step
-        # (for testing purposes only)
-        self.hessian_every_step = True
 
 class OPT_STATE(object):
     """ This describes the state of an OptObject during the optimization process
@@ -972,7 +1058,7 @@ class OPT_STATE(object):
     FAILED           = 3  # optimization failed with no recovery option
 
 class Optimizer(object):
-    def __init__(self, coords, molecule, IC, engine, dirname, params, hessian=None):
+    def __init__(self, coords, molecule, IC, engine, dirname, params):
         """
         Object representing the geometry optimization of a molecular system.
 
@@ -991,8 +1077,6 @@ class Optimizer(object):
         params : OptParams object
             Contains optimization parameters (really just a struct)
             Includes xyzout and qdata output file names (written if not None)
-        hessian : np.ndarray, optional
-            3Nx3N array of Cartesian Hessian of initial structure
             
         """
         # Copies of data passed into constructor
@@ -1013,8 +1097,6 @@ class Optimizer(object):
             self.thre_rj = 1e-2
         # Set initial value of the trust radius.
         self.trust = self.params.trust
-        # Optional Hessian matrix provided as input
-        if hessian is not None: self.Hx0 = hessian.copy()
         # Copies of molecule object for preserving the optimization trajectory and the last frame
         self.progress = deepcopy(self.molecule)
         self.progress.xyzs = []
@@ -1116,9 +1198,21 @@ class Optimizer(object):
         spcalc = self.engine.calc(self.X, self.dirname)
         self.E = spcalc['energy']
         self.gradx = spcalc['gradient']
-        # Calculate Hessian at every step (computationally inefficient, only for testing purposes)
-        if self.params.hessian_every_step:
+        # Calculate Hessian at the first step, or at each step if desired
+        if self.params.hessian == 'each':
+            # Hx is assumed to be the Cartesian Hessian at the current step.
+            # Otherwise we use the variable name Hx0 to avoid almost certain confusion.
             self.Hx = CartesianHessian(self.X, self.molecule, self.engine, self.dirname, readfiles=False, verbose=False)
+        elif self.Iteration == 0:
+            if self.params.hessian in ['first', 'exit']:
+                self.Hx0 = CartesianHessian(self.X, self.molecule, self.engine, self.dirname, readfiles=False, verbose=False)
+                if self.params.hessian == 'exit':
+                    logger.info("Exiting as requested after Hessian calculation.\n")
+                    sys.exit(0)
+            elif hasattr(self.params, 'hess_data') and self.Iteration == 0:
+                self.Hx0 = self.params.hess_data.copy()
+                if self.Hx0.shape != (self.X.shape[0], self.X.shape[0]):
+                    raise IOError('hess_data passed in via OptParams does not have the right shape')
         # Add new Cartesian coordinates, energies, and gradients to history
         self.progress.xyzs.append(self.X.reshape(-1,3) * bohr2ang)
         self.progress.qm_energies.append(self.E)
@@ -1141,8 +1235,8 @@ class Optimizer(object):
         self.X_hist = [self.X]
         self.Gx_hist = [self.gradx]
         # Initial Hessian
-        if self.params.hessian_every_step:
-            # Compute IC Hessian from Cartesian Hessian
+        if hasattr(self, 'Hx'):
+            # Compute IC Hessian from Cartesian Hessian at the current step
             self.H0 = self.IC.calcHess(self.X, self.gradx, self.Hx)
         elif hasattr(self, 'Hx0'):
             # Compute IC Hessian from input Cartesian Hessian
@@ -1160,9 +1254,6 @@ class Optimizer(object):
             logger.info("Hessian Eigenvalues: " + ' '.join("%.5e" % i for i in Eig) + '\n')
         return Eig
         
-    def partition_rfo_step(self):
-        return get_prfo_step(self.G, self.H)
-
     def step(self):
         """
         Perform one step of the optimization.
@@ -1192,70 +1283,57 @@ class Optimizer(object):
         # Are we far from constraint satisfaction?
         self.farConstraints = self.IC.haveConstraints() and self.IC.getConstraintViolation(self.X) > 1e-1
         ### OBTAIN AN OPTIMIZATION STEP ###
-        transition_state = False
-        if transition_state:
-            dy = self.partition_rfo_step()
-            # Internal coordinate step size
-            inorm = np.linalg.norm(dy)
-            if inorm > 0.3:
-                dy /= (inorm/0.3)
-                inorm = np.linalg.norm(dy)
-            # Cartesian coordinate step size
+        # The trust radius is to be computed in Cartesian coordinates.
+        # First take a full-size optimization step
+        dy, _, __ = self.get_delta_prime(v0)
+        # Internal coordinate step size
+        inorm = np.linalg.norm(dy)
+        # Cartesian coordinate step size
+        self.cnorm = self.getCartesianNorm(dy)
+        if params.verbose: logger.info("dy(i): %.4f dy(c): %.4f trust(c): %.4f\n" % (inorm, self.cnorm, self.trust))
+        # If the step is above the trust radius in Cartesian coordinates, then
+        # do the following to reduce the step length:
+        if self.cnorm > 1.1 * self.trust:
+            # This is the function f(inorm) = cnorm-target that we find a root
+            # for obtaining a step with the desired Cartesian step size.
+            froot = self.createFroot(v0)
+            froot.stores[inorm] = self.cnorm
+            ### Find the internal coordinate norm that matches the desired Cartesian coordinate norm
+            iopt = brent_wiki(froot.evaluate, 0.0, inorm, self.trust, cvg=0.1, obj=froot, verbose=params.verbose)
+            if froot.brentFailed and froot.stored_arg is not None:
+                # If Brent fails but we obtained an IC step that is smaller than the Cartesian trust radius, use it
+                if params.verbose: logger.info("\x1b[93mUsing stored solution at %.3e\x1b[0m\n" % froot.stored_val)
+                iopt = froot.stored_arg
+            elif self.IC.bork:
+                # Decrease the target Cartesian step size and try again
+                for i in range(3):
+                    froot.target /= 2
+                    if params.verbose: logger.info("\x1b[93mReducing target to %.3e\x1b[0m\n" % froot.target)
+                    froot.above_flag = True # Stop at any valid step between current target step size and trust radius
+                    iopt = brent_wiki(froot.evaluate, 0.0, iopt, froot.target, cvg=0.1, verbose=params.verbose)
+                    if not self.IC.bork: break
+            LastForce = self.ForceRebuild
+            self.ForceRebuild = False
+            if self.IC.bork:
+                logger.info("\x1b[91mInverse iteration for Cartesians failed\x1b[0m\n")
+                # This variable is added because IC.bork is unset later.
+                self.ForceRebuild = True
+            else:
+                if params.verbose: logger.info("\x1b[93mBrent algorithm requires %i evaluations\x1b[0m\n" % froot.counter)
+            ##### If IC failed to produce valid Cartesian step, it is "borked" and we need to rebuild it.
+            if self.ForceRebuild:
+                # Force a rebuild of the coordinate system and skip the energy / gradient and evaluation steps.
+                if LastForce:
+                    logger.warning("\x1b[1;91mFailed twice in a row to rebuild the coordinate system; continuing in Cartesian coordinates\x1b[0m\n")
+                self.checkCoordinateSystem(recover=True, cartesian=LastForce)
+                logger.info("\x1b[1;93mSkipping optimization step\x1b[0m\n")
+                self.Iteration -= 1
+                self.state = OPT_STATE.SKIP_EVALUATION
+                return
+            ##### End Rebuild
+            # Finally, take an internal coordinate step of the desired length.
+            dy, _ = self.trust_step(iopt, v0)
             self.cnorm = self.getCartesianNorm(dy)
-            # params.verbose = True
-            if params.verbose: logger.info("dy(i): %.4f dy(c): %.4f trust(c): %.4f\n" % (inorm, self.cnorm, self.trust))
-        else:
-            # The trust radius is to be computed in Cartesian coordinates.
-            # First take a full-size Newton Raphson step
-            dy, _, __ = self.get_delta_prime(v0)
-            # Internal coordinate step size
-            inorm = np.linalg.norm(dy)
-            # Cartesian coordinate step size
-            self.cnorm = self.getCartesianNorm(dy)
-            if params.verbose: logger.info("dy(i): %.4f dy(c): %.4f trust(c): %.4f\n" % (inorm, self.cnorm, self.trust))
-            # If the step is above the trust radius in Cartesian coordinates, then
-            # do the following to reduce the step length:
-            if self.cnorm > 1.1 * self.trust:
-                # This is the function f(inorm) = cnorm-target that we find a root
-                # for obtaining a step with the desired Cartesian step size.
-                froot = self.createFroot(v0)
-                froot.stores[inorm] = self.cnorm
-                ### Find the internal coordinate norm that matches the desired Cartesian coordinate norm
-                iopt = brent_wiki(froot.evaluate, 0.0, inorm, self.trust, cvg=0.1, obj=froot, verbose=params.verbose)
-                if froot.brentFailed and froot.stored_arg is not None:
-                    # If Brent fails but we obtained an IC step that is smaller than the Cartesian trust radius, use it
-                    if params.verbose: logger.info("\x1b[93mUsing stored solution at %.3e\x1b[0m\n" % froot.stored_val)
-                    iopt = froot.stored_arg
-                elif self.IC.bork:
-                    # Decrease the target Cartesian step size and try again
-                    for i in range(3):
-                        froot.target /= 2
-                        if params.verbose: logger.info("\x1b[93mReducing target to %.3e\x1b[0m\n" % froot.target)
-                        froot.above_flag = True # Stop at any valid step between current target step size and trust radius
-                        iopt = brent_wiki(froot.evaluate, 0.0, iopt, froot.target, cvg=0.1, verbose=params.verbose)
-                        if not self.IC.bork: break
-                LastForce = self.ForceRebuild
-                self.ForceRebuild = False
-                if self.IC.bork:
-                    logger.info("\x1b[91mInverse iteration for Cartesians failed\x1b[0m\n")
-                    # This variable is added because IC.bork is unset later.
-                    self.ForceRebuild = True
-                else:
-                    if params.verbose: logger.info("\x1b[93mBrent algorithm requires %i evaluations\x1b[0m\n" % froot.counter)
-                ##### If IC failed to produce valid Cartesian step, it is "borked" and we need to rebuild it.
-                if self.ForceRebuild:
-                    # Force a rebuild of the coordinate system and skip the energy / gradient and evaluation steps.
-                    if LastForce:
-                        logger.warning("\x1b[1;91mFailed twice in a row to rebuild the coordinate system; continuing in Cartesian coordinates\x1b[0m\n")
-                    self.checkCoordinateSystem(recover=True, cartesian=LastForce)
-                    logger.info("\x1b[1;93mSkipping optimization step\x1b[0m\n")
-                    self.Iteration -= 1
-                    self.state = OPT_STATE.SKIP_EVALUATION
-                    return
-                ##### End Rebuild
-                # Finally, take an internal coordinate step of the desired length.
-                dy, _ = self.trust_step(iopt, v0)
-                self.cnorm = self.getCartesianNorm(dy)
         ### DONE OBTAINING THE STEP ###
         if isinstance(self.IC, PrimitiveInternalCoordinates):
             idx = np.argmax(np.abs(dy))
@@ -1407,7 +1485,7 @@ class Optimizer(object):
         self.G = self.IC.calcGrad(self.X, self.gradx).flatten()
 
         ### Update the Hessian ###
-        if self.params.hessian_every_step:
+        if hasattr(self, 'Hx'):
             self.H = self.IC.calcHess(self.X, self.gradx, self.Hx)
         elif UpdateHessian:
             self.UpdateHessian()
@@ -1468,7 +1546,7 @@ class Optimizer(object):
             np.savetxt(self.params.write_cart_hess, Hx, fmt='% 14.10f')
         return self.progress
 
-def Optimize(coords, molecule, IC, engine, dirname, params, hessian=None):
+def Optimize(coords, molecule, IC, engine, dirname, params):
     """
     Optimize the geometry of a molecule. This function used contain the whole
     optimization loop, which has since been moved to the Optimizer() class;
@@ -1496,7 +1574,7 @@ def Optimize(coords, molecule, IC, engine, dirname, params, hessian=None):
     progress: Molecule
         A molecule object for opt trajectory and energies
     """
-    optimizer = Optimizer(coords, molecule, IC, engine, dirname, params, hessian)
+    optimizer = Optimizer(coords, molecule, IC, engine, dirname, params)
     return optimizer.optimizeGeometry()
 
 def CheckInternalGrad(coords, molecule, IC, engine, dirname, verbose=False):
@@ -1591,15 +1669,45 @@ def CheckInternalHess(coords, molecule, IC, engine, dirname, verbose=False):
     return Hq, Hq_f
 
 def CartesianHessian(coords, molecule, engine, dirname, readfiles=True, verbose=False):
-    """ Calculate the Cartesian Hessian using finite difference. """
+    """ 
+    Calculate the Cartesian Hessian using finite difference, and/or read data from disk. 
+    Data is stored in a folder <prefix>.tmp/hessian, with gradient calculations found in
+    <prefix>.tmp/hessian/displace/001p.
+
+    Parameters
+    ----------
+    coords : np.ndarray
+        Nx3 array of Cartesian coordinates in atomic units
+    molecule : Molecule
+        Molecule object
+    engine : Engine
+        Object containing methods for calculating energy and gradient
+    dirname : str
+        Directory name for files to be written, i.e. <prefix>.tmp
+    readfiles : bool
+        Read Hessian data from disk if valid
+        
+    Returns
+    -------
+        Hx : np.ndarray
+        (Nx3)x(Nx3) array containing Cartesian Hessian.
+        Files are also written to <prefix.tmp>/hessian.
+    """
     nc = len(coords)
+    # Attempt to read existing Hessian data if it exists.
     hesstxt = os.path.join(dirname, "hessian", "hessian.txt")
-    if readfiles and os.path.exists(hesstxt):
-        logger.info("Reading existing Hessian file\n")
+    hessxyz = os.path.join(dirname, "hessian", "coords.xyz")
+    if readfiles and os.path.exists(hesstxt) and os.path.exists(hessxyz):
         Hx = np.loadtxt(hesstxt)
-        if Hx.shape[0] != nc:
-            raise IOError("Hessian matrix read from file does not have the right shape")
-        return Hx
+        if Hx.shape[0] == nc:
+            hess_mol = Molecule(hessxyz)
+            if np.allclose(coords.reshape(-1, 3)*bohr2ang, hess_mol.xyzs[0], atol=1e-6):
+                logger.info("Using Hessian matrix read from file\n")
+                return Hx
+            else:
+                logger.info("Coordinates for Hessian don't match current coordinates, recalculating.\n")
+        else:
+            logger.info("Hessian read from file doesn't have the right shape, recalculating.\n")
     # Calculate Hessian using finite difference
     # Finite difference step
     h = 1.0e-3
@@ -1638,6 +1746,11 @@ def CartesianHessian(coords, molecule, engine, dirname, readfiles=True, verbose=
             gbak = engine.calc(coords, dirname_d, readfiles=readfiles)['gradient']
             coords[i] += h
             Hx[i] = (gfwd-gbak)/(2*h)
+    # Save Hessian to text file
+    oldxyz = molecule.xyzs[0].copy()
+    molecule.xyzs[0] = coords.reshape(-1, 3)*bohr2ang
+    molecule[0].write(hessxyz)
+    molecule.xyzs[0] = oldxyz
     np.savetxt(hesstxt, Hx)
     return Hx
 
@@ -1700,12 +1813,7 @@ def get_molecule_engine(**kwargs):
         Engine object containing methods for calculating energy and gradient
     """
     ### Set up based on which quantum chemistry code we're using.
-    qchem = kwargs.get('qchem', False)
-    psi4 = kwargs.get('psi4', False)
-    gmx = kwargs.get('gmx', False)
-    molpro = kwargs.get('molpro', False)
-    openmm = kwargs.get('openmm', False)
-    qcengine = kwargs.get('qcengine', False)
+    engine_str = kwargs.get('engine', None)
     customengine = kwargs.get('customengine', None)
     # Path to Molpro executable (used if molpro=True)
     molproexe = kwargs.get('molproexe', None)
@@ -1721,7 +1829,7 @@ def get_molecule_engine(**kwargs):
 
     ## MECI calculations create a custom engine that contains two other engines.
     if kwargs.get('meci', None):
-        if sum([psi4, gmx, molpro, qcengine, openmm]) >= 1 or customengine:
+        if engine_str.lower() in ['psi4', 'gmx', 'molpro', 'qcengine', 'openmm'] or customengine:
             logger.warning("MECI optimizations are not tested with engines: psi4, gmx, molpro, qcegine, openmm, customengine. Be Careful!")
         meci_sigma = kwargs.get('meci_sigma')
         meci_alpha = kwargs.get('meci_alpha')
@@ -1747,90 +1855,103 @@ def get_molecule_engine(**kwargs):
     for i in range(nrad):
         radii[arg_radii[2*i].capitalize()] = float(arg_radii[2*i+1])
 
-    if sum([qchem, psi4, gmx, molpro, qcengine, openmm]) > 1:
-        raise RuntimeError("Do not specify more than one of --qchem, --psi4, --gmx, --molpro, --qcengine, --openmm")
-    if qchem:
-        # The file from which we make the Molecule object
-        if pdb is not None:
-            # If we pass the PDB, then read both the PDB and the Q-Chem input file,
-            # then copy the Q-Chem rem variables over to the PDB
+    if engine_str:
+        engine_str = engine_str.lower()
+        if engine_str not in ['tera', 'qchem', 'psi4', 'gmx', 'molpro', 'openmm', 'qcengine']:
+            raise RuntimeError("Valid values of engine are: tera, qchem, psi4, gmx, molpro, openmm, qcengine")
+        if customengine:
+            raise RuntimeError("engine and customengine cannot simultaneously be set")
+        if engine_str == 'terachem':
+            logger.info("TeraChem engine selected. Expecting TeraChem input for gradient calculation.\n")
+            set_tcenv()
+            tcin = load_tcin(inputf)
+            if pdb is not None:
+                M = Molecule(pdb, radii=radii, fragment=frag)
+            else:
+                if not os.path.exists(tcin['coordinates']):
+                    raise RuntimeError("TeraChem coordinate file does not exist")
+                M = Molecule(tcin['coordinates'], radii=radii, fragment=frag)
+            M.charge = tcin['charge']
+            M.mult = tcin.get('spinmult',1)
+            engine = TeraChem(M, tcin)
+            if nt is not None:
+                raise RuntimeError("--nt not configured to work with terachem yet")
+        elif engine_str == 'qchem':
+            logger.info("Q-Chem engine selected. Expecting Q-Chem input for gradient calculation.\n")
+            # The file from which we make the Molecule object
+            if pdb is not None:
+                # If we pass the PDB, then read both the PDB and the Q-Chem input file,
+                # then copy the Q-Chem rem variables over to the PDB
+                M = Molecule(pdb, radii=radii, fragment=frag)
+                M1 = Molecule(inputf, radii=radii)
+                for i in ['qctemplate', 'qcrems', 'elem', 'qm_ghost', 'charge', 'mult']:
+                    if i in M1: M[i] = M1[i]
+            else:
+                M = Molecule(inputf, radii=radii)
+            engine = QChem(M)
+            if nt is not None:
+                engine.set_nt(nt)
+        elif engine_str == 'gmx':
+            logger.info("Gromacs engine selected. Expecting conf.gro, topol.top and shot.mdp (exact names).\n")
+            M = Molecule(inputf, radii=radii, fragment=frag)
+            if pdb is not None:
+                M = Molecule(pdb, radii=radii, fragment=frag)
+            if 'boxes' in M.Data:
+                del M.Data['boxes']
+            engine = Gromacs(M)
+            if nt is not None:
+                raise RuntimeError("--nt not configured to work with Gromacs yet")
+        elif engine_str == 'openmm':
+            logger.info("OpenMM engine selected. Expecting forcefield.xml or system.xml file, and PDB passed in via --pdb.\n")
+            if pdb is None:
+                raise RuntimeError("Must pass a PDB with option --pdb to use OpenMM.")
             M = Molecule(pdb, radii=radii, fragment=frag)
-            M1 = Molecule(inputf, radii=radii)
-            for i in ['qctemplate', 'qcrems', 'elem', 'qm_ghost', 'charge', 'mult']:
-                if i in M1: M[i] = M1[i]
-        else:
-            M = Molecule(inputf, radii=radii)
-        engine = QChem(M)
-        if nt is not None:
-            engine.set_nt(nt)
-    elif gmx:
-        M = Molecule(inputf, radii=radii, fragment=frag)
-        if pdb is not None:
-            M = Molecule(pdb, radii=radii, fragment=frag)
-        if 'boxes' in M.Data:
-            del M.Data['boxes']
-        engine = Gromacs(M)
-        if nt is not None:
-            raise RuntimeError("--nt not configured to work with --gmx yet")
-    elif openmm:
-        if pdb is None:
-            raise RuntimeError("Must pass a PDB with option --pdb to use OpenMM.")
-        M = Molecule(pdb, radii=radii, fragment=frag)
-        if 'boxes' in M.Data:
-            del M.Data['boxes']
-        engine = OpenMM(M, pdb, inputf)
-        if nt is not None:
-            raise RuntimeError("--nt not configured to work with --openmm yet")
-    elif psi4:
-        engine = Psi4()
-        engine.load_psi4_input(inputf)
-        if pdb is not None:
-            M = Molecule(pdb, radii=radii, fragment=frag)
-            M1 = engine.M
-            for i in ['elem']:
-                if i in M1: M[i] = M1[i]
-        else:
+            if 'boxes' in M.Data:
+                del M.Data['boxes']
+            engine = OpenMM(M, pdb, inputf)
+            if nt is not None:
+                raise RuntimeError("--nt not configured to work with OpenMM yet")
+        elif engine_str == 'psi4':
+            logger.info("Psi4 engine selected. Expecting Psi4 input for gradient calculation.\n")
+            engine = Psi4()
+            engine.load_psi4_input(inputf)
+            if pdb is not None:
+                M = Molecule(pdb, radii=radii, fragment=frag)
+                M1 = engine.M
+                for i in ['elem']:
+                    if i in M1: M[i] = M1[i]
+            else:
+                M = engine.M
+                M.top_settings['radii'] = radii
+            if nt is not None:
+                engine.set_nt(nt)
+        elif engine_str == 'molpro':
+            logger.info("Molpro engine selected. Expecting Molpro input for gradient calculation.\n")
+            engine = Molpro()
+            engine.load_molpro_input(inputf)
             M = engine.M
-            M.top_settings['radii'] = radii
-        if nt is not None:
-            engine.set_nt(nt)
-    elif molpro:
-        engine = Molpro()
-        engine.load_molpro_input(inputf)
-        M = engine.M
-        if nt is not None:
-            engine.set_nt(nt)
-        if molproexe is not None:
-            engine.set_molproexe(molproexe)
-    elif qcengine:
-        schema = kwargs.get('qcschema', False)
-        if schema is False:
-            raise RuntimeError("QCEngineAPI option requires a QCSchema")
-
-        program = kwargs.get('qce_program', False)
-        if program is False:
-            raise RuntimeError("QCEngineAPI option requires a qce_program option")
-
-        engine = QCEngineAPI(schema, program)
-        M = engine.M
+            if nt is not None:
+                engine.set_nt(nt)
+            if molproexe is not None:
+                engine.set_molproexe(molproexe)
+        elif engine_str == 'qcengine':
+            logger.info("QCEngine selected.\n")
+            schema = kwargs.get('qcschema', False)
+            if schema is False:
+                raise RuntimeError("QCEngineAPI option requires a QCSchema")
+    
+            program = kwargs.get('qce_program', False)
+            if program is False:
+                raise RuntimeError("QCEngineAPI option requires a qce_program option")
+            engine = QCEngineAPI(schema, program)
+            M = engine.M
     elif customengine:
+        logger.info("Custom engine selected.\n")
         engine = customengine
         M = engine.M
-    else:
-        set_tcenv()
-        tcin = load_tcin(inputf)
-        if pdb is not None:
-            M = Molecule(pdb, radii=radii, fragment=frag)
-        else:
-            if not os.path.exists(tcin['coordinates']):
-                raise RuntimeError("TeraChem coordinate file does not exist")
-            M = Molecule(tcin['coordinates'], radii=radii, fragment=frag)
-        M.charge = tcin['charge']
-        M.mult = tcin.get('spinmult',1)
-        engine = TeraChem(M, tcin)
-        if nt is not None:
-            raise RuntimeError("--nt not configured to work with terachem yet")
 
+    # If --coords is provided via command line, use initial coordinates in the provided file
+    # to override all previously provided coordinates.
     arg_coords = kwargs.get('coords', None)
     if arg_coords is not None:
         M1 = Molecule(arg_coords)
@@ -1881,35 +2002,8 @@ def run_optimizer(**kwargs):
         logger.info('Backed up existing log file: %s -> %s\n' % (logfilename, os.path.basename(backed_up)))
 
     t0 = time.time()
-    # Custom convergence criteria
-    criteria = kwargs.get('converge', [])
-    if len(criteria)%2 != 0:
-        raise RuntimeError('Please pass an even number of options to --converge')
-    for i in range(int(len(criteria)/2)):
-        key = 'convergence_' + criteria[2*i].lower()
-        try:
-            val = float(criteria[2*i+1])
-            logger.info('Using convergence criteria: %s %.2e\n' % (key, val))
-        except ValueError:
-            # This must be a set
-            val = str(criteria[2*i+1])
-            logger.info('Using convergence criteria set: %s %s\n' % (key, val))
-        kwargs[key] = val
 
-    # LPW 2019-04-20: Changed the default behavior of "reset" to True.
-    # When users pass '--no_reset' via the CLI, that will result in
-    # passing OptParams(reset=False) to the constructor.
-    # After a suitable amount of time, remove '--reset' from the CLI.
-    if kwargs.get('no_reset', False):
-        if kwargs.get('reset', False):
-            raise RuntimeError('Do not provide both --reset and --no_reset')
-        kwargs['reset'] = False
-    else:
-        if kwargs.get('reset', False):
-            logger.info('The --reset option defaults to True and will be removed soon from the CLI.')
-        kwargs['reset'] = True
-    if 'no_reset' in kwargs: del kwargs['no_reset']
-
+    # Create the params object, containing data to be passed into the optimizer
     params = OptParams(**kwargs)
 
     # Get the Molecule and engine objects needed for optimization
@@ -1935,9 +2029,8 @@ def run_optimizer(**kwargs):
 
     # QC-specific scratch folder
     qcdir = kwargs.get('qcdir', None) # Provide an initial qchem scratch folder (e.g. supplied initial guess
-    qchem = kwargs.get('qchem', False)
     if qcdir is not None:
-        if not qchem:
+        if 'engine' in kwargs and kwargs['engine'].lower() != 'qchem':
             raise RuntimeError("--qcdir only valid if --qchem is specified")
         if not os.path.exists(qcdir):
             raise RuntimeError("--qcdir points to a folder that doesn't exist")
@@ -1995,12 +2088,6 @@ def run_optimizer(**kwargs):
         CheckInternalHess(coords, M, IC.Prims, engine, dirname, verbose)
         return
 
-    hessian = False
-    Hx = None
-    if hessian:
-        Hx = CartesianHessian(coords, M, engine, dirname, readfiles=True, verbose=True)
-        params.reset = False
-    
     # Print out information about the coordinate system
     if isinstance(IC, CartesianCoordinates):
         logger.info("%i Cartesian coordinates being used\n" % (3*M.na))
@@ -2015,7 +2102,7 @@ def run_optimizer(**kwargs):
             params.xyzout = prefix+"_optim.xyz"
         else:
             params.xyzout = prefix+".xyz"
-        progress = Optimize(coords, M, IC, engine, dirname, params, hessian=Hx)
+        progress = Optimize(coords, M, IC, engine, dirname, params)
     else:
         # Run a single constrained geometry optimization or scan over a grid of values
         if isinstance(IC, (CartesianCoordinates, PrimitiveInternalCoordinates)):
@@ -2035,7 +2122,7 @@ def run_optimizer(**kwargs):
             else:
                 params.xyzout = prefix+".xyz"
             if ic == 0:
-                progress = Optimize(coords, M, IC, engine, dirname, params, hessian=Hx)
+                progress = Optimize(coords, M, IC, engine, dirname, params)
             else:
                 progress += Optimize(coords, M, IC, engine, dirname, params)
             # update the structure for next optimization in SCAN (by CNH)
@@ -2056,6 +2143,17 @@ def run_optimizer(**kwargs):
     logger.info("Time elapsed since start of run_optimizer: %.3f seconds\n" % (time.time()-t0))
     return progress
 
+def str2bool(v):
+    """ Allows command line options such as "yes" and "True" to be converted into Booleans. """
+    if isinstance(v, bool):
+        return v
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
+
 def main():
     """Read user's input"""
 
@@ -2063,15 +2161,12 @@ def main():
     parser.add_argument('--coordsys', type=str, default='tric', help='Coordinate system: "cart" for Cartesian, "prim" for Primitive (a.k.a redundant), '
                         '"dlc" for Delocalized Internal Coordinates, "hdlc" for Hybrid Delocalized Internal Coordinates, "tric" for Translation-Rotation'
                         'Internal Coordinates (default).')
-    parser.add_argument('--qchem', action='store_true', help='Run optimization in Q-Chem (pass Q-Chem input).')
-    parser.add_argument('--psi4', action='store_true', help='Compute gradients in Psi4.')
-    parser.add_argument('--openmm', action='store_true', help='Compute gradients in OpenMM. Provide state.xml as input, and --pdb is required.')
-    parser.add_argument('--gmx', action='store_true', help='Compute gradients in Gromacs (requires conf.gro, topol.top, shot.mdp).')
+    parser.add_argument('--engine', type=str, default='tera', help='Specify engine for computing energies and gradients, '
+                        '"tera" for TeraChem (default), "qchem" for Q-Chem, "psi4" for Psi4, "openmm" for OpenMM, "gmx" for Gromacs, "molpro" for Molpro.')
     parser.add_argument('--meci', type=str, default=None, help='Provide second input file and search for minimum-energy conical '
                         'intersection or crossing point between two SCF solutions (TeraChem and Q-Chem supported).')
     parser.add_argument('--meci_sigma', type=float, default=3.5, help='Sigma parameter for MECI optimization.')
     parser.add_argument('--meci_alpha', type=float, default=0.025, help='Alpha parameter for MECI optimization.')
-    parser.add_argument('--molpro', action='store_true', help='Compute gradients in Molpro.')
     parser.add_argument('--molproexe', type=str, default=None, help='Specify absolute path of Molpro executable.')
     parser.add_argument('--molcnv', action='store_true', help='Use Molpro style convergence criteria instead of the default.')
     parser.add_argument('--prefix', type=str, default=None, help='Specify a prefix for log file and temporary directory.')
@@ -2079,13 +2174,17 @@ def main():
     parser.add_argument('--fdcheck', action='store_true', help='Check internal coordinate gradients using finite difference.')
     parser.add_argument('--enforce', type=float, default=0.0, help='Enforce exact constraints when within provided tolerance (in a.u. and radian)')
     parser.add_argument('--conmethod', type=int, default=0, help='Set to 1 to enable updated constraint algorithm.')
-    parser.add_argument('--write_cart_hess', type=str, default=None, help='Write approximate Hessian matrix at optimized geometry to specified file (Cartesian coords.)')
+    parser.add_argument('--write_cart_hess', type=str, default=None, help='Convert current Hessian matrix at optimized geometry to Cartesian coords and write to specified file.')
     parser.add_argument('--epsilon', type=float, default=1e-5, help='Small eigenvalue threshold.')
     parser.add_argument('--check', type=int, default=0, help='Check coordinates every N steps to see whether it has changed.')
     parser.add_argument('--verbose', action='store_true', help='More verbose printouts.')
     parser.add_argument('--logINI',  type=str, dest='logIni', help='ini file for logging')
-    parser.add_argument('--reset', action='store_true', help='Reset Hessian when eigenvalues are under epsilon. (Deprecated; now does this by default.)')
-    parser.add_argument('--no_reset', action='store_true', help='Do not reset Hessian when eigenvalues are under epsilon.')
+    parser.add_argument('--reset', type=str2bool, help='Reset Hessian when eigenvalues are under epsilon. Defaults to True for minimization and False for transition states.')
+    parser.add_argument('--transition', action='store_true', help='Search for a first order saddle point / transition state.')
+    parser.add_argument('--hessian', type=str, help='Specify when to calculate Cartesian Hessian from finite difference of gradient. '
+                        '"never" : Do not calculate or read Hessian data. file:<path> : Read Hessian data in NumPy format from path, e.g. file:run.tmp/hessian/hessian.txt .'
+                        '"first" : Calculate or read for the initial structure. "each" : Calculate for each step in the optimization (costly).'
+                        '"exit" : Calculate Hessian and then exit without optimizing. Default is "never" for minimization and "initial" for transition state.')
     parser.add_argument('--rfo', action='store_true', help='Use rational function optimization (default is trust-radius Newton Raphson).')
     parser.add_argument('--trust', type=float, default=0.1, help='Starting trust radius.')
     parser.add_argument('--tmax', type=float, default=0.3, help='Maximum trust radius.')
