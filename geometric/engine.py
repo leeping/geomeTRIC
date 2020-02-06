@@ -13,7 +13,7 @@ import re
 import os
 
 from .molecule import Molecule
-from .nifty import eqcgmx, fqcgmx, bohr2ang, logger, getWorkQueue, queue_up_src_dest
+from .nifty import eqcgmx, fqcgmx, bohr2ang, logger, getWorkQueue, queue_up_src_dest, splitall
 from .errors import EngineError, Psi4EngineError, QChemEngineError, TeraChemEngineError, ConicalIntersectionEngineError, \
     OpenMMEngineError, GromacsEngineError, MolproEngineError, QCEngineAPIEngineError
 
@@ -198,7 +198,7 @@ class Engine(object):
                     result = self.read_result(dirname)
                     read_success = True
                 except:
-                    logger.info("Tried but failed to read results from %s\nRunning new calculation\n" % dirname)
+                    logger.info("Failed to read output from %s, recalculating\n" % dirname)
             if not read_success:
                 if not os.path.exists(dirname): os.makedirs(dirname)
                 result = self.calc_new(coords, dirname)
@@ -285,6 +285,11 @@ class Engine(object):
             self.stored_calcs[coord_hash] = {'coords':coords, 'result':result}
         return result
 
+    def link_scratch(self, src, dest):
+        """ Create a symlink from src to dest scratch folder. 
+        If not implemented, do nothing."""
+        return
+
 class Blank(Engine):
     """
     Always return zero energy and gradient.
@@ -342,7 +347,7 @@ class TeraChem(Engine):
             scrFiles = ['ca0', 'cb0']
         else:
             scrFiles = ['c0']
-        if self.tcin['casscf'].lower() == 'yes':
+        if self.tcin.get('casscf', 'no').lower() == 'yes':
             is_casscf = True
             scrFiles += ['c0.casscf']
         else: is_casscf = False
@@ -445,9 +450,30 @@ class TeraChem(Engine):
             energy = float(open(os.path.join(dirname,'energy.txt')).readlines()[0].strip())
             gradient = np.loadtxt(os.path.join(dirname,'grad.txt')).flatten()
             s2 = float(open(os.path.join(dirname,'s-squared.txt')).readlines()[0].strip())
+            assert gradient.shape[0] == self.M.na*3
         except (OSError, IOError, RuntimeError, subprocess.CalledProcessError):
             raise TeraChemEngineError
         return {'energy':energy, 'gradient':gradient, 's2':s2}
+
+    def link_scratch(self, src, dest):
+        if os.path.split(self.scr)[0]:
+            raise RuntimeError("link_scratch cannot be used if self.scr is a nontrivial path")
+        cwd = os.getcwd()
+        destdirs = splitall(dest)
+        if not os.path.exists(dest): os.makedirs(dest)
+        if '..' in destdirs or '.' in destdirs: 
+            raise RuntimeError('Destination path contains . or .. and is thus invalid')
+        if not os.path.exists(os.path.join(src, self.scr)):
+            logger.info(" TeraChem.link_scratch warning: %s/scr folder does not exist" % src)
+        os.chdir(dest)
+        pathlist = ['..']*len(splitall(dest)) + [src, self.scr]
+        # print(pathlist)
+        if os.path.exists(self.scr):
+            if os.path.islink(self.scr): os.unlink(self.scr)
+            else: shutil.rmtree(self.scr)
+        os.symlink(os.path.join(*pathlist), self.scr)
+        # print("Symlink created, check %s" % os.abspath(os.getcwd()))
+        os.chdir(cwd)
 
 class OpenMM(Engine):
     """
@@ -715,9 +741,9 @@ class QChem(Engine):
         try:
             # Run Q-Chem
             if self.qcdir:
-                subprocess.check_call('qchem%s run.in run.out run.d > run.log 2>&1' % self.nt(), cwd=dirname, shell=True)
+                subprocess.check_call('qchem%s -save run.in run.out run.d > run.log 2>&1' % self.nt(), cwd=dirname, shell=True)
             else:
-                subprocess.check_call('qchem%s run.in run.out run.d > run.log 2>&1' % self.nt(), cwd=dirname, shell=True)
+                subprocess.check_call('qchem%s -save run.in run.out run.d > run.log 2>&1' % self.nt(), cwd=dirname, shell=True)
                 # Assume reading the SCF guess is desirable
                 self.qcdir = True
                 self.M.edit_qcrems({'scf_guess':'read'})
@@ -748,7 +774,19 @@ class QChem(Engine):
         M1 = Molecule('%s/run.out' % dirname)
         # In the case of multi-stage jobs, the last energy and gradient is what we want.
         energy = M1.qm_energies[-1]
-        gradient = M1.qm_grads[-1].flatten()
+        # gradient = M1.qm_grads[-1].flatten()
+        # Parse gradient from GRAD file for improved precision.
+        gradient = []
+        gradmode = 0
+        for line in open('%s/run.d/GRAD' % dirname).readlines():
+            if line.strip().startswith('$gradient'):
+                gradmode = 1
+            elif line.startswith('$'):
+                gradmode = 0
+            elif gradmode:
+                s = line.split()
+                gradient.append([float(i) for i in s])
+        gradient = np.array(gradient).flatten()
         # Assume that the last occurence of "S^2" is what we want.
         s2 = 0.0
         for line in open('%s/run.out' % dirname):
