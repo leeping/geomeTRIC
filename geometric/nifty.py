@@ -1024,9 +1024,14 @@ def splitall(path):
     return allparts
 
 # Back up a file.
-def bak(path, dest=None):
+def bak(path, dest=None, cwd=None, start=1):
     oldf = path
     newf = None
+    if cwd != None:
+        if not os.path.exists(cwd):
+            raise RuntimeError("%s is not an existing folder" % cwd)
+        old_d = os.getcwd()
+        os.chdir(cwd)
     if os.path.exists(path):
         dnm, fnm = os.path.split(path)
         if dnm == '' : dnm = '.'
@@ -1034,7 +1039,7 @@ def bak(path, dest=None):
         if dest is None:
             dest = dnm
         if not os.path.isdir(dest): os.makedirs(dest)
-        i = 1
+        i = start
         while True:
             fnm = "%s_%i%s" % (base,i,ext)
             newf = os.path.join(dest, fnm)
@@ -1042,6 +1047,8 @@ def bak(path, dest=None):
             i += 1
         logger.info("Backing up %s -> %s\n" % (oldf, newf))
         shutil.move(oldf,newf)
+    if cwd != None:
+        os.chdir(old_d)
     return newf
 
 # Purpose: Given a file name and/or an extension, do one of the following:

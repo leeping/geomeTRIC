@@ -13,7 +13,7 @@ import re
 import os
 
 from .molecule import Molecule
-from .nifty import eqcgmx, fqcgmx, bohr2ang, logger, getWorkQueue, queue_up_src_dest, splitall
+from .nifty import bak, eqcgmx, fqcgmx, bohr2ang, logger, getWorkQueue, queue_up_src_dest, splitall
 from .errors import EngineError, Psi4EngineError, QChemEngineError, TeraChemEngineError, ConicalIntersectionEngineError, \
     OpenMMEngineError, GromacsEngineError, MolproEngineError, QCEngineAPIEngineError
 
@@ -401,6 +401,10 @@ class TeraChem(Engine):
         self.tcin['run'] = 'gradient'
         # Write the TeraChem input file
         edit_tcin(fout="%s/run.in" % dirname, options=self.tcin)
+        # Back up any existing output files
+        # Commented out (should be enabled during debuggin')
+        # bak('run.out', cwd=dirname, start=0)
+        # bak('start.xyz', cwd=dirname, start=0)
         # Convert coordinates back to the xyz file
         self.M.xyzs[0] = coords.reshape(-1, 3) * bohr2ang
         self.M[0].write(os.path.join(dirname, 'start.xyz'))
