@@ -1788,10 +1788,7 @@ def run_optimizer(**kwargs):
 
     if Cons is None:
         # Run a standard geometry optimization
-        if prefix == os.path.splitext(inputf)[0]:
-            params.xyzout = prefix+"_optim.xyz"
-        else:
-            params.xyzout = prefix+".xyz"
+        params.xyzout = prefix+"_optim.xyz"
         progress = Optimize(coords, M, IC, engine, dirname, params)
     else:
         # Run a single constrained geometry optimization or scan over a grid of values
@@ -1807,10 +1804,8 @@ def run_optimizer(**kwargs):
                 params.xyzout = prefix+"_scan-%03i.xyz" % ic
                 # In the special case of a constraint scan, we write out multiple qdata.txt files
                 if params.qdata is not None: params.qdata = 'qdata_scan-%03i.txt' % ic
-            elif prefix == os.path.splitext(kwargs['input'])[0]:
-                params.xyzout = prefix+"_optim.xyz"
             else:
-                params.xyzout = prefix+".xyz"
+                params.xyzout = prefix+"_optim.xyz"
             if ic == 0:
                 progress = Optimize(coords, M, IC, engine, dirname, params)
             else:
