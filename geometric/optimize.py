@@ -1506,17 +1506,24 @@ def get_molecule_engine(**kwargs):
     if kwargs.get('meci', None):
         if sum([psi4, gmx, molpro, qcengine, openmm]) >= 1 or customengine:
             logger.warning("MECI optimizations are not tested with engines: psi4, gmx, molpro, qcegine, openmm, customengine. Be Careful!")
-        meci_sigma = kwargs.get('meci_sigma')
-        meci_alpha = kwargs.get('meci_alpha')
-        sub_engines = {}
-        for state in [1, 2]:
+        ## If 'engine' is provided as the argument to 'meci', then we assume the engine is
+        # directly returning the MECI objective function and gradient.
+        if kwargs['meci'].lower() == 'engine':
             sub_kwargs = kwargs.copy()
-            if state == 2:
-                sub_kwargs['input'] = kwargs['meci']
             sub_kwargs['meci'] = None
-            M, sub_engine = get_molecule_engine(**sub_kwargs)
-            sub_engines[state] = sub_engine
-        engine = ConicalIntersection(M, sub_engines[1], sub_engines[2], meci_sigma, meci_alpha)
+            M, engine = get_molecule_engine(**sub_kwargs)
+        else:
+            meci_sigma = kwargs.get('meci_sigma')
+            meci_alpha = kwargs.get('meci_alpha')
+            sub_engines = {}
+            for state in [1, 2]:
+                sub_kwargs = kwargs.copy()
+                if state == 2:
+                    sub_kwargs['input'] = kwargs['meci']
+                sub_kwargs['meci'] = None
+                M, sub_engine = get_molecule_engine(**sub_kwargs)
+                sub_engines[state] = sub_engine
+            engine = ConicalIntersection(M, sub_engines[1], sub_engines[2], meci_sigma, meci_alpha)
         return M, engine
 
     ## Read radii from the command line.
@@ -1840,9 +1847,12 @@ def main():
     parser.add_argument('--openmm', action='store_true', help='Compute gradients in OpenMM. Provide state.xml as input, and --pdb is required.')
     parser.add_argument('--gmx', action='store_true', help='Compute gradients in Gromacs (requires conf.gro, topol.top, shot.mdp).')
     parser.add_argument('--meci', type=str, default=None, help='Provide second input file and search for minimum-energy conical '
-                        'intersection or crossing point between two SCF solutions (TeraChem and Q-Chem supported).')
-    parser.add_argument('--meci_sigma', type=float, default=3.5, help='Sigma parameter for MECI optimization.')
-    parser.add_argument('--meci_alpha', type=float, default=0.025, help='Alpha parameter for MECI optimization.')
+                        'intersection or crossing point between two SCF solutions (TeraChem and Q-Chem supported).'
+                        'Or, provide "engine" if the engine directly provides the MECI objective function and gradient.')
+    parser.add_argument('--meci_sigma', type=float, default=3.5, help='Sigma parameter for MECI optimization;'
+                        'only used if geomeTRIC computes the MECI objective function from 2 energies/gradients.')
+    parser.add_argument('--meci_alpha', type=float, default=0.025, help='Alpha parameter for MECI optimization;'
+                        'only used if geomeTRIC computes the MECI objective function from 2 energies/gradients.')
     parser.add_argument('--molpro', action='store_true', help='Compute gradients in Molpro.')
     parser.add_argument('--molproexe', type=str, default=None, help='Specify absolute path of Molpro executable.')
     parser.add_argument('--molcnv', action='store_true', help='Use Molpro style convergence criteria instead of the default.')
