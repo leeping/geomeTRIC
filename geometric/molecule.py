@@ -2943,7 +2943,11 @@ class Molecule(object):
             if ln == 0:
                 comms = [line]
             elif ln == 1:
-                na = int(line[:5])
+                # Although is isn't exactly up to spec, 
+                # it seems that some .rst7 files have spaces that precede the "integer"
+                # and others have >99999 atoms
+                na = int(line.split()[0])
+                print("Number of atoms is %i" % na)
             elif mode == 'x':
                 xyz.append([float(line[:12]), float(line[12:24]), float(line[24:36])])
                 an += 1
