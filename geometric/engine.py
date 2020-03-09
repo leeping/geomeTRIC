@@ -236,6 +236,20 @@ class TeraChem(Engine):
                         raise TeraChemEngineError('%s guess file is missing' % f)
         else:
             self.guessMode = 'none'
+        # Management of QM/MM: Read qmindices and 
+        # store locations of prmtop and qmindices files,
+        self.qmmm = 'qmindices' in tcin
+        if self.qmmm:
+            if not os.path.exists(tcin['coordinates']):
+                raise RuntimeError("TeraChem QM/MM coordinate file does not exist")
+            if not os.path.exists(tcin['prmtop']):
+                raise RuntimeError("TeraChem QM/MM prmtop file does not exist")
+            if not os.path.exists(tcin['qmindices']):
+                raise RuntimeError("TeraChem QM/MM qmindices file does not exist")
+            self.qmindices_name = os.path.abspath(tcin['qmindices'])
+            self.prmtop_name = os.path.abspath(tcin['prmtop'])
+            self.qmindices = [int(i.split()[0]) for i in open(self.qmindices_name).readlines()]
+            self.M_full = Molecule(tcin['coordinates'], ftype='inpcrd', build_topology=False)
         super(TeraChem, self).__init__(molecule)
 
     def manage_guess(self, dirname):
@@ -306,27 +320,37 @@ class TeraChem(Engine):
     def calc_new(self, coords, dirname):
         # Ensure guess files are in the correct locations
         self.manage_guess(dirname)
+        # Copy QMMM files to the correct locations
+        if self.qmmm:
+            shutil.copy2(self.qmindices_name, dirname)
+            shutil.copy2(self.prmtop_name, dirname)
         # Set other needed options
-        self.tcin['coordinates'] = 'start.xyz'
+        start_xyz = 'start.rst7' if self.qmmm else 'start.xyz'
+        self.tcin['coordinates'] = start_xyz
         self.tcin['run'] = 'gradient'
         # Write the TeraChem input file
         edit_tcin(fout="%s/run.in" % dirname, options=self.tcin)
         # Back up any existing output files
         # Commented out (should be enabled during debuggin')
         # bak('run.out', cwd=dirname, start=0)
-        # bak('start.xyz', cwd=dirname, start=0)
+        # bak(start_xyz, cwd=dirname, start=0)
         # Convert coordinates back to the xyz file
         self.M.xyzs[0] = coords.reshape(-1, 3) * bohr2ang
-        self.M[0].write(os.path.join(dirname, 'start.xyz'))
+        if self.qmmm:
+            self.M_full.xyzs[0][self.qmindices, :] = self.M.xyzs[0]
+            self.M_full[0].write(os.path.join(dirname, start_xyz), ftype='inpcrd')
+        else:
+            self.M[0].write(os.path.join(dirname, start_xyz))
         # Run TeraChem
         subprocess.check_call('terachem run.in > run.out', cwd=dirname, shell=True)
         # Extract energy and gradient
         try:
             subprocess.call("awk '/FINAL ENERGY/ {p=$3} /Correlation Energy/ {p+=$5} /FINAL Target State Energy/ {p=$5} END {printf \"%.10f\\n\", p}' run.out > energy.txt", cwd=dirname, shell=True)
-            subprocess.call("awk '/Gradient units are Hartree/,/Net gradient/ {if ($1 ~ /^-?[0-9]/) {print}}' run.out > grad.txt", cwd=dirname, shell=True)
+            subprocess.call("awk '/Gradient units are Hartree/,/Net gradient|Point charge part/ {if ($1 ~ /^-?[0-9]/) {print}}' run.out > grad.txt", cwd=dirname, shell=True)
             subprocess.call("awk 'BEGIN {s=0} /SPIN S-SQUARED/ {s=$3} END {printf \"%.6f\\n\", s}' run.out > s-squared.txt", cwd=dirname, shell=True)
             energy = float(open(os.path.join(dirname,'energy.txt')).readlines()[0].strip())
-            gradient = np.loadtxt(os.path.join(dirname,'grad.txt')).flatten()
+            na = len(self.qmindices) if self.qmmm else self.M.na
+            gradient = np.loadtxt(os.path.join(dirname,'grad.txt'))[:na].flatten()
             s2 = float(open(os.path.join(dirname,'s-squared.txt')).readlines()[0].strip())
         except (OSError, IOError, RuntimeError, subprocess.CalledProcessError):
             raise TeraChemEngineError
@@ -338,15 +362,25 @@ class TeraChem(Engine):
         scrdir = os.path.join(dirname, self.scr)
         if not os.path.exists(scrdir): os.makedirs(scrdir)
         guessfnms = self.manage_guess(dirname)
-        self.tcin['coordinates'] = 'start.xyz'
+        start_xyz = 'start.rst7' if self.qmmm else 'start.xyz'
+        self.tcin['coordinates'] = start_xyz
         self.tcin['run'] = 'gradient'
         # For queueing up jobs, delete GPU key and let the worker decide
         self.tcin['gpus'] = None
         tcopts = edit_tcin(fout="%s/run.in" % dirname, options=self.tcin)
         # Convert coordinates back to the xyz file
         self.M.xyzs[0] = coords.reshape(-1, 3) * bohr2ang
-        self.M[0].write(os.path.join(dirname, 'start.xyz'))
-        in_files = [('%s/run.in' % dirname, 'run.in'), ('%s/start.xyz' % dirname, 'start.xyz')]
+        if self.qmmm:
+            self.M_full.xyzs[0][self.qmindices, :] = self.M.xyzs[0]
+            self.M_full[0].write(os.path.join(dirname, start_xyz), ftype='inpcrd')
+        else:
+            self.M[0].write(os.path.join(dirname, start_xyz))
+        # Specify WQ input and output files
+        in_files = [('%s/run.in' % dirname, 'run.in'), ('%s/%s' % (dirname, start_xyz), start_xyz)]
+        if self.qmmm:
+            # Send absolute path of qmindices and prmtop to the root folder of the WQ tmpdir
+            in_files += [(self.qmindices_name, os.path.split(self.qmindices_name)[1]),
+                         (self.prmtop_name, os.path.split(self.prmtop_name)[1])]
         out_files = [('%s/run.out' % dirname, 'run.out')]
         for f in guessfnms:
             in_files.append((os.path.join(dirname, f), f))
@@ -359,16 +393,17 @@ class TeraChem(Engine):
     def number_output(self, dirname, calcNum):
         if not os.path.exists(os.path.join(dirname, 'run.out')):
             raise RuntimeError('run.out does not exist')
-        shutil.copy2(os.path.join(dirname,'start.xyz'), os.path.join(dirname,'start_%03i.xyz' % calcNum))
+        shutil.copy2(os.path.join(dirname,start_xyz), os.path.join(dirname,'start_%03i.%s' % (calcNum, os.path.splitext(start_xyz)[1])))
         shutil.copy2(os.path.join(dirname,'run.out'), os.path.join(dirname,'run_%03i.out' % calcNum))
 
     def read_wq_new(self, coords, dirname):
         # Extract energy and gradient
         subprocess.call("awk '/FINAL ENERGY/ {p=$3} /Correlation Energy/ {p+=$5} /FINAL Target State Energy/ {p=$5} END {printf \"%.10f\\n\", p}' run.out > energy.txt", cwd=dirname, shell=True)
-        subprocess.call("awk '/Gradient units are Hartree/,/Net gradient/ {if ($1 ~ /^-?[0-9]/) {print}}' run.out > grad.txt", cwd=dirname, shell=True)
+        subprocess.call("awk '/Gradient units are Hartree/,/Net gradient|Point charge part/ {if ($1 ~ /^-?[0-9]/) {print}}' run.out > grad.txt", cwd=dirname, shell=True)
         subprocess.call("awk 'BEGIN {s=0} /SPIN S-SQUARED/ {s=$3} END {printf \"%.6f\\n\", s}' run.out > s-squared.txt", cwd=dirname, shell=True)
         energy = float(open(os.path.join(dirname,'energy.txt')).readlines()[0].strip())
-        gradient = np.loadtxt(os.path.join(dirname,'grad.txt')).flatten()
+        na = len(self.qmindices) if self.qmmm else self.M.na
+        gradient = np.loadtxt(os.path.join(dirname,'grad.txt'))[:na].flatten()
         s2 = float(open(os.path.join(dirname,'s-squared.txt')).readlines()[0].strip())
         return {'energy':energy, 'gradient':gradient, 's2':s2}
 
