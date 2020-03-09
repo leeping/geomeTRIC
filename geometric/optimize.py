@@ -1663,10 +1663,10 @@ def run_optimizer(**kwargs):
     #==============================#
 
     import geometric
-    printLogo(logger)
-    logger.info('-=# \x1b[1;94m geomeTRIC started. Version: %s \x1b[0m #=-\n' % geometric.__version__)
     logger.info('geometric-optimize called with the following command line:\n')
     logger.info(' '.join(sys.argv)+'\n')
+    printLogo(logger)
+    logger.info('-=# \x1b[1;94m geomeTRIC started. Version: %s \x1b[0m #=-\n' % geometric.__version__)
     if backed_up:
         logger.info('Backed up existing log file: %s -> %s\n' % (logfilename, os.path.basename(backed_up)))
 
