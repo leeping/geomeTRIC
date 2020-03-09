@@ -2234,7 +2234,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                 typedict[str(type(Internal))] = 1
             else:
                 typedict[str(type(Internal))] += 1
-        if len(lines) > 100:
+        if len(lines) > 1000:
             # Print only summary if too many
             lines = []
         for k, v in typedict.items():
