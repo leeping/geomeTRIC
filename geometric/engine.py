@@ -13,7 +13,7 @@ import re
 import os
 
 from .molecule import Molecule
-from .nifty import bak, eqcgmx, fqcgmx, bohr2ang, logger, getWorkQueue, queue_up_src_dest
+from .nifty import bak, eqcgmx, fqcgmx, bohr2ang, logger, getWorkQueue, queue_up_src_dest, splitall
 from .errors import EngineError, Psi4EngineError, QChemEngineError, TeraChemEngineError, ConicalIntersectionEngineError, \
     OpenMMEngineError, GromacsEngineError, MolproEngineError, QCEngineAPIEngineError
 
@@ -157,13 +157,51 @@ class Engine(object):
     # def __deepcopy__(self, memo):
     #     return copy(self)
 
-    def calc(self, coords, dirname):
+    def calc(self, coords, dirname, readfiles=False):
+        """
+        Top-level method for a single-point calculation. 
+        Calculation will be skipped if results are contained in the hash table, 
+        and optionally, can skip calculation if output exists on disk (which is 
+        useful in the case of restarting a crashed Hessian calculation)
+        
+        Parameters
+        ----------
+        coords : np.array
+            1-dimensional array of shape (3*N_atoms) containing atomic coordinates in Bohr
+        dirname : str
+            Relative path containing calculation files
+        readfiles : bool, default=False
+            If valid calculation output files exist in dirname, read the results instead of
+            running a new calculation
+
+        Returns
+        -------
+        result : dict
+            Dictionary containing results:
+            result['energy'] = float
+                Energy in atomic units
+            result['gradient'] = np.array
+                1-dimensional array of same shape as coords, containing nuclear gradients in a.u.
+            result['s2'] = float
+                Optional output containing expectation value of <S^2> operator, used in
+                crossing point optimizations
+        """
         coord_hash = hash(coords.tostring())
         if coord_hash in self.stored_calcs:
             result = self.stored_calcs[coord_hash]['result']
         else:
-            if not os.path.exists(dirname): os.makedirs(dirname)
-            result = self.calc_new(coords, dirname)
+            # If the readfiles flag is set to True, then attempt to read the
+            # result from the temp-folder, then skip the calculation if successful.
+            read_success = False
+            if readfiles and os.path.exists(dirname) and hasattr(self, 'read_result'):
+                try:
+                    result = self.read_result(dirname)
+                    read_success = True
+                except:
+                    logger.info("Failed to read output from %s, recalculating\n" % dirname)
+            if not read_success:
+                if not os.path.exists(dirname): os.makedirs(dirname)
+                result = self.calc_new(coords, dirname)
             self.stored_calcs[coord_hash] = {'coords':coords, 'result':result}
         return result
 
@@ -173,24 +211,77 @@ class Engine(object):
     def calc_new(self, coords, dirname):
         raise NotImplementedError("Not implemented for the base class")
 
-    def calc_wq(self, coords, dirname):
+    def calc_wq(self, coords, dirname, readfiles=False):
+        """
+        Top-level method for submitting a single-point calculation using Work Queue. 
+        Different from calc(), this method does not return results, because the control
+        flow involves submitting calculations to WQ and gathering data after calculations
+        are complete.
+        
+        Calculation will be skipped if results are contained in the hash table, 
+        and optionally, can skip calculation if output exists on disk (which is 
+        useful in the case of restarting a crashed Hessian calculation)
+        
+        Parameters
+        ----------
+        coords : np.array
+            1-dimensional array of shape (3*N_atoms) containing atomic coordinates in Bohr
+        dirname : str
+            Relative path containing calculation files
+        readfiles : bool, default=False
+            If valid calculation output files exist in dirname, read the results instead of
+            running a new calculation
+        """
         coord_hash = hash(coords.tostring())
         if coord_hash in self.stored_calcs:
             return
         else:
-            self.calc_wq_new(coords, dirname)
+            # If the readfiles flag is set to True, then attempt to read the
+            # result from the temp-folder, then skip the calculation if successful.
+            read_success = False
+            if readfiles and os.path.exists(dirname) and hasattr(self, 'read_result'):
+                try:
+                    result = self.read_result(dirname)
+                    read_success = True
+                except:
+                    logger.info("Tried but failed to read results from %s\nRunning new calculation\n" % dirname)
+            if not read_success:
+                self.calc_wq_new(coords, dirname)
 
     def calc_wq_new(self, coords, dirname):
         raise NotImplementedError("Work Queue is not implemented for this class")
 
     def read_wq(self, coords, dirname):
+        """
+        Read Work Queue results after all jobs are completed.
+
+        Parameters
+        ----------
+        coords : np.array
+            1-dimensional array of shape (3*N_atoms) containing atomic coordinates in Bohr.
+            Used for retrieving results from hash table (in which case calc was not submitted)
+        dirname : str
+            Relative path containing calculation files
+
+        Returns
+        -------
+        result : dict
+            Dictionary containing results:
+            result['energy'] = float
+                Energy in atomic units
+            result['gradient'] = np.array
+                1-dimensional array of same shape as coords, containing nuclear gradients in a.u.
+            result['s2'] = float
+                Optional output containing expectation value of <S^2> operator, used in
+                crossing point optimizations
+        """
         coord_hash = hash(coords.tostring())
         if coord_hash in self.stored_calcs:
             result = self.stored_calcs[coord_hash]['result']
         else:
             if not os.path.exists(dirname):
                 raise RuntimeError("In read_wq, %s doesn't exist" % dirname)
-            result = self.read_wq_new(coords, dirname)
+            result = self.read_result(dirname)
             self.stored_calcs[coord_hash] = {'coords':coords, 'result':result}
         return result
 
@@ -344,17 +435,8 @@ class TeraChem(Engine):
         # Run TeraChem
         subprocess.check_call('terachem run.in > run.out', cwd=dirname, shell=True)
         # Extract energy and gradient
-        try:
-            subprocess.call("awk '/FINAL ENERGY/ {p=$3} /Correlation Energy/ {p+=$5} /FINAL Target State Energy/ {p=$5} END {printf \"%.10f\\n\", p}' run.out > energy.txt", cwd=dirname, shell=True)
-            subprocess.call("awk '/Gradient units are Hartree/,/Net gradient|Point charge part/ {if ($1 ~ /^-?[0-9]/) {print}}' run.out > grad.txt", cwd=dirname, shell=True)
-            subprocess.call("awk 'BEGIN {s=0} /SPIN S-SQUARED/ {s=$3} END {printf \"%.6f\\n\", s}' run.out > s-squared.txt", cwd=dirname, shell=True)
-            energy = float(open(os.path.join(dirname,'energy.txt')).readlines()[0].strip())
-            na = len(self.qmindices) if self.qmmm else self.M.na
-            gradient = np.loadtxt(os.path.join(dirname,'grad.txt'))[:na].flatten()
-            s2 = float(open(os.path.join(dirname,'s-squared.txt')).readlines()[0].strip())
-        except (OSError, IOError, RuntimeError, subprocess.CalledProcessError):
-            raise TeraChemEngineError
-        return {'energy':energy, 'gradient':gradient, 's2':s2}
+        result = self.read_result(dirname)
+        return result
 
     def calc_wq_new(self, coords, dirname):
         wq = getWorkQueue()
@@ -398,14 +480,39 @@ class TeraChem(Engine):
 
     def read_wq_new(self, coords, dirname):
         # Extract energy and gradient
-        subprocess.call("awk '/FINAL ENERGY/ {p=$3} /Correlation Energy/ {p+=$5} /FINAL Target State Energy/ {p=$5} END {printf \"%.10f\\n\", p}' run.out > energy.txt", cwd=dirname, shell=True)
-        subprocess.call("awk '/Gradient units are Hartree/,/Net gradient|Point charge part/ {if ($1 ~ /^-?[0-9]/) {print}}' run.out > grad.txt", cwd=dirname, shell=True)
-        subprocess.call("awk 'BEGIN {s=0} /SPIN S-SQUARED/ {s=$3} END {printf \"%.6f\\n\", s}' run.out > s-squared.txt", cwd=dirname, shell=True)
-        energy = float(open(os.path.join(dirname,'energy.txt')).readlines()[0].strip())
-        na = len(self.qmindices) if self.qmmm else self.M.na
-        gradient = np.loadtxt(os.path.join(dirname,'grad.txt'))[:na].flatten()
-        s2 = float(open(os.path.join(dirname,'s-squared.txt')).readlines()[0].strip())
+        try:
+            # LPW note: Using python to call awk is not ideal and would take a bit of elbow grease to fix in the future.
+            subprocess.call("awk '/FINAL ENERGY/ {p=$3} /Correlation Energy/ {p+=$5} /FINAL Target State Energy/ {p=$5} END {printf \"%.10f\\n\", p}' run.out > energy.txt", cwd=dirname, shell=True)
+            subprocess.call("awk '/Gradient units are Hartree/,/Net gradient|Point charge part/ {if ($1 ~ /^-?[0-9]/) {print}}' run.out > grad.txt", cwd=dirname, shell=True)
+            subprocess.call("awk 'BEGIN {s=0} /SPIN S-SQUARED/ {s=$3} END {printf \"%.6f\\n\", s}' run.out > s-squared.txt", cwd=dirname, shell=True)
+            energy = float(open(os.path.join(dirname,'energy.txt')).readlines()[0].strip())
+            na = len(self.qmindices) if self.qmmm else self.M.na
+            gradient = np.loadtxt(os.path.join(dirname,'grad.txt'))[:na].flatten()
+            s2 = float(open(os.path.join(dirname,'s-squared.txt')).readlines()[0].strip())
+            assert gradient.shape[0] == self.M.na*3
+        except (OSError, IOError, RuntimeError, subprocess.CalledProcessError):
+            raise TeraChemEngineError
         return {'energy':energy, 'gradient':gradient, 's2':s2}
+
+    def link_scratch(self, src, dest):
+        if os.path.split(self.scr)[0]:
+            raise RuntimeError("link_scratch cannot be used if self.scr is a nontrivial path")
+        cwd = os.getcwd()
+        destdirs = splitall(dest)
+        if not os.path.exists(dest): os.makedirs(dest)
+        if '..' in destdirs or '.' in destdirs: 
+            raise RuntimeError('Destination path contains . or .. and is thus invalid')
+        if not os.path.exists(os.path.join(src, self.scr)):
+            logger.info(" TeraChem.link_scratch warning: %s/scr folder does not exist" % src)
+        os.chdir(dest)
+        pathlist = ['..']*len(splitall(dest)) + [src, self.scr]
+        # print(pathlist)
+        if os.path.exists(self.scr):
+            if os.path.islink(self.scr): os.unlink(self.scr)
+            else: shutil.rmtree(self.scr)
+        os.symlink(os.path.join(*pathlist), self.scr)
+        # print("Symlink created, check %s" % os.abspath(os.getcwd()))
+        os.chdir(cwd)
 
 class OpenMM(Engine):
     """
@@ -434,11 +541,11 @@ class OpenMM(Engine):
                 # If the user has provided an OpenMM system, we can use it directly
                 system = mm.XmlSerializer.deserialize(xmlStr)
                 xmlSystem = True
-                logger.info("Treating the provided xml as a system XML file")
+                logger.info("Treating the provided xml as a system XML file\n")
             except ValueError:
-                logger.info("Treating the provided xml as a force field XML file")
+                logger.info("Treating the provided xml as a force field XML file\n")
         else:
-            logger.info("xml file not in the current folder, treating as a force field XML file and setting up in gas phase.")
+            logger.info("xml file not in the current folder, treating as a force field XML file and setting up in gas phase.\n")
         if not xmlSystem:
             forcefield = app.ForceField(xml)
             system = forcefield.createSystem(pdb.topology, nonbondedMethod=app.NoCutoff, constraints=None, rigidWater=False)
@@ -583,16 +690,15 @@ class Psi4(Engine):
             # Run Psi4
             subprocess.check_call('psi4%s input.dat' % self.nt(), cwd=dirname, shell=True)
             # Read energy and gradients from Psi4 output
-            parsed = self.parse_psi4_output(os.path.join(dirname, 'output.dat'))
-            energy = parsed['energy']
-            gradient = parsed['gradient']
+            result = self.read_result(dirname)
         except (OSError, IOError, RuntimeError, subprocess.CalledProcessError):
             raise Psi4EngineError
-        return {'energy':energy, 'gradient':gradient}
-
-    def parse_psi4_output(self, psi4out):
-        """ read an output file from Psi4 """
+        return result
+    
+    def read_result(self, dirname):
+        """ Read Psi4 calculation output. """
         energy, gradient = None, None
+        psi4out = os.path.join(dirname, 'output.dat')
         with open(psi4out) as outfile:
             found_grad = False
             found_num_grad = False
@@ -629,7 +735,7 @@ class Psi4(Engine):
                 elif line_strip == 'Gradient written.':
                     # this works for CCSD(T) gradients computed by numerical displacements
                     found_num_grad = True
-                    logger.info("found num grad")
+                    logger.info("found num grad\n")
                 elif found_num_grad is True and line_strip.startswith('------------------------------'):
                     for _ in range(4):
                         line = next(outfile)
@@ -662,28 +768,28 @@ class QChem(Engine):
         # Convert coordinates back to the xyz file
         self.M.xyzs[0] = coords.reshape(-1, 3) * bohr2ang
         self.M.edit_qcrems({'jobtype':'force'})
+        # LPW 2019-12-17: In some cases (such as running a FD Hessian calculation)
+        # we may use multiple folders for running different calcs using the same engine.
+        # When changing to a new folder without run.d, the calculation will crash if scf_guess is set to read.
+        # So we check if run.d actually exists in the folder. If not, do not read the guess.
+        # This is a hack and at some point we may want some more flexibility in which qcdir we use.
+        if self.qcdir and not os.path.exists(os.path.join(dirname, 'run.d')):
+            self.qcdir = False
+            self.M.edit_qcrems({'scf_guess':None})
         self.M[0].write(os.path.join(dirname, 'run.in'))
         try:
-            # Run Qchem
+            # Run Q-Chem
             if self.qcdir:
-                subprocess.check_call('qchem%s run.in run.out run.d > run.log 2>&1' % self.nt(), cwd=dirname, shell=True)
+                subprocess.check_call('qchem%s -save run.in run.out run.d > run.log 2>&1' % self.nt(), cwd=dirname, shell=True)
             else:
-                subprocess.check_call('qchem%s run.in run.out run.d > run.log 2>&1' % self.nt(), cwd=dirname, shell=True)
+                subprocess.check_call('qchem%s -save run.in run.out run.d > run.log 2>&1' % self.nt(), cwd=dirname, shell=True)
                 # Assume reading the SCF guess is desirable
                 self.qcdir = True
                 self.M.edit_qcrems({'scf_guess':'read'})
-            M1 = Molecule('%s/run.out' % dirname)
-            # In the case of multi-stage jobs, the last energy and gradient is what we want.
-            energy = M1.qm_energies[-1]
-            gradient = M1.qm_grads[-1].flatten()
-            # Assume that the last occurence of "S^2" is what we want.
-            s2 = 0.0
-            for line in open('%s/run.out' % dirname):
-                if "<S^2>" in line:
-                    s2 = float(line.split()[-1])
+            result = self.read_result(dirname)
         except (OSError, IOError, RuntimeError, subprocess.CalledProcessError):
             raise QChemEngineError
-        return {'energy':energy, 'gradient':gradient, 's2':s2}
+        return result
 
     def calc_wq_new(self, coords, dirname):
         wq = getWorkQueue()
@@ -703,11 +809,23 @@ class QChem(Engine):
             raise RuntimeError('run.out does not exist')
         shutil.copy2(os.path.join(dirname,'run.out'), os.path.join(dirname,'run_%03i.out' % calcNum))
 
-    def read_wq_new(self, coords, dirname):
+    def read_result(self, dirname):
         M1 = Molecule('%s/run.out' % dirname)
         # In the case of multi-stage jobs, the last energy and gradient is what we want.
         energy = M1.qm_energies[-1]
-        gradient = M1.qm_grads[-1].flatten()
+        # gradient = M1.qm_grads[-1].flatten()
+        # Parse gradient from GRAD file for improved precision.
+        gradient = []
+        gradmode = 0
+        for line in open('%s/run.d/GRAD' % dirname).readlines():
+            if line.strip().startswith('$gradient'):
+                gradmode = 1
+            elif line.startswith('$'):
+                gradmode = 0
+            elif gradmode:
+                s = line.split()
+                gradient.append([float(i) for i in s])
+        gradient = np.array(gradient).flatten()
         # Assume that the last occurence of "S^2" is what we want.
         s2 = 0.0
         for line in open('%s/run.out' % dirname):
@@ -830,19 +948,20 @@ class Molpro(Engine):
             # Run Molpro
             subprocess.check_call('%s%s run.mol' % (self.molproExe(), self.nt()), cwd=dirname, shell=True)
             # Read energy and gradients from Molpro output
-            energy, gradient = self.parse_molpro_output(os.path.join(dirname, 'run.out'))
+            result = self.read_result(dirname)
         except (OSError, IOError, RuntimeError, subprocess.CalledProcessError):
             raise MolproEngineError
-        return {'energy':energy, 'gradient':gradient}
+        return result
 
     def number_output(self, dirname, calcNum):
         if not os.path.exists(os.path.join(dirname, 'run.out')):
             raise RuntimeError('run.out does not exist')
         shutil.copy2(os.path.join(dirname,'run.out'), os.path.join(dirname,'run_%03i.out' % calcNum))
 
-    def parse_molpro_output(self, molpro_out):
+    def read_result(self, dirname):
         """ read an output file from Molpro"""
         energy, gradient = None, None
+        molpro_out = os.path.join(dirname, 'run.out')
         with open(molpro_out) as outfile:
             found_grad = False
             for line in outfile:

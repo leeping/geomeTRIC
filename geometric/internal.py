@@ -1833,16 +1833,17 @@ class InternalCoordinates(object):
         # Damping factor
         damp = 1.0
         # Function to exit from loop
+        if verbose >= 2: logger.info("    InternalCoordinates.newCartesian converting internal to Cartesian step\n")
         def finish(microiter, rmsdt, ndqt, xyzsave, xyz_iter1):
             if ndqt > 1e-1:
-                if verbose: logger.info("Failed to obtain coordinates after %i microiterations (rmsd = %.3e |dQ| = %.3e)\n" % (microiter, rmsdt, ndqt))
+                if verbose: logger.info("      newCartesian Iter: %i Failed to obtain coordinates (rmsd = %.3e |dQ| = %.3e)\n" % (microiter, rmsdt, ndqt))
                 self.bork = True
                 self.writeCache(xyz, dQ, xyz_iter1)
                 return xyz_iter1.flatten()
             elif ndqt > 1e-3:
-                if verbose: logger.info("Approximate coordinates obtained after %i microiterations (rmsd = %.3e |dQ| = %.3e)\n" % (microiter, rmsdt, ndqt))
+                if verbose: logger.info("      newCartesian Iter: %i Approximate coordinates obtained (rmsd = %.3e |dQ| = %.3e)\n" % (microiter, rmsdt, ndqt))
             else:
-                if verbose: logger.info("Cartesian coordinates obtained after %i microiterations (rmsd = %.3e |dQ| = %.3e)\n" % (microiter, rmsdt, ndqt))
+                if verbose: logger.info("      newCartesian Iter: %i Cartesian coordinates obtained (rmsd = %.3e |dQ| = %.3e)\n" % (microiter, rmsdt, ndqt))
             self.writeCache(xyz, dQ, xyzsave)
             return xyzsave.flatten()
         fail_counter = 0
@@ -1862,19 +1863,19 @@ class InternalCoordinates(object):
             ndq = np.linalg.norm(dQ1-dQ_actual)
             if len(ndqs) > 0:
                 if ndq > ndqt:
-                    if verbose: logger.info("Iter: %i Err-dQ (Best) = %.5e (%.5e) RMSD: %.5e Damp: %.5e (Bad)\n" % (microiter, ndq, ndqt, rmsd, damp))
+                    if verbose >= 2: logger.info("      newCartesian Iter: %i Err-dQ (Best) = %.5e (%.5e) RMSD: %.5e Damp: %.5e (Bad)\n" % (microiter, ndq, ndqt, rmsd, damp))
                     damp /= 2
                     fail_counter += 1
                     # xyz2 = xyz1.copy()
                 else:
-                    if verbose: logger.info("Iter: %i Err-dQ (Best) = %.5e (%.5e) RMSD: %.5e Damp: %.5e (Good)\n" % (microiter, ndq, ndqt, rmsd, damp))
+                    if verbose >= 2: logger.info("      newCartesian Iter: %i Err-dQ (Best) = %.5e (%.5e) RMSD: %.5e Damp: %.5e (Good)\n" % (microiter, ndq, ndqt, rmsd, damp))
                     fail_counter = 0
                     damp = min(damp*1.2, 1.0)
                     rmsdt = rmsd
                     ndqt = ndq
                     xyzsave = xyz2.copy()
             else:
-                if verbose: logger.info("Iter: %i Err-dQ = %.5e RMSD: %.5e Damp: %.5e\n" % (microiter, ndq, rmsd, damp))
+                if verbose >= 2: logger.info("      newCartesian Iter: %i Err-dQ = %.5e RMSD: %.5e Damp: %.5e\n" % (microiter, ndq, rmsd, damp))
                 rmsdt = rmsd
                 ndqt = ndq
             ndqs.append(ndq)
@@ -2233,7 +2234,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                 typedict[str(type(Internal))] = 1
             else:
                 typedict[str(type(Internal))] += 1
-        if len(lines) > 100:
+        if len(lines) > 1000:
             # Print only summary if too many
             lines = []
         for k, v in typedict.items():
@@ -2761,7 +2762,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
             xyzs.append(xyz1.copy())
             ndqs.append(np.linalg.norm(dQ))
             # print("applyConstraints calling newCartesian (%i), |dQ| = %.3e" % (niter, np.linalg.norm(dQ)))
-            xyz2 = self.newCartesian(xyz1, dQ, verbose=False)
+            xyz2 = self.newCartesian(xyz1, dQ, verbose=0)
             if np.linalg.norm(dQ) < 1e-6:
                 return xyz2
             if niter > 1 and np.linalg.norm(dQ) > np.linalg.norm(dQ0):
@@ -2775,7 +2776,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
             niter += 1
             dQ0 = dQ.copy()
             
-    def newCartesian_withConstraint(self, xyz, dQ, thre=0.1, verbose=False):
+    def newCartesian_withConstraint(self, xyz, dQ, thre=0.1, verbose=0):
         xyz2 = self.newCartesian(xyz, dQ, verbose)
         constraintSmall = len(self.Prims.cPrims) > 0
         for ic, c in enumerate(self.Prims.cPrims):
