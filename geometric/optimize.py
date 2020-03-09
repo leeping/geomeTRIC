@@ -1609,7 +1609,35 @@ def get_molecule_engine(**kwargs):
     else:
         set_tcenv()
         tcin = load_tcin(inputf)
-        if pdb is not None:
+        # The QM-MM interface is designed on the following ideas:
+        # 1) We are only optimizing the QM portion of the system 
+        # (until we implement fast inversion of G matrices and Hessians)
+        # 2) The geomeTRIC optimizer only "sees" the part of the molecule being optimized.
+        # 3) The TeraChem engine writes .rst7 files instead of .xyz files by inserting the
+        # optimization coordinates into the correct locations.
+        qmmm = 'qmindices' in tcin
+        if qmmm:
+            from simtk.openmm.app import AmberPrmtopFile
+            # Need to build a molecule object for the portion of the system being optimized
+            # We rely on OpenMM's AmberPrmtopFile class to read the .prmtop file
+            if not os.path.exists(tcin['coordinates']):
+                raise RuntimeError("TeraChem QM/MM coordinate file does not exist")
+            if not os.path.exists(tcin['prmtop']):
+                raise RuntimeError("TeraChem QM/MM prmtop file does not exist")
+            if not os.path.exists(tcin['qmindices']):
+                raise RuntimeError("TeraChem QM/MM qmindices file does not exist")
+            prmtop_name = tcin['prmtop']
+            prmtop = AmberPrmtopFile(prmtop_name)
+            M_full = Molecule(tcin['coordinates'], ftype='inpcrd', build_topology=False)
+            M_full.elem = [a.element.symbol for a in list(prmtop.topology.atoms())]
+            M_full.resid = [a.residue.index for a in list(prmtop.topology.atoms())]
+            qmindices_name = tcin['qmindices']
+            qmindices = [int(i.split()[0]) for i in open(qmindices_name).readlines()]
+            M = M_full.atom_select(qmindices)
+            M.top_settings['radii'] = radii
+            M.top_settings['fragment'] = frag
+            M.build_topology()
+        elif pdb is not None:
             M = Molecule(pdb, radii=radii, fragment=frag)
         else:
             if not os.path.exists(tcin['coordinates']):
@@ -1617,6 +1645,8 @@ def get_molecule_engine(**kwargs):
             M = Molecule(tcin['coordinates'], radii=radii, fragment=frag)
         M.charge = tcin['charge']
         M.mult = tcin.get('spinmult',1)
+        # The TeraChem engine needs to write rst7 files before calling TC
+        # and also make sure the prmtop and qmindices.txt files are present.
         engine = TeraChem(M, tcin)
         if nt is not None:
             raise RuntimeError("--nt not configured to work with terachem yet")
