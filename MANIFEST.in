@@ -2,6 +2,9 @@ recursive-include geometric *.py
 recursive-include geometric/data *.pdb
 recursive-include geometric/data *.txt
 recursive-include geometric/data *.gro
+recursive-include geometric/data *.xml
+recursive-include geometric/data *.xyz
+recursive-include geometric/config *.ini
 
 include versioneer.py
 include geometric/_version.py
