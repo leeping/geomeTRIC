@@ -66,6 +66,8 @@ script:
       cd examples/water2_psi4
       coverage run `which geometric-optimize` --engine psi4 water2.psi4in
       cd ../..
+      echo "cat ./geometric/tests/test_generated_files/test_run_json_psi4_hydrogen/out.json"
+      cat ./geometric/tests/test_generated_files/test_run_json_psi4_hydrogen/out.json
     fi
 
 notifications:
