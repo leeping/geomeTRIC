@@ -133,8 +133,8 @@ def test_openmm_h2o2_h2o_grad_hess(localizer):
     M, engine = geometric.optimize.get_molecule_engine(engine='openmm', pdb=os.path.join(datad, 'h2o2_h2o.pdb'), input=os.path.join(datad, 'h2o2_h2o_system.xml'))
     coords = M.xyzs[0].flatten() * geometric.nifty.ang2bohr
     IC = geometric.internal.DelocalizedInternalCoordinates(M, build=True, connect=False, addcart=False)
-    Gq_ana, Gq_num = geometric.optimize.CheckInternalGrad(coords, M, IC.Prims, engine, 'h2o2_h2o.tmp', False)
-    Hq_ana, Hq_num = geometric.optimize.CheckInternalHess(coords, M, IC.Prims, engine, 'h2o2_h2o.tmp', False)
+    Gq_ana, Gq_num = geometric.ic_tools.check_internal_grad(coords, M, IC.Prims, engine, 'h2o2_h2o.tmp', False)
+    Hq_ana, Hq_num = geometric.ic_tools.check_internal_hess(coords, M, IC.Prims, engine, 'h2o2_h2o.tmp', False)
     assert np.allclose(Gq_ana, Gq_num, atol=1e-5)
     assert np.allclose(Hq_ana, Hq_num, atol=1e-5)
     #                                                    constraints=os.path.join(datad, 'ala_constraints.txt')

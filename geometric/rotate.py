@@ -1,3 +1,50 @@
+"""
+rotate.py: Quaternion and exponential map representation of rotations
+
+This module computes quaternion and exponential map parameters for rotations that bring
+two sets of Cartesian coordinates into superposition, as well as the first and second
+derivatives w/r.t. one of the sets.
+
+References
+----------
+1. L.-P. Wang & C. C. Song, "Geometry optimization made simple using translation and rotation coordinates." J. Chem, Phys. 144, 214108.
+1. E. A. Coutsias, C. Seok, K. A. Dill. "Using quaternions to calculate RMSD.". J. Comput. Chem 2004.
+2. K. B. Petersen, M. S. Pedersen. "The Matrix Cookbook", 2012.
+3. G. H. Golub, V. Pereyra. "The differentiation of pseudo-inverses and 
+nonlinear least squares problems whose variables separate." Siam J. Numer. Anal., 1973.
+
+Copyright 2016-2020 Regents of the University of California and the Authors
+
+Authors: Lee-Ping Wang, Chenchen Song
+
+Contributors: 
+
+Redistribution and use in source and binary forms, with or without modification,
+are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice,
+this list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+this list of conditions and the following disclaimer in the documentation
+and/or other materials provided with the distribution.
+
+3. Neither the name of the copyright holder nor the names of its contributors
+may be used to endorse or promote products derived from this software
+without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT,
+INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
+NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
+"""
+
 from __future__ import division
 
 import sys, time
@@ -8,16 +55,6 @@ from geometric.molecule import *
 from geometric.nifty import invert_svd, logger
 
 """
-This module computes quaternion and exponential map parameters for rotations that bring
-two sets of Cartesian coordinates into superposition, as well as the first and second
-derivatives w/r.t. one of the sets.
-
-References
-----------
-1. L.-P. Wang & C. C. Song, "Geometry optimization made simple using translation and rotation coordinates." J. Chem, Phys. 144, 214108.
-1. E. A. Coutsias, C. Seok, K. A. Dill. "Using quaternions to calculate RMSD.". J. Comput. Chem 2004.
-2. K. B. Petersen, M. S. Pedersen. "The Matrix Cookbook", 2012.
-3. G. H. Golub, V. Pereyra. "The differentiation of pseudo-inverses and nonlinear least squares problems whose variables separate." Siam J. Numer. Anal., 1973.
 """
 
 def build_correlation(x, y):

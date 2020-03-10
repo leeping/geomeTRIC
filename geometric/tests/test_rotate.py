@@ -9,8 +9,10 @@ import numpy as np
 from . import addons
 
 datad = addons.datad
+test_logger = addons.test_logger
 
-def test_q_der():
+def test_q_der(test_logger):
+    
     M = geometric.molecule.Molecule(os.path.join(datad, 'water5.xyz'))
     x = M.xyzs[0]
     y = M.xyzs[-1]
@@ -25,7 +27,7 @@ def test_q_der():
     assert np.allclose(a2, l2, atol=1.e-7)
     assert np.allclose(q, q_ref, atol=1.e-7)
     
-def test_expmap_der():
+def test_expmap_der(test_logger):
     M = geometric.molecule.Molecule(os.path.join(datad, 'water5.xyz'))
     x = M.xyzs[0]
     y = M.xyzs[-1]

@@ -2,9 +2,11 @@
 Figures out currently available modules
 """
 
+import geometric
 import pytest
 import os
-
+import logging.config
+import pkg_resources
 
 def _plugin_import(plug):
     """
@@ -64,3 +66,13 @@ def in_folder(request):
     # Change back to CWD
     os.chdir(cwd)
 
+# make tests run in their own folder
+@pytest.fixture(scope="function")
+def test_logger(request):
+
+    # Adding these three lines here removes the extra newline that was printed 
+    logIni = pkg_resources.resource_filename(geometric.optimize.__name__, 'logTest.ini')
+    logging.config.fileConfig(logIni,disable_existing_loggers=False)
+    
+    # Yield for testing
+    yield 

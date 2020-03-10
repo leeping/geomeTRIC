@@ -1,4 +1,38 @@
-#!/usr/bin/env python
+"""
+engine.py: Communicate with QM or MM software packages for energy/gradient info
+
+Copyright 2016-2020 Regents of the University of California and the Authors
+
+Authors: Lee-Ping Wang, Chenchen Song
+
+Contributors: Yudong Qiu, Daniel G. A. Smith, Sebastian Lee, Qiming Sun,
+Alberto Gobbi, Josh Horton
+
+Redistribution and use in source and binary forms, with or without modification,
+are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice,
+this list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+this list of conditions and the following disclaimer in the documentation
+and/or other materials provided with the distribution.
+
+3. Neither the name of the copyright holder nor the names of its contributors
+may be used to endorse or promote products derived from this software
+without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT,
+INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
+NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
+"""
 
 from __future__ import print_function, division
 
@@ -307,7 +341,7 @@ class TeraChem(Engine):
     """
     Run a TeraChem energy and gradient calculation.
     """
-    def __init__(self, molecule, tcin):
+    def __init__(self, molecule, tcin, dirname=None):
         self.tcin = tcin.copy()
         if 'scrdir' in self.tcin:
             self.scr = self.tcin['scrdir']
@@ -341,8 +375,17 @@ class TeraChem(Engine):
             self.prmtop_name = os.path.abspath(tcin['prmtop'])
             self.qmindices = [int(i.split()[0]) for i in open(self.qmindices_name).readlines()]
             self.M_full = Molecule(tcin['coordinates'], ftype='inpcrd', build_topology=False)
+        if dirname: self.prep_temp_folder(dirname)
         super(TeraChem, self).__init__(molecule)
 
+    def prep_temp_folder(self, dirname):
+        # Clean up the temporary folder.
+        if os.path.exists(dirname):
+            # Remove existing scratch files in ./run.tmp/scr to avoid confusion
+            for f in ['c0', 'ca0', 'cb0']:
+                if os.path.exists(os.path.join(dirname, self.scr, f)):
+                    os.remove(os.path.join(dirname, self.scr, f))
+        
     def manage_guess(self, dirname):
         """
         Management of guess files in TeraChem calculations.
@@ -615,7 +658,7 @@ class Psi4(Engine):
     """
     Run a Psi4 energy and gradient calculation.
     """
-    def __init__(self, molecule=None):
+    def __init__(self, molecule=None, threads=None):
         # molecule.py can not parse psi4 input yet, so we use self.load_psi4_input() as a walk around
         if molecule is None:
             # create a fake molecule
@@ -623,16 +666,13 @@ class Psi4(Engine):
             molecule.elem = ['H']
             molecule.xyzs = [[[0,0,0]]]
         super(Psi4, self).__init__(molecule)
-        self.threads = None
+        self.threads = threads
 
     def nt(self):
         if self.threads is not None:
             return " -n %i" % self.threads
         else:
             return ""
-
-    def set_nt(self, threads):
-        self.threads = threads
 
     def load_psi4_input(self, psi4in):
         """ Psi4 input file parser, only support xyz coordinates for now """
@@ -749,19 +789,31 @@ class Psi4(Engine):
         return {'energy':energy, 'gradient':gradient}
 
 class QChem(Engine):
-    def __init__(self, molecule):
+    def __init__(self, molecule, dirname=None, qcdir=None, threads=None):
         super(QChem, self).__init__(molecule)
-        self.qcdir = False
-        self.threads = None
+        self.threads = threads
+        self.prep_temp_folder(dirname, qcdir)
+
+    def prep_temp_folder(self, dirname, qcdir):
+        # Provide an initial qchem scratch folder (e.g. supplied initial guess)
+        if not qcdir:
+            self.qcdir = False
+            return
+        elif not os.path.exists(qcdir):
+            raise QChemEngineError("qcdir points to a folder that doesn't exist")
+        if not dirname:
+            raise QChemEngineError("If qcdir is provided, dirname must also be provided")
+        elif not os.path.exists(dirname):
+            os.makedirs(dirname)
+        shutil.copytree(qcdir, os.path.join(dirname, "run.d"))
+        self.M.edit_qcrems({'scf_guess':'read'})
+        self.qcdir = True
 
     def nt(self):
         if self.threads is not None:
             return " -nt %i" % self.threads
         else:
             return ""
-
-    def set_nt(self, threads):
-        self.threads = threads
 
     def calc_new(self, coords, dirname):
         if not os.path.exists(dirname): os.makedirs(dirname)
@@ -865,7 +917,7 @@ class Molpro(Engine):
     """
     Run a Molpro energy and gradient calculation.
     """
-    def __init__(self, molecule=None):
+    def __init__(self, molecule=None, threads=None):
         # molecule.py can not parse molpro input yet, so we use self.load_molpro_input() as a walk around
         if molecule is None:
             # create a fake molecule
@@ -873,7 +925,7 @@ class Molpro(Engine):
             molecule.elem = ['H']
             molecule.xyzs = [[[0,0,0]]]
         super(Molpro, self).__init__(molecule)
-        self.threads = None
+        self.threads = threads
         self.molproExePath = None
 
     def molproExe(self):
@@ -890,9 +942,6 @@ class Molpro(Engine):
             return " -n %i" % self.threads
         else:
             return ""
-
-    def set_nt(self, threads):
-        self.threads = threads
 
     def load_molpro_input(self, molproin):
         """ Molpro input file parser, only support xyz coordinates for now """

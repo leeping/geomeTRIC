@@ -1,1 +1,1 @@
-geometric-optimize --qchem ethane.in constraints.txt
+geometric-optimize --engine qchem ethane.in constraints.txt
