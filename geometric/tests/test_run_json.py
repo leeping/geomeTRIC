@@ -233,6 +233,9 @@ def test_run_json_psi4_hydrogen(localizer):
 
     out_json = geometric.run_json.geometric_run_json(in_json_dict)
     print(out_json['stdout'])
+    for k in out_json.keys():
+        print(k)
+        print(out_json[k])
 
     with open('out.json', 'w') as handle:
         json.dump(out_json, handle, indent=2)
