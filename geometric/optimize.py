@@ -688,9 +688,10 @@ def run_optimizer(**kwargs):
     dirname = prefix+".tmp"
     if not os.path.exists(dirname):
         os.makedirs(dirname)
+    kwargs['dirname'] = dirname
     
     # Get the Molecule and engine objects needed for optimization
-    M, engine = get_molecule_engine(**kwargs, dirname=dirname)
+    M, engine = get_molecule_engine(**kwargs)
 
     # Get initial coordinates in bohr
     coords = M.xyzs[0].flatten() * ang2bohr
