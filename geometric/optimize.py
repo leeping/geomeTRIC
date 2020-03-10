@@ -2127,6 +2127,8 @@ def get_molecule_engine(**kwargs):
         logger.info("Custom engine selected.\n")
         engine = customengine
         M = engine.M
+    else:
+        raise RuntimeError("Neither engine name nor customengine object was provided.\n")
 
     # If --coords is provided via command line, use initial coordinates in the provided file
     # to override all previously provided coordinates.

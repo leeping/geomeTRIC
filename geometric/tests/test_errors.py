@@ -56,7 +56,7 @@ gradient('hf')
     input_opts = {
         'coordsys': 'tric',
         'conv': 1.e-7,
-        'psi4': True,
+        'engine' : 'psi4',
         'input': 'water.in'
     }
     M, engine = geometric.optimize.get_molecule_engine(**input_opts)
@@ -87,7 +87,7 @@ gradient('hf')
     input_opts = {
         'coordsys': 'tric',
         'conv': 1.e-7,
-        'psi4': True,
+        'engine': 'psi4',
         'input': 'water.in'
     }
     M, engine = geometric.optimize.get_molecule_engine(**input_opts)
@@ -119,7 +119,7 @@ gradient('hf')
     input_opts = {
         'coordsys': 'tric',
         'conv': 1.e-7,
-        'psi4': True,
+        'engine': 'psi4',
         'input': 'water.in',
         'maxiter': 1, # this will cause GeomOptNotConvergedError
     }
