@@ -21,19 +21,13 @@ matrix:
       dist: trusty
       env:
         - PYTHON_VER=3.6
-        - PROG=OPENMM
+        - PROG=PSI4
     - os: linux
       python: 3.7
       dist: xenial
       env:
         - PYTHON_VER=3.7
         - PROG=RDKIT
-    - os: linux
-      python: 3.7
-      dist: xenial
-      env:
-        - PYTHON_VER=3.7
-        - PROG=PSI4
 
 before_install:
     # Additional info about the build
@@ -72,7 +66,6 @@ script:
       cd examples/water2_psi4
       coverage run `which geometric-optimize` --engine psi4 water2.psi4in
       cd ../..
-      pytest -s geometric/tests/test_run_json.py -k test_run_json_psi4_hydrogen
     fi
 
 notifications:
