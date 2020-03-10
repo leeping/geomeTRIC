@@ -60,7 +60,7 @@ def parse_input_json_dict(in_json_dict):
     })
 
     # Here we force the use of qcengine because other engines don't support qc schema
-    input_opts.update({'qcengine': True, 'qcschema': input_specification, 'qce_program': input_opts["program"]})
+    input_opts.update({'engine': 'qcengine', 'qcschema': input_specification, 'qce_program': input_opts["program"]})
     return input_opts
 
 

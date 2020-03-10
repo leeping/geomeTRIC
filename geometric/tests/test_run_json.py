@@ -266,4 +266,4 @@ def test_rdkit_run_error(localizer):
     ret = geometric.run_json.geometric_run_json(in_json_dict)
     print(ret['stdout'])
     assert ret["success"] == False
-    assert "UFF methods" in ret["error"]["error_message"]
+    assert "UFF" in ret["error"]["error_message"]

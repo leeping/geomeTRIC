@@ -19,7 +19,7 @@ def test_dlc_openmm_water3(localizer):
     Optimize the geometry of three water molecules using standard delocalized internal coordinates.
     The coordinate system will break down and have to be rebuilt.
     """
-    progress = geometric.optimize.run_optimizer(openmm=True, pdb=os.path.join(datad,'water3.pdb'), coordsys='dlc', input='tip3p.xml')
+    progress = geometric.optimize.run_optimizer(engine='openmm', pdb=os.path.join(datad,'water3.pdb'), coordsys='dlc', input='tip3p.xml')
     # The results here are in Angstrom
     #
     ref = np.array([[ 1.19172917, -1.71174316,  0.79961878],
@@ -50,7 +50,7 @@ def test_tric_openmm_water6(localizer):
     Optimize the geometry of six water molecules using translation-rotation internal coordinates.
     This optimization should be rather stable.
     """
-    progress = geometric.optimize.run_optimizer(openmm=True, pdb=os.path.join(datad,'water6.pdb'), input='tip3p.xml', qdata=True)
+    progress = geometric.optimize.run_optimizer(engine='openmm', pdb=os.path.join(datad,'water6.pdb'), input='tip3p.xml', qdata=True)
     ref = np.array([[ 1.32539118, -1.69049000,  0.75057673],
                     [ 1.99955139, -2.21940859,  1.18382539],
                     [ 1.57912690, -0.77129578,  0.98807568],
@@ -105,7 +105,7 @@ def test_tric_openmm_water6(localizer):
 @addons.using_openmm
 def test_openmm_ala_scan(localizer):
     # Requires amber99sb.xml which ships with OpenMM
-    m = geometric.optimize.run_optimizer(openmm=True, enforce=0.1, pdb=os.path.join(datad, 'ala_a99sb_min.pdb'), input='amber99sb.xml',
+    m = geometric.optimize.run_optimizer(engine='openmm', enforce=0.1, pdb=os.path.join(datad, 'ala_a99sb_min.pdb'), input='amber99sb.xml',
                                          constraints=os.path.join(datad, 'ala_constraints.txt'))
     scan_final = geometric.molecule.Molecule('scan-final.xyz')
     scan_energies = np.array([float(c.split()[-1]) for c in scan_final.comms])
@@ -118,7 +118,7 @@ def test_openmm_ala_scan(localizer):
 @addons.using_openmm
 def test_openmm_ala_scan_conmethod(localizer):
     # Requires amber99sb.xml which ships with OpenMM
-    m = geometric.optimize.run_optimizer(openmm=True, conmethod=1, pdb=os.path.join(datad, 'ala_a99sb_min.pdb'), input='amber99sb.xml',
+    m = geometric.optimize.run_optimizer(engine='openmm', conmethod=1, pdb=os.path.join(datad, 'ala_a99sb_min.pdb'), input='amber99sb.xml',
                                          constraints=os.path.join(datad, 'ala_constraints.txt'))
     scan_final = geometric.molecule.Molecule('scan-final.xyz')
     scan_energies = np.array([float(c.split()[-1]) for c in scan_final.comms])
@@ -130,7 +130,7 @@ def test_openmm_ala_scan_conmethod(localizer):
 
 @addons.using_openmm
 def test_openmm_h2o2_h2o_grad_hess(localizer):
-    M, engine = geometric.optimize.get_molecule_engine(openmm=True, pdb=os.path.join(datad, 'h2o2_h2o.pdb'), input=os.path.join(datad, 'h2o2_h2o_system.xml'))
+    M, engine = geometric.optimize.get_molecule_engine(engine='openmm', pdb=os.path.join(datad, 'h2o2_h2o.pdb'), input=os.path.join(datad, 'h2o2_h2o_system.xml'))
     coords = M.xyzs[0].flatten() * geometric.nifty.ang2bohr
     IC = geometric.internal.DelocalizedInternalCoordinates(M, build=True, connect=False, addcart=False)
     Gq_ana, Gq_num = geometric.optimize.CheckInternalGrad(coords, M, IC.Prims, engine, 'h2o2_h2o.tmp', False)
@@ -138,7 +138,7 @@ def test_openmm_h2o2_h2o_grad_hess(localizer):
     assert np.allclose(Gq_ana, Gq_num, atol=1e-5)
     assert np.allclose(Hq_ana, Hq_num, atol=1e-5)
     #                                                    constraints=os.path.join(datad, 'ala_constraints.txt')
-    # m = geometric.optimize.run_optimizer(openmm=True, enforce=0.1, pdb=os.path.join(datad, 'ala_a99sb_min.pdb'), input='amber99sb.xml',
+    # m = geometric.optimize.run_optimizer(engine='openmm', enforce=0.1, pdb=os.path.join(datad, 'ala_a99sb_min.pdb'), input='amber99sb.xml',
     #                                      constraints=os.path.join(datad, 'ala_constraints.txt'))
     # scan_final = geometric.molecule.Molecule('scan-final.xyz')
     # scan_energies = np.array([float(c.split()[-1]) for c in scan_final.comms])
@@ -151,13 +151,13 @@ def test_openmm_h2o2_h2o_grad_hess(localizer):
 @addons.using_openmm
 def test_combination_detection(localizer):
     """Read in opls combination xml and make sure we find this to apply the combination rules"""
-    M, engine = geometric.optimize.get_molecule_engine(openmm=True, pdb=os.path.join(datad, 'captan.pdb'), input=os.path.join(datad, 'captan.xml'))
+    M, engine = geometric.optimize.get_molecule_engine(engine='openmm', pdb=os.path.join(datad, 'captan.pdb'), input=os.path.join(datad, 'captan.xml'))
     assert engine.combination == 'opls'
 
 @addons.using_openmm
 def test_opls_energy(localizer):
     """Test the opls energy evaluation of the molecule."""
-    M, engine = geometric.optimize.get_molecule_engine(openmm=True, pdb=os.path.join(datad, 'captan.pdb'),input=os.path.join(datad, 'captan.xml'))
+    M, engine = geometric.optimize.get_molecule_engine(engine='openmm', pdb=os.path.join(datad, 'captan.pdb'),input=os.path.join(datad, 'captan.xml'))
     coords = M.xyzs[0].flatten() * geometric.nifty.ang2bohr
     spcalc = engine.calc_new(coords, None)
     energy = spcalc['energy']

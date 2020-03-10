@@ -85,7 +85,7 @@ class BatchOptimizer(object):
 
         optimizers = []
         for schema in schemas:
-            M, engine = gt.get_molecule_engine(qcschema=schema, **self.kwargs)
+            M, engine = gt.get_molecule_engine(engine='qcengine', qcschema=schema, **self.kwargs)
             coords = M.xyzs[0].flatten() * ang2bohr
     
             # Read in the constraints
