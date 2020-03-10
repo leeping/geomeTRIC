@@ -1,6 +1,7 @@
 coverage:
   ignore:
     - geometric/tests/.*
+    - geometric/PDB.py
     - setup.py
   status:
     patch: false
