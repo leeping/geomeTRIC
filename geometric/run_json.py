@@ -189,7 +189,7 @@ def geometric_run_json(in_json_dict):
     """ Take a input dictionary loaded from json, and return an output dictionary for json """
 
     # Default logger configuration (prevents extra newline from being printed)
-    logIni = pkg_resources.resource_filename(geometric.optimize.__name__, 'logJson.ini')
+    logIni = pkg_resources.resource_filename(geometric.optimize.__name__, 'data/logJson.ini')
     import logging.config
     logging.config.fileConfig(logIni,disable_existing_loggers=False)
 
