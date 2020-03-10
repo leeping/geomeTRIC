@@ -649,7 +649,7 @@ def run_optimizer(**kwargs):
     # By default, output should be written to <args.prefix>.log and also printed to the terminal.
     # This behavior may be changed by editing the log.ini file.
     # Output will only be written to log files after the 'logConfig' line is called!
-    logIni = 'log.ini'
+    logIni = 'config/log.ini'
     if kwargs.get('logIni') is None:
         import geometric.optimize
         logIni = pkg_resources.resource_filename(geometric.optimize.__name__, logIni)
