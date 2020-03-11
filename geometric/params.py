@@ -36,6 +36,7 @@ POSSIBILITY OF SUCH DAMAGE.
 from __future__ import division
 import argparse
 import numpy as np
+from .errors import ParamError
 from .nifty import logger
 
 class OptParams(object):
@@ -47,6 +48,8 @@ class OptParams(object):
     def __init__(self, **kwargs):
         # Whether we are optimizing for a transition state. This changes a number of default parameters.
         self.transition = kwargs.get('transition', False)
+        # CI optimizations sometimes require tiny steps
+        self.meci = kwargs.get('meci', False)
         # Handle convergence criteria; this edits the kwargs
         self.convergence_criteria(**kwargs)
         # Threshold (in a.u. / rad) for activating alternative algorithm that enforces precise constraint satisfaction
@@ -63,15 +66,21 @@ class OptParams(object):
         self.trust = kwargs.get('trust', 0.1)
         # Maximum value of trust radius
         self.tmax = kwargs.get('tmax', 0.3)
+        # Minimum value of the trust radius
+        self.tmin = kwargs.get('tmin', 0.0 if (self.transition or self.meci) else self.Convergence_drms)
+        # Minimum size of a step that can be rejected
+        self.thre_rj = kwargs.get('thre_rj', 1e-4 if (self.transition or self.meci) else 1e-2)
+        # Sanity checks on trust radius
+        if self.tmax < self.tmin:
+            raise ParamError("Max trust radius must be larger than min")
         self.trust = min(self.tmax, self.trust)
+        self.trust = max(self.tmin, self.trust)
         # Maximum number of optimization cycles
         self.maxiter = kwargs.get('maxiter', 300)
         # Use updated constraint algorithm implemented 2019-03-20
         self.conmethod = kwargs.get('conmethod', 0)
         # Write Hessian matrix at optimized structure to text file
         self.write_cart_hess = kwargs.get('write_cart_hess', None)
-        # CI optimizations sometimes require tiny steps
-        self.meci = kwargs.get('meci', False)
         # Output .xyz file name may be set separately in
         # run_optimizer() prior to calling Optimize().
         self.xyzout = kwargs.get('xyzout', None)

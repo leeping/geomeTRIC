@@ -42,6 +42,9 @@ class Error(Exception):
 class EngineError(Error):
     pass
 
+class ParamError(Error):
+    pass
+
 class TeraChemEngineError(EngineError):
     pass
 
