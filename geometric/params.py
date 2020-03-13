@@ -171,7 +171,7 @@ def str2bool(v):
     else:
         raise argparse.ArgumentTypeError('Boolean value expected.')
 
-def parse_args(*args):
+def parse_optimizer_args(*args):
     
     """ Read user input. Designed to be called by optimize.main() passing in sys.argv[1:] """
     
@@ -207,6 +207,7 @@ def parse_args(*args):
                         '"never" : Do not calculate or read Hessian data. file:<path> : Read Hessian data in NumPy format from path, e.g. file:run.tmp/hessian/hessian.txt .'
                         '"first" : Calculate or read for the initial structure. "each" : Calculate for each step in the optimization (costly).'
                         '"exit" : Calculate Hessian and then exit without optimizing. Default is "never" for minimization and "initial" for transition state.')
+    parser.add_argument('--port', type=int, default=0, help='If nonzero, the Work Queue port used to distribute Hessian calculations. Workers must be started separately.')
     parser.add_argument('--rfo', action='store_true', help='Use rational function optimization (default is trust-radius Newton Raphson).')
     parser.add_argument('--trust', type=float, default=0.1, help='Starting trust radius.')
     parser.add_argument('--tmax', type=float, default=0.3, help='Maximum trust radius.')
@@ -221,7 +222,7 @@ def parse_args(*args):
     parser.add_argument('--converge', type=str, nargs="+", default=[], help='Custom convergence criteria as key/value pairs.'
                         'Provide the name of a criteria set as "set GAU_LOOSE" or "set TURBOMOLE", and/or set specific criteria using "energy 1e-5" or "grms 1e-3')
     parser.add_argument('--nt', type=int, help='Specify number of threads for running in parallel (for TeraChem this should be number of GPUs)')
-    parser.add_argument('input', type=str, help='TeraChem or Q-Chem input file')
+    parser.add_argument('input', type=str, help='Input file for calculation')
     parser.add_argument('constraints', type=str, nargs='?', help='Constraint input file (optional)')
     args = parser.parse_args(*args)
     return args

@@ -106,11 +106,13 @@ def calc_cartesian_hessian(coords, molecule, engine, dirname, readfiles=True, ve
             coords[i] += h
             dirname_d = os.path.join(dirname, "hessian/displace/%03ip" % (i+1))
             readfiles_d = readfiles and os.path.exists(dirname_d)
-            engine.calc_wq(coords, dirname_d, readfiles=readfiles_d)['gradient']
+            engine.copy_scratch(dirname, dirname_d)
+            engine.calc_wq(coords, dirname_d, readfiles=readfiles_d)
             coords[i] -= 2*h
             dirname_d = os.path.join(dirname, "hessian/displace/%03im" % (i+1))
             readfiles_d = readfiles and os.path.exists(dirname_d)
-            engine.calc_wq(coords, dirname_d, readfiles=readfiles_d)['gradient']
+            engine.copy_scratch(dirname, dirname_d)
+            engine.calc_wq(coords, dirname_d, readfiles=readfiles_d)
             coords[i] += h
         wq_wait(wq, print_time=600)
         for i in range(nc):
@@ -132,12 +134,12 @@ def calc_cartesian_hessian(coords, molecule, engine, dirname, readfiles=True, ve
             coords[i] += h
             dirname_d = os.path.join(dirname, "hessian/displace/%03ip" % (i+1))
             readfiles_d = readfiles and os.path.exists(dirname_d)
-            engine.link_scratch(dirname, dirname_d)
+            engine.copy_scratch(dirname, dirname_d)
             gfwd = engine.calc(coords, dirname_d, readfiles=readfiles_d)['gradient']
             coords[i] -= 2*h
             dirname_d = os.path.join(dirname, "hessian/displace/%03im" % (i+1))
             readfiles_d = readfiles and os.path.exists(dirname_d)
-            engine.link_scratch(dirname, dirname_d)
+            engine.copy_scratch(dirname, dirname_d)
             gbak = engine.calc(coords, dirname_d, readfiles=readfiles_d)['gradient']
             coords[i] += h
             Hx[i] = (gfwd-gbak)/(2*h)

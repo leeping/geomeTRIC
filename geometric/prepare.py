@@ -34,6 +34,8 @@ POSSIBILITY OF SUCH DAMAGE.
 """
 
 from __future__ import division
+
+import os
 import itertools
 import numpy as np
 

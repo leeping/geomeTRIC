@@ -52,8 +52,8 @@ from .ic_tools import check_internal_grad, check_internal_hess, write_displaceme
 from .normal_modes import calc_cartesian_hessian
 from .step import brent_wiki, Froot, calc_drms_dmax, get_cartesian_norm, rebuild_hessian, get_delta_prime, trust_step, force_positive_definite
 from .prepare import get_molecule_engine, parse_constraints
-from .params import OptParams, parse_args
-from .nifty import row, col, flat, bohr2ang, ang2bohr, logger, bak
+from .params import OptParams, parse_optimizer_args
+from .nifty import row, col, flat, bohr2ang, ang2bohr, logger, bak, createWorkQueue
 from .errors import EngineError, GeomOptNotConvergedError
 
 class Optimizer(object):
@@ -665,6 +665,7 @@ def run_optimizer(**kwargs):
     logfilename = kwargs.get('prefix')
     # Input file for optimization; QC input file or OpenMM .xml file
     inputf = kwargs.get('input')
+    verbose = kwargs.get('verbose', False)
     # Get calculation prefix and temporary directory name
     arg_prefix = kwargs.get('prefix', None) #prefix for output file and temporary directory
     prefix = arg_prefix if arg_prefix is not None else os.path.splitext(inputf)[0]
@@ -700,6 +701,11 @@ def run_optimizer(**kwargs):
     # Get the Molecule and engine objects needed for optimization
     M, engine = get_molecule_engine(**kwargs)
 
+    # Create Work Queue object
+    if kwargs.get('port', 0):
+        logger.info("Creating Work Queue object for distributed Hessian calculation\n")
+        createWorkQueue(kwargs['port'], debug=verbose>1)
+
     # Get initial coordinates in bohr
     coords = M.xyzs[0].flatten() * ang2bohr
 
@@ -733,7 +739,6 @@ def run_optimizer(**kwargs):
     #========================================#
 
     # Auxiliary functions (will not do optimization):
-    verbose = kwargs.get('verbose', False)
     displace = kwargs.get('displace', False) # Write out the displacements of the coordinates.
     if displace:
         write_displacements(coords, M, IC, dirname, verbose)
@@ -799,7 +804,7 @@ def run_optimizer(**kwargs):
 
 def main():
     # Read user input (look in params.py for full list of options). 
-    args = parse_args(sys.argv[1:])
+    args = parse_optimizer_args(sys.argv[1:])
 
     # Run the optimizer.
     try:

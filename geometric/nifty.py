@@ -113,6 +113,9 @@ except ImportError:
     logger.warning("gzip module import failed (used in compressing or decompressing pickle files)\n")
     HaveGZ = False
 
+# The directory that this file lives in
+rootdir = os.path.dirname(os.path.abspath(__file__))
+
 ## Boltzmann constant
 kb = 0.0083144100163
 ## Q-Chem to GMX unit conversion for energy
@@ -131,7 +134,6 @@ grad_gmx2au = 1.0 / grad_au2gmx
 # Gradient units
 au2evang = 51.42209166566339
 evang2au = 1.0 / au2evang
-
 
 #=========================#
 #     I/O formatting      #
@@ -861,10 +863,15 @@ def createWorkQueue(wq_port, debug=True, name=package):
     global WORK_QUEUE
     if debug:
         work_queue.set_debug_flag('all')
-    WORK_QUEUE = work_queue.WorkQueue(port=wq_port, catalog=True, exclusive=False, shutdown=False)
+    WORK_QUEUE = work_queue.WorkQueue(port=wq_port)
     WORK_QUEUE.specify_name(name)
+    # QYD: prefer the worker that is fastest in previous tasks
+    # another choice is first-come-first serve: WORK_QUEUE_SCHEDULE_FCFS
+    WORK_QUEUE.specify_algorithm(work_queue.WORK_QUEUE_SCHEDULE_TIME)
+    # QYD: We don't want to specify the following extremely long keepalive times
+    # because they will prevent checking "dead" workers, causing the program to wait forever
     #WORK_QUEUE.specify_keepalive_timeout(8640000)
-    WORK_QUEUE.specify_keepalive_interval(8640000)
+    #WORK_QUEUE.specify_keepalive_interval(8640000)
 
 def destroyWorkQueue():
     # Convenience function to destroy the Work Queue objects.
