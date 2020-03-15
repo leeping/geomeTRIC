@@ -67,7 +67,7 @@ class OptParams(object):
         # Maximum value of trust radius
         self.tmax = kwargs.get('tmax', 0.3)
         # Minimum value of the trust radius
-        self.tmin = kwargs.get('tmin', 0.0 if (self.transition or self.meci) else self.Convergence_drms)
+        self.tmin = kwargs.get('tmin', 0.0 if (self.transition or self.meci) else min(1.2e-3, self.Convergence_drms))
         # Minimum size of a step that can be rejected
         self.thre_rj = kwargs.get('thre_rj', 1e-4 if (self.transition or self.meci) else 1e-2)
         # Sanity checks on trust radius
