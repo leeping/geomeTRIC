@@ -83,7 +83,7 @@ else:
             message = record.getMessage()
             self.stream.write(message)
             self.flush()
-            
+
     if "geometric" in __name__:
         # This ensures logging behavior is consistent with the rest of geomeTRIC
         logger = getLogger(__name__)
@@ -897,7 +897,6 @@ def queue_up(wq, command, input_files, output_files, tag=None, tgt=None, verbose
     for f in output_files:
         lf = os.path.join(cwd,f)
         task.specify_output_file(lf,f,cache=False)
-    task.specify_algorithm(work_queue.WORK_QUEUE_SCHEDULE_FCFS)
     if tag is None: tag = command
     task.specify_tag(tag)
     task.print_time = print_time
@@ -929,7 +928,6 @@ def queue_up_src_dest(wq, command, input_files, output_files, tag=None, tgt=None
     for f in output_files:
         # print f[0], f[1]
         task.specify_output_file(f[0],f[1],cache=False)
-    task.specify_algorithm(work_queue.WORK_QUEUE_SCHEDULE_FCFS)
     if tag is None: tag = command
     task.specify_tag(tag)
     task.print_time = print_time
@@ -1406,16 +1404,27 @@ def _exec(command, print_to_screen = False, outfnm = None, logfnm = None, stdin 
     #===============================================================#
     # stdout and stderr streams of the process.
     streams = [p.stdout, p.stderr]
+    # Are we using Python 2?
+    p2 = sys.version_info.major == 2
     # These are functions that take chunks of lines (read) as inputs.
     def process_out(read):
-        if print_to_screen: sys.stdout.write(str(read.encode('utf-8')))
+        if print_to_screen:
+            # LPW 2019-11-25: We should be writing a string, not a representation of bytes
+            if p2:
+                sys.stdout.write(str(read.encode('utf-8')))
+            else:
+                sys.stdout.write(read)
         if copy_stdout:
             process_out.stdout.append(read)
             wtf(read)
     process_out.stdout = []
 
     def process_err(read):
-        if print_to_screen: sys.stderr.write(str(read.encode('utf-8')))
+        if print_to_screen:
+            if p2:
+                sys.stderr.write(str(read.encode('utf-8')))
+            else:
+                sys.stderr.write(read)
         process_err.stderr.append(read)
         if copy_stderr:
             process_out.stdout.append(read)
@@ -1428,15 +1437,24 @@ def _exec(command, print_to_screen = False, outfnm = None, logfnm = None, stdin 
         while True:
             to_read, _, _ = select(streams, [], [])
             for fh in to_read:
+                # We want to call fh.read below, but this can lead to a system hang when executing Tinker on mac.
+                # This hang can be avoided by running fh.read1 (with a "1" at the end), however python2.7
+                # doesn't implement ByteStream.read1. So, to enable python3 builds on mac to work, we pick the "best"
+                # fh.read function we can get
+                if hasattr(fh, 'read1'):
+                    fhread = fh.read1
+                else:
+                    fhread = fh.read
+
                 if fh is p.stdout:
                     read_nbytes = 0
                     read = ''.encode('utf-8')
                     while True:
                         if read_nbytes == 0:
-                            read += fh.read(rbytes)
+                            read += fhread(rbytes)
                             read_nbytes += rbytes
                         else:
-                            read += fh.read(1)
+                            read += fhread(1)
                             read_nbytes += 1
                         if read_nbytes > 10+rbytes:
                             raise RuntimeError("Failed to decode stdout from external process.")
@@ -1455,10 +1473,10 @@ def _exec(command, print_to_screen = False, outfnm = None, logfnm = None, stdin 
                     read = ''.encode('utf-8')
                     while True:
                         if read_nbytes == 0:
-                            read += fh.read(rbytes)
+                            read += fhread(rbytes)
                             read_nbytes += rbytes
                         else:
-                            read += fh.read(1)
+                            read += fhread(1)
                             read_nbytes += 1
                         if read_nbytes > 10+rbytes:
                             raise RuntimeError("Failed to decode stderr from external process.")
