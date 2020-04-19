@@ -455,6 +455,7 @@ class Optimizer(object):
         assert self.state == OPT_STATE.NEEDS_EVALUATION
         
         ### Adjust Trust Radius and/or Reject Step ###
+        prev_trust = self.trust
         if step_state in (StepState.Poor, StepState.Reject):
             new_trust = max(params.tmin, min(self.trust, self.cnorm)/2)
             self.trustprint = "\x1b[91m-\x1b[0m" if new_trust < self.trust else "="
@@ -467,7 +468,7 @@ class Optimizer(object):
             self.trustprint = "="
 
         if step_state == StepState.Reject:
-            if self.trust <= params.thre_rj:
+            if prev_trust <= params.thre_rj:
                 logger.info("\x1b[93mNot rejecting step - trust below %.3e\x1b[0m\n" % params.thre_rj)
             elif (not params.transition) and self.E < self.Eprev:
                 logger.info("\x1b[93mNot rejecting step - energy decreases during minimization\x1b[0m\n")
