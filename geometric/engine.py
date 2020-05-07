@@ -154,7 +154,7 @@ def edit_tcin(fin=None, fout=None, options=None, defaults=None, reqxyz=True, ign
                     print(line_out, file=f)
             for k, v in Answer.items():
                 if k not in havekeys:
-                    print("%-15s %s" % (k, str(v)), file=f)
+                    print("%-25s     %s" % (k, str(v)), file=f)
     return Answer
 
 def set_tcenv():
@@ -478,8 +478,8 @@ class TeraChem(Engine):
         edit_tcin(fout="%s/run.in" % dirname, options=self.tcin)
         # Back up any existing output files
         # Commented out (should be enabled during debuggin')
-        bak('run.out', cwd=dirname, start=0)
-        bak('start.xyz', cwd=dirname, start=0)
+        # bak('run.out', cwd=dirname, start=0)
+        # bak(start_xyz, cwd=dirname, start=0)
         # Convert coordinates back to the xyz file
         self.M.xyzs[0] = coords.reshape(-1, 3) * bohr2ang
         if self.qmmm:
