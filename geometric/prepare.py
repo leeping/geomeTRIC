@@ -41,6 +41,7 @@ import numpy as np
 
 from .internal import Distance, Angle, Dihedral, CartesianX, CartesianY, CartesianZ, TranslationX, TranslationY, TranslationZ, RotationA, RotationB, RotationC
 from .engine import set_tcenv, load_tcin, TeraChem, ConicalIntersection, Psi4, QChem, Gromacs, Molpro, OpenMM, QCEngineAPI
+from .rotate import calc_fac_dfac
 from .molecule import Molecule, Elements
 from .nifty import logger, isint, uncommadash, bohr2ang, ang2bohr
 
@@ -234,7 +235,7 @@ def get_molecule_engine(**kwargs):
     else:
         raise RuntimeError("Neither engine name nor customengine object was provided.\n")
     
-    # If --coords is provided via command line, use initial coordinates in the provided file
+    # If --coords is provided via command line, use final coordinate set in the provided file
     # to override all previously provided coordinates.
     arg_coords = kwargs.get('coords', None)
     if arg_coords is not None:

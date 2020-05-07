@@ -54,7 +54,7 @@ from .step import brent_wiki, Froot, calc_drms_dmax, get_cartesian_norm, rebuild
 from .prepare import get_molecule_engine, parse_constraints
 from .params import OptParams, parse_optimizer_args
 from .nifty import row, col, flat, bohr2ang, ang2bohr, logger, bak, createWorkQueue
-from .errors import EngineError, GeomOptNotConvergedError
+from .errors import HessianExit, EngineError, GeomOptNotConvergedError
 
 class Optimizer(object):
     def __init__(self, coords, molecule, IC, engine, dirname, params):
@@ -204,7 +204,14 @@ class Optimizer(object):
                 self.Hx0 = calc_cartesian_hessian(self.X, self.molecule, self.engine, self.dirname, readfiles=True, verbose=self.params.verbose)
                 if self.params.hessian == 'exit':
                     logger.info("Exiting as requested after Hessian calculation.\n")
-                    sys.exit(0)
+                    logger.info("Cartesian Hessian is stored in %s/hessian/hessian.txt.\n" % self.dirname)
+                    logger.info("Cartesian Hessian printout:\n")
+                    for i in range(self.Hx0.shape[0]):
+                        for j in range(self.Hx0.shape[1]):
+                            logger.info(" % 10.6f" % self.Hx0[i,j])
+                        logger.info("\n")
+                    raise HessianExit
+                    # sys.exit(0)
             elif hasattr(self.params, 'hess_data') and self.Iteration == 0:
                 self.Hx0 = self.params.hess_data.copy()
                 if self.Hx0.shape != (self.X.shape[0], self.X.shape[0]):
@@ -816,6 +823,9 @@ def main():
     except GeomOptNotConvergedError:
         logger.info("Geometry Converge Failed Error:\n" + traceback.format_exc())
         sys.exit(50)
+    except HessianExit:
+        logger.info("Exiting normally.\n")
+        sys.exit(0)
     except:
         logger.info("Unknown Error:\n" + traceback.format_exc())
         raise
