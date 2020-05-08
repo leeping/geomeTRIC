@@ -39,6 +39,9 @@ POSSIBILITY OF SUCH DAMAGE.
 class Error(Exception):
     pass
 
+class HessianExit(Error):
+    pass
+
 class EngineError(Error):
     pass
 

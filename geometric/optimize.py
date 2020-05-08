@@ -54,7 +54,7 @@ from .step import brent_wiki, Froot, calc_drms_dmax, get_cartesian_norm, rebuild
 from .prepare import get_molecule_engine, parse_constraints
 from .params import OptParams, parse_optimizer_args
 from .nifty import row, col, flat, bohr2ang, ang2bohr, logger, bak, createWorkQueue
-from .errors import EngineError, GeomOptNotConvergedError
+from .errors import HessianExit, EngineError, GeomOptNotConvergedError
 
 class Optimizer(object):
     def __init__(self, coords, molecule, IC, engine, dirname, params):
@@ -208,7 +208,14 @@ class Optimizer(object):
                     frequency_analysis(self.X, self.Hx0, self.molecule.elem, verbose=max(1, self.params.verbose))
                 if self.params.hessian == 'exit':
                     logger.info("Exiting as requested after Hessian calculation.\n")
-                    sys.exit(0)
+                    logger.info("Cartesian Hessian is stored in %s/hessian/hessian.txt.\n" % self.dirname)
+                    logger.info("Cartesian Hessian printout:\n")
+                    for i in range(self.Hx0.shape[0]):
+                        for j in range(self.Hx0.shape[1]):
+                            logger.info(" % 10.6f" % self.Hx0[i,j])
+                        logger.info("\n")
+                    raise HessianExit
+                    # sys.exit(0)
             elif hasattr(self.params, 'hess_data') and self.Iteration == 0:
                 self.Hx0 = self.params.hess_data.copy()
                 if self.params.vibration:
@@ -461,6 +468,7 @@ class Optimizer(object):
         assert self.state == OPT_STATE.NEEDS_EVALUATION
         
         ### Adjust Trust Radius and/or Reject Step ###
+        prev_trust = self.trust
         if step_state in (StepState.Poor, StepState.Reject):
             new_trust = max(params.tmin, min(self.trust, self.cnorm)/2)
             self.trustprint = "\x1b[91m-\x1b[0m" if new_trust < self.trust else "="
@@ -473,7 +481,7 @@ class Optimizer(object):
             self.trustprint = "="
 
         if step_state == StepState.Reject:
-            if self.trust <= params.thre_rj:
+            if prev_trust <= params.thre_rj:
                 logger.info("\x1b[93mNot rejecting step - trust below %.3e\x1b[0m\n" % params.thre_rj)
             elif (not params.transition) and self.E < self.Eprev:
                 logger.info("\x1b[93mNot rejecting step - energy decreases during minimization\x1b[0m\n")
@@ -825,6 +833,9 @@ def main():
     except GeomOptNotConvergedError:
         logger.info("Geometry Converge Failed Error:\n" + traceback.format_exc())
         sys.exit(50)
+    except HessianExit:
+        logger.info("Exiting normally.\n")
+        sys.exit(0)
     except:
         logger.info("Unknown Error:\n" + traceback.format_exc())
         raise
