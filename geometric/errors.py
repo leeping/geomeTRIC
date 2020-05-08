@@ -45,6 +45,9 @@ class EngineError(Error):
 class ParamError(Error):
     pass
 
+class GramSchmidtError(Error):
+    pass
+
 class TeraChemEngineError(EngineError):
     pass
 

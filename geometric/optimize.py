@@ -199,14 +199,20 @@ class Optimizer(object):
             # Hx is assumed to be the Cartesian Hessian at the current step.
             # Otherwise we use the variable name Hx0 to avoid almost certain confusion.
             self.Hx = calc_cartesian_hessian(self.X, self.molecule, self.engine, self.dirname, readfiles=True, verbose=self.params.verbose)
+            if self.params.vibration:
+                frequency_analysis(self.X, self.Hx, self.molecule.elem, verbose=max(1, self.params.verbose))
         elif self.Iteration == 0:
-            if self.params.hessian in ['first', 'exit']:
+            if self.params.hessian in ['first', 'exit', 'first+last']:
                 self.Hx0 = calc_cartesian_hessian(self.X, self.molecule, self.engine, self.dirname, readfiles=True, verbose=self.params.verbose)
+                if self.params.vibration:
+                    frequency_analysis(self.X, self.Hx0, self.molecule.elem, verbose=max(1, self.params.verbose))
                 if self.params.hessian == 'exit':
                     logger.info("Exiting as requested after Hessian calculation.\n")
                     sys.exit(0)
             elif hasattr(self.params, 'hess_data') and self.Iteration == 0:
                 self.Hx0 = self.params.hess_data.copy()
+                if self.params.vibration:
+                    frequency_analysis(self.X, self.Hx0, self.molecule.elem, verbose=max(1, self.params.verbose))
                 if self.Hx0.shape != (self.X.shape[0], self.X.shape[0]):
                     raise IOError('hess_data passed in via OptParams does not have the right shape')
             # self.Hx = self.Hx0.copy()
@@ -596,6 +602,10 @@ class Optimizer(object):
             logger.info("Saving current approximate Hessian (Cartesian coordinates) to %s" % self.params.write_cart_hess)
             Hx = self.IC.calcHessCart(self.X, self.G, self.H)
             np.savetxt(self.params.write_cart_hess, Hx, fmt='% 14.10f')
+        if self.params.hessian in ['last', 'first+last']:
+            Hx = calc_cartesian_hessian(self.X, self.molecule, self.engine, self.dirname, readfiles=False, verbose=self.params.verbose)
+            if self.params.vibration:
+                frequency_analysis(self.X, Hx, self.molecule.elem, verbose=max(1, self.params.verbose))
         return self.progress
 
 class OPT_STATE(object):
