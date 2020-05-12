@@ -100,12 +100,15 @@ class OptParams(object):
                 self.hess_data = np.loadtxt(self.hessian[5:])
             else:
                 raise IOError("No Hessian data file found at %s" % self.hessian)
-        elif self.hessian.lower() in ['never', 'first', 'each', 'exit', 'last', 'first+last']:
+        elif self.hessian.lower() in ['never', 'first', 'each', 'stop', 'last', 'first+last']:
             self.hessian = self.hessian.lower()
         else:
-            raise RuntimeError("Hessian command line argument can only be never, first, last, first+last, each, exit, or file:<path>")
-        # Perform a vibrational analysis whenever a cartesian Hessian is computed
-        self.vibration = kwargs.get('vibration', True)
+            raise RuntimeError("Hessian command line argument can only be never, first, last, first+last, each, stop, or file:<path>")
+        # Perform a frequency analysis whenever a cartesian Hessian is computed
+        self.frequency = kwargs.get('frequency', None)
+        if self.frequency is None: self.frequency = True
+        # Temperature and pressure for harmonic free energy 
+        self.temperature, self.pressure = kwargs.get('thermo', [300.0, 1.0])
         # Reset Hessian to guess whenever eigenvalues drop below epsilon
         self.reset = kwargs.get('reset', None)
         if self.reset is None: self.reset = not (self.transition or self.hessian == 'each')
@@ -157,8 +160,12 @@ class OptParams(object):
             logger.info(' Hessian will be computed on the first step.\n')
         elif self.hessian == 'each':
             logger.info(' Hessian will be computed for each step.\n')
-        elif self.hessian == 'exit':
-            logger.info(' Hessian will be computed for first step, then program will exit.\n')
+        elif self.hessian == 'stop':
+            logger.info(' Hessian will be computed for first step, then program will stop.\n')
+        elif self.hessian == 'last':
+            logger.info(' Hessian will be computed for last step.\n')
+        elif self.hessian == 'first+last':
+            logger.info(' Hessian will be computed for both first and last step.\n')
         elif self.hessian.startswith('file:'):
             logger.info(' Hessian data will be read from file: %s\n' % self.hessian[5:])
 
@@ -208,9 +215,10 @@ def parse_optimizer_args(*args):
     parser.add_argument('--hessian', type=str, help='Specify when to calculate Cartesian Hessian using finite difference of gradient. '
                         '"never" : Do not calculate or read Hessian data. file:<path> : Read initial Hessian data in NumPy format from path, e.g. file:run.tmp/hessian/hessian.txt .'
                         '"first" : Calculate Hessian for the initial structure. "each" : Calculate for each step in the optimization (costly).'
-                        '"exit" : Calculate Hessian for initial structure, then exit. "last" : Calculate Hessian at conclusion of optimization.'
+                        '"stop" : Calculate Hessian for initial structure, then exit. "last" : Calculate Hessian at conclusion of optimization.'
                         '"first+last" : Calculate Hessian for both the first and last structure. Default is "never" for minimization and "initial" for transition state.')
-    parser.add_argument('--vibration', type=str2bool, help='Perform vibrational analysis whenever Hessian is calculated, default is True.')
+    parser.add_argument('--frequency', type=str2bool, help='Perform frequency analysis whenever Hessian is calculated, default is True.')
+    parser.add_argument('--thermo', type=float, nargs=2, default=[300.,1.0], help='Temperature (K) and pressure (bar) for harmonic free energy following frequency analysis.')
     parser.add_argument('--port', type=int, default=0, help='If nonzero, the Work Queue port used to distribute Hessian calculations. Workers must be started separately.')
     parser.add_argument('--rfo', action='store_true', help='Use rational function optimization (default is trust-radius Newton Raphson).')
     parser.add_argument('--trust', type=float, default=0.1, help='Starting trust radius.')

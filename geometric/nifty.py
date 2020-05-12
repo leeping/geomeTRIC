@@ -121,12 +121,15 @@ rootdir = os.path.dirname(os.path.abspath(__file__))
 # Hartree energy in eV         27.211 386 245 988(53)
 # Avogadro constant            6.022 140 76 e23         (exact)
 # molar gas constant           8.314 462 618            (exact)
+# Boltzmann constant           1.380649e-23             (exact)
 # Bohr radius                  5.291 772 109 03(80) e-11
 # speed of light in vacuum     299 792 458 (exact)
+# reduced Planck's constant    1.054571817e-34 (exact)
 # calorie-joule relationship   4.184 J (exact; from NIST)
 
 ## Boltzmann constant in kJ mol^-1 k^-1
 kb          = 0.008314462618       # Previous value: 0.0083144100163
+kb_si       = 1.380649e-23
 
 # Conversion factors
 bohr2ang     = 0.529177210903      # Previous value: 0.529177210
@@ -140,6 +143,8 @@ grad_gmx2au  = 1.0 / grad_au2gmx
 au2evang     = 51.422067476325886  # Previous value: 51.42209166566339
 evang2au     = 1.0 / au2evang
 c_lightspeed = 299792458.
+hbar         = 1.054571817e-34
+avogadro     = 6.02214076e23
 
 ## Q-Chem to GMX unit conversion for energy
 eqcgmx = au2kj                     # Previous value: 2625.5002

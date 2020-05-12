@@ -37,9 +37,9 @@ POSSIBILITY OF SUCH DAMAGE.
 from __future__ import division
 import os, shutil
 import numpy as np
-from .errors import GramSchmidtError
+from .errors import FrequencyError
 from .molecule import Molecule, PeriodicTable
-from .nifty import logger, au2kj, ang2bohr, bohr2ang, c_lightspeed, wq_wait, getWorkQueue
+from .nifty import logger, kb, kb_si, hbar, au2kj, au2kcal, ang2bohr, bohr2ang, c_lightspeed, avogadro, wq_wait, getWorkQueue
 
 def calc_cartesian_hessian(coords, molecule, engine, dirname, readfiles=True, verbose=0):
     """ 
@@ -79,6 +79,8 @@ def calc_cartesian_hessian(coords, molecule, engine, dirname, readfiles=True, ve
                 return Hx
             else:
                 logger.info("Coordinates for Hessian don't match current coordinates, recalculating.\n")
+                bak('hessian.txt', cwd=os.path.join(dirname, "hessian"), start=0)
+                bak('coords.xyz', cwd=os.path.join(dirname, "hessian"), start=0)
                 readfiles=False
         else:
             logger.info("Hessian read from file doesn't have the right shape, recalculating.\n")
@@ -106,14 +108,10 @@ def calc_cartesian_hessian(coords, molecule, engine, dirname, readfiles=True, ve
             if verbose >= 2: logger.info(" Submitting gradient calculation for coordinate %i/%i\n" % (i+1, nc))
             coords[i] += h
             dirname_d = os.path.join(dirname, "hessian/displace/%03ip" % (i+1))
-            readfiles_d = readfiles and os.path.exists(dirname_d)
-            engine.copy_scratch(dirname, dirname_d)
-            engine.calc_wq(coords, dirname_d, readfiles=readfiles_d)
+            engine.calc_wq(coords, dirname_d, readfiles=readfiles, copydir=dirname)
             coords[i] -= 2*h
             dirname_d = os.path.join(dirname, "hessian/displace/%03im" % (i+1))
-            readfiles_d = readfiles and os.path.exists(dirname_d)
-            engine.copy_scratch(dirname, dirname_d)
-            engine.calc_wq(coords, dirname_d, readfiles=readfiles_d)
+            engine.calc_wq(coords, dirname_d, readfiles=readfiles, copydir=dirname)
             coords[i] += h
         wq_wait(wq, print_time=600)
         for i in range(nc):
@@ -134,14 +132,10 @@ def calc_cartesian_hessian(coords, molecule, engine, dirname, readfiles=True, ve
             elif verbose >= 1 and (i%5 == 0): logger.info("%i / %i gradient calculations complete\n" % (i*2, nc*2))
             coords[i] += h
             dirname_d = os.path.join(dirname, "hessian/displace/%03ip" % (i+1))
-            readfiles_d = readfiles and os.path.exists(dirname_d)
-            engine.copy_scratch(dirname, dirname_d)
-            gfwd = engine.calc(coords, dirname_d, readfiles=readfiles_d)['gradient']
+            gfwd = engine.calc(coords, dirname_d, readfiles=readfiles, copydir=dirname)['gradient']
             coords[i] -= 2*h
             dirname_d = os.path.join(dirname, "hessian/displace/%03im" % (i+1))
-            readfiles_d = readfiles and os.path.exists(dirname_d)
-            engine.copy_scratch(dirname, dirname_d)
-            gbak = engine.calc(coords, dirname_d, readfiles=readfiles_d)['gradient']
+            gbak = engine.calc(coords, dirname_d, readfiles=readfiles, copydir=dirname)['gradient']
             coords[i] += h
             Hx[i] = (gfwd-gbak)/(2*h)
             if verbose == 1 and i == (nc-1) : logger.info("%i / %i gradient calculations complete\n" % (nc*2, nc*2))
@@ -158,7 +152,7 @@ def calc_cartesian_hessian(coords, molecule, engine, dirname, readfiles=True, ve
             shutil.rmtree(os.path.join(dirname, "hessian", "displace"))
     return Hx
 
-def frequency_analysis(coords, Hessian, elem=None, mass=None, verbose=0):
+def frequency_analysis(coords, Hessian, elem=None, mass=None, energy=0.0, temperature=300.0, pressure=1.0, verbose=0, outfnm=None, note=None):
     """
     Parameters
     ----------
@@ -174,8 +168,18 @@ def frequency_analysis(coords, Hessian, elem=None, mass=None, verbose=0):
         n_atoms length list or 1D array containing atomic masses in amu.
         If provided, masses will not be looked up using elem.
         If neither mass nor elem will be provided, will assume masses are all unity.
-    verbose : bool
+    energy : float
+        Electronic energy passed to the harmonic free energy module
+    temperature : float
+        Temperature passed to the harmonic free energy module
+    pressure : float
+        Pressure passed to the harmonic free energy module
+    verbose : int
         Print debugging info
+    outfnm : str
+        If provided, write vibrational data to a ForceBalance-parsable vdata.txt file
+    note : str
+        If provided, write a note into the comment line of the xyz structure in vdata.txt
 
     Returns
     -------
@@ -186,19 +190,20 @@ def frequency_analysis(coords, Hessian, elem=None, mass=None, verbose=0):
         n_vibmodes*n_atoms length array containing un-mass-weighted Cartesian displacements 
         of each normal mode
     """
+    # Create a copy of coords and reshape into a 2D array
+    coords = coords.copy().reshape(-1, 3)
     na = coords.shape[0]
     if mass:
         mass = np.array(mass)
         assert len(mass) == na
     elif elem:
-        mass = np.array([PeriodicTable[elem[j]] for j in elem])
+        mass = np.array([PeriodicTable[j] for j in elem])
         assert len(elem) == na
     else:
         logger.warning("neither elem nor mass is provided; assuming all masses unity")
         mass = np.ones(na)
-        
     assert coords.shape == (na, 3)
-    assert Hessian.ndim == (3*na, 3*na)
+    assert Hessian.shape == (3*na, 3*na)
 
     # Convert Hessian eigenvalues into wavenumbers:
     # 
@@ -249,12 +254,14 @@ def frequency_analysis(coords, Hessian, elem=None, mass=None, verbose=0):
     # Eigenvectors are in the rows after transpose
     Ivecs = Ivecs.T 
 
-    # Obtain the rotational degrees of freedom
-    RotDOF = 0;
+    # Obtain the number of rotational degrees of freedom
+    RotDOF = 0
     for i in range(3):
         if abs(Ivals[i]) > 1.0e-10:
-            RotDOF +=1;
-    TR_DOF = 3 + RotDOF;
+            RotDOF += 1
+    TR_DOF = 3 + RotDOF
+    if TR_DOF not in (5, 6):
+        raise FrequencyError("Unexpected number of trans+rot DOF: %i not in (5, 6)" % TR_DOF)
 
     if verbose >= 2:
         logger.info("Center of mass: % .12f % .12f % .12f\n" % (cxyz[0], cxyz[1], cxyz[2]))
@@ -269,15 +276,17 @@ def frequency_analysis(coords, Hessian, elem=None, mass=None, verbose=0):
     # Internal coordinates of the Eckart frame
     ic_eckart=np.zeros((6, TotDOF))
     for i in range(na):
-        gEckart = np.dot(Ivecs, xcm[i])
+        # The dot product of (the coordinates of the atoms with respect to the center of mass) and 
+        # the corresponding row of the matrix used to diagonalize the moment of inertia tensor
+        p_vec = np.dot(Ivecs, xcm[i])
         smass = np.sqrt(mass[i]) 
         ic_eckart[0][3*i  ] = smass 
         ic_eckart[1][3*i+1] = smass 
         ic_eckart[2][3*i+2] = smass 
         for ix in range(3):
-            ic_eckart[3][3*i+ix] = -Ivecs[1][ix]*smass*gEckart[2] + Ivecs[2][ix]*smass*gEckart[1];
-            ic_eckart[4][3*i+ix] = -Ivecs[0][ix]*smass*gEckart[2] + Ivecs[2][ix]*smass*gEckart[0];
-            ic_eckart[5][3*i+ix] =  Ivecs[0][ix]*smass*gEckart[1] - Ivecs[1][ix]*smass*gEckart[0];
+            ic_eckart[3][3*i+ix] = smass*(Ivecs[2][ix]*p_vec[1] - Ivecs[1][ix]*p_vec[2])
+            ic_eckart[4][3*i+ix] = smass*(Ivecs[2][ix]*p_vec[0] - Ivecs[0][ix]*p_vec[2])
+            ic_eckart[5][3*i+ix] = smass*(Ivecs[0][ix]*p_vec[1] - Ivecs[1][ix]*p_vec[0])
     
     if verbose >= 2:
         logger.info("Coordinates in Eckart frame:\n")
@@ -288,6 +297,8 @@ def frequency_analysis(coords, Hessian, elem=None, mass=None, verbose=0):
 
     # Sort the rotation ICs by their norm in descending order, then normalize them
     ic_eckart_norm = np.sqrt(np.sum(ic_eckart**2, axis=1))
+    # If the norm is equal to zero, then do not scale.
+    ic_eckart_norm += (ic_eckart_norm == 0.0)
     sortidx = np.concatenate((np.array([0,1,2]), 3+np.argsort(ic_eckart_norm[3:])[::-1]))
     ic_eckart1 = ic_eckart[sortidx, :]
     ic_eckart1 /= ic_eckart_norm[sortidx, np.newaxis]
@@ -311,11 +322,11 @@ def frequency_analysis(coords, Hessian, elem=None, mass=None, verbose=0):
                 proj_basis[i] -= np.dot(ic_eckart[n], proj_basis[i]) * ic_eckart[n] 
             overlap = np.sum(np.dot(ic_eckart, proj_basis[i]))
             max_overlap = max(overlap, max_overlap)        
-        if verbose:
-            logger.info("Gram-Schmidt Iteration %i: % .12f" % (iteration, overlap))
+        if verbose >= 2:
+            logger.info("Gram-Schmidt Iteration %i: % .12f\n" % (iteration, overlap))
         if max_overlap < 1e-12 : break
         if iteration == maxIt - 1:
-            raise GramSchmidtError("Gram-Schmidt orthogonalization failed after %i iterations" % maxIt)
+            raise FrequencyError("Gram-Schmidt orthogonalization failed after %i iterations" % maxIt)
     
     # Diagonalize the overlap matrix to create (3N-6) orthonormal basis vectors
     # constructed from translation and rotation-projected proj_basis
@@ -341,9 +352,9 @@ def frequency_analysis(coords, Hessian, elem=None, mass=None, verbose=0):
     if numzero_upper == TR_DOF and numzero_lower == TR_DOF:
         if 0: logger.info("Expected number of vanishing eigenvalues: %i\n" % TR_DOF)
     elif numzero_upper < TR_DOF:
-        raise GramSchmidtError("Not enough vanishing eigenvalues: %i < %i (detected < expected)" % (numzero_upper, TR_DOF))
+        raise FrequencyError("Not enough vanishing eigenvalues: %i < %i (detected < expected)" % (numzero_upper, TR_DOF))
     elif numzero_lower > TR_DOF:
-        raise GramSchmidtError("Too many vanishing eigenvalues: %i > %i (detected > expected)" % (numzero_lower, TR_DOF))
+        raise FrequencyError("Too many vanishing eigenvalues: %i > %i (detected > expected)" % (numzero_lower, TR_DOF))
     else:
         logger.warning("Eigenvalues near zero: N(<1e-12) = %i, N(1e-12-1e-8) = %i Expected = %i\n" % (numzero_lower, numzero_upper, TR_DOF))
 
@@ -361,6 +372,10 @@ def frequency_analysis(coords, Hessian, elem=None, mass=None, verbose=0):
     # These are the orthonormal, TR-projected internal coordinates
     ic_basis = np.dot(norm_vecs, proj_basis)
     
+    #===========================================#
+    #| Calculate frequencies and displacements |#
+    #===========================================#
+
     # Calculate the internal coordinate Hessian and diagonalize
     ic_hessian = np.linalg.multi_dot((ic_basis, wHessian, ic_basis.T))
     ichess_vals, ichess_vecs = np.linalg.eigh(ic_hessian)
@@ -400,16 +415,235 @@ def frequency_analysis(coords, Hessian, elem=None, mass=None, verbose=0):
             logger.info("\n")
             i += 3
 
-    # for i in range(VibDOF):
-    #     print(freqs_wavenumber[i])
-    # Print summary
-    # if verbose:
-    # print("Number of Atoms", na)
-    # print("Number of vibrational modes", VibDOF)
-    # print("Vibrational modes in Cartesian coordinates (not mass-weighted)")
-    # print(freqs_wavenumber)
-    # print(normal_modes_cart)
-    return freqs_wavenumber, normal_modes_cart
+    # Write results to file (can be parsed by ForceBalance)
+    G_tot_au, components, out_lines = free_energy_harmonic(coords, mass, freqs_wavenumber, energy, temperature, pressure, verbose)
+    if outfnm:
+        write_vdata(freqs_wavenumber, normal_modes_cart, coords, elem, outfnm, out_lines, note=note)
+        logger.info("Vibrational analysis written to %s\n" % outfnm)
+    return freqs_wavenumber, normal_modes_cart, G_tot_au
+
+def free_energy_harmonic(coords, mass, freqs_wavenumber, energy, temperature, pressure, verbose = 0):
+    """
+    Calculate Gibbs free energy (i.e. thermochemical analysis) of a system where
+    translation / rotation / vibration degrees of freedom are approximated using
+    ideal gas / rigid rotor / harmonic oscillator respectively.
+
+    Caveat: For rotational degrees of freedom, the high-temperature limit is used and
+    the symmetry is assumed to be C1.
+
+    Parameters
+    ----------
+    coords : np.array
+        n_atoms*3 length or (natoms, 3) shape array containing coordinates in bohr
+    mass : np.array
+        n_atoms length 1D array containing atomic masses in amu.
+    freqs_wavenumber : np.array
+        n_freqs (3*n_atoms-5 or 6) length 1D array containing frequencies in wavenumber.
+    energy : float
+        Ground state energy (in a.u.)
+    temperature : float
+        Temperature (in K) for which the free energy corrections are to be computed
+    pressure : float
+        Pressure (in bar) for which the free energy corrections are to be computed
+    verbose : int
+        Print debugging info
+    """
+    # Create a copy of coords and reshape into a 2D array
+    coords = coords.copy().reshape(-1, 3)
+    na = coords.shape[0]
+    mass = np.array(mass)
+    assert mass.shape == (na,)
+    assert coords.shape == (na, 3)
+    assert freqs_wavenumber.shape in ((3*na-5,), (3*na-6,))
+
+    E, T, P = energy, temperature, pressure
+    # Total mass
+    mtot = np.sum(mass)
+    # Compute the center of mass
+    cxyz = np.sum(coords * mass[:, np.newaxis], axis=0)/mtot
+    # Coordinates in the center-of-mass frame
+    xcm = coords - cxyz[np.newaxis, :]
+    # Moment of inertia tensor
+    I = np.sum([mass[i] * (np.eye(3)*(np.dot(xcm[i], xcm[i])) - np.outer(xcm[i], xcm[i])) for i in range(na)], axis=0)
+    # Principal moments in units of amu bohr^2
+    Ivals, Ivecs = np.linalg.eigh(I)
+    # In descending order, and converted to SI units
+    Ivals_si = np.sort(Ivals)[::-1] / (avogadro * 1000) * (bohr2ang * 1e-10)**2
+    # Obtain the number of rotational degrees of freedom
+    RotDOF = 0
+    for i in range(3):
+        if abs(Ivals[i]) > 1.0e-10:
+            RotDOF +=1
+    # Planck's constant in SI units
+    h = 2 * np.pi * hbar
+    # These values should be calculated in kcal/mol (for energy) and cal/mol/K (for entropy).
+    # H is "enthalpy" which is equivalent to thermal energy,
+    # except for translational degrees of freedom where it is equal to E+PV.
+    # For ideal gas, H = <E> + PV = 5/2 kT
+    H_trans = 2.5 * kb * T / 4.184
+    # Total mass in kg
+    m_kg = mtot / avogadro / 1000
+    # kb_T in Si units
+    kT_si = kb_si * T
+    # Boltzmann's constant in units of cal mol^-1 K^-1
+    kb_cal = kb * 1000 / 4.184
+    # Volume per particle at the prvided temperature and pressure in m^3
+    # (includes factor of 1000 for kJ/mol -> J/mol and 1/1e5 for bar -> Pa
+    V = kT_si / (P * 1e5)
+    # Thermal wavelength at the current temperature
+    L = h/np.sqrt(2*np.pi*m_kg*kT_si)
+    # Entropy for one particle from Sackur-Tetrode equation (N=1):
+    # S = N * kb * ln(V/N/L**3) + 5/2
+    # Convert from units of kJ mol^-1 K^-1 to cal mol^-1 K^-1
+    S_trans = kb_cal * (np.log(V/L**3) + 2.5)
+    # Rotational energy in classical approximation
+    E_rot = kb_cal * T * RotDOF / (2 * 1000)
+    # Rotational entropy 
+    if RotDOF == 3:
+        (Ia, Ib, Ic) = Ivals_si
+        # Not dividing by the symmetry number; may implement in future
+        Z_rot = np.sqrt(np.pi * Ia * Ib * Ic) * (np.sqrt(2 * kT_si) / hbar)**3
+        S_rot = kb_cal * (np.log(Z_rot) + 1.5)
+    elif RotDOF == 2:
+        # For a linear molecule, the moment of inertia is just one number
+        Ia = Ivals_si[0]
+        Z_rot = 2 * Ia * kT_si / hbar**2
+        S_rot = kb_cal * (np.log(Z_rot) + 1.0)
+    # Vibrational energy
+    ZPVE = 0.0
+    E_vib = 0.0
+    S_vib = 0.0
+    nimag = 0
+    if verbose >= 1:
+        logger.info("Mode   Freq(1/cm)     Zero-point  +  Thermal = Evib(kcal/mol) Svib(cal/mol/K)\n")
+    for ifreq, freq in enumerate(freqs_wavenumber):
+        if freq < 0:
+            nimag += 1
+            e_vib1 = 0.0
+            s_vib1 = 0.0
+            zpve1 = 0.0
+        else:
+            # Energy quantum of harmonic oscillator
+            hv_si = h * (freq * 100 * c_lightspeed)
+            # In units of kcal/mol
+            hv = hv_si * avogadro / 1000 / 4.184
+            # Zero point vibrational energy
+            zpve1 = hv/2
+            # <E> = hv [1/2 + 1/(exp(beta*hv) - 1)]
+            expfac = np.exp(hv_si/kT_si)
+            e_vib1 = hv * 1.0/(expfac-1.0)
+            # Vibrational partition function
+            z_vib1 = np.exp(-hv_si/(kT_si*2))/(1-np.exp(-hv_si/kT_si))
+            # F = -kT ln Z
+            f_vib1 = -kb_cal * T * np.log(z_vib1) / 1000
+            # F = E - TS -> S = (E-F)/T
+            s_vib1 = 1000*(zpve1+e_vib1-f_vib1)/T
+        if verbose >= 1:
+            logger.info("%4i   % 10.4f       %8.4f    %8.4f         %8.4f        %8.4f\n" % (ifreq, freq, zpve1, e_vib1, zpve1+e_vib1, s_vib1))
+        ZPVE += zpve1
+        E_vib += e_vib1
+        S_vib += s_vib1
+    H_tot = H_trans + E_rot + E_vib
+    S_tot = S_trans + S_rot + S_vib
+    DG_tot = ZPVE + H_tot - T*S_tot/1000
+    G_tot_au = E + DG_tot/au2kcal
+    components = {'Trans':{'H':H_trans, 'S':S_trans, 'G': H_trans-T*S_trans},
+                  'Rot':{'E':E_rot, 'S':S_rot, 'G': E_rot-T*S_rot},
+                  'Vib':{'ZPVE':ZPVE, 'E':E_vib, 'S':S_vib, 'G':ZPVE+E_vib-T*S_vib}}
+    out_lines = ["\n"]
+    out_lines.append("== Summary of harmonic free energy analysis ==\n")
+    out_lines.append("Note: Rotational symmetry is set to 1 regardless of true symmetry\n")
+    if nimag > 0:
+        out_lines.append("Note: Free energy does not include contribution from %i imaginary mode(s)\n" % nimag)
+    out_lines.append("\n")
+    out_lines.append("Gibbs free energy contributions calculated at @ %.2f K:\n" % T)
+    out_lines.append("Zero-point vibrational energy:                              %12.4f kcal/mol \n" % ZPVE)
+    out_lines.append("H   (Trans + Rot + Vib = Tot): %8.4f + %8.4f + %8.4f = %8.4f kcal/mol \n" % (H_trans, E_rot, E_vib, H_tot))
+    out_lines.append("S   (Trans + Rot + Vib = Tot): %8.4f + %8.4f + %8.4f = %8.4f cal/mol/K\n" % (S_trans, S_rot, S_vib, S_tot))
+    out_lines.append("TS  (Trans + Rot + Vib = Tot): %8.4f + %8.4f + %8.4f = %8.4f kcal/mol \n" % (T*S_trans/1000, T*S_rot/1000, T*S_vib/1000, T*S_tot/1000))
+    out_lines.append("\n")
+    out_lines.append("Ground State Electronic Energy    : E0                        = % 14.8f au (% 15.4f kcal/mol)\n" % (E, E*au2kcal))
+    out_lines.append("Free Energy Correction (Harmonic) : ZPVE + [H-TS]_T,R,V       = % 14.8f au (% 15.4f kcal/mol)\n" % (DG_tot/au2kcal, DG_tot))
+    out_lines.append("Gibbs Free Energy (Harmonic)      : E0 + ZPVE + [H-TS]_T,R,V  = % 14.8f au (% 15.4f kcal/mol)\n" % (G_tot_au, G_tot_au*au2kcal))
+    out_lines.append("\n")
+    logger.info(''.join(out_lines))
+    return G_tot_au, components, out_lines
+
+def write_vdata(freqs_wavenumber, normal_modes_cart, xyz, elem, outfnm, extracomms=None, note=None):
+    """
+    Write vibrational data to a text file readable by ForceBalance.
+    
+    Parameters
+    ----------
+    freqs_wavenumber : np.array
+        n_vibmodes length array containing vibrational frequencies in wavenumber
+        (imaginary frequencies should be negative)
+    normal_modes_cart : np.array
+        n_vibmodes*n_atoms length array containing un-mass-weighted Cartesian displacements 
+        of each normal mode
+    coords : np.ndarray
+        Nx3 array of Cartesian coordinates in atomic units
+        (note: coordinates will be written to file in Angstrom)
+    elem : list
+        n_atoms length list containing atomic symbols. 
+    outfnm : str
+        Output file name:
+    extracomms : list
+        List of additional lines to be printed as comments before the start of data
+        (for example, the harmonic free energy components)
+    note : str
+        Optional note to print in comment line of xyz block
+    """
+    commblk = """    #==========================================#
+    #|   File containing vibrational modes    |#
+    #|      generated by geomeTRIC and        |#
+    #|       readable by ForceBalance         |# 
+    #|                                        |#
+    #| Octothorpes are comments               |#
+    #| This file should be formatted like so: |#
+    #| (Full XYZ file for the molecule)       |#
+    #| Number of atoms                        |#
+    #| Comment line                           |#
+    #| a1 x1 y1 z1 (xyz for atom 1)           |#
+    #| a2 x2 y2 z2 (xyz for atom 2)           |#
+    #|                                        |#
+    #| These coords will be actually used     |#
+    #|                                        |#
+    #| (Followed by vibrational modes)        |#
+    #| Do not use mass-weighted coordinates   |#
+    #| ...                                    |#
+    #| v (Eigenvalue in wavenumbers)          |#
+    #| dx1 dy1 dz1 (Eigenvector for atom 1)   |#
+    #| dx2 dy2 dz2 (Eigenvector for atom 2)   |#
+    #| ...                                    |#
+    #| (Empty line is optional)               |#
+    #| v (Eigenvalue)                         |#
+    #| dx1 dy1 dz1 (Eigenvector for atom 1)   |#
+    #| dx2 dy2 dz2 (Eigenvector for atom 2)   |#
+    #| ...                                    |#
+    #| and so on                              |#
+    #|                                        |#
+    #| Please list freqs in increasing order  |#
+    #==========================================#
+    """
+    with open(outfnm, 'w') as f:
+        print(commblk, file=f)
+        if extracomms:
+            for line in extracomms:
+                print("# " + line, file=f, end='')
+            print("", file=f)
+        print(len(elem), file=f)
+        if note:
+            print(note, file=f)
+        else:
+            print("Coordinates and vibrations generated by geomeTRIC", file=f)
+        for e, i in zip(elem, xyz):
+            print("%2s % 15.10f % 15.10f % 15.10f" % (e, i[0]*bohr2ang, i[1]*bohr2ang, i[2]*bohr2ang), file=f)
+        for frq, mode in zip(freqs_wavenumber, normal_modes_cart):
+            print(file=f)
+            print("% 12.6f" % frq, file=f)
+            for i in mode.reshape(-1,3):
+                print("% 9.6f % 9.6f % 9.6f" % (i[0], i[1], i[2]), file=f)
 
 def main():
     import logging.config, pkg_resources

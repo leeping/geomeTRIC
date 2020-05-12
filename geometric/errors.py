@@ -39,6 +39,9 @@ POSSIBILITY OF SUCH DAMAGE.
 class Error(Exception):
     pass
 
+class InputError(Error):
+    pass
+
 class HessianExit(Error):
     pass
 
@@ -48,7 +51,10 @@ class EngineError(Error):
 class ParamError(Error):
     pass
 
-class GramSchmidtError(Error):
+class FrequencyError(Error):
+    pass
+
+class CheckCoordError(Error):
     pass
 
 class TeraChemEngineError(EngineError):

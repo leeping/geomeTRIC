@@ -37,6 +37,7 @@ POSSIBILITY OF SUCH DAMAGE.
 from __future__ import print_function, division
 
 import shutil
+from distutils.dir_util import copy_tree
 import subprocess
 from collections import OrderedDict
 from copy import deepcopy
@@ -48,7 +49,7 @@ import os
 
 from .molecule import Molecule
 from .nifty import bak, eqcgmx, fqcgmx, bohr2ang, logger, getWorkQueue, queue_up_src_dest, rootdir, splitall
-from .errors import EngineError, Psi4EngineError, QChemEngineError, TeraChemEngineError, \
+from .errors import EngineError, CheckCoordError, Psi4EngineError, QChemEngineError, TeraChemEngineError, \
     ConicalIntersectionEngineError, OpenMMEngineError, GromacsEngineError, MolproEngineError, QCEngineAPIEngineError
 
 #=============================#
@@ -191,7 +192,7 @@ class Engine(object):
     # def __deepcopy__(self, memo):
     #     return copy(self)
 
-    def calc(self, coords, dirname, readfiles=False):
+    def calc(self, coords, dirname, readfiles=False, copydir=None):
         """
         Top-level method for a single-point calculation. 
         Calculation will be skipped if results are contained in the hash table, 
@@ -207,6 +208,10 @@ class Engine(object):
         readfiles : bool, default=False
             If valid calculation output files exist in dirname, read the results instead of
             running a new calculation
+        copydir : str, default=None
+            If provided, the contents of this folder will be copied to the scratch folder
+            prior to starting a calculation (e.g. when calculating the Hessian we want to use SCF
+            guess of the midpoint)
 
         Returns
         -------
@@ -229,12 +234,14 @@ class Engine(object):
             read_success = False
             if readfiles and os.path.exists(dirname) and hasattr(self, 'read_result'):
                 try:
-                    result = self.read_result(dirname)
+                    result = self.read_result(dirname, check_coord=coords)
                     read_success = True
-                except:
-                    logger.info("Failed to read output from %s, recalculating\n" % dirname)
+                    logger.info("Successfully read existing single-point result from %s\n" % dirname)
+                except (EngineError, CheckCoordError): pass
             if not read_success:
-                if not os.path.exists(dirname): os.makedirs(dirname)
+                if copydir:
+                    self.copy_scratch(copydir, dirname)
+                elif not os.path.exists(dirname): os.makedirs(dirname)
                 result = self.calc_new(coords, dirname)
             self.stored_calcs[coord_hash] = {'coords':coords, 'result':result}
         return result
@@ -245,7 +252,7 @@ class Engine(object):
     def calc_new(self, coords, dirname):
         raise NotImplementedError("Not implemented for the base class")
 
-    def calc_wq(self, coords, dirname, readfiles=False):
+    def calc_wq(self, coords, dirname, readfiles=False, copydir=None):
         """
         Top-level method for submitting a single-point calculation using Work Queue. 
         Different from calc(), this method does not return results, because the control
@@ -265,6 +272,10 @@ class Engine(object):
         readfiles : bool, default=False
             If valid calculation output files exist in dirname, read the results instead of
             running a new calculation
+        copydir : str, default=None
+            If provided, the contents of this folder will be copied to the scratch folder
+            prior to starting a calculation (e.g. when calculating the Hessian we want to use SCF
+            guess of the midpoint)
         """
         coord_hash = hash(coords.tostring())
         if coord_hash in self.stored_calcs:
@@ -275,11 +286,12 @@ class Engine(object):
             read_success = False
             if readfiles and os.path.exists(dirname) and hasattr(self, 'read_result'):
                 try:
-                    result = self.read_result(dirname)
+                    result = self.read_result(dirname, check_coord=coords)
                     read_success = True
-                except:
-                    logger.info("Tried but failed to read results from %s\nRunning new calculation\n" % dirname)
+                except (EngineError, CheckCoordError): pass
             if not read_success:
+                if copydir:
+                    self.copy_scratch(copydir, dirname)
                 self.calc_wq_new(coords, dirname)
 
     def calc_wq_new(self, coords, dirname):
@@ -390,21 +402,8 @@ class TeraChem(Engine):
             self.prmtop_name = os.path.abspath(tcin['prmtop'])
             self.qmindices = [int(i.split()[0]) for i in open(self.qmindices_name).readlines()]
             self.M_full = Molecule(tcin['coordinates'], ftype='inpcrd', build_topology=False)
-        if dirname: self.prep_temp_folder(dirname)
         super(TeraChem, self).__init__(molecule)
 
-    def prep_temp_folder(self, dirname):
-        # Clean up the temporary folder.
-        if os.path.exists(dirname):
-            # Remove existing scratch files in ./run.tmp and ./run.tmp/scr to avoid confusion.
-            # 2020-03-12: Currently I can't think of a use case for having pre-existing files
-            # in these folders, so opting to clean them up at the start of the calculation.
-            for f in self.orbital_filenames():
-                if os.path.exists(os.path.join(dirname, self.scr, f)):
-                    os.remove(os.path.join(dirname, self.scr, f))
-                if os.path.exists(os.path.join(dirname, f)):
-                    os.remove(os.path.join(dirname, f))
-    
     def orbital_filenames(self):
         """
         Names of orbital files generated by TeraChem calculations.
@@ -542,7 +541,26 @@ class TeraChem(Engine):
         shutil.copy2(os.path.join(dirname,start_xyz), os.path.join(dirname,'start_%03i.%s' % (calcNum, os.path.splitext(start_xyz)[1])))
         shutil.copy2(os.path.join(dirname,'run.out'), os.path.join(dirname,'run_%03i.out' % calcNum))
 
-    def read_result(self, dirname):
+    def read_result(self, dirname, check_coord=None):
+        if check_coord is not None:
+            read_xyz_success = False
+            start_xyz = 'start.rst7' if self.qmmm else 'start.xyz'
+            if os.path.exists(os.path.join(dirname, start_xyz)):
+                try:
+                    M = Molecule(os.path.join(dirname, start_xyz))
+                    read_xyz = M.xyzs[0][self.qmindices] if self.qmmm else M.xyzs[0]
+                    read_xyz = read_xyz.flatten() / bohr2ang
+                    read_xyz_success = True
+                except: pass
+            if not read_xyz_success or np.linalg.norm(check_coord - read_xyz) > 1e-8:
+                # If the upcoming calculation is for a different geometry than the existing one,
+                # then delete the guess files to prevent landing in the wrong state by accident.
+                for f in self.orbital_filenames():
+                    if os.path.exists(os.path.join(dirname, f)):
+                        os.remove(os.path.join(dirname, f))
+                    if os.path.exists(os.path.join(dirname, self.scr, f)):
+                        os.remove(os.path.join(dirname, self.scr, f))
+                raise CheckCoordError
         # Extract energy and gradient
         try:
             # LPW note: Using python to call awk is not ideal and would take a bit of elbow grease to fix in the future.
@@ -554,7 +572,7 @@ class TeraChem(Engine):
             gradient = np.loadtxt(os.path.join(dirname,'grad.txt'))[:na].flatten()
             s2 = float(open(os.path.join(dirname,'s-squared.txt')).readlines()[0].strip())
             assert gradient.shape[0] == self.M.na*3
-        except (OSError, IOError, RuntimeError, subprocess.CalledProcessError):
+        except (OSError, IOError, IndexError, RuntimeError, AssertionError, subprocess.CalledProcessError):
             raise TeraChemEngineError
         return {'energy':energy, 'gradient':gradient, 's2':s2}
 
@@ -564,10 +582,13 @@ class TeraChem(Engine):
         if not os.path.exists(dest): os.makedirs(dest)
         if not os.path.exists(os.path.join(src, self.scr)):
             raise TeraChemEngineError("Trying to copy %s but it does not exist" % os.path.join(src, self.scr))
-        if os.path.exists(os.path.join(dest, self.scr)):
-            logger.warning("%s exists, removing it first" % (os.path.join(dest, self.scr)))
-            shutil.rmtree(os.path.join(dest, self.scr))
-        shutil.copytree(os.path.join(src, self.scr), os.path.join(dest, self.scr))
+        # Use distutils.dir_util.copy_tree instead of shutil.copytree
+        # because the former does not require the original dir to be removed, thus is safer
+        copy_tree(os.path.join(src, self.scr), os.path.join(dest, self.scr))
+        # if os.path.exists(os.path.join(dest, self.scr)):
+        #     logger.warning("%s exists, removing it first\n" % (os.path.join(dest, self.scr)))
+        #     shutil.rmtree(os.path.join(dest, self.scr))
+        # shutil.copytree(os.path.join(src, self.scr), os.path.join(dest, self.scr))
 
 class OpenMM(Engine):
     """
@@ -666,6 +687,9 @@ class OpenMM(Engine):
                 nonbonded_force.setExceptionParameters(i, p1, p2, q, sig14, eps)
         return system
 
+    def copy_scratch(self, src, dest):
+        return
+
 class Psi4(Engine):
     """
     Run a Psi4 energy and gradient calculation.
@@ -747,8 +771,10 @@ class Psi4(Engine):
             raise Psi4EngineError
         return result
     
-    def read_result(self, dirname):
+    def read_result(self, dirname, check_coord=None):
         """ Read Psi4 calculation output. """
+        if check_coord is not None:
+            raise CheckCoordError("Coordinate checking not implemented")
         energy, gradient = None, None
         psi4out = os.path.join(dirname, 'output.dat')
         with open(psi4out) as outfile:
@@ -817,7 +843,13 @@ class QChem(Engine):
             raise QChemEngineError("If qcdir is provided, dirname must also be provided")
         elif not os.path.exists(dirname):
             os.makedirs(dirname)
-        shutil.copytree(qcdir, os.path.join(dirname, "run.d"))
+        # Use distutils.dir_util.copy_tree instead of shutil.copytree
+        # because the former does not require the original dir to be removed, thus is safer
+        copy_tree(qcdir, os.path.join(dirname, "run.d"))
+        # if os.path.exists(os.path.join(dirname, "run.d")):
+        #     logger.warning("%s/run.d already exists, removing it prior to replacing with %s.\n" % (dirname, qcdir))
+        #     shutil.rmtree(os.path.join(dirname, "run.d"))
+        # shutil.copytree(qcdir, os.path.join(dirname, "run.d"))
         self.M.edit_qcrems({'scf_guess':'read'})
         self.qcdir = True
 
@@ -873,7 +905,17 @@ class QChem(Engine):
             raise RuntimeError('run.out does not exist')
         shutil.copy2(os.path.join(dirname,'run.out'), os.path.join(dirname,'run_%03i.out' % calcNum))
 
-    def read_result(self, dirname):
+    def read_result(self, dirname, check_coord=None):
+        if check_coord is not None:
+            read_xyz_success = False
+            if os.path.exists('%s/run.out' % dirname): 
+                try:
+                    M1 = Molecule('%s/run.out' % dirname)
+                    read_xyz = M1.xyzs[0].flatten() / bohr2ang
+                    read_xyz_success = True
+                except: pass
+            if not read_xyz_success or np.linalg.norm(check_coord - read_xyz) > 1e-8:
+                raise CheckCoordError
         M1 = Molecule('%s/run.out' % dirname)
         # In the case of multi-stage jobs, the last energy and gradient is what we want.
         energy = M1.qm_energies[-1]
@@ -924,6 +966,8 @@ class Gromacs(Engine):
             raise GromacsEngineError
         return {'energy':Energy, 'gradient':Gradient}
 
+    def copy_scratch(self, src, dest):
+        return
 
 class Molpro(Engine):
     """
@@ -1019,8 +1063,10 @@ class Molpro(Engine):
             raise RuntimeError('run.out does not exist')
         shutil.copy2(os.path.join(dirname,'run.out'), os.path.join(dirname,'run_%03i.out' % calcNum))
 
-    def read_result(self, dirname):
+    def read_result(self, dirname, check_coord=None):
         """ read an output file from Molpro"""
+        if check_coord is not None:
+            raise CheckCoordError("Coordinate check not implemented")
         energy, gradient = None, None
         molpro_out = os.path.join(dirname, 'run.out')
         with open(molpro_out) as outfile:
