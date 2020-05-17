@@ -145,6 +145,12 @@ evang2au     = 1.0 / au2evang
 c_lightspeed = 299792458.
 hbar         = 1.054571817e-34
 avogadro     = 6.02214076e23
+au_mass      = 9.1093837015e-31    # Atomic unit of mass in kg
+amu_mass     = 1.66053906660e-27   # Atomic mass unit in kg
+amu2au       = amu_mass / au_mass
+cm2au        = 100 * c_lightspeed * (2*np.pi*hbar) * avogadro / 1000 / au2kj # Multiply to convert cm^-1 to Hartree
+ambervel2au  = 9.349961132249932e-04 # Multiply to go from AMBER velocity unit Ang/(1/20.455 ps) to bohr/atu.
+
 
 ## Q-Chem to GMX unit conversion for energy
 eqcgmx = au2kj                     # Previous value: 2625.5002

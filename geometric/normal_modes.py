@@ -39,7 +39,7 @@ import os, shutil
 import numpy as np
 from .errors import FrequencyError
 from .molecule import Molecule, PeriodicTable
-from .nifty import logger, kb, kb_si, hbar, au2kj, au2kcal, ang2bohr, bohr2ang, c_lightspeed, avogadro, wq_wait, getWorkQueue
+from .nifty import logger, kb, kb_si, hbar, au2kj, au2kcal, ang2bohr, bohr2ang, c_lightspeed, avogadro, cm2au, amu2au, ambervel2au, wq_wait, getWorkQueue
 
 def calc_cartesian_hessian(coords, molecule, engine, dirname, readfiles=True, verbose=0):
     """ 
@@ -152,7 +152,7 @@ def calc_cartesian_hessian(coords, molecule, engine, dirname, readfiles=True, ve
             shutil.rmtree(os.path.join(dirname, "hessian", "displace"))
     return Hx
 
-def frequency_analysis(coords, Hessian, elem=None, mass=None, energy=0.0, temperature=300.0, pressure=1.0, verbose=0, outfnm=None, note=None):
+def frequency_analysis(coords, Hessian, elem=None, mass=None, energy=0.0, temperature=300.0, pressure=1.0, verbose=0, outfnm=None, note=None, wigner=None):
     """
     Parameters
     ----------
@@ -180,6 +180,10 @@ def frequency_analysis(coords, Hessian, elem=None, mass=None, energy=0.0, temper
         If provided, write vibrational data to a ForceBalance-parsable vdata.txt file
     note : str
         If provided, write a note into the comment line of the xyz structure in vdata.txt
+    wigner : tuple
+        If provided, should be a 2-tuple containing (nSamples, dirname)
+        containing the output folder and number of samples and the output folder
+        to which samples should be written
 
     Returns
     -------
@@ -280,13 +284,13 @@ def frequency_analysis(coords, Hessian, elem=None, mass=None, energy=0.0, temper
         # the corresponding row of the matrix used to diagonalize the moment of inertia tensor
         p_vec = np.dot(Ivecs, xcm[i])
         smass = np.sqrt(mass[i]) 
-        ic_eckart[0][3*i  ] = smass 
-        ic_eckart[1][3*i+1] = smass 
-        ic_eckart[2][3*i+2] = smass 
+        ic_eckart[0,3*i  ] = smass 
+        ic_eckart[1,3*i+1] = smass 
+        ic_eckart[2,3*i+2] = smass 
         for ix in range(3):
-            ic_eckart[3][3*i+ix] = smass*(Ivecs[2][ix]*p_vec[1] - Ivecs[1][ix]*p_vec[2])
-            ic_eckart[4][3*i+ix] = smass*(Ivecs[2][ix]*p_vec[0] - Ivecs[0][ix]*p_vec[2])
-            ic_eckart[5][3*i+ix] = smass*(Ivecs[0][ix]*p_vec[1] - Ivecs[1][ix]*p_vec[0])
+            ic_eckart[3,3*i+ix] = smass*(Ivecs[2,ix]*p_vec[1] - Ivecs[1,ix]*p_vec[2])
+            ic_eckart[4,3*i+ix] = smass*(Ivecs[2,ix]*p_vec[0] - Ivecs[0,ix]*p_vec[2])
+            ic_eckart[5,3*i+ix] = smass*(Ivecs[0,ix]*p_vec[1] - Ivecs[1,ix]*p_vec[0])
     
     if verbose >= 2:
         logger.info("Coordinates in Eckart frame:\n")
@@ -420,6 +424,9 @@ def frequency_analysis(coords, Hessian, elem=None, mass=None, energy=0.0, temper
     if outfnm:
         write_vdata(freqs_wavenumber, normal_modes_cart, coords, elem, outfnm, out_lines, note=note)
         logger.info("Vibrational analysis written to %s\n" % outfnm)
+    if wigner is not None:
+        nSample, dirname = wigner
+        wigner_sample(coords, mass, elem, freqs_wavenumber, normal_modes_cart, temperature, nSample, dirname)
     return freqs_wavenumber, normal_modes_cart, G_tot_au
 
 def free_energy_harmonic(coords, mass, freqs_wavenumber, energy, temperature, pressure, verbose = 0):
@@ -645,6 +652,143 @@ def write_vdata(freqs_wavenumber, normal_modes_cart, xyz, elem, outfnm, extracom
             for i in mode.reshape(-1,3):
                 print("% 9.6f % 9.6f % 9.6f" % (i[0], i[1], i[2]), file=f)
 
+def wigner_sample(coords, mass, elem, freqs_wavenumber, normal_modes_cart, temperature, n_samples, dirname):
+    """
+    Generate samples from a Wigner distribution.
+
+    Parameters
+    ----------
+    coords : np.array
+        1D or 2D (n_atoms x 3) array containing coordinates in a.u.
+    mass : list or np.array
+        Atomic masses in amu
+    elem : list
+        Atomic symbols
+    freqs_wavenumber : np.array
+        Vibrational frequencies in cm^-1 (output of frequency_analysis)
+    normal_modes_cart : np.array
+        2D array (3N-6 or 3N-5 x (natoms x 3)) Cartesian displacements of vibrational modes (output of frequency_analysis)
+    temperature : float
+        Desired temperature for distribution
+    n_samples : int
+        Desired number of samples
+    dirname : str
+        Output directory name where Wigner samples should be written
+        Files will be written to dirname/000/, and include coords.xyz (Angstroms),
+        vel.xyz (Amber units), and fms.dat (contains coordinates and momenta in a.u.)
+    """
+    mass = np.array(mass)
+    nAtoms = len(mass)
+    coords = coords.reshape(-1, 3)
+    assert coords.shape[0] == nAtoms
+
+    # convert frequency to a.u.
+    freq_au = freqs_wavenumber* cm2au
+    mass_au = np.array(mass)* amu2au
+    au2joule = 1000 * 2625.4996394798254 / 6.02214076e23
+
+    # beta = k_B*T 
+    beta = 1.0 /( kb_si / au2joule * temperature);
+
+    nmodes = len(freq_au)
+    ZPE = 0.5*np.sum(freq_au)
+
+    # Total mass
+    totmass = np.sum(mass)
+    # Compute the center of mass
+    cxyz = np.sum(coords * mass[:, np.newaxis], axis=0)/totmass
+    
+    # Coordinates in the center-of-mass frame
+    ctr_coors = coords - cxyz[np.newaxis, :]
+
+    # how to test imaginary frequency
+
+    sigma_x = []
+    sigma_p = []    
+    for n in range(nmodes):
+        freq = freq_au[n]
+        if temperature ==0:
+            tanhf = 1.0
+        else:
+            tanhf = np.tanh(freq*0.5*beta)
+        # f= 0.5* beta* hbar* omega
+        # position: exp( -tanh(f)* m* omega/hbar * q^2)
+        sigma_x2 = 0.5/(freq*tanhf) 
+        sigma_x.append(np.sqrt(sigma_x2)) 
+        
+        # momentum: exp( -tanh(f)/(hbar*m*omega)* p^2)
+        sigma_p2 = 0.5*(freq/tanhf)
+        sigma_p.append(np.sqrt(sigma_p2))
+    # print("sigma_x", sigma_x)
+    # print("sigma_p", sigma_p)
+    sample_data = []
+    
+    for idx in range(n_samples):
+        xvec = np.zeros(nAtoms*3)
+        pvec = np.zeros(nAtoms*3)
+
+        # apply random displacement
+        for n in range(nmodes):
+            xlen = np.random.normal(0.0, sigma_x[n])
+            plen = np.random.normal(0.0, sigma_p[n])
+            xvec += xlen* normal_modes_cart[n]
+            pvec += plen* normal_modes_cart[n]
+
+        # undo mass-weights           
+        for a in range(nAtoms):
+            smass = np.sqrt(mass_au[a])
+            for ix in range(3):
+                xvec[a*3+ix] /= smass
+                pvec[a*3+ix] *= smass
+
+        # generate coordinates
+        xvec = np.reshape(xvec, (nAtoms, 3))
+        coors = xvec + ctr_coors
+
+        # remove COM and generate velocity/momenta
+        totmass = 0
+        vel_com = np.zeros(3)
+        for a in range(nAtoms):
+            totmass += mass_au[a]
+            for ix in range(3):
+                vel_com[ix] += pvec[a*3+ix]  
+        vel_com /= totmass
+
+        velos = np.zeros((nAtoms, 3))
+        momenta = np.zeros((nAtoms, 3))
+        for a in range(nAtoms):
+            smass = mass_au[a]
+            for ix in range(3):
+                velos[a,ix] = pvec[a*3+ix]/ smass - vel_com[ix]
+                momenta[a,ix] = velos[a,ix]*mass_au[a] 
+
+        EKin = 0.0
+        for a in range(nAtoms):
+            for ix in range(3):
+                EKin += mass_au[a]* velos[a,ix]* velos[a,ix] 
+        EKin *= 0.5
+
+        # Write sample data to files.
+        outd = os.path.join(dirname, "%03i" % idx)
+        if not os.path.exists(outd) : os.makedirs(outd)
+        M = Molecule()
+        M.elem = elem
+        M.xyzs = [coors.copy() * bohr2ang]
+        M.comms = ['Randomly sampled initial positions; COM at origin']
+        M.write(os.path.join(outd, 'coords.xyz'))
+        M.xyzs = [velos.copy() / ambervel2au ]
+        M.comms = ['Randomly sampled initial velocities; COM removed; AMBER units; KE = %.8f a.u.' % EKin]
+        M.write(os.path.join(outd, 'vel.xyz'))
+        with open(os.path.join(outd, 'fms.dat'), 'w') as f:
+            print("UNITS=BOHR", file=f)
+            print("%i" % nAtoms, file=f)
+            for i in range(nAtoms):
+                print("%-5s% 18.10f% 18.10f% 18.10f" % (elem[i], coors[i,0], coors[i,1], coors[i,2]), file=f)
+            print("# momenta", file=f)
+            for i in range(nAtoms):
+                print("  % 18.10f% 18.10f% 18.10f" % (momenta[i,0], momenta[i,1], momenta[i,2]), file=f)
+    logger.info("Wigner distribution sampling: %i samples using T = %.2f written to %s\n" % (n_samples, temperature, dirname))
+            
 def main():
     import logging.config, pkg_resources
     import geometric.optimize
@@ -655,7 +799,6 @@ def main():
     mass = np.array([PeriodicTable[M.elem[j]] for j in range(M.na)])
     hessian = np.loadtxt("hessian.txt")
     frequencies, displacements = frequency_analysis(coords, hessian, elem=M.elem, mass=mass, verbose=True)
-    np.savetxt('displacements.txt', displacements)
 
 if __name__ == "__main__":
     main()

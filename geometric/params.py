@@ -109,6 +109,10 @@ class OptParams(object):
         if self.frequency is None: self.frequency = True
         # Temperature and pressure for harmonic free energy 
         self.temperature, self.pressure = kwargs.get('thermo', [300.0, 1.0])
+        # Number of desired samples from Wigner distribution
+        self.wigner = kwargs.get('wigner', 0)
+        if self.wigner and not self.frequency:
+            raise ParamError('Wigner sampling requires frequency analysis')
         # Reset Hessian to guess whenever eigenvalues drop below epsilon
         self.reset = kwargs.get('reset', None)
         if self.reset is None: self.reset = not (self.transition or self.hessian == 'each')
@@ -219,6 +223,7 @@ def parse_optimizer_args(*args):
                         '"first+last" : Calculate Hessian for both the first and last structure. Default is "never" for minimization and "initial" for transition state.')
     parser.add_argument('--frequency', type=str2bool, help='Perform frequency analysis whenever Hessian is calculated, default is True.')
     parser.add_argument('--thermo', type=float, nargs=2, default=[300.,1.0], help='Temperature (K) and pressure (bar) for harmonic free energy following frequency analysis.')
+    parser.add_argument('--wigner', type=int, default=0, help='Number of desired samples from Wigner distribution after frequency analysis.')
     parser.add_argument('--port', type=int, default=0, help='If nonzero, the Work Queue port used to distribute Hessian calculations. Workers must be started separately.')
     parser.add_argument('--rfo', action='store_true', help='Use rational function optimization (default is trust-radius Newton Raphson).')
     parser.add_argument('--trust', type=float, default=0.1, help='Starting trust radius.')

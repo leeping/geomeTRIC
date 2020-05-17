@@ -188,8 +188,22 @@ class Optimizer(object):
     def rebuild_hessian(self):
         self.H = rebuild_hessian(self.IC, self.H0, self.X_hist, self.Gx_hist, self.params)
 
-    def get_vibPrefix(self):
-        return self.params.xyzout.replace("_optim.xyz", "").replace(".xyz", "")
+    def frequency_analysis(self, hessian, suffix, afterOpt):
+        do_wigner = False
+        if self.params.wigner:
+            # Wigner sampling should only be performed on the final Hessian calculation of a run
+            if self.params.hessian in ['last', 'first+last', 'each'] and afterOpt:
+                do_wigner = True
+            elif self.params.hessian in ['first', 'stop']:
+                do_wigner = True
+        if do_wigner:
+            logger.info("Requesting %i samples from Wigner distribution.\n" % self.params.wigner)
+        prefix = self.params.xyzout.replace("_optim.xyz", "").replace(".xyz", "")
+        # Call the frequency analysis function with an input Hessian, with most arguments populated from self.params
+        frequency_analysis(self.X, hessian, self.molecule.elem, energy=self.E, temperature=self.params.temperature, pressure=self.params.pressure, verbose=self.params.verbose, 
+                           outfnm='%s.vdata_%s' % (prefix, suffix), note='Iteration %i Energy % .8f%s' % (self.Iteration, self.E, ' (Optimized Structure)' if afterOpt else ''),
+                           wigner=((self.params.wigner, os.path.join(self.dirname, 'wigner')) if do_wigner else None))
+
 
     def calcEnergyForce(self):
         """
@@ -208,14 +222,12 @@ class Optimizer(object):
             # Otherwise we use the variable name Hx0 to avoid almost certain confusion.
             self.Hx = calc_cartesian_hessian(self.X, self.molecule, self.engine, self.dirname, readfiles=True, verbose=self.params.verbose)
             if self.params.frequency:
-                frequency_analysis(self.X, self.Hx, self.molecule.elem, energy=self.E, temperature=self.params.temperature, pressure=self.params.pressure, verbose=self.params.verbose, 
-                                   outfnm='%s.vdata_%i.txt' % (self.get_vibPrefix(), self.Iteration), note='Iteration %i Energy % .8f' % (self.Iteration, self.E))
+                self.frequency_analysis(self.Hx, 'iter%03i' % self.Iteration, False)
         elif self.Iteration == 0:
             if self.params.hessian in ['first', 'stop', 'first+last']:
                 self.Hx0 = calc_cartesian_hessian(self.X, self.molecule, self.engine, self.dirname, readfiles=True, verbose=self.params.verbose)
                 if self.params.frequency:
-                    frequency_analysis(self.X, self.Hx0, self.molecule.elem, energy=self.E, temperature=self.params.temperature, pressure=self.params.pressure, verbose=self.params.verbose, 
-                                       outfnm='%s.vdata_first.txt' % self.get_vibPrefix(), note='Iteration %i Energy % .8f' % (self.Iteration, self.E))
+                    self.frequency_analysis(self.Hx0, 'first', False)
                 if self.params.hessian == 'stop':
                     logger.info("Exiting as requested after Hessian calculation.\n")
                     logger.info("Cartesian Hessian is stored in %s/hessian/hessian.txt.\n" % self.dirname)
@@ -224,8 +236,7 @@ class Optimizer(object):
             elif hasattr(self.params, 'hess_data') and self.Iteration == 0:
                 self.Hx0 = self.params.hess_data.copy()
                 if self.params.frequency:
-                    frequency_analysis(self.X, self.Hx0, self.molecule.elem, energy=self.E, temperature=self.params.temperature, pressure=self.params.pressure, verbose=self.params.verbose, 
-                                       outfnm='%s.vdata_first.txt' % self.get_vibPrefix(), note='Iteration %i Energy % .8f' % (self.Iteration, self.E))
+                    self.frequency_analysis(self.Hx0, 'first', False)
                 if self.Hx0.shape != (self.X.shape[0], self.X.shape[0]):
                     raise IOError('hess_data passed in via OptParams does not have the right shape')
             # self.Hx = self.Hx0.copy()
@@ -616,12 +627,10 @@ class Optimizer(object):
             logger.info("Saving current approximate Hessian (Cartesian coordinates) to %s" % self.params.write_cart_hess)
             Hx = self.IC.calcHessCart(self.X, self.G, self.H)
             np.savetxt(self.params.write_cart_hess, Hx, fmt='% 14.10f')
-        if self.params.hessian in ['last', 'first+last']:
+        if self.params.hessian in ['last', 'first+last', 'each']:
             Hx = calc_cartesian_hessian(self.X, self.molecule, self.engine, self.dirname, readfiles=False, verbose=self.params.verbose)
             if self.params.frequency:
-                frequency_analysis(self.X, Hx, self.molecule.elem, energy=self.E, temperature=self.params.temperature, pressure=self.params.pressure, verbose=self.params.verbose, 
-                                   outfnm='%s.vdata_last.txt' % self.get_vibPrefix(), note='Iteration %i Energy % .8f (Optimized Structure)' % (self.Iteration, self.E))
-
+                self.frequency_analysis(Hx, 'last', True)
         return self.progress
 
 class OPT_STATE(object):
