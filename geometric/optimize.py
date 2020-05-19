@@ -49,12 +49,12 @@ import geometric
 from .info import print_logo, print_citation
 from .internal import CartesianCoordinates, PrimitiveInternalCoordinates, DelocalizedInternalCoordinates
 from .ic_tools import check_internal_grad, check_internal_hess, write_displacements
-from .normal_modes import calc_cartesian_hessian
+from .normal_modes import calc_cartesian_hessian, frequency_analysis
 from .step import brent_wiki, Froot, calc_drms_dmax, get_cartesian_norm, rebuild_hessian, get_delta_prime, trust_step, force_positive_definite
 from .prepare import get_molecule_engine, parse_constraints
 from .params import OptParams, parse_optimizer_args
 from .nifty import row, col, flat, bohr2ang, ang2bohr, logger, bak, createWorkQueue
-from .errors import HessianExit, EngineError, GeomOptNotConvergedError
+from .errors import InputError, HessianExit, EngineError, GeomOptNotConvergedError
 
 class Optimizer(object):
     def __init__(self, coords, molecule, IC, engine, dirname, params):
@@ -103,6 +103,9 @@ class Optimizer(object):
         # Some more variables to be updated throughout the course of the optimization
         self.trustprint = "="
         self.ForceRebuild = False
+        # Sanity check - if there's only one atom, it will probably crash
+        if self.molecule.na < 2:
+            raise InputError("Geometry optimizer assumes there are at least two atoms in the system")
 
     def get_cartesian_norm(self, dy, verbose=None):
         if not verbose: verbose = self.params.verbose
@@ -185,13 +188,32 @@ class Optimizer(object):
     def rebuild_hessian(self):
         self.H = rebuild_hessian(self.IC, self.H0, self.X_hist, self.Gx_hist, self.params)
 
+    def frequency_analysis(self, hessian, suffix, afterOpt):
+        do_wigner = False
+        if self.params.wigner:
+            # Wigner sampling should only be performed on the final Hessian calculation of a run
+            if self.params.hessian in ['last', 'first+last', 'each'] and afterOpt:
+                do_wigner = True
+            elif self.params.hessian in ['first', 'stop']:
+                do_wigner = True
+        if do_wigner:
+            logger.info("Requesting %i samples from Wigner distribution.\n" % self.params.wigner)
+        prefix = self.params.xyzout.replace("_optim.xyz", "").replace(".xyz", "")
+        # Call the frequency analysis function with an input Hessian, with most arguments populated from self.params
+        frequency_analysis(self.X, hessian, self.molecule.elem, energy=self.E, temperature=self.params.temperature, pressure=self.params.pressure, verbose=self.params.verbose, 
+                           outfnm='%s.vdata_%s' % (prefix, suffix), note='Iteration %i Energy % .8f%s' % (self.Iteration, self.E, ' (Optimized Structure)' if afterOpt else ''),
+                           wigner=((self.params.wigner, os.path.join(self.dirname, 'wigner')) if do_wigner else None))
+
+
     def calcEnergyForce(self):
         """
         Calculate the energy and Cartesian gradients of the current structure.
         """
         ### Calculate Energy and Gradient ###
         # Dictionary containing single point properties (energy, gradient)
-        spcalc = self.engine.calc(self.X, self.dirname)
+        # For frequency calculations and multi-step jobs, the gradient from an existing
+        # output file may be read in.
+        spcalc = self.engine.calc(self.X, self.dirname, readfiles=(self.Iteration==0))
         self.E = spcalc['energy']
         self.gradx = spcalc['gradient']
         # Calculate Hessian at the first step, or at each step if desired
@@ -199,21 +221,22 @@ class Optimizer(object):
             # Hx is assumed to be the Cartesian Hessian at the current step.
             # Otherwise we use the variable name Hx0 to avoid almost certain confusion.
             self.Hx = calc_cartesian_hessian(self.X, self.molecule, self.engine, self.dirname, readfiles=True, verbose=self.params.verbose)
+            if self.params.frequency:
+                self.frequency_analysis(self.Hx, 'iter%03i' % self.Iteration, False)
         elif self.Iteration == 0:
-            if self.params.hessian in ['first', 'exit']:
+            if self.params.hessian in ['first', 'stop', 'first+last']:
                 self.Hx0 = calc_cartesian_hessian(self.X, self.molecule, self.engine, self.dirname, readfiles=True, verbose=self.params.verbose)
-                if self.params.hessian == 'exit':
+                if self.params.frequency:
+                    self.frequency_analysis(self.Hx0, 'first', False)
+                if self.params.hessian == 'stop':
                     logger.info("Exiting as requested after Hessian calculation.\n")
                     logger.info("Cartesian Hessian is stored in %s/hessian/hessian.txt.\n" % self.dirname)
-                    logger.info("Cartesian Hessian printout:\n")
-                    for i in range(self.Hx0.shape[0]):
-                        for j in range(self.Hx0.shape[1]):
-                            logger.info(" % 10.6f" % self.Hx0[i,j])
-                        logger.info("\n")
                     raise HessianExit
                     # sys.exit(0)
             elif hasattr(self.params, 'hess_data') and self.Iteration == 0:
                 self.Hx0 = self.params.hess_data.copy()
+                if self.params.frequency:
+                    self.frequency_analysis(self.Hx0, 'first', False)
                 if self.Hx0.shape != (self.X.shape[0], self.X.shape[0]):
                     raise IOError('hess_data passed in via OptParams does not have the right shape')
             # self.Hx = self.Hx0.copy()
@@ -604,6 +627,10 @@ class Optimizer(object):
             logger.info("Saving current approximate Hessian (Cartesian coordinates) to %s" % self.params.write_cart_hess)
             Hx = self.IC.calcHessCart(self.X, self.G, self.H)
             np.savetxt(self.params.write_cart_hess, Hx, fmt='% 14.10f')
+        if self.params.hessian in ['last', 'first+last', 'each']:
+            Hx = calc_cartesian_hessian(self.X, self.molecule, self.engine, self.dirname, readfiles=False, verbose=self.params.verbose)
+            if self.params.frequency:
+                self.frequency_analysis(Hx, 'last', True)
         return self.progress
 
 class OPT_STATE(object):
