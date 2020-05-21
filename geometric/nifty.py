@@ -20,6 +20,7 @@ from __future__ import print_function
 
 import filecmp
 import itertools
+import distutils
 import os
 import re
 import shutil
@@ -1330,6 +1331,19 @@ def which(fnm):
         return os.path.split(os.popen('which %s 2> /dev/null' % fnm).readlines()[0].strip())[0]
     except:
         return ''
+
+def copy_tree_over(src, dest):
+    """
+    Copy a source directory tree to a destination directory tree,
+    overwriting files as necessary.  This does not require removing
+    the destination folder, which can reduce the number of times
+    shutil.rmtree needs to be called.
+    """
+    # From https://stackoverflow.com/questions/9160227/dir-util-copy-tree-fails-after-shutil-rmtree/28055993 : 
+    # If you copy folder, then remove it, then copy again it will fail, because it caches all the created dirs. 
+    # To workaround you can clear _path_created before copy:
+    distutils.dir_util._path_created = {}
+    distutils.dir_util.copy_tree(src, dest)
 
 # Thanks to cesarkawakami on #python (IRC freenode) for this code.
 class LineChunker(object):
