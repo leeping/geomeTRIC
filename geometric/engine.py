@@ -581,7 +581,7 @@ class TeraChem(Engine):
         if not os.path.exists(dest): os.makedirs(dest)
         if not os.path.exists(os.path.join(src, self.scr)):
             raise TeraChemEngineError("Trying to copy %s but it does not exist" % os.path.join(src, self.scr))
-        copy_tree_over(qcdir, os.path.join(dirname, "run.d"))
+        copy_tree_over(os.path.join(src, self.scr), os.path.join(dest, self.scr))
 
 class OpenMM(Engine):
     """
