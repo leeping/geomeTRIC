@@ -20,7 +20,7 @@ from __future__ import print_function
 
 import filecmp
 import itertools
-import distutils
+import distutils.dir_util
 import os
 import re
 import shutil
