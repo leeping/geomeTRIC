@@ -37,7 +37,6 @@ POSSIBILITY OF SUCH DAMAGE.
 from __future__ import print_function, division
 
 import shutil
-from distutils.dir_util import copy_tree
 import subprocess
 from collections import OrderedDict
 from copy import deepcopy
@@ -48,7 +47,7 @@ import re
 import os
 
 from .molecule import Molecule
-from .nifty import bak, eqcgmx, fqcgmx, bohr2ang, logger, getWorkQueue, queue_up_src_dest, rootdir, splitall
+from .nifty import bak, eqcgmx, fqcgmx, bohr2ang, logger, getWorkQueue, queue_up_src_dest, rootdir, splitall, copy_tree_over
 from .errors import EngineError, CheckCoordError, Psi4EngineError, QChemEngineError, TeraChemEngineError, \
     ConicalIntersectionEngineError, OpenMMEngineError, GromacsEngineError, MolproEngineError, QCEngineAPIEngineError
 
@@ -582,13 +581,7 @@ class TeraChem(Engine):
         if not os.path.exists(dest): os.makedirs(dest)
         if not os.path.exists(os.path.join(src, self.scr)):
             raise TeraChemEngineError("Trying to copy %s but it does not exist" % os.path.join(src, self.scr))
-        # Use distutils.dir_util.copy_tree instead of shutil.copytree
-        # because the former does not require the original dir to be removed, thus is safer
-        copy_tree(os.path.join(src, self.scr), os.path.join(dest, self.scr))
-        # if os.path.exists(os.path.join(dest, self.scr)):
-        #     logger.warning("%s exists, removing it first\n" % (os.path.join(dest, self.scr)))
-        #     shutil.rmtree(os.path.join(dest, self.scr))
-        # shutil.copytree(os.path.join(src, self.scr), os.path.join(dest, self.scr))
+        copy_tree_over(os.path.join(src, self.scr), os.path.join(dest, self.scr))
 
 class OpenMM(Engine):
     """
@@ -843,13 +836,7 @@ class QChem(Engine):
             raise QChemEngineError("If qcdir is provided, dirname must also be provided")
         elif not os.path.exists(dirname):
             os.makedirs(dirname)
-        # Use distutils.dir_util.copy_tree instead of shutil.copytree
-        # because the former does not require the original dir to be removed, thus is safer
-        copy_tree(qcdir, os.path.join(dirname, "run.d"))
-        # if os.path.exists(os.path.join(dirname, "run.d")):
-        #     logger.warning("%s/run.d already exists, removing it prior to replacing with %s.\n" % (dirname, qcdir))
-        #     shutil.rmtree(os.path.join(dirname, "run.d"))
-        # shutil.copytree(qcdir, os.path.join(dirname, "run.d"))
+        copy_tree_over(qcdir, os.path.join(dirname, "run.d"))
         self.M.edit_qcrems({'scf_guess':'read'})
         self.qcdir = True
 

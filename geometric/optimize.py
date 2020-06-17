@@ -810,9 +810,9 @@ def run_optimizer(**kwargs):
             IC = CoordClass(M, build=True, connect=connect, addcart=addcart, constraints=Cons, cvals=CVal, conmethod=params.conmethod)
             IC.printConstraints(coords, thre=-1)
             if len(CVals) > 1:
-                params.xyzout = prefix+"_scan-%03i.xyz" % ic
+                params.xyzout = prefix+"_scan-%03i.xyz" % (ic+1)
                 # In the special case of a constraint scan, we write out multiple qdata.txt files
-                if params.qdata is not None: params.qdata = 'qdata_scan-%03i.txt' % ic
+                if params.qdata is not None: params.qdata = 'qdata_scan-%03i.txt' % (ic+1)
             else:
                 params.xyzout = prefix+"_optim.xyz"
             if ic == 0:
