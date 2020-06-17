@@ -39,7 +39,7 @@ import os, shutil
 import numpy as np
 from .errors import FrequencyError
 from .molecule import Molecule, PeriodicTable
-from .nifty import logger, kb, kb_si, hbar, au2kj, au2kcal, ang2bohr, bohr2ang, c_lightspeed, avogadro, cm2au, amu2au, ambervel2au, wq_wait, getWorkQueue
+from .nifty import logger, kb, kb_si, hbar, au2kj, au2kcal, ang2bohr, bohr2ang, c_lightspeed, avogadro, cm2au, amu2au, ambervel2au, wq_wait, getWorkQueue, commadash
 
 def calc_cartesian_hessian(coords, molecule, engine, dirname, readfiles=True, verbose=0):
     """ 
@@ -425,8 +425,13 @@ def frequency_analysis(coords, Hessian, elem=None, mass=None, energy=0.0, temper
         write_vdata(freqs_wavenumber, normal_modes_cart, coords, elem, outfnm, out_lines, note=note)
         logger.info("Vibrational analysis written to %s\n" % outfnm)
     if wigner is not None:
+        # Overwrite control. If negative number is provided, then overwrite samples.
         nSample, dirname = wigner
-        wigner_sample(coords, mass, elem, freqs_wavenumber, normal_modes_cart, temperature, nSample, dirname)
+        overwrite = False
+        if nSample < 0:
+            nSample = abs(nSample)
+            overwrite = True
+        wigner_sample(coords, mass, elem, freqs_wavenumber, normal_modes_cart, temperature, nSample, dirname, overwrite)
     return freqs_wavenumber, normal_modes_cart, G_tot_au
 
 def free_energy_harmonic(coords, mass, freqs_wavenumber, energy, temperature, pressure, verbose = 0):
@@ -652,7 +657,7 @@ def write_vdata(freqs_wavenumber, normal_modes_cart, xyz, elem, outfnm, extracom
             for i in mode.reshape(-1,3):
                 print("% 9.6f % 9.6f % 9.6f" % (i[0], i[1], i[2]), file=f)
 
-def wigner_sample(coords, mass, elem, freqs_wavenumber, normal_modes_cart, temperature, n_samples, dirname):
+def wigner_sample(coords, mass, elem, freqs_wavenumber, normal_modes_cart, temperature, n_samples, dirname, overwrite):
     """
     Generate samples from a Wigner distribution.
 
@@ -676,6 +681,9 @@ def wigner_sample(coords, mass, elem, freqs_wavenumber, normal_modes_cart, tempe
         Output directory name where Wigner samples should be written
         Files will be written to dirname/000/, and include coords.xyz (Angstroms),
         vel.xyz (Amber units), and fms.dat (contains coordinates and momenta in a.u.)
+    overwrite : bool
+        If True, then overwrite any existing Wigner sample files.
+        (Accessed by providing a negative number to OptParams.wigner)
     """
     mass = np.array(mass)
     nAtoms = len(mass)
@@ -722,6 +730,7 @@ def wigner_sample(coords, mass, elem, freqs_wavenumber, normal_modes_cart, tempe
     # print("sigma_x", sigma_x)
     # print("sigma_p", sigma_p)
     sample_data = []
+    ovr_idx = []
     
     for idx in range(n_samples):
         xvec = np.zeros(nAtoms*3)
@@ -771,6 +780,9 @@ def wigner_sample(coords, mass, elem, freqs_wavenumber, normal_modes_cart, tempe
         # Write sample data to files.
         outd = os.path.join(dirname, "%03i" % idx)
         if not os.path.exists(outd) : os.makedirs(outd)
+        if any([os.path.exists(os.path.join(outd, f)) for f in ['coords.xyz', 'vel.xyz', 'fms.dat']]):
+            ovr_idx.append(idx)
+            if not overwrite: continue
         M = Molecule()
         M.elem = elem
         M.xyzs = [coors.copy() * bohr2ang]
@@ -788,6 +800,8 @@ def wigner_sample(coords, mass, elem, freqs_wavenumber, normal_modes_cart, tempe
             for i in range(nAtoms):
                 print("  % 18.10f% 18.10f% 18.10f" % (momenta[i,0], momenta[i,1], momenta[i,2]), file=f)
     logger.info("Wigner distribution sampling: %i samples using T = %.2f written to %s\n" % (n_samples, temperature, dirname))
+    if ovr_idx:
+        print("Wigner distribution sample generation: %s samples %s" % (commadash(ovr_idx), 'overwritten' if overwrite else 'skipped'))
             
 def main():
     import logging.config, pkg_resources
