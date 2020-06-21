@@ -431,7 +431,7 @@ def frequency_analysis(coords, Hessian, elem=None, mass=None, energy=0.0, temper
         if nSample < 0:
             nSample = abs(nSample)
             overwrite = True
-        wigner_sample(coords, mass, elem, freqs_wavenumber, normal_modes_cart, temperature, nSample, dirname, overwrite)
+        wigner_sample(coords, mass, elem, freqs_wavenumber, normal_modes, temperature, nSample, dirname, overwrite)
     return freqs_wavenumber, normal_modes_cart, G_tot_au
 
 def free_energy_harmonic(coords, mass, freqs_wavenumber, energy, temperature, pressure, verbose = 0):
@@ -657,7 +657,7 @@ def write_vdata(freqs_wavenumber, normal_modes_cart, xyz, elem, outfnm, extracom
             for i in mode.reshape(-1,3):
                 print("% 9.6f % 9.6f % 9.6f" % (i[0], i[1], i[2]), file=f)
 
-def wigner_sample(coords, mass, elem, freqs_wavenumber, normal_modes_cart, temperature, n_samples, dirname, overwrite):
+def wigner_sample(coords, mass, elem, freqs_wavenumber, normal_modes, temperature, n_samples, dirname, overwrite):
     """
     Generate samples from a Wigner distribution.
 
@@ -671,8 +671,8 @@ def wigner_sample(coords, mass, elem, freqs_wavenumber, normal_modes_cart, tempe
         Atomic symbols
     freqs_wavenumber : np.array
         Vibrational frequencies in cm^-1 (output of frequency_analysis)
-    normal_modes_cart : np.array
-        2D array (3N-6 or 3N-5 x (natoms x 3)) Cartesian displacements of vibrational modes (output of frequency_analysis)
+    normal_modes : np.array
+        2D array (3N-6 or 3N-5 x (natoms x 3)) mass-weighted displacements of vibrational modes (output of frequency_analysis)
     temperature : float
         Desired temperature for distribution
     n_samples : int
@@ -740,8 +740,8 @@ def wigner_sample(coords, mass, elem, freqs_wavenumber, normal_modes_cart, tempe
         for n in range(nmodes):
             xlen = np.random.normal(0.0, sigma_x[n])
             plen = np.random.normal(0.0, sigma_p[n])
-            xvec += xlen* normal_modes_cart[n]
-            pvec += plen* normal_modes_cart[n]
+            xvec += xlen* normal_modes[n]
+            pvec += plen* normal_modes[n]
 
         # undo mass-weights           
         for a in range(nAtoms):
