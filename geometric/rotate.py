@@ -804,3 +804,40 @@ def get_expmap_der(x, y, second=False, fdcheck=False, use_loops=False):
         return dvdx, dvdx2
     else:
         return dvdx
+
+def calc_rot_vec_diff(v1_in, v2_in):
+    """
+    Calculate the difference in two provided rotation vectors v1_in - v2_in.
+    """
+    # The two rotation vectors for coord1 and coord2
+    v1 = v1_in.copy()
+    v2 = v2_in.copy()
+    if np.linalg.norm(v1) < 1e-6 and np.linalg.norm(v2) < 1e-6:
+        return v1-v2
+    # Take the vector with the larger norm b/c the unit vector is better defined
+    va, vb = (v1, v2) if np.dot(v1, v1) > np.dot(v2, v2) else (v2, v1)
+    # Displace the larger vector along multiples of 2pi*va/|va| until displacement is minimized
+    vh = va / np.linalg.norm(va)
+    revcount = 0
+    while True:
+        vd = np.dot(va-vb, va-vb)
+        va += 2*np.pi*vh
+        revcount += 1
+        if np.dot(va-vb, va-vb) > vd:
+            va -= 2*np.pi*vh
+            revcount -= 1
+            break
+    while True:
+        vd = np.dot(va-vb, va-vb)
+        va -= 2*np.pi*vh
+        revcount -= 1
+        if np.dot(va-vb, va-vb) > vd:
+            va += 2*np.pi*vh
+            revcount += 1
+            break
+    # if revcount != 0:
+    #     logger.info("calc_rot_vec_diff: %i multiples of 2*pi were used in calculating rotational difference\n" % revcount)
+    #     print("in : v1= % 8.4f % 8.4f % 8.4f v2= % 8.4f % 8.4f % 8.4f" % (v1_in[0], v1_in[1], v1_in[2], v2_in[0], v2_in[1], v2_in[2]))
+    #     print("out: v1= % 8.4f % 8.4f % 8.4f v2= % 8.4f % 8.4f % 8.4f" % (v1[0], v1[1], v1[2], v2[0], v2[1], v2[2]))
+        # print()
+    return v1-v2

@@ -47,9 +47,9 @@ import re
 import os
 
 from .molecule import Molecule
-from .nifty import bak, eqcgmx, fqcgmx, bohr2ang, logger, getWorkQueue, queue_up_src_dest, splitall
-from .errors import EngineError, Psi4EngineError, QChemEngineError, TeraChemEngineError, ConicalIntersectionEngineError, \
-    OpenMMEngineError, GromacsEngineError, MolproEngineError, QCEngineAPIEngineError
+from .nifty import bak, eqcgmx, fqcgmx, bohr2ang, logger, getWorkQueue, queue_up_src_dest, rootdir, splitall, copy_tree_over
+from .errors import EngineError, CheckCoordError, Psi4EngineError, QChemEngineError, TeraChemEngineError, \
+    ConicalIntersectionEngineError, OpenMMEngineError, GromacsEngineError, MolproEngineError, QCEngineAPIEngineError
 
 #=============================#
 #| Useful TeraChem functions |#
@@ -154,7 +154,7 @@ def edit_tcin(fin=None, fout=None, options=None, defaults=None, reqxyz=True, ign
                     print(line_out, file=f)
             for k, v in Answer.items():
                 if k not in havekeys:
-                    print("%-15s %s" % (k, str(v)), file=f)
+                    print("%-25s     %s" % (k, str(v)), file=f)
     return Answer
 
 def set_tcenv():
@@ -191,7 +191,7 @@ class Engine(object):
     # def __deepcopy__(self, memo):
     #     return copy(self)
 
-    def calc(self, coords, dirname, readfiles=False):
+    def calc(self, coords, dirname, readfiles=False, copydir=None):
         """
         Top-level method for a single-point calculation. 
         Calculation will be skipped if results are contained in the hash table, 
@@ -207,6 +207,10 @@ class Engine(object):
         readfiles : bool, default=False
             If valid calculation output files exist in dirname, read the results instead of
             running a new calculation
+        copydir : str, default=None
+            If provided, the contents of this folder will be copied to the scratch folder
+            prior to starting a calculation (e.g. when calculating the Hessian we want to use SCF
+            guess of the midpoint)
 
         Returns
         -------
@@ -229,12 +233,14 @@ class Engine(object):
             read_success = False
             if readfiles and os.path.exists(dirname) and hasattr(self, 'read_result'):
                 try:
-                    result = self.read_result(dirname)
+                    result = self.read_result(dirname, check_coord=coords)
                     read_success = True
-                except:
-                    logger.info("Failed to read output from %s, recalculating\n" % dirname)
+                    logger.info("Successfully read existing single-point result from %s\n" % dirname)
+                except (EngineError, CheckCoordError): pass
             if not read_success:
-                if not os.path.exists(dirname): os.makedirs(dirname)
+                if copydir:
+                    self.copy_scratch(copydir, dirname)
+                elif not os.path.exists(dirname): os.makedirs(dirname)
                 result = self.calc_new(coords, dirname)
             self.stored_calcs[coord_hash] = {'coords':coords, 'result':result}
         return result
@@ -245,7 +251,7 @@ class Engine(object):
     def calc_new(self, coords, dirname):
         raise NotImplementedError("Not implemented for the base class")
 
-    def calc_wq(self, coords, dirname, readfiles=False):
+    def calc_wq(self, coords, dirname, readfiles=False, copydir=None):
         """
         Top-level method for submitting a single-point calculation using Work Queue. 
         Different from calc(), this method does not return results, because the control
@@ -265,6 +271,10 @@ class Engine(object):
         readfiles : bool, default=False
             If valid calculation output files exist in dirname, read the results instead of
             running a new calculation
+        copydir : str, default=None
+            If provided, the contents of this folder will be copied to the scratch folder
+            prior to starting a calculation (e.g. when calculating the Hessian we want to use SCF
+            guess of the midpoint)
         """
         coord_hash = hash(coords.tostring())
         if coord_hash in self.stored_calcs:
@@ -275,11 +285,12 @@ class Engine(object):
             read_success = False
             if readfiles and os.path.exists(dirname) and hasattr(self, 'read_result'):
                 try:
-                    result = self.read_result(dirname)
+                    result = self.read_result(dirname, check_coord=coords)
                     read_success = True
-                except:
-                    logger.info("Tried but failed to read results from %s\nRunning new calculation\n" % dirname)
+                except (EngineError, CheckCoordError): pass
             if not read_success:
+                if copydir:
+                    self.copy_scratch(copydir, dirname)
                 self.calc_wq_new(coords, dirname)
 
     def calc_wq_new(self, coords, dirname):
@@ -319,10 +330,11 @@ class Engine(object):
             self.stored_calcs[coord_hash] = {'coords':coords, 'result':result}
         return result
 
-    def read_wq_new(self, coords, dirname):
-        raise NotImplementedError("Work Queue is not implemented for this class")
-
     def number_output(self, dirname, calcNum):
+        return
+
+    def copy_scratch(self, src, dest):
+        logger.warning("copy_scratch not implemented for this engine\n")
         return
 
 class Blank(Engine):
@@ -343,24 +355,38 @@ class TeraChem(Engine):
     """
     def __init__(self, molecule, tcin, dirname=None):
         self.tcin = tcin.copy()
+        # Scratch folder
         if 'scrdir' in self.tcin:
             self.scr = self.tcin['scrdir']
         else:
             self.scr = 'scr'
-        if 'guess' in self.tcin:
+        # A few notes about the electronic structure method
+        self.casscf = self.tcin.get('casscf', 'no').lower() == 'yes'
+        self.unrestricted = (self.tcin['method'][0] == 'u')
+        # Build a list of guess files
+        if self.casscf and 'casguess' in self.tcin:
+            # CASSCF guess uses key 'casguess' and skips SCF entirely
+            guessVal = self.tcin['casguess'].split()
+            self.initguess_mode = 'file'
+            self.initguess_files = guessVal
+        elif 'guess' in self.tcin:
             guessVal = self.tcin['guess'].split()
-            if guessVal[0] == 'frag':
-                self.guessMode = 'frag'
-                self.fragFile = guessVal[1]
-                if not os.path.exists(self.fragFile):
-                    raise TeraChemEngineError('%s fragment file is missing' % self.fragFile)
+            if guessVal[0] in ['frag', 'sad', 'sadlp', 'exciton', 'frag_scf']:
+                self.initguess_mode = guessVal[0]
+                self.initguess_files = guessVal[1:]
+            elif guessVal[0] in ['hcore', 'generate']:
+                self.initguess_mode = guessVal[0]
+                self.initguess_files = []
             else:
-                self.guessMode = 'file'
-                for f in guessVal:
-                    if not os.path.exists(f):
-                        raise TeraChemEngineError('%s guess file is missing' % f)
+                self.initguess_mode = 'file'
+                self.initguess_files = guessVal
         else:
-            self.guessMode = 'none'
+            self.initguess_mode = 'none'
+            self.initguess_files = []
+        # Check that all starting guess files exist
+        for f in self.initguess_files:
+            if not os.path.exists(f):
+                raise TeraChemEngineError('%s guess file is missing' % f)
         # Management of QM/MM: Read qmindices and 
         # store locations of prmtop and qmindices files,
         self.qmmm = 'qmindices' in tcin
@@ -375,90 +401,74 @@ class TeraChem(Engine):
             self.prmtop_name = os.path.abspath(tcin['prmtop'])
             self.qmindices = [int(i.split()[0]) for i in open(self.qmindices_name).readlines()]
             self.M_full = Molecule(tcin['coordinates'], ftype='inpcrd', build_topology=False)
-        if dirname: self.prep_temp_folder(dirname)
         super(TeraChem, self).__init__(molecule)
 
-    def prep_temp_folder(self, dirname):
-        # Clean up the temporary folder.
-        if os.path.exists(dirname):
-            # Remove existing scratch files in ./run.tmp/scr to avoid confusion
-            for f in ['c0', 'ca0', 'cb0']:
-                if os.path.exists(os.path.join(dirname, self.scr, f)):
-                    os.remove(os.path.join(dirname, self.scr, f))
-        
-    def manage_guess(self, dirname):
+    def orbital_filenames(self):
         """
-        Management of guess files in TeraChem calculations.
-        This function make sure the correct guess files are in the temp-folder
-        given by "dirname" and sets the corresponding options in self.tcin.
+        Names of orbital files generated by TeraChem calculations.
+        """
+        orbfnms = []
+        if self.casscf:
+            orbfnms.append('c0.casscf')
+        elif self.unrestricted:
+            orbfnms.append('ca0')
+            orbfnms.append('cb0')
+        else:
+            orbfnms.append('c0')
+        return orbfnms
+
+    def copy_guess_files(self, dirname):
+        """
+        Prior to running a TeraChem gradient calculation, 
+        copy guess files to expected locations and make edits
+        to the TeraChem input file to use these files.
+
+        Guess files are used in the following priority:
+        1) If default orbital filenames exist in dirname/scr e.g. from a previous calculation, 
+           they will supersede the user-provided initial guess for the current calculation
+        2) Otherwise, the user-provided initial guess will be used.
+        
+        These files are copied to "dirname", either from <root>dirname/scr in the former case,
+        or from <root> in the latter case. (<root> is the folder in which the calculation is run.)
 
         Returns
         -------
-        fileNames : list
-            The list of guess files that the TeraChem calculation will require,
-            whether it is a MO coefficient file or a text file specifying fragments.
+        copied_files : list
+            The list of guess files that the TeraChem calculation will use.
         """
-        # These are files that may be produced in a previous energy/grad calc
-        # (This may be changed if non-single-reference calcs start to be used)
-        unrestricted = self.tcin['method'][0] == 'u'
-        if unrestricted:
-            scrFiles = ['ca0', 'cb0']
-        else:
-            scrFiles = ['c0']
-        if self.tcin.get('casscf', 'no').lower() == 'yes':
-            is_casscf = True
-            scrFiles += ['c0.casscf']
-        else: is_casscf = False
-        # Copy fragment guess file if applicable. It will be used in every energy/grad calc
-        if self.guessMode == 'frag':
-            shutil.copy2(self.fragFile, dirname)
-            return [self.fragFile]
-        # If guess is not set and orbital files are in temp/scr from a previous energy/grad calc,
-        # then set guess mode to use files.
-        if self.guessMode == 'none':
-            guessFiles = []
-            for f in scrFiles:
-                if os.path.exists(os.path.join(dirname, self.scr, f)):
-                    guessFiles.append(f)
-            if guessFiles:
-                self.tcin['guess'] = ' '.join([f for f in guessFiles if 'casscf' not in f])
-                if 'c0.casscf' in guessFiles and is_casscf: self.tcin['casguess'] = 'c0.casscf'
-                self.guessMode = 'file'
-            else:
-                return []
-        # If using guess files (including from the above if-block), copy the guess files into the temp-dir.
-        # Use files in temp/scr if they exist; otherwise, use files in the base dir.
-        if self.guessMode != 'file':
-            raise TeraChemEngineError("Guess mode should be 'file' at this point in the code: currently %s" % self.guessMode)
-        guessFiles = self.tcin['guess'].split()
-        for f in guessFiles:
-            if f in scrFiles and os.path.exists(os.path.join(dirname, self.scr, f)):
+        # Default scratch file names written by TeraChem to run.tmp/scr
+        orbital_files = self.orbital_filenames()
+        # Names of scratch files that were actually used (all in the run.tmp folder)
+        copied_files = []
+        if all([os.path.exists(os.path.join(dirname, self.scr, f)) for f in orbital_files]):
+            # If all scratch files (with default names) exist in run.tmp/scr folder, e.g. from a previous calc,
+            # then copy it to the run.tmp folder and use it as the guess in the current calculation.
+            for f in orbital_files:
                 shutil.copy2(os.path.join(dirname, self.scr, f), os.path.join(dirname, f))
-            elif not os.path.exists(os.path.join(dirname, f)):
-                shutil.copy2(f, dirname)
-            if not os.path.exists(os.path.join(dirname, f)):
-                raise TeraChemEngineError("%s guess file is missing and this code shouldn't be called" % f)
-        if is_casscf:
-            f = 'c0.casscf'
-            if os.path.exists(os.path.join(dirname, self.scr, f)):
-                shutil.copy2(os.path.join(dirname, self.scr, f), os.path.join(dirname, f))
-            elif not os.path.exists(os.path.join(dirname, f)):
-                shutil.copy2(f, dirname)
-            if not os.path.exists(os.path.join(dirname, f)):
-                raise TeraChemEngineError("%s guess file is missing and this code shouldn't be called" % f)
-        # When guess files are provided, turn off purify and mix.
-        if 'purify' not in self.tcin: self.tcin['purify'] = 'no'
-        if 'mixguess' not in self.tcin: self.tcin['mixguess'] = "0.0"
-        return guessFiles
+                copied_files.append(f)
+            if 'purify' not in self.tcin: 
+                self.tcin['purify'] = 'no'
+            if 'mixguess' not in self.tcin: 
+                self.tcin['mixguess'] = "0.0"
+            self.tcin['casguess' if self.casscf else 'guess'] = ' '.join(orbital_files)
+        elif self.initguess_mode != 'none':
+            # If scratch files from previous calc do not exist, then copy initial guess files
+            for f in self.initguess_files:
+                if os.path.exists(f):
+                    shutil.copy2(f, os.path.join(dirname, f))
+                else:
+                    raise TeraChemEngineError("%s guess file is missing and this code shouldn't be called" % f)
+            if self.initguess_mode == 'file':
+                self.tcin['casguess' if self.casscf else 'guess'] = ' '.join(self.initguess_files)
+            elif self.initguess_mode != 'none':
+                self.tcin['guess'] = ' '.join([self.initguess_mode] + self.initguess_files)
+            copied_files = self.initguess_files[:]
+        return copied_files
 
     def calc_new(self, coords, dirname):
         # Ensure guess files are in the correct locations
-        self.manage_guess(dirname)
-        # Copy QMMM files to the correct locations
-        if self.qmmm:
-            shutil.copy2(self.qmindices_name, dirname)
-            shutil.copy2(self.prmtop_name, dirname)
-        # Set other needed options
+        self.copy_guess_files(dirname)
+        # Set coordinate file name
         start_xyz = 'start.rst7' if self.qmmm else 'start.xyz'
         self.tcin['coordinates'] = start_xyz
         self.tcin['run'] = 'gradient'
@@ -471,6 +481,9 @@ class TeraChem(Engine):
         # Convert coordinates back to the xyz file
         self.M.xyzs[0] = coords.reshape(-1, 3) * bohr2ang
         if self.qmmm:
+            # Copy QMMM files to the correct locations and set positions in inpcrd/rst7 file
+            shutil.copy2(self.qmindices_name, dirname)
+            shutil.copy2(self.prmtop_name, dirname)
             self.M_full.xyzs[0][self.qmindices, :] = self.M.xyzs[0]
             self.M_full[0].write(os.path.join(dirname, start_xyz), ftype='inpcrd')
         else:
@@ -482,20 +495,27 @@ class TeraChem(Engine):
         return result
 
     def calc_wq_new(self, coords, dirname):
+        # Set up Work Queue object
         wq = getWorkQueue()
-        if not os.path.exists(dirname): os.makedirs(dirname)
         scrdir = os.path.join(dirname, self.scr)
+        if not os.path.exists(dirname): os.makedirs(dirname)
         if not os.path.exists(scrdir): os.makedirs(scrdir)
-        guessfnms = self.manage_guess(dirname)
+        # Ensure guess files are in the correct locations
+        guessfnms = self.copy_guess_files(dirname)
+        # Set coordinate file name
         start_xyz = 'start.rst7' if self.qmmm else 'start.xyz'
         self.tcin['coordinates'] = start_xyz
         self.tcin['run'] = 'gradient'
         # For queueing up jobs, delete GPU key and let the worker decide
         self.tcin['gpus'] = None
-        tcopts = edit_tcin(fout="%s/run.in" % dirname, options=self.tcin)
+        # Write the TeraChem input file
+        edit_tcin(fout="%s/run.in" % dirname, options=self.tcin)
         # Convert coordinates back to the xyz file
         self.M.xyzs[0] = coords.reshape(-1, 3) * bohr2ang
         if self.qmmm:
+            # Copy QMMM files to the correct locations and set positions in inpcrd/rst7 file
+            shutil.copy2(self.qmindices_name, dirname)
+            shutil.copy2(self.prmtop_name, dirname)
             self.M_full.xyzs[0][self.qmindices, :] = self.M.xyzs[0]
             self.M_full[0].write(os.path.join(dirname, start_xyz), ftype='inpcrd')
         else:
@@ -503,17 +523,16 @@ class TeraChem(Engine):
         # Specify WQ input and output files
         in_files = [('%s/run.in' % dirname, 'run.in'), ('%s/%s' % (dirname, start_xyz), start_xyz)]
         if self.qmmm:
-            # Send absolute path of qmindices and prmtop to the root folder of the WQ tmpdir
-            in_files += [(self.qmindices_name, os.path.split(self.qmindices_name)[1]),
-                         (self.prmtop_name, os.path.split(self.prmtop_name)[1])]
-        out_files = [('%s/run.out' % dirname, 'run.out')]
+            in_files += [(os.path.join(dirname, self.qmindices_name), self.qmindices_name),
+                         (os.path.join(dirname, self.prmtop_name), self.prmtop_name)]
         for f in guessfnms:
             in_files.append((os.path.join(dirname, f), f))
-        out_scr = ['ca0', 'cb0'] if unrestricted else ['c0']
-        out_scr += ['mullpop']
+        out_files = [('%s/run.out' % dirname, 'run.out')]
+        out_scr = self.orbital_filenames()
+        out_scr += ['grad.xyz', 'mullpop']
         for f in out_scr:
             out_files.append((os.path.join(dirname, self.scr, f), os.path.join(self.scr, f)))
-        queue_up_src_dest(wq, "%s/runtc run.in &> run.out" % rootdir, in_files, out_files, verbose=False)
+        queue_up_src_dest(wq, "terachem run.in &> run.out", in_files, out_files, verbose=False, print_time=600)
 
     def number_output(self, dirname, calcNum):
         if not os.path.exists(os.path.join(dirname, 'run.out')):
@@ -521,7 +540,26 @@ class TeraChem(Engine):
         shutil.copy2(os.path.join(dirname,start_xyz), os.path.join(dirname,'start_%03i.%s' % (calcNum, os.path.splitext(start_xyz)[1])))
         shutil.copy2(os.path.join(dirname,'run.out'), os.path.join(dirname,'run_%03i.out' % calcNum))
 
-    def read_wq_new(self, coords, dirname):
+    def read_result(self, dirname, check_coord=None):
+        if check_coord is not None:
+            read_xyz_success = False
+            start_xyz = 'start.rst7' if self.qmmm else 'start.xyz'
+            if os.path.exists(os.path.join(dirname, start_xyz)):
+                try:
+                    M = Molecule(os.path.join(dirname, start_xyz))
+                    read_xyz = M.xyzs[0][self.qmindices] if self.qmmm else M.xyzs[0]
+                    read_xyz = read_xyz.flatten() / bohr2ang
+                    read_xyz_success = True
+                except: pass
+            if not read_xyz_success or np.linalg.norm(check_coord - read_xyz) > 1e-8:
+                # If the upcoming calculation is for a different geometry than the existing one,
+                # then delete the guess files to prevent landing in the wrong state by accident.
+                for f in self.orbital_filenames():
+                    if os.path.exists(os.path.join(dirname, f)):
+                        os.remove(os.path.join(dirname, f))
+                    if os.path.exists(os.path.join(dirname, self.scr, f)):
+                        os.remove(os.path.join(dirname, self.scr, f))
+                raise CheckCoordError
         # Extract energy and gradient
         try:
             # LPW note: Using python to call awk is not ideal and would take a bit of elbow grease to fix in the future.
@@ -533,29 +571,17 @@ class TeraChem(Engine):
             gradient = np.loadtxt(os.path.join(dirname,'grad.txt'))[:na].flatten()
             s2 = float(open(os.path.join(dirname,'s-squared.txt')).readlines()[0].strip())
             assert gradient.shape[0] == self.M.na*3
-        except (OSError, IOError, RuntimeError, subprocess.CalledProcessError):
+        except (OSError, IOError, IndexError, RuntimeError, AssertionError, subprocess.CalledProcessError):
             raise TeraChemEngineError
         return {'energy':energy, 'gradient':gradient, 's2':s2}
 
-    def link_scratch(self, src, dest):
+    def copy_scratch(self, src, dest):
         if os.path.split(self.scr)[0]:
-            raise RuntimeError("link_scratch cannot be used if self.scr is a nontrivial path")
-        cwd = os.getcwd()
-        destdirs = splitall(dest)
+            raise TeraChemEngineError("copy_scratch cannot be used because %s contains subfolders" % self.scr)
         if not os.path.exists(dest): os.makedirs(dest)
-        if '..' in destdirs or '.' in destdirs: 
-            raise RuntimeError('Destination path contains . or .. and is thus invalid')
         if not os.path.exists(os.path.join(src, self.scr)):
-            logger.info(" TeraChem.link_scratch warning: %s/scr folder does not exist" % src)
-        os.chdir(dest)
-        pathlist = ['..']*len(splitall(dest)) + [src, self.scr]
-        # print(pathlist)
-        if os.path.exists(self.scr):
-            if os.path.islink(self.scr): os.unlink(self.scr)
-            else: shutil.rmtree(self.scr)
-        os.symlink(os.path.join(*pathlist), self.scr)
-        # print("Symlink created, check %s" % os.abspath(os.getcwd()))
-        os.chdir(cwd)
+            raise TeraChemEngineError("Trying to copy %s but it does not exist" % os.path.join(src, self.scr))
+        copy_tree_over(os.path.join(src, self.scr), os.path.join(dest, self.scr))
 
 class OpenMM(Engine):
     """
@@ -654,6 +680,9 @@ class OpenMM(Engine):
                 nonbonded_force.setExceptionParameters(i, p1, p2, q, sig14, eps)
         return system
 
+    def copy_scratch(self, src, dest):
+        return
+
 class Psi4(Engine):
     """
     Run a Psi4 energy and gradient calculation.
@@ -735,8 +764,10 @@ class Psi4(Engine):
             raise Psi4EngineError
         return result
     
-    def read_result(self, dirname):
+    def read_result(self, dirname, check_coord=None):
         """ Read Psi4 calculation output. """
+        if check_coord is not None:
+            raise CheckCoordError("Coordinate checking not implemented")
         energy, gradient = None, None
         psi4out = os.path.join(dirname, 'output.dat')
         with open(psi4out) as outfile:
@@ -805,7 +836,7 @@ class QChem(Engine):
             raise QChemEngineError("If qcdir is provided, dirname must also be provided")
         elif not os.path.exists(dirname):
             os.makedirs(dirname)
-        shutil.copytree(qcdir, os.path.join(dirname, "run.d"))
+        copy_tree_over(qcdir, os.path.join(dirname, "run.d"))
         self.M.edit_qcrems({'scf_guess':'read'})
         self.qcdir = True
 
@@ -861,7 +892,17 @@ class QChem(Engine):
             raise RuntimeError('run.out does not exist')
         shutil.copy2(os.path.join(dirname,'run.out'), os.path.join(dirname,'run_%03i.out' % calcNum))
 
-    def read_result(self, dirname):
+    def read_result(self, dirname, check_coord=None):
+        if check_coord is not None:
+            read_xyz_success = False
+            if os.path.exists('%s/run.out' % dirname): 
+                try:
+                    M1 = Molecule('%s/run.out' % dirname)
+                    read_xyz = M1.xyzs[0].flatten() / bohr2ang
+                    read_xyz_success = True
+                except: pass
+            if not read_xyz_success or np.linalg.norm(check_coord - read_xyz) > 1e-8:
+                raise CheckCoordError
         M1 = Molecule('%s/run.out' % dirname)
         # In the case of multi-stage jobs, the last energy and gradient is what we want.
         energy = M1.qm_energies[-1]
@@ -912,6 +953,8 @@ class Gromacs(Engine):
             raise GromacsEngineError
         return {'energy':Energy, 'gradient':Gradient}
 
+    def copy_scratch(self, src, dest):
+        return
 
 class Molpro(Engine):
     """
@@ -1007,8 +1050,10 @@ class Molpro(Engine):
             raise RuntimeError('run.out does not exist')
         shutil.copy2(os.path.join(dirname,'run.out'), os.path.join(dirname,'run_%03i.out' % calcNum))
 
-    def read_result(self, dirname):
+    def read_result(self, dirname, check_coord=None):
         """ read an output file from Molpro"""
+        if check_coord is not None:
+            raise CheckCoordError("Coordinate check not implemented")
         energy, gradient = None, None
         molpro_out = os.path.join(dirname, 'run.out')
         with open(molpro_out) as outfile:

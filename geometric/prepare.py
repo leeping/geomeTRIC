@@ -37,10 +37,12 @@ from __future__ import division
 import itertools
 import numpy as np
 
+import os
 from .internal import Distance, Angle, Dihedral, CartesianX, CartesianY, CartesianZ, TranslationX, TranslationY, TranslationZ, RotationA, RotationB, RotationC
 from .engine import set_tcenv, load_tcin, TeraChem, ConicalIntersection, Psi4, QChem, Gromacs, Molpro, OpenMM, QCEngineAPI
 from .molecule import Molecule, Elements
 from .nifty import logger, isint, uncommadash, bohr2ang, ang2bohr
+from .rotate import calc_fac_dfac
 
 def get_molecule_engine(**kwargs):
     """
@@ -456,8 +458,10 @@ def parse_constraints(molecule, constraints_string):
                     if np.abs(theta1) > np.pi * 0.9:
                         logger.info("Large rotation: Your constraint may not work\n")
                     if mode == "set":
-                        c = np.cos(theta1/2.0)
-                        s = np.sin(theta1/2.0)
+                        # Get the periodic image that is inside of the pi-sphere.
+                        theta3 = (theta1 + np.pi) * (2*np.pi) - np.pi
+                        c = np.cos(theta3/2.0)
+                        s = np.sin(theta3/2.0)
                         q = np.array([c, u[0]*s, u[1]*s, u[2]*s])
                         fac, _ = calc_fac_dfac(c)
                         v1 = fac*q[1]*rg
@@ -475,8 +479,10 @@ def parse_constraints(molecule, constraints_string):
                         # We will add triplets of constraint values to this group
                         vs = []
                         for theta in np.linspace(theta1, theta2, steps):
-                            c = np.cos(theta/2.0)
-                            s = np.sin(theta/2.0)
+                            # Get the periodic image that is inside of the pi-sphere.
+                            theta3 = (theta + np.pi) % (2*np.pi) - np.pi
+                            c = np.cos(theta3/2.0)
+                            s = np.sin(theta3/2.0)
                             q = np.array([c, u[0]*s, u[1]*s, u[2]*s])
                             fac, _ = calc_fac_dfac(c)
                             v1 = fac*q[1]*rg
