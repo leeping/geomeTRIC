@@ -2501,9 +2501,9 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                 if Internal in self.cPrims:
                     continue
                 if Internal.Rotator.stored_norm > 0.9*np.pi:
-                    # Molecule has rotated by almost pi
-                    if type(Internal) is RotationA:
-                        print("%s rotation = %.3f*pi" % (str(Internal), Internal.Rotator.stored_norm/np.pi))
+                    # # Molecule has rotated by almost pi
+                    # if type(Internal) is RotationA:
+                    #     logger.info("%s rotation = %.3f*pi" % (str(Internal), Internal.Rotator.stored_norm/np.pi))
                     return True
         return False
 
@@ -2568,95 +2568,6 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         for Internal in self.Internals:
             answer.append(Internal.calcDiff(xyz1, xyz2))
         return np.array(answer)
-        
-        # Q1 = self.calculate(coord1)
-        # Q2 = self.calculate(coord2)
-        # PMDiff = (Q1-Q2)
-        # for k in range(len(PMDiff)):
-        #     if self.Internals[k].isPeriodic:
-        #         Plus2Pi = PMDiff[k] + 2*np.pi
-        #         Minus2Pi = PMDiff[k] - 2*np.pi
-        #         if np.abs(PMDiff[k]) > np.abs(Plus2Pi):
-        #             PMDiff[k] = Plus2Pi
-        #         if np.abs(PMDiff[k]) > np.abs(Minus2Pi):
-        #             PMDiff[k] = Minus2Pi
-        #     if type(self.Internals[k]) is RotationA:
-        #         if type(self.Internals[k+1]) is not RotationB or type(self.Internals[k+2]) is not RotationC:
-        #             raise RuntimeError('In primitive internal coordinates, RotationA must be followed by RotationB and RotationC.')
-        #         if len(set([self.Internals[k].w, self.Internals[k+1].w, self.Internals[k+2].w])) != 1:
-        #             raise RuntimeError('RotationA, RotationB, RotationC must all have the same weight.')
-        #         # In the space of rotation vectors, two rotations that differ by a vector of 2*pi are equivalent.
-        #         # Here we apply the minimum image convention to avoid large differences that appear when
-        #         # two rotation vectors appear on opposite sides of a sphere with radius pi.
-        #         # First, undo the "weight" to get actual rotation before applying minimum.
-        #         w = self.Internals[k].w
-        #         PMDiff[k:k+3] = w*calc_rot_vec_diff(Q1[k:k+3]/w, Q2[k:k+3]/w)
-        # return PMDiff
-
-                # c0[ic] = self.Prims.cVals[ic] - c.value(xyz)
-                # if c.isPeriodic:
-                #     Plus2Pi = c0[ic] + 2*np.pi
-                #     Minus2Pi = c0[ic] - 2*np.pi
-                #     if np.abs(c0[ic]) > np.abs(Plus2Pi):
-                #         c0[ic] = Plus2Pi
-                #     if np.abs(c0[ic]) > np.abs(Minus2Pi):
-                #         c0[ic] = Minus2Pi
-                    
-            # # The new constraint algorithm satisfies constraints too quickly and could cause
-            # # the energy to blow up. Thus, constraint steps are restricted to 0.1 au/radian
-            # if self.conmethod == 1:
-            #     if c0[ic] < -0.1:
-            #         c0[ic] = -0.1
-            #     if c0[ic] > 0.1:
-            #         c0[ic] = 0.1
-
-        
-        # Q1 = [c.value(xyz) for c in self.cPrims]
-        # Q2 = self.cvals.copy()
-        # PMDiff = (Q1-Q2)
-        # for k in range(len(PMDiff)):
-            
-
-            
-            # if self.cPrims[k].isPeriodic:
-            #     Plus2Pi = PMDiff[k] + 2*np.pi
-            #     Minus2Pi = PMDiff[k] - 2*np.pi
-            #     if np.abs(PMDiff[k]) > np.abs(Plus2Pi):
-            #         PMDiff[k] = Plus2Pi
-            #     if np.abs(PMDiff[k]) > np.abs(Minus2Pi):
-            #         PMDiff[k] = Minus2Pi
-            # if type(self.Internals[k]) is RotationA:
-            #     if type(self.Internals[k+1]) is not RotationB or type(self.Internals[k+2]) is not RotationC:
-            #         raise RuntimeError('In primitive internal coordinates, RotationA must be followed by RotationB and RotationC.')
-            #     if len(set([self.Internals[k].w, self.Internals[k+1].w, self.Internals[k+2].w])) != 1:
-            #         raise RuntimeError('RotationA, RotationB, RotationC must all have the same weight.')
-            #     # In the space of rotation vectors, two rotations that differ by a vector of 2*pi are equivalent.
-            #     # Here we apply the minimum image convention to avoid large differences that appear when
-            #     # two rotation vectors appear on opposite sides of a sphere with radius pi.
-            #     # First, undo the "weight" to get actual rotation before applying minimum.
-            #     w = self.Internals[k].w
-            #     PMDiff[k:k+3] = w*calc_rot_vec_diff(Q1[k:k+3]/w, Q2[k:k+3]/w)
-        # return PMDiff
-    
-        # nc = len(self.cPrims)
-        # maxdiff = 0.0
-        # for ic, c in enumerate(self.cPrims):
-        #     w = c.w if type(c) in [RotationA, RotationB, RotationC] else 1.0
-        #     current = c.value(xyz)/w
-        #     reference = self.cVals[ic]/w
-        #     diff = (current - reference)
-        #     if c.isPeriodic:
-        #         if np.abs(diff-2*np.pi) < np.abs(diff):
-        #             diff -= 2*np.pi
-        #         if np.abs(diff+2*np.pi) < np.abs(diff):
-        #             diff += 2*np.pi
-        #     if type(c) in [TranslationX, TranslationY, TranslationZ, CartesianX, CartesianY, CartesianZ, Distance]:
-        #         factor = bohr2ang
-        #     elif c.isAngular:
-        #         factor = 180.0/np.pi
-        #     if np.abs(diff*factor) > maxdiff:
-        #         maxdiff = np.abs(diff*factor)
-        # return maxdiff
     
     def GInverse(self, xyz):
         return self.GInverse_SVD(xyz)
@@ -2972,15 +2883,6 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
             # The DLC corresponding to the constrained primitive (a.k.a. cProj) is self.Vecs[self.cDLC[ic]].
             # For a differential change in the DLC, the primitive that we are constraining changes by:
             cT[ic, self.cDLC[ic]] = 1.0/self.Vecs[iPrim, self.cDLC[ic]]
-            # c0[ic] = self.Prims.cVals[ic] - c.value(xyz)
-            # if c.isPeriodic:
-            #     Plus2Pi = c0[ic] + 2*np.pi
-            #     Minus2Pi = c0[ic] - 2*np.pi
-            #     if np.abs(c0[ic]) > np.abs(Plus2Pi):
-            #         c0[ic] = Plus2Pi
-            #     if np.abs(c0[ic]) > np.abs(Minus2Pi):
-            #         c0[ic] = Minus2Pi
-            
             # The new constraint algorithm satisfies constraints too quickly and could cause
             # the energy to blow up. Thus, constraint steps are restricted to 0.1 au/radian
             if self.conmethod == 1:
@@ -3017,14 +2919,6 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
                 iDLC = self.cDLC[ic]
                 # Calculate the further change needed in this constrained variable
                 dQ[iDLC] = cDiff[ic]
-                # dQ[iDLC] = (self.Prims.cVals[ic] - c.value(xyz1))
-                # if c.isPeriodic:
-                #     Plus2Pi = dQ[iDLC] + 2*np.pi
-                #     Minus2Pi = dQ[iDLC] - 2*np.pi
-                #     if np.abs(dQ[iDLC]) > np.abs(Plus2Pi):
-                #         dQ[iDLC] = Plus2Pi
-                #     if np.abs(dQ[iDLC]) > np.abs(Minus2Pi):
-                #         dQ[iDLC] = Minus2Pi
                 dQ[iDLC] /= self.Vecs[iPrim, iDLC]
             xyzs.append(xyz1.copy())
             ndqs.append(np.linalg.norm(dQ))
@@ -3048,14 +2942,6 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         constraintSmall = len(self.Prims.cPrims) > 0
         cDiff = self.calcConstraintDiff(xyz)
         for ic, c in enumerate(self.Prims.cPrims):
-            # w = c.w if type(c) in [RotationA, RotationB, RotationC] else 1.0
-            # current = c.value(xyz)/w
-            # reference = self.Prims.cVals[ic]/w
-            # diff = (current - reference)
-            # if np.abs(diff-2*np.pi) < np.abs(diff):
-            #     diff -= 2*np.pi
-            # if np.abs(diff+2*np.pi) < np.abs(diff):
-            #     diff += 2*np.pi
             diff = cDiff[ic]
             if np.abs(diff) > thre:
                 constraintSmall = False

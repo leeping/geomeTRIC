@@ -455,8 +455,8 @@ def parse_constraints(molecule, constraints_string):
                     u /= np.linalg.norm(u)
                     # Get the angle
                     theta1 = float(s[5]) * np.pi / 180
-                    if np.abs(theta1) > np.pi * 0.9:
-                        logger.info("Large rotation: Your constraint may not work\n")
+                    # if np.abs(theta1) > np.pi * 0.9:
+                    #     logger.info("Large rotation: Your constraint may not work\n")
                     if mode == "set":
                         # Get the periodic image that is inside of the pi-sphere.
                         theta3 = (theta1 + np.pi) * (2*np.pi) - np.pi
@@ -470,8 +470,8 @@ def parse_constraints(molecule, constraints_string):
                         vals.append([[v1, v2, v3]])
                     elif mode == "scan":
                         theta2 = float(s[6]) * np.pi / 180
-                        if np.abs(theta2) > np.pi * 0.9:
-                            logger.info("Large rotation: Your constraint may not work\n")
+                        # if np.abs(theta2) > np.pi * 0.9:
+                        #     logger.info("Large rotation: Your constraint may not work\n")
                         steps = int(s[7])
                         # To alleviate future confusion:
                         # There is one group of three constraints that we are going to scan over in one dimension.

@@ -11,6 +11,23 @@ import pytest
 
 localizer = addons.in_folder
 
+def _compare_constraint_strings(str1, str2, atol=1e-6):
+    str1lines = str1.split('\n')
+    str2lines = str2.split('\n')
+    assert len(str1lines) == len(str2lines)
+    for line1, line2 in zip(str1lines, str2lines):
+        words1 = line1.split()
+        words2 = line2.split()
+        assert len(words1) == len(words2)
+        for word1, word2 in zip(words1, words2):
+            if geometric.nifty.isint(word1):
+                assert geometric.nifty.isint(word2)
+                assert int(word1) == int(word2)
+            elif geometric.nifty.isfloat(word1):
+                assert geometric.nifty.isfloat(word2)
+                assert abs(float(word1) - float(word2)) < atol
+            else:
+                assert word1 == word2
 
 def _build_input(molecule, program="rdkit", method="UFF", basis=None):
     qc_schema_input = {
@@ -68,7 +85,7 @@ def test_convert_constraint_dict_full():
         }]
     }
     constraint_string = geometric.run_json.make_constraints_string(constraint_dict)
-    assert constraint_string == """$freeze
+    ref_constraint_string = """$freeze
 xyz 1-5
 $set
 distance 2 1 0.582094931
@@ -76,7 +93,7 @@ angle 2 1 5 110.0
 $scan
 distance 2 1 0.52917721 1.05835442 3
 dihedral 1 5 6 7 110.0 150.0 3"""
-
+    _compare_constraint_strings(constraint_string, ref_constraint_string)
 
 def test_convert_constraint_dict_failure():
     failing_constraint_dict = {'not_recognized_keyword': [('xyz', [0, 1])]}

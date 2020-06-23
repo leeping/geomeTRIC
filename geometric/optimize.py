@@ -507,7 +507,9 @@ class Optimizer(object):
             if self.checkCoordinateSystem(): UpdateHessian = False
         else:
             self.CoordCounter += 1
-        self.IC.largeRots()
+        # Check for large rotations (debugging purposes)
+        # if self.IC.largeRots():
+        #     logger.info("Large rotations - no longer need to reset rotations\n")
         if self.IC.linearRotCheck():
             logger.info("Large rotations in linear molecules - refreshing Rotator reference points and DLC vectors\n")
             self.refreshCoordinates()
