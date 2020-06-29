@@ -508,8 +508,7 @@ class Optimizer(object):
         else:
             self.CoordCounter += 1
         # Check for large rotations (debugging purposes)
-        # if self.IC.largeRots():
-        #     logger.info("Large rotations - no longer need to reset rotations\n")
+        self.IC.largeRots()
         if self.IC.linearRotCheck():
             logger.info("Large rotations in linear molecules - refreshing Rotator reference points and DLC vectors\n")
             self.refreshCoordinates()

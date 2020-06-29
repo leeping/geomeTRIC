@@ -841,3 +841,4 @@ def calc_rot_vec_diff(v1_in, v2_in):
     #     print("out: v1= % 8.4f % 8.4f % 8.4f v2= % 8.4f % 8.4f % 8.4f" % (v1[0], v1[1], v1[2], v2[0], v2[1], v2[2]))
         # print()
     return v1-v2
+

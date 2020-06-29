@@ -2502,8 +2502,8 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                     continue
                 if Internal.Rotator.stored_norm > 0.9*np.pi:
                     # # Molecule has rotated by almost pi
-                    # if type(Internal) is RotationA:
-                    #     logger.info("%s rotation = %.3f*pi" % (str(Internal), Internal.Rotator.stored_norm/np.pi))
+                    if type(Internal) is RotationA:
+                        logger.info("Large rotation: %s = %.3f*pi\n" % (str(Internal), Internal.Rotator.stored_norm/np.pi))
                     return True
         return False
 
