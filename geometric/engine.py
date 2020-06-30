@@ -349,7 +349,7 @@ class Blank(Engine):
         gradient = np.zeros(len(coords), dtype=float)
         return {'energy':energy, 'gradient':gradient}
 
-class TeraChem(Engine):
+class TeraChem(Engine): # pragma: no cover
     """
     Run a TeraChem energy and gradient calculation.
     """
