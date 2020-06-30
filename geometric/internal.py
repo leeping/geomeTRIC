@@ -1721,7 +1721,7 @@ class OutOfPlane(PrimitiveCoordinate):
 def convert_angstroms_degrees(prims, values):
     """ Convert values of primitive ICs (or differences) from
     weighted atomic units to Angstroms and degrees. """
-    converted = values.copy()
+    converted = np.array(values).copy()
     for ic, c in enumerate(prims):
         if type(c) in [TranslationX, TranslationY, TranslationZ]:
             w = 1.0
