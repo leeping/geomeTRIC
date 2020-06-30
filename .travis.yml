@@ -27,7 +27,7 @@ matrix:
       dist: xenial
       env:
         - PYTHON_VER=3.7
-        - PROG=RDKIT
+        - PROG=PSI4_RDKIT
 
 before_install:
     # Additional info about the build
@@ -47,6 +47,8 @@ install:
       python devtools/scripts/create_conda_env.py -n=test -p=$PYTHON_VER devtools/conda-envs/rdkit.yaml
     elif [ $PROG == "PSI4" ]; then
       python devtools/scripts/create_conda_env.py -n=test -p=$PYTHON_VER devtools/conda-envs/psi.yaml
+    elif [ $PROG == "PSI4_RDKIT" ]; then
+      python devtools/scripts/create_conda_env.py -n=test -p=$PYTHON_VER devtools/conda-envs/psi_rdkit.yaml
     elif [ $PROG == "OPENMM" ]; then
       python devtools/scripts/create_conda_env.py -n=test -p=$PYTHON_VER devtools/conda-envs/openmm.yaml
     else
