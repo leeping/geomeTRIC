@@ -120,18 +120,24 @@ class TestAlaGRO:
         assert np.allclose(M.xyzs[1], M.xyzs[2])
         assert np.allclose(M.xyzs[0], M.xyzs[2])
 
-    def test_write(self, localizer):
+    def test_convert_gro(self, localizer):
         # print(len(self.molecule))
         # print(self.molecule.xyzs)
         # self.molecule.write('out.xyz')
         # M_xyz = geometric.molecule.Molecule('out.xyz')
         # assert np.allclose(self.molecule.xyzs[0], M_xyz.xyzs[0])
-        for fmt in ['xyz', 'inpcrd', 'pdb', 'qdata', 'arc']:
+        for fmt in ['xyz', 'inpcrd', 'pdb', 'qdata', 'gro', 'arc']:
             print("Testing reading/writing of %s format for AlaGlu system" % fmt)
             outfnm = "out.%s" % fmt
             self.molecule.write(outfnm)
             M_test = geometric.molecule.Molecule(outfnm)
             assert np.allclose(self.molecule.xyzs[0], M_test.xyzs[0])
+            if fmt in ['xyz', 'pdb', 'gro', 'arc']:
+                assert self.molecule.elem == M_test.elem
+            if fmt in ['pdb', 'gro']:
+                assert self.molecule.resid == M_test.resid
+                assert self.molecule.resname == M_test.resname
+                assert self.molecule.atomname == M_test.atomname
 
     def test_select_stack(self):
         M1 = self.molecule.atom_select(range(22))
@@ -161,3 +167,38 @@ class TestAlaGRO:
         # This method is being called after each test case, and it will revert input back to original function
         geometric.molecule.input = input
         
+class TestWaterQCOut:
+    @classmethod
+    def setup_class(cls):
+        try: cls.molecule = geometric.molecule.Molecule(os.path.join(datad, 'water6_step2.qcout'))
+        except:
+            assert 0, "Failed to load water hexamer structure"
+
+    def test_topology(self):
+        """Check for the correct number of bonds in a simple molecule"""
+        # print(len(self.molecule.bonds))
+        # self.logger.debug("\nTrying to read alanine dipeptide conformation... ")
+        assert len(self.molecule.bonds) == 12, "Incorrect number of bonds for water hexamer structure"
+        assert len(self.molecule.molecules) == 6, "Incorrect number of molecules for water hexamer structure"
+
+    def test_convert_qcout(self, localizer):
+        # Test a variety of output formats
+        # Q-Chem input file
+        fmt = 'qcin'
+        print("Testing reading/writing of %s format for water hexamer system" % fmt)
+        outfnm = "out.%s" % fmt
+        self.molecule.write(outfnm)
+        M_test = geometric.molecule.Molecule(outfnm)
+        assert np.allclose(self.molecule.xyzs[0], M_test.xyzs[0])
+        assert M_test.charge == self.molecule.charge
+        assert M_test.mult == self.molecule.mult
+        assert M_test.qcrems == self.molecule.qcrems
+        # ForceBalance qdata file
+        fmt = 'qdata'
+        print("Testing reading/writing of %s format for water hexamer system" % fmt)
+        outfnm = "out.%s" % fmt
+        self.molecule.write(outfnm)
+        M_test = geometric.molecule.Molecule(outfnm)
+        assert np.allclose(self.molecule.xyzs[0], M_test.xyzs[0])
+        assert np.allclose(self.molecule.qm_energies, M_test.qm_energies)
+        assert np.allclose(self.molecule.qm_grads[0], M_test.qm_grads[0])
