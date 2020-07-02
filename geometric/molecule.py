@@ -197,7 +197,7 @@ elif "geometric" in __name__:
     # This ensures logging behavior is consistent with the rest of geomeTRIC
     from .nifty import logger
     package = "geomeTRIC"
-else:
+else: # pragma: no cover
     # Previous default behavior if FB package level loggers could not be imported
     from logging import *
     class RawStreamHandler(StreamHandler):
