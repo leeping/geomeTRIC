@@ -1,0 +1,3 @@
+If the Hessian isn't reset for below 1e-5, the optimization "discovers" a lower energy conformation.
+Also double checked that allowing large rotations for linear molecules still doesn't work
+(failed inverse iterations).

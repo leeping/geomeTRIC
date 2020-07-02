@@ -1,0 +1,7 @@
+[report]
+exclude_lines =
+    pragma: no cover
+    if "forcebalance" in __name__
+    except ImportError
+    logger.error
+    raise RuntimeError

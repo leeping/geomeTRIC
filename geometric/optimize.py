@@ -131,6 +131,8 @@ class Optimizer(object):
         Refresh the Cartesian coordinates used to define parts of the internal coordinate system.
         These include definitions of delocalized internal coordinates and reference coordinates for rotators.
         """
+        logger.info("Refreshing coordinate system and resetting rotations\n")
+        # Resetting of rotations
         self.IC.resetRotations(self.X)
         if isinstance(self.IC, DelocalizedInternalCoordinates):
             self.IC.build_dlc(self.X)
@@ -291,7 +293,7 @@ class Optimizer(object):
         else:
             v0 = 0.0
         # Are we far from constraint satisfaction?
-        self.farConstraints = self.IC.haveConstraints() and self.IC.getConstraintViolation(self.X) > 1e-1
+        self.farConstraints = self.IC.haveConstraints() and self.IC.maxConstraintViolation(self.X) > 1e-1
         ### OBTAIN AN OPTIMIZATION STEP ###
         # The trust radius is to be computed in Cartesian coordinates.
         # First take a full-size optimization step
@@ -372,6 +374,8 @@ class Optimizer(object):
         ## The "actual" dy may be different from the one passed to newCartesian(),
         ## for example if we enforce constraints or don't get the step we expect.
         dy = self.IC.calcDiff(self.X, X0)
+        # dyp = self.IC.Prims.calcDiff(self.X, X0)
+        # print("Actual dy:", dy)
         self.Y += dy
         self.expect = flat(0.5*multi_dot([row(dy),self.H,col(dy)]))[0] + np.dot(dy,self.G)
         self.state = OPT_STATE.NEEDS_EVALUATION
@@ -398,7 +402,7 @@ class Optimizer(object):
         # Molpro defaults for convergence
         Converged_molpro_gmax = max_gradient < params.Convergence_molpro_gmax
         Converged_molpro_dmax = max_displacement < params.Convergence_molpro_dmax
-        self.conSatisfied = not self.IC.haveConstraints() or self.IC.getConstraintViolation(self.X) < 1e-2
+        self.conSatisfied = not self.IC.haveConstraints() or self.IC.maxConstraintViolation(self.X) < 1e-2
         # Print status
         msg = "Step %4i :" % self.Iteration
         msg += " Displace = %s%.3e\x1b[0m/%s%.3e\x1b[0m (rms/max)" % ("\x1b[92m" if Converged_drms else "\x1b[0m", rms_displacement, "\x1b[92m" if Converged_dmax else "\x1b[0m", max_displacement)
@@ -503,8 +507,10 @@ class Optimizer(object):
             if self.checkCoordinateSystem(): UpdateHessian = False
         else:
             self.CoordCounter += 1
-        if self.IC.largeRots():
-            logger.info("Large rotations - refreshing Rotator reference points and DLC vectors\n")
+        # Check for large rotations (debugging purposes)
+        if self.params.verbose >= 1: self.IC.largeRots()
+        if self.IC.linearRotCheck():
+            logger.info("Large rotations in linear molecules - refreshing Rotator reference points and DLC vectors\n")
             self.refreshCoordinates()
             UpdateHessian = False
         self.G = self.IC.calcGrad(self.X, self.gradx).flatten()
@@ -715,6 +721,7 @@ def run_optimizer(**kwargs):
                     'prim':(PrimitiveInternalCoordinates, True, False),
                     'dlc':(DelocalizedInternalCoordinates, True, False),
                     'hdlc':(DelocalizedInternalCoordinates, False, True),
+                    'tric-p':(PrimitiveInternalCoordinates, False, False),
                     'tric':(DelocalizedInternalCoordinates, False, False)}
     coordsys = kwargs.get('coordsys', 'tric')
     CoordClass, connect, addcart = CoordSysDict[coordsys.lower()]
@@ -779,7 +786,8 @@ def run_optimizer(**kwargs):
                 Mfinal += progress[-1]
             else:
                 Mfinal = progress[-1]
-            cNames, cVals = IC.getConstraintTargetVals()
+            cNames = IC.getConstraintNames()
+            cVals = IC.getConstraintTargetVals()
             comment = ', '.join(["%s = %.2f" % (cName, cVal) for cName, cVal in zip(cNames, cVals)])
             Mfinal.comms[-1] = "Scan Cycle %i/%i ; %s ; %s" % (ic+1, len(CVals), comment, progress.comms[-1])
             #print

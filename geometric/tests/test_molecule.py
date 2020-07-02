@@ -9,6 +9,7 @@ import numpy as np
 from . import addons
 
 datad = addons.datad
+localizer = addons.in_folder
 
 def test_blank_molecule():
     mol = geometric.molecule.Molecule()
@@ -52,6 +53,53 @@ class TestAlaGRO:
         np.testing.assert_almost_equal(bx.alpha, 90.0)
         np.testing.assert_almost_equal(bx.beta, 90.0)
         np.testing.assert_almost_equal(bx.gamma, 90.0)
+        # This is how to override "ask for user input"
+        # when running unit tests.
+        # Three numbers = rectilinear box
+        del self.molecule.Data['boxes']
+        geometric.molecule.input = lambda userinput : '11 13 15'
+        self.molecule.require_boxes()
+        bx = self.molecule.boxes[0]
+        np.testing.assert_almost_equal(bx.a, 11.0)
+        np.testing.assert_almost_equal(bx.b, 13.0)
+        np.testing.assert_almost_equal(bx.c, 15.0)
+        np.testing.assert_almost_equal(bx.alpha, 90.0)
+        np.testing.assert_almost_equal(bx.beta, 90.0)
+        np.testing.assert_almost_equal(bx.gamma, 90.0)
+        # Six numbers = specify alpha, beta, gamma
+        del self.molecule.Data['boxes']
+        geometric.molecule.input = lambda userinput : '11 13 15 81 82 93.5'
+        self.molecule.require_boxes()
+        bx = self.molecule.boxes[0]
+        np.testing.assert_almost_equal(bx.a, 11.0)
+        np.testing.assert_almost_equal(bx.b, 13.0)
+        np.testing.assert_almost_equal(bx.c, 15.0)
+        np.testing.assert_almost_equal(bx.alpha, 81.0)
+        np.testing.assert_almost_equal(bx.beta, 82.0)
+        np.testing.assert_almost_equal(bx.gamma, 93.5)
+        # Nine numbers = specify box vectors
+        # In this case the box vectors of a truncated octahedral box are given.
+        del self.molecule.Data['boxes']
+        geometric.molecule.input = lambda userinput : '7.65918   7.22115   6.25370   0.00000   0.00000   2.55306   0.00000  -2.55306   3.61057'
+        self.molecule.require_boxes()
+        bx = self.molecule.boxes[0]
+        np.testing.assert_almost_equal(bx.a, 7.659, decimal=3)
+        np.testing.assert_almost_equal(bx.b, 7.659, decimal=3)
+        np.testing.assert_almost_equal(bx.c, 7.659, decimal=3)
+        np.testing.assert_almost_equal(bx.alpha, 70.53, decimal=2)
+        np.testing.assert_almost_equal(bx.beta, 109.47, decimal=3)
+        np.testing.assert_almost_equal(bx.gamma, 70.53, decimal=3)
+        # A single number = cubic box
+        del self.molecule.Data['boxes']
+        geometric.molecule.input = lambda userinput : '20'
+        self.molecule.require_boxes()
+        bx = self.molecule.boxes[0]
+        np.testing.assert_almost_equal(bx.a, 20.0)
+        np.testing.assert_almost_equal(bx.b, 20.0)
+        np.testing.assert_almost_equal(bx.c, 20.0)
+        np.testing.assert_almost_equal(bx.alpha, 90.0)
+        np.testing.assert_almost_equal(bx.beta, 90.0)
+        np.testing.assert_almost_equal(bx.gamma, 90.0)
 
     def test_add(self):
         # Test adding of Molecule objects and ensure that copies are created when adding
@@ -71,6 +119,25 @@ class TestAlaGRO:
         assert np.allclose(M.xyzs[0], M.xyzs[1])
         assert np.allclose(M.xyzs[1], M.xyzs[2])
         assert np.allclose(M.xyzs[0], M.xyzs[2])
+
+    def test_convert_gro(self, localizer):
+        # print(len(self.molecule))
+        # print(self.molecule.xyzs)
+        # self.molecule.write('out.xyz')
+        # M_xyz = geometric.molecule.Molecule('out.xyz')
+        # assert np.allclose(self.molecule.xyzs[0], M_xyz.xyzs[0])
+        for fmt in ['xyz', 'inpcrd', 'pdb', 'qdata', 'gro', 'arc']:
+            print("Testing reading/writing of %s format for AlaGlu system" % fmt)
+            outfnm = "out.%s" % fmt
+            self.molecule.write(outfnm)
+            M_test = geometric.molecule.Molecule(outfnm)
+            assert np.allclose(self.molecule.xyzs[0], M_test.xyzs[0])
+            if fmt in ['xyz', 'pdb', 'gro', 'arc']:
+                assert self.molecule.elem == M_test.elem
+            if fmt in ['pdb', 'gro']:
+                assert self.molecule.resid == M_test.resid
+                assert self.molecule.resname == M_test.resname
+                assert self.molecule.atomname == M_test.atomname
 
     def test_select_stack(self):
         M1 = self.molecule.atom_select(range(22))
@@ -95,3 +162,43 @@ class TestAlaGRO:
         IC_TR = geometric.internal.DelocalizedInternalCoordinates(self.molecule, build=True, connect=False, addcart=False, remove_tr=True)
         assert len(IC.Internals) == self.molecule.na*3
         assert len(IC_TR.Internals) == (self.molecule.na*3 - 6)
+
+    def teardown_method(self, method):
+        # This method is being called after each test case, and it will revert input back to original function
+        geometric.molecule.input = input
+        
+class TestWaterQCOut:
+    @classmethod
+    def setup_class(cls):
+        try: cls.molecule = geometric.molecule.Molecule(os.path.join(datad, 'water6_step2.qcout'))
+        except:
+            assert 0, "Failed to load water hexamer structure"
+
+    def test_topology(self):
+        """Check for the correct number of bonds in a simple molecule"""
+        # print(len(self.molecule.bonds))
+        # self.logger.debug("\nTrying to read alanine dipeptide conformation... ")
+        assert len(self.molecule.bonds) == 12, "Incorrect number of bonds for water hexamer structure"
+        assert len(self.molecule.molecules) == 6, "Incorrect number of molecules for water hexamer structure"
+
+    def test_convert_qcout(self, localizer):
+        # Test a variety of output formats
+        # Q-Chem input file
+        fmt = 'qcin'
+        print("Testing reading/writing of %s format for water hexamer system" % fmt)
+        outfnm = "out.%s" % fmt
+        self.molecule.write(outfnm)
+        M_test = geometric.molecule.Molecule(outfnm)
+        assert np.allclose(self.molecule.xyzs[0], M_test.xyzs[0])
+        assert M_test.charge == self.molecule.charge
+        assert M_test.mult == self.molecule.mult
+        assert M_test.qcrems == self.molecule.qcrems
+        # ForceBalance qdata file
+        fmt = 'qdata'
+        print("Testing reading/writing of %s format for water hexamer system" % fmt)
+        outfnm = "out.%s" % fmt
+        self.molecule.write(outfnm)
+        M_test = geometric.molecule.Molecule(outfnm)
+        assert np.allclose(self.molecule.xyzs[0], M_test.xyzs[0])
+        assert np.allclose(self.molecule.qm_energies, M_test.qm_energies)
+        assert np.allclose(self.molecule.qm_grads[0], M_test.qm_grads[0])

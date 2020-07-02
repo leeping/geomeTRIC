@@ -20,6 +20,7 @@ from __future__ import print_function
 
 import filecmp
 import itertools
+import distutils.dir_util
 import os
 import re
 import shutil
@@ -113,24 +114,49 @@ except ImportError:
     logger.warning("gzip module import failed (used in compressing or decompressing pickle files)\n")
     HaveGZ = False
 
-## Boltzmann constant
-kb = 0.0083144100163
-## Q-Chem to GMX unit conversion for energy
-eqcgmx = 2625.5002
-## Q-Chem to GMX unit conversion for force
-fqcgmx = -49621.9
+# The directory that this file lives in
+rootdir = os.path.dirname(os.path.abspath(__file__))
+
+# On 2020-05-07, these values were revised to CODATA 2018 values
+# hartree-joule relationship   4.359 744 722 2071(85) e-18
+# Hartree energy in eV         27.211 386 245 988(53)
+# Avogadro constant            6.022 140 76 e23         (exact)
+# molar gas constant           8.314 462 618            (exact)
+# Boltzmann constant           1.380649e-23             (exact)
+# Bohr radius                  5.291 772 109 03(80) e-11
+# speed of light in vacuum     299 792 458 (exact)
+# reduced Planck's constant    1.054571817e-34 (exact)
+# calorie-joule relationship   4.184 J (exact; from NIST)
+
+## Boltzmann constant in kJ mol^-1 k^-1
+kb          = 0.008314462618       # Previous value: 0.0083144100163
+kb_si       = 1.380649e-23
+
 # Conversion factors
-bohr2ang = 0.529177210
-ang2bohr = 1.0 / bohr2ang
-au2kcal = 627.5096080306
-kcal2au = 1.0 / au2kcal
-au2kj = 2625.5002
-kj2au = 1.0 / au2kj
-grad_au2gmx = 49614.75960959161
-grad_gmx2au = 1.0 / grad_au2gmx
-# Gradient units
-au2evang = 51.42209166566339
-evang2au = 1.0 / au2evang
+bohr2ang     = 0.529177210903      # Previous value: 0.529177210
+ang2bohr     = 1.0 / bohr2ang
+au2kcal      = 627.5094740630558   # Previous value: 627.5096080306
+kcal2au      = 1.0 / au2kcal
+au2kj        = 2625.4996394798254  # Previous value: 2625.5002
+kj2au        = 1.0 / au2kj
+grad_au2gmx  = 49614.75258920567   # Previous value: 49614.75960959161
+grad_gmx2au  = 1.0 / grad_au2gmx
+au2evang     = 51.422067476325886  # Previous value: 51.42209166566339
+evang2au     = 1.0 / au2evang
+c_lightspeed = 299792458.
+hbar         = 1.054571817e-34
+avogadro     = 6.02214076e23
+au_mass      = 9.1093837015e-31    # Atomic unit of mass in kg
+amu_mass     = 1.66053906660e-27   # Atomic mass unit in kg
+amu2au       = amu_mass / au_mass
+cm2au        = 100 * c_lightspeed * (2*np.pi*hbar) * avogadro / 1000 / au2kj # Multiply to convert cm^-1 to Hartree
+ambervel2au  = 9.349961132249932e-04 # Multiply to go from AMBER velocity unit Ang/(1/20.455 ps) to bohr/atu.
+
+
+## Q-Chem to GMX unit conversion for energy
+eqcgmx = au2kj                     # Previous value: 2625.5002
+## Q-Chem to GMX unit conversion for force
+fqcgmx = -grad_au2gmx              # Previous value: -49621.9
 
 
 #=========================#
@@ -1305,6 +1331,19 @@ def which(fnm):
         return os.path.split(os.popen('which %s 2> /dev/null' % fnm).readlines()[0].strip())[0]
     except:
         return ''
+
+def copy_tree_over(src, dest):
+    """
+    Copy a source directory tree to a destination directory tree,
+    overwriting files as necessary.  This does not require removing
+    the destination folder, which can reduce the number of times
+    shutil.rmtree needs to be called.
+    """
+    # From https://stackoverflow.com/questions/9160227/dir-util-copy-tree-fails-after-shutil-rmtree/28055993 : 
+    # If you copy folder, then remove it, then copy again it will fail, because it caches all the created dirs. 
+    # To workaround you can clear _path_created before copy:
+    distutils.dir_util._path_created = {}
+    distutils.dir_util.copy_tree(src, dest)
 
 # Thanks to cesarkawakami on #python (IRC freenode) for this code.
 class LineChunker(object):

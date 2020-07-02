@@ -63,7 +63,7 @@ target/
 # geomeTRIC output
 *.tmp/
 *_optim.xyz
-output.*/
+# output.*/
 opt.xyz
 energy.txt
 

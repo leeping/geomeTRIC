@@ -9,25 +9,25 @@ matrix:
       dist: trusty
       env:
         - PYTHON_VER=2.7
-        - PROG=OPENMM
+        - PROG=OPENMM_ONLY
     - os: linux
       python: 3.5
       dist: trusty
       env:
         - PYTHON_VER=3.5
-        - PROG=OPENMM
+        - PROG=OPENMM_ONLY
     - os: linux
       python: 3.6
       dist: trusty
       env:
         - PYTHON_VER=3.6
-        - PROG=PSI4
+        - PROG=OMM_PSI4_RDKIT
     - os: linux
       python: 3.7
       dist: xenial
       env:
         - PYTHON_VER=3.7
-        - PROG=RDKIT
+        - PROG=OMM_PSI4_RDKIT
 
 before_install:
     # Additional info about the build
@@ -43,12 +43,14 @@ install:
 
     # Create test environment for package
   - |
-    if [ $PROG == "RDKIT" ]; then
-      python devtools/scripts/create_conda_env.py -n=test -p=$PYTHON_VER devtools/conda-envs/rdkit.yaml
-    elif [ $PROG == "PSI4" ]; then
-      python devtools/scripts/create_conda_env.py -n=test -p=$PYTHON_VER devtools/conda-envs/psi.yaml
-    elif [ $PROG == "OPENMM" ]; then
-      python devtools/scripts/create_conda_env.py -n=test -p=$PYTHON_VER devtools/conda-envs/openmm.yaml
+    if [ $PROG == "OMM_RDKIT" ]; then
+      python devtools/scripts/create_conda_env.py -n=test -p=$PYTHON_VER devtools/conda-envs/omm_rdkit.yaml
+    elif [ $PROG == "OMM_PSI4" ]; then
+      python devtools/scripts/create_conda_env.py -n=test -p=$PYTHON_VER devtools/conda-envs/omm_psi4.yaml
+    elif [ $PROG == "OMM_PSI4_RDKIT" ]; then
+      python devtools/scripts/create_conda_env.py -n=test -p=$PYTHON_VER devtools/conda-envs/omm_psi4_rdkit.yaml
+    elif [ $PROG == "OPENMM_ONLY" ]; then
+      python devtools/scripts/create_conda_env.py -n=test -p=$PYTHON_VER devtools/conda-envs/openmm_only.yaml
     else
       echo "ERROR: No match for PROG ($PROG)."
       exit 1

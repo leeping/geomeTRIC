@@ -1,0 +1,6 @@
+$freeze
+rotation 1-3
+xy 1
+xy 4
+$scan
+rotation 4-6 0.0 0.0 1.0 0.0 720.0 73

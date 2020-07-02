@@ -168,8 +168,8 @@ def parse_args(*args):
     
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--coordsys', type=str, default='tric', help='Coordinate system: "cart" for Cartesian, "prim" for Primitive (a.k.a redundant), '
-                        '"dlc" for Delocalized Internal Coordinates, "hdlc" for Hybrid Delocalized Internal Coordinates, "tric" for Translation-Rotation'
-                        'Internal Coordinates (default).')
+                        '"dlc" for Delocalized Internal Coordinates, "hdlc" for Hybrid Delocalized Internal Coordinates, "tric-p" for primitive Translation-Rotation'
+                        'Internal Coordinates (no delocalization), "tric" for Translation-Rotation Internal Coordinates (default).')
     parser.add_argument('--engine', type=str, default='tera', help='Specify engine for computing energies and gradients, '
                         '"tera" for TeraChem (default), "qchem" for Q-Chem, "psi4" for Psi4, "openmm" for OpenMM, "gmx" for Gromacs, "molpro" for Molpro.')
     parser.add_argument('--meci', type=str, default=None, help='Provide second input file and search for minimum-energy conical '

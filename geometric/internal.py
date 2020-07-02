@@ -46,7 +46,7 @@ from numpy.linalg import multi_dot
 
 from geometric.molecule import Elements, Radii
 from geometric.nifty import click, commadash, ang2bohr, bohr2ang, logger, pvec1d, pmat2d
-from geometric.rotate import get_expmap, get_expmap_der, is_linear
+from geometric.rotate import get_expmap, get_expmap_der, is_linear, calc_rot_vec_diff
 
 ## Some vector calculus functions
 def unit_vector(a):
@@ -146,7 +146,50 @@ def d_nucross(a, b):
     return np.dot(d_unit_vector(a), d_ncross(ev, b))
 ## End vector calculus functions
 
-class CartesianX(object):
+class PrimitiveCoordinate(object):
+    """
+    Parent class for primitive internal coordinate objects with common methods.
+    """
+    def calcDiff(self, xyz1, xyz2=None, val2=None):
+        """
+        Return the difference of the internal coordinate
+        calculated for c(xyz1) - c(xyz2) or c(xyz1) - val2.
+
+        Parameters
+        ----------
+        xyz1 : np.ndarray
+            xyz coordinates of first structure in Bohr
+        xyz2 : np.ndarray
+            If provided, xyz coordinates of second structure in Bohr
+        val2 : float
+            If provided, this is the value to subtract
+        """
+        if xyz2 is None and val2 is None:
+            raise RuntimeError("Provide exactly one of xyz2 and val2")
+        elif xyz2 is not None and val2 is not None:
+            raise RuntimeError("Provide exactly one of xyz2 and val2")
+        if xyz2 is not None:
+            val2 = self.value(xyz2)
+        diff = self.value(xyz1) - val2
+        if hasattr(self, 'w'):
+            w = self.w
+        else:
+            w = 1.0
+        # Divide by the weight, if exists, to get the "base" number
+        diff /= w
+        # Subtract out any differences of 2*pi for periodic degrees of freedom
+        # (rotation ICs handled separately)
+        if hasattr(self, 'isPeriodic') and self.isPeriodic:
+            Plus2Pi = diff + 2*np.pi
+            Minus2Pi = diff - 2*np.pi
+            if np.abs(diff) > np.abs(Plus2Pi):
+                diff = Plus2Pi
+            if np.abs(diff) > np.abs(Minus2Pi):
+                diff = Minus2Pi
+        diff *= w
+        return diff
+        
+class CartesianX(PrimitiveCoordinate):
     def __init__(self, a, w=1.0):
         self.a = a
         self.w = w
@@ -171,7 +214,7 @@ class CartesianX(object):
         xyz = xyz.reshape(-1,3)
         a = self.a
         return xyz[a][0]*self.w
-        
+
     def derivative(self, xyz):
         xyz = xyz.reshape(-1,3)
         derivatives = np.zeros_like(xyz)
@@ -183,7 +226,7 @@ class CartesianX(object):
         deriv2 = np.zeros((xyz.shape[0], xyz.shape[1], xyz.shape[0], xyz.shape[1]))
         return deriv2
     
-class CartesianY(object):
+class CartesianY(PrimitiveCoordinate):
     def __init__(self, a, w=1.0):
         self.a = a
         self.w = w
@@ -220,7 +263,7 @@ class CartesianY(object):
         deriv2 = np.zeros((xyz.shape[0], xyz.shape[1], xyz.shape[0], xyz.shape[1]))
         return deriv2
 
-class CartesianZ(object):
+class CartesianZ(PrimitiveCoordinate):
     def __init__(self, a, w=1.0):
         self.a = a
         self.w = w
@@ -245,7 +288,7 @@ class CartesianZ(object):
         xyz = xyz.reshape(-1,3)
         a = self.a
         return xyz[a][2]*self.w
-        
+
     def derivative(self, xyz):
         xyz = xyz.reshape(-1,3)
         derivatives = np.zeros_like(xyz)
@@ -257,7 +300,7 @@ class CartesianZ(object):
         deriv2 = np.zeros((xyz.shape[0], xyz.shape[1], xyz.shape[0], xyz.shape[1]))
         return deriv2
     
-class TranslationX(object):
+class TranslationX(PrimitiveCoordinate):
     def __init__(self, a, w):
         self.a = a
         self.w = w
@@ -284,7 +327,19 @@ class TranslationX(object):
         xyz = xyz.reshape(-1,3)
         a = np.array(self.a)
         return np.sum(xyz[a,0]*self.w)
-        
+
+    def calcDiff(self, xyz1, xyz2=None, val2=None):
+        # Translation ICs require an explicit implementation of calcDiff
+        # because self.w is not a float but an array
+        if xyz2 is None and val2 is None:
+            raise RuntimeError("Provide exactly one of xyz2 and val2")
+        elif xyz2 is not None and val2 is not None:
+            raise RuntimeError("Provide exactly one of xyz2 and val2")
+        if xyz2 is not None:
+            val2 = self.value(xyz2)
+        diff = self.value(xyz1) - val2
+        return diff
+
     def derivative(self, xyz):
         xyz = xyz.reshape(-1,3)
         derivatives = np.zeros_like(xyz)
@@ -324,7 +379,19 @@ class TranslationY(object):
         xyz = xyz.reshape(-1,3)
         a = np.array(self.a)
         return np.sum(xyz[a,1]*self.w)
-        
+
+    def calcDiff(self, xyz1, xyz2=None, val2=None):
+        # Translation ICs require an explicit implementation of calcDiff
+        # because self.w is not a float but an array
+        if xyz2 is None and val2 is None:
+            raise RuntimeError("Provide exactly one of xyz2 and val2")
+        elif xyz2 is not None and val2 is not None:
+            raise RuntimeError("Provide exactly one of xyz2 and val2")
+        if xyz2 is not None:
+            val2 = self.value(xyz2)
+        diff = self.value(xyz1) - val2
+        return diff
+    
     def derivative(self, xyz):
         xyz = xyz.reshape(-1,3)
         derivatives = np.zeros_like(xyz)
@@ -337,7 +404,7 @@ class TranslationY(object):
         deriv2 = np.zeros((xyz.shape[0], xyz.shape[1], xyz.shape[0], xyz.shape[1]))
         return deriv2
 
-class TranslationZ(object):
+class TranslationZ(PrimitiveCoordinate):
     def __init__(self, a, w):
         self.a = a
         self.w = w
@@ -365,6 +432,18 @@ class TranslationZ(object):
         a = np.array(self.a)
         return np.sum(xyz[a,2]*self.w)
         
+    def calcDiff(self, xyz1, xyz2=None, val2=None):
+        # Translation ICs require an explicit implementation of calcDiff
+        # because self.w is not a float but an array
+        if xyz2 is None and val2 is None:
+            raise RuntimeError("Provide exactly one of xyz2 and val2")
+        elif xyz2 is not None and val2 is not None:
+            raise RuntimeError("Provide exactly one of xyz2 and val2")
+        if xyz2 is not None:
+            val2 = self.value(xyz2)
+        diff = self.value(xyz1) - val2
+        return diff
+    
     def derivative(self, xyz):
         xyz = xyz.reshape(-1,3)
         derivatives = np.zeros_like(xyz)
@@ -385,6 +464,10 @@ class Rotator(object):
         self.x0 = x0.copy()
         self.stored_valxyz = np.zeros_like(x0)
         self.stored_value = None
+        # A second set of xyz coordinates used only when computing
+        # differences in rotation coordinates
+        self.stored_valxyz2 = np.zeros_like(x0)
+        self.stored_value2 = None
         self.stored_derxyz = np.zeros_like(x0)
         self.stored_deriv = None
         self.stored_deriv2xyz = np.zeros_like(x0)
@@ -404,6 +487,8 @@ class Rotator(object):
         self.x0 = x0.copy()
         self.stored_valxyz = np.zeros_like(x0)
         self.stored_value = None
+        self.stored_valxyz2 = np.zeros_like(x0)
+        self.stored_value2 = None
         self.stored_derxyz = np.zeros_like(x0)
         self.stored_deriv = None
         self.stored_deriv2xyz = np.zeros_like(x0)
@@ -445,7 +530,7 @@ class Rotator(object):
         self.e0 = np.cross(vy, [ex, ey, ez][np.argmin([np.dot(i, ev)**2 for i in [ex, ey, ez]])])
         self.e0 /= np.linalg.norm(self.e0)
 
-    def value(self, xyz):
+    def value(self, xyz, store=True):
         xyz = xyz.reshape(-1, 3)
         if np.max(np.abs(xyz-self.stored_valxyz)) < 1e-12:
             return self.stored_value
@@ -476,10 +561,33 @@ class Rotator(object):
                 xsel = np.vstack((xsel, exdum+xmean))
                 ysel = np.vstack((ysel, eydum+ymean))
             answer = get_expmap(xsel, ysel)
-            self.stored_norm = np.linalg.norm(answer)
-            self.stored_valxyz = xyz.copy()
-            self.stored_value = answer.copy()
+            if store:
+                self.stored_norm = np.linalg.norm(answer)
+                self.stored_valxyz = xyz.copy()
+                self.stored_value = answer.copy()
             return answer
+
+    def calcDiff(self, xyz1, xyz2=None, val2=None):
+        """
+        Return the difference of the internal coordinate
+        calculated for (xyz1 - xyz2).
+        """
+        if xyz2 is None and val2 is None:
+            raise RuntimeError("Provide exactly one of xyz2 and val2")
+        elif xyz2 is not None and val2 is not None:
+            raise RuntimeError("Provide exactly one of xyz2 and val2")
+        val1 = self.value(xyz1)
+        if xyz2 is not None:
+            # The "second" coordinate set is cached separately
+            xyz2 = xyz2.reshape(-1, 3)
+            if np.max(np.abs(xyz2-self.stored_valxyz2)) < 1e-12:
+                val2 = self.stored_value2.copy()
+            else:
+                val2 = self.value(xyz2, store=False)
+                self.stored_valxyz2 = xyz2.copy()
+                self.stored_value2 = val2.copy()
+        # Calculate difference in rotation vectors, modulo n*2pi displacement vectors
+        return calc_rot_vec_diff(val1, val2)
 
     def derivative(self, xyz):
         xyz = xyz.reshape(-1, 3)
@@ -621,7 +729,7 @@ class Rotator(object):
                     second_derivatives[a, :, b, :, :] = deriv2_raw[i, :, j, :, :]
             return second_derivatives
         
-class RotationA(object):
+class RotationA(PrimitiveCoordinate):
     def __init__(self, a, x0, Rotators, w=1.0):
         self.a = tuple(sorted(a))
         self.x0 = x0
@@ -650,6 +758,9 @@ class RotationA(object):
         
     def value(self, xyz):
         return self.Rotator.value(xyz)[0]*self.w
+
+    def calcDiff(self, xyz1, xyz2=None, val2=None):
+        return self.Rotator.calcDiff(xyz1, xyz2, val2)[0]*self.w
         
     def derivative(self, xyz):
         der_all = self.Rotator.derivative(xyz)
@@ -661,7 +772,7 @@ class RotationA(object):
         second_derivatives = deriv2_all[:, :, :, :, 0]*self.w
         return second_derivatives
     
-class RotationB(object):
+class RotationB(PrimitiveCoordinate):
     def __init__(self, a, x0, Rotators, w=1.0):
         self.a = tuple(sorted(a))
         self.x0 = x0
@@ -690,6 +801,9 @@ class RotationB(object):
         
     def value(self, xyz):
         return self.Rotator.value(xyz)[1]*self.w
+    
+    def calcDiff(self, xyz1, xyz2=None, val2=None):
+        return self.Rotator.calcDiff(xyz1, xyz2, val2)[1]*self.w
         
     def derivative(self, xyz):
         der_all = self.Rotator.derivative(xyz)
@@ -701,7 +815,7 @@ class RotationB(object):
         second_derivatives = deriv2_all[:, :, :, :, 1]*self.w
         return second_derivatives
 
-class RotationC(object):
+class RotationC(PrimitiveCoordinate):
     def __init__(self, a, x0, Rotators, w=1.0):
         self.a = tuple(sorted(a))
         self.x0 = x0
@@ -731,6 +845,9 @@ class RotationC(object):
     def value(self, xyz):
         return self.Rotator.value(xyz)[2]*self.w
         
+    def calcDiff(self, xyz1, xyz2=None, val2=None):
+        return self.Rotator.calcDiff(xyz1, xyz2, val2)[2]*self.w
+
     def derivative(self, xyz):
         der_all = self.Rotator.derivative(xyz)
         derivatives = der_all[:, :, 2]*self.w
@@ -741,7 +858,7 @@ class RotationC(object):
         second_derivatives = deriv2_all[:, :, :, :, 2]*self.w
         return second_derivatives
 
-class Distance(object):
+class Distance(PrimitiveCoordinate):
     def __init__(self, a, b):
         self.a = a
         self.b = b
@@ -771,7 +888,7 @@ class Distance(object):
         a = self.a
         b = self.b
         return np.sqrt(np.sum((xyz[a]-xyz[b])**2))
-        
+    
     def derivative(self, xyz):
         xyz = xyz.reshape(-1,3)
         derivatives = np.zeros_like(xyz)
@@ -796,7 +913,7 @@ class Distance(object):
         deriv2[n, :, m, :] = mtx
         return deriv2
     
-class Angle(object):
+class Angle(PrimitiveCoordinate):
     def __init__(self, a, b, c):
         self.a = a
         self.b = b
@@ -935,7 +1052,7 @@ class Angle(object):
                                       - (cq/sq) * np.outer(der1[a], der1[b]))
         return deriv2
 
-class LinearAngle(object):
+class LinearAngle(PrimitiveCoordinate):
     def __init__(self, a, b, c, axis):
         self.a = a
         self.b = b
@@ -1087,7 +1204,7 @@ class LinearAngle(object):
                 deriv2[ii, j, :, :] = fderiv
         return deriv2
     
-class MultiAngle(object):
+class MultiAngle(PrimitiveCoordinate):
     def __init__(self, a, b, c):
         if type(a) is int:
             a = (a,)
@@ -1200,7 +1317,7 @@ class MultiAngle(object):
     def second_derivative(self, xyz):
         raise NotImplementedError("Second derivatives have not been implemented for IC type %s" % self.__name__)
 
-class Dihedral(object):
+class Dihedral(PrimitiveCoordinate):
     def __init__(self, a, b, c, d):
         self.a = a
         self.b = b
@@ -1247,7 +1364,7 @@ class Dihedral(object):
         arg2 = np.sum(np.multiply(cross1, cross2))
         answer = np.arctan2(arg1, arg2)
         return answer
-        
+    
     def derivative(self, xyz):
         xyz = xyz.reshape(-1,3)
         derivatives = np.zeros_like(xyz)
@@ -1388,7 +1505,7 @@ class Dihedral(object):
         # printTerm('1x1y',  3.33702e-01)
         # printTerm('1x1z',  5.90389e-02)
 
-class MultiDihedral(object):
+class MultiDihedral(PrimitiveCoordinate):
     def __init__(self, a, b, c, d):
         if type(a) is int:
             a = (a, )
@@ -1444,7 +1561,7 @@ class MultiDihedral(object):
         arg2 = np.sum(np.multiply(cross1, cross2))
         answer = np.arctan2(arg1, arg2)
         return answer
-        
+    
     def derivative(self, xyz):
         xyz = xyz.reshape(-1,3)
         derivatives = np.zeros_like(xyz)
@@ -1491,7 +1608,7 @@ class MultiDihedral(object):
     def second_derivative(self, xyz):
         raise NotImplementedError("Second derivatives have not been implemented for IC type %s" % self.__name__)
 
-class OutOfPlane(object):
+class OutOfPlane(PrimitiveCoordinate):
     def __init__(self, a, b, c, d):
         self.a = a
         self.b = b
@@ -1600,7 +1717,26 @@ class OutOfPlane(object):
                 fderiv = (FPlus-FMinus)/(2*h)
                 deriv2[ii, j, :, :] = fderiv
         return deriv2
-    
+
+def convert_angstroms_degrees(prims, values):
+    """ Convert values of primitive ICs (or differences) from
+    weighted atomic units to Angstroms and degrees. """
+    converted = np.array(values).copy()
+    for ic, c in enumerate(prims):
+        if type(c) in [TranslationX, TranslationY, TranslationZ]:
+            w = 1.0
+        elif hasattr(c, 'w'):
+            w = c.w
+        else:
+            w = 1.0
+        if type(c) in [TranslationX, TranslationY, TranslationZ, CartesianX, CartesianY, CartesianZ, Distance, LinearAngle]:
+            factor = bohr2ang
+        elif c.isAngular:
+            factor = 180.0 / np.pi
+        converted[ic] /= w
+        converted[ic] *= factor
+    return converted
+
 CacheWarning = False
 
 class InternalCoordinates(object):
@@ -2344,7 +2480,8 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         for rot in self.Rotators.values():
             rot.reset(xyz)
 
-    def largeRots(self):
+    def linearRotCheck(self):
+        # Check if certain problems might be happening due to rotations of linear molecules.
         for Internal in self.Internals:
             if type(Internal) is LinearAngle:
                 if Internal.stored_dot2 > 0.75:
@@ -2353,11 +2490,20 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
             if type(Internal) in [RotationA, RotationB, RotationC]:
                 if Internal in self.cPrims:
                     continue
-                if Internal.Rotator.stored_norm > 0.9*np.pi:
-                    # Molecule has rotated by almost pi
-                    return True
                 if Internal.Rotator.stored_dot2 > 0.9:
                     # Linear molecule is almost parallel to reference axis
+                    return True
+        return False
+
+    def largeRots(self):
+        for Internal in self.Internals:
+            if type(Internal) in [RotationA, RotationB, RotationC]:
+                if Internal in self.cPrims:
+                    continue
+                if Internal.Rotator.stored_norm > 0.9*np.pi:
+                    # # Molecule has rotated by almost pi
+                    if type(Internal) is RotationA:
+                        logger.info("Large rotation: %s = %.3f*pi\n" % (str(Internal), Internal.Rotator.stored_norm/np.pi))
                     return True
         return False
 
@@ -2365,15 +2511,6 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         answer = []
         for Internal in self.Internals:
             answer.append(Internal.value(xyz))
-        return np.array(answer)
-
-    def calculateDegrees(self, xyz):
-        answer = []
-        for Internal in self.Internals:
-            value = Internal.value(xyz)
-            if Internal.isAngular:
-                value *= 180/np.pi
-            answer.append(value)
         return np.array(answer)
 
     def getRotatorNorms(self):
@@ -2425,21 +2562,13 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         # 5) 3
         return np.array(answer)
     
-    def calcDiff(self, coord1, coord2):
+    def calcDiff(self, xyz1, xyz2):
         """ Calculate difference in internal coordinates (coord1-coord2), accounting for changes in 2*pi of angles. """
-        Q1 = self.calculate(coord1)
-        Q2 = self.calculate(coord2)
-        PMDiff = (Q1-Q2)
-        for k in range(len(PMDiff)):
-            if self.Internals[k].isPeriodic:
-                Plus2Pi = PMDiff[k] + 2*np.pi
-                Minus2Pi = PMDiff[k] - 2*np.pi
-                if np.abs(PMDiff[k]) > np.abs(Plus2Pi):
-                    PMDiff[k] = Plus2Pi
-                if np.abs(PMDiff[k]) > np.abs(Minus2Pi):
-                    PMDiff[k] = Minus2Pi
-        return PMDiff
-
+        answer = []
+        for Internal in self.Internals:
+            answer.append(Internal.calcDiff(xyz1, xyz2))
+        return np.array(answer)
+    
     def GInverse(self, xyz):
         return self.GInverse_SVD(xyz)
 
@@ -2493,68 +2622,72 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
     def haveConstraints(self):
         return len(self.cPrims) > 0
 
-    def getConstraintViolation(self, xyz):
-        nc = len(self.cPrims)
-        maxdiff = 0.0
+    def getConstraintNames(self):
+        return [str(c) for c in self.cPrims]
+        
+    def getConstraintTargetVals(self, units=False):
+        if units:
+            return convert_angstroms_degrees(self.cPrims, self.cVals)
+        else:
+            return self.cVals
+
+    def getConstraintCurrentVals(self, xyz, units=False):
+        answer = []
         for ic, c in enumerate(self.cPrims):
-            w = c.w if type(c) in [RotationA, RotationB, RotationC] else 1.0
-            current = c.value(xyz)/w
-            reference = self.cVals[ic]/w
-            diff = (current - reference)
-            if c.isPeriodic:
-                if np.abs(diff-2*np.pi) < np.abs(diff):
-                    diff -= 2*np.pi
-                if np.abs(diff+2*np.pi) < np.abs(diff):
-                    diff += 2*np.pi
-            if type(c) in [TranslationX, TranslationY, TranslationZ, CartesianX, CartesianY, CartesianZ, Distance]:
-                factor = bohr2ang
-            elif c.isAngular:
-                factor = 180.0/np.pi
-            if np.abs(diff*factor) > maxdiff:
-                maxdiff = np.abs(diff*factor)
-        return maxdiff
+            value = c.value(xyz)
+            answer.append(value)
+        if units:
+            return convert_angstroms_degrees(self.cPrims, np.array(answer))
+        else:
+            return np.array(answer)
+
+    def calcConstraintDiff(self, xyz, units=False):
+        """ Calculate difference between 
+        (constraint ICs evaluated at provided coordinates - constraint values).
+
+        If units=True then the values will be returned in units of Angstrom and degrees 
+        for distance and angle degrees of freedom respectively.
+        """
+        cDiffs = np.zeros(len(self.cPrims), dtype=float)
+        for ic, c in enumerate(self.cPrims):
+            # Calculate the further change needed in this constrained variable
+            if type(c) is RotationA:
+                ca = c
+                cb = self.cPrims[ic+1]
+                cc = self.cPrims[ic+2]
+                if type(cb) is not RotationB or type(cc) is not RotationC:
+                    raise RuntimeError('In primitive internal coordinates, RotationA must be followed by RotationB and RotationC.')
+                if len(set([ca.w, cb.w, cc.w])) != 1:
+                    raise RuntimeError('The triple of rotation ICs need to have the same weight.')
+                cDiffs[ic] = ca.calcDiff(xyz, val2=self.cVals[ic:ic+3]/c.w)
+                cDiffs[ic+1] = cb.calcDiff(xyz, val2=self.cVals[ic:ic+3]/c.w)
+                cDiffs[ic+2] = cc.calcDiff(xyz, val2=self.cVals[ic:ic+3]/c.w)
+            elif type(c) in [RotationB, RotationC]: pass
+            else:
+                cDiffs[ic] = c.calcDiff(xyz, val2=self.cVals[ic])
+        if units:
+            return convert_angstroms_degrees(self.cPrims, cDiffs)
+        else:
+            return cDiffs
     
+    def maxConstraintViolation(self, xyz):
+        cDiffs = self.calcConstraintDiff(xyz, units=True)
+        return np.max(np.abs(cDiffs))
+
     def printConstraints(self, xyz, thre=1e-5):
         nc = len(self.cPrims)
         out_lines = []
         header = "Constraint                         Current      Target       Diff."
+        curr = self.getConstraintCurrentVals(xyz, units=True)
+        refs = self.getConstraintTargetVals(units=True)
+        diff = self.calcConstraintDiff(xyz, units=True)
         for ic, c in enumerate(self.cPrims):
-            w = c.w if type(c) in [RotationA, RotationB, RotationC] else 1.0
-            current = c.value(xyz)/w
-            reference = self.cVals[ic]/w
-            diff = (current - reference)
-            if c.isPeriodic:
-                if np.abs(diff-2*np.pi) < np.abs(diff):
-                    diff -= 2*np.pi
-                if np.abs(diff+2*np.pi) < np.abs(diff):
-                    diff += 2*np.pi
-            if type(c) in [TranslationX, TranslationY, TranslationZ, CartesianX, CartesianY, CartesianZ, Distance]:
-                factor = bohr2ang
-            elif c.isAngular:
-                factor = 180.0/np.pi
-            if np.abs(diff*factor) > thre:
-                out_lines.append("%-30s  % 10.5f  % 10.5f  % 10.5f" % (str(c), current*factor, reference*factor, diff*factor))
+            if np.abs(diff[ic]) > thre:
+                out_lines.append("%-30s  % 10.5f  % 10.5f  % 10.5f" % (str(c), curr[ic], refs[ic], diff[ic]))
         if len(out_lines) > 0:
             logger.info(header + "\n")
             logger.info('\n'.join(out_lines) + "\n")
-            # if type(c) in [RotationA, RotationB, RotationC]:
-            #     print c, c.value(xyz)
-
-    def getConstraintTargetVals(self):
-        nc = len(self.cPrims)
-        cNames = []
-        cVals = []
-        for ic, c in enumerate(self.cPrims):
-            w = c.w if type(c) in [RotationA, RotationB, RotationC] else 1.0
-            reference = self.cVals[ic]/w
-            if type(c) in [TranslationX, TranslationY, TranslationZ, CartesianX, CartesianY, CartesianZ, Distance]:
-                factor = bohr2ang
-            elif c.isAngular:
-                factor = 180.0/np.pi
-            cNames.append(str(c))
-            cVals.append(reference*factor)
-        return(cNames, cVals)
-
+            
     def guess_hessian(self, coords):
         """
         Build a guess Hessian that roughly follows Schlegel's guidelines. 
@@ -2685,15 +2818,24 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
     def haveConstraints(self):
         return len(self.Prims.cPrims) > 0
 
-    def getConstraintViolation(self, xyz):
-        return self.Prims.getConstraintViolation(xyz)
+    def getConstraintNames(self):
+        return self.Prims.getConstraintNames()
+    
+    def getConstraintTargetVals(self, units=True):
+        return self.Prims.getConstraintTargetVals(units=units)
+    
+    def getConstraintCurrentVals(self, xyz, units=True):
+        return self.Prims.getConstraintCurrentVals(xyz, units=units)
+
+    def calcConstraintDiff(self, xyz, units=False):
+        return self.Prims.calcConstraintDiff(xyz, units=units)
+    
+    def maxConstraintViolation(self, xyz):
+        return self.Prims.maxConstraintViolation(xyz)
 
     def printConstraints(self, xyz, thre=1e-5):
         self.Prims.printConstraints(xyz, thre=thre)
-
-    def getConstraintTargetVals(self):
-        return self.Prims.getConstraintTargetVals()
-
+    
     def augmentGH(self, xyz, G, H):
         """
         Add extra dimensions to the gradient and Hessian corresponding to the constrained degrees of freedom.
@@ -2732,22 +2874,15 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         nt = ni+nc
         # Lower block of the augmented Hessian
         cT = np.zeros((nc, ni), dtype=float)
-        c0 = np.zeros(nc, dtype=float)
+        # The further change needed in constrained variables:
+        # (Constraint values) - (Current values of constraint ICs)
+        c0 = -1.0 * self.calcConstraintDiff(xyz)
         for ic, c in enumerate(self.Prims.cPrims):
             # Look up the index of the primitive that is being constrained
             iPrim = self.Prims.Internals.index(c)
             # The DLC corresponding to the constrained primitive (a.k.a. cProj) is self.Vecs[self.cDLC[ic]].
             # For a differential change in the DLC, the primitive that we are constraining changes by:
             cT[ic, self.cDLC[ic]] = 1.0/self.Vecs[iPrim, self.cDLC[ic]]
-            # Calculate the further change needed in this constrained variable
-            c0[ic] = self.Prims.cVals[ic] - c.value(xyz)
-            if c.isPeriodic:
-                Plus2Pi = c0[ic] + 2*np.pi
-                Minus2Pi = c0[ic] - 2*np.pi
-                if np.abs(c0[ic]) > np.abs(Plus2Pi):
-                    c0[ic] = Plus2Pi
-                if np.abs(c0[ic]) > np.abs(Minus2Pi):
-                    c0[ic] = Minus2Pi
             # The new constraint algorithm satisfies constraints too quickly and could cause
             # the energy to blow up. Thus, constraint steps are restricted to 0.1 au/radian
             if self.conmethod == 1:
@@ -2776,20 +2911,14 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         ndqs = []
         while True:
             dQ = np.zeros(len(self.Internals), dtype=float)
+            cDiff = -1.0 * self.calcConstraintDiff(xyz1)
             for ic, c in enumerate(self.Prims.cPrims):
                 # Look up the index of the primitive that is being constrained
                 iPrim = self.Prims.Internals.index(c)
                 # Look up the index of the DLC that corresponds to the constraint
                 iDLC = self.cDLC[ic]
                 # Calculate the further change needed in this constrained variable
-                dQ[iDLC] = (self.Prims.cVals[ic] - c.value(xyz1))
-                if c.isPeriodic:
-                    Plus2Pi = dQ[iDLC] + 2*np.pi
-                    Minus2Pi = dQ[iDLC] - 2*np.pi
-                    if np.abs(dQ[iDLC]) > np.abs(Plus2Pi):
-                        dQ[iDLC] = Plus2Pi
-                    if np.abs(dQ[iDLC]) > np.abs(Minus2Pi):
-                        dQ[iDLC] = Minus2Pi
+                dQ[iDLC] = cDiff[ic]
                 dQ[iDLC] /= self.Vecs[iPrim, iDLC]
             xyzs.append(xyz1.copy())
             ndqs.append(np.linalg.norm(dQ))
@@ -2811,15 +2940,9 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
     def newCartesian_withConstraint(self, xyz, dQ, thre=0.1, verbose=0):
         xyz2 = self.newCartesian(xyz, dQ, verbose)
         constraintSmall = len(self.Prims.cPrims) > 0
+        cDiff = self.calcConstraintDiff(xyz)
         for ic, c in enumerate(self.Prims.cPrims):
-            w = c.w if type(c) in [RotationA, RotationB, RotationC] else 1.0
-            current = c.value(xyz)/w
-            reference = self.Prims.cVals[ic]/w
-            diff = (current - reference)
-            if np.abs(diff-2*np.pi) < np.abs(diff):
-                diff -= 2*np.pi
-            if np.abs(diff+2*np.pi) < np.abs(diff):
-                diff += 2*np.pi
+            diff = cDiff[ic]
             if np.abs(diff) > thre:
                 constraintSmall = False
         if constraintSmall:
@@ -3233,6 +3356,10 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
 
     def __ne__(self, other):
         return not self.__eq__(other)
+
+    def linearRotCheck(self):
+        """ Check if certain problems might be happening due to rotations of linear molecules. """
+        return self.Prims.linearRotCheck()
 
     def largeRots(self):
         """ Determine whether a molecule has rotated by an amount larger than some threshold (hardcoded in Prims.largeRots()). """
