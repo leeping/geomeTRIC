@@ -1621,7 +1621,7 @@ class Molecule(object):
             selection = list(range(len(self)))
         else:
             selection = list(selection)
-        Answer = self.Write_Tab[self.Funnel[ftype.lower()]](selection,**kwargs)
+        Answer = self.Write_Tab[self.Funnel[ftype.lower()]](selection=selection,**kwargs)
         ## Any method that returns text will give us a list of lines, which we then write to the file.
         if Answer is not None:
             if fnm is None or fnm == sys.stdout:
@@ -3101,7 +3101,7 @@ class Molecule(object):
 
         return Answer
 
-    def read_dcd(self, fnm, **kwargs):
+    def read_dcd(self, fnm, **kwargs): # pragma: no cover
         xyzs = []
         boxes = []
         if _dcdlib.vmdplugin_init() != 0:
@@ -4026,7 +4026,8 @@ class Molecule(object):
     #|         Writing functions         |#
     #=====================================#
 
-    def write_qcin(self, selection, **kwargs):
+    def write_qcin(self, **kwargs):
+        selection = kwargs.get('selection', list(range(len(self))))
         self.require('qctemplate','qcrems','charge','mult')
         out = []
         if 'read' in kwargs:
@@ -4092,7 +4093,8 @@ class Molecule(object):
                 out.append('')
         return out
 
-    def write_xyz(self, selection, **kwargs):
+    def write_xyz(self, **kwargs):
+        selection = kwargs.get('selection', list(range(len(self))))
         self.require('elem','xyzs')
         out = []
         for I in selection:
@@ -4114,7 +4116,7 @@ class Molecule(object):
                 elist.append(self.elem[i])
         return elist
 
-    def write_lammps_data(self, selection, **kwargs):
+    def write_lammps_data(self, **kwargs):
         """
         Write the first frame of the selection to a LAMMPS data file
         for the purpose of automatically initializing a LAMMPS simulation.
@@ -4123,6 +4125,10 @@ class Molecule(object):
         (1) We are interested in a ReaxFF simulation
         (2) Atom types will be generated from elements
         """
+        selection = kwargs.get('selection', list(range(len(self))))
+        if len(selection) != 1:
+            logger.error("only a single frame can be written for write_lammps_data\n")
+            raise RuntimeError
         I = selection[0]
         out = []
         comm = self.comms[I]
@@ -4186,7 +4192,8 @@ class Molecule(object):
             out.append("%4i 1 %2i 0.0 % 15.10f % 15.10f % 15.10f" % (i+1, list(atmap.keys()).index(self.elem[i])+1, self.xyzs[I][i, 0], self.xyzs[I][i, 1], self.xyzs[I][i, 2]))
         return out
 
-    def write_molproq(self, selection, **kwargs):
+    def write_molproq(self, **kwargs):
+        selection = kwargs.get('selection', list(range(len(self))))
         self.require('xyzs','partial_charge')
         out = []
         for I in selection:
@@ -4198,7 +4205,8 @@ class Molecule(object):
                 out.append("% 15.10f % 15.10f % 15.10f % 15.10f   0" % (xyz[i,0],xyz[i,1],xyz[i,2],self.partial_charge[i]))
         return out
 
-    def write_mdcrd(self, selection, **kwargs):
+    def write_mdcrd(self, **kwargs):
+        selection = kwargs.get('selection', list(range(len(self))))
         self.require('xyzs')
         # In mdcrd files, there is only one comment line
         out = ['mdcrd file generated using %s' % package]
@@ -4209,11 +4217,13 @@ class Molecule(object):
                 out.append(''.join(["%8.3f" % i for i in [self.boxes[I].a, self.boxes[I].b, self.boxes[I].c]]))
         return out
 
-    def write_inpcrd(self, selection, sn=None, **kwargs):
+    def write_inpcrd(self, **kwargs):
+        selection = kwargs.get('selection', list(range(len(self))))
         self.require('xyzs')
-        if len(self.xyzs) != 1 and sn is None:
-            logger.error("inpcrd can only be written for a single-frame trajectory\n")
+        if len(selection) != 1:
+            logger.error("only a single frame can be written for write_inpcrd\n")
             raise RuntimeError
+        sn = selection[0]
         if sn is not None:
             self.xyzs = [self.xyzs[sn]]
             self.comms = [self.comms[sn]]
@@ -4232,7 +4242,8 @@ class Molecule(object):
             out.append(''.join(["%12.7f" % i for i in [self.boxes[0].a, self.boxes[0].b, self.boxes[0].c]]))
         return out
 
-    def write_arc(self, selection, **kwargs):
+    def write_arc(self, **kwargs):
+        selection = kwargs.get('selection', list(range(len(self))))
         self.require('elem','xyzs')
         out = []
         if 'tinkersuf' not in self.Data:
@@ -4247,7 +4258,8 @@ class Molecule(object):
                 out.append("%6i  %s%s" % (i+1,format_xyz_coord(self.elem[i],xyz[i],tinker=True),self.tinkersuf[i] if 'tinkersuf' in self.Data else ''))
         return out
 
-    def write_gro(self, selection, **kwargs):
+    def write_gro(self, **kwargs):
+        selection = kwargs.get('selection', list(range(len(self))))
         out = []
         if sys.stdin.isatty():
             self.require('elem','xyzs')
@@ -4281,7 +4293,8 @@ class Molecule(object):
             out.append(format_gro_box(self.boxes[I]))
         return out
 
-    def write_dcd(self, selection, **kwargs):
+    def write_dcd(self, **kwargs): # pragma: no cover
+        selection = kwargs.get('selection', list(range(len(self))))
         if _dcdlib.vmdplugin_init() != 0:
             logger.error("Unable to init DCD plugin\n")
             raise IOError
@@ -4307,7 +4320,8 @@ class Molecule(object):
         _dcdlib.close_file_write(dcd)
         dcd = None
 
-    def write_pdb(self, selection, **kwargs):
+    def write_pdb(self, **kwargs):
+        selection = kwargs.get('selection', list(range(len(self))))
         standardResidues = ['ALA', 'ASN', 'CYS', 'GLU', 'HIS', 'LEU', 'MET', 'PRO', 'THR', 'TYR', # Standard amino acids
                             'ARG', 'ASP', 'GLN', 'GLY', 'ILE', 'LYS', 'PHE', 'SER', 'TRP', 'VAL', # Standard amino acids
                             'HID', 'HIE', 'HIP', 'ASH', 'GLH', 'TYD', 'CYM', 'CYX', 'LYN', # Some alternate protonation states
@@ -4386,7 +4400,7 @@ class Molecule(object):
             out.append("CRYST1%9.3f%9.3f%9.3f%7.2f%7.2f%7.2f P 1           1 " % (a, b, c, alpha, beta, gamma))
         # Write the structures as models.
         atomIndices = {}
-        for sn in range(len(self)):
+        for sn in selection:
             modelIndex = sn
             if len(self) > 1:
                 out.append("MODEL     %4d" % modelIndex)
@@ -4449,8 +4463,9 @@ class Molecule(object):
             out.append(line)
         return out
 
-    def write_qdata(self, selection, **kwargs):
+    def write_qdata(self, **kwargs):
         """ Text quantum data format. """
+        selection = kwargs.get('selection', list(range(len(self))))
         #self.require('xyzs','qm_energies','qm_grads')
         out = []
         for I in selection:

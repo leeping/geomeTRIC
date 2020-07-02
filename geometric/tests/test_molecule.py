@@ -9,6 +9,7 @@ import numpy as np
 from . import addons
 
 datad = addons.datad
+localizer = addons.in_folder
 
 def test_blank_molecule():
     mol = geometric.molecule.Molecule()
@@ -54,17 +55,6 @@ class TestAlaGRO:
         np.testing.assert_almost_equal(bx.gamma, 90.0)
         # This is how to override "ask for user input"
         # when running unit tests.
-        # A single number = cubic box
-        del self.molecule.Data['boxes']
-        geometric.molecule.input = lambda userinput : '25'
-        self.molecule.require_boxes()
-        bx = self.molecule.boxes[0]
-        np.testing.assert_almost_equal(bx.a, 25.0)
-        np.testing.assert_almost_equal(bx.b, 25.0)
-        np.testing.assert_almost_equal(bx.c, 25.0)
-        np.testing.assert_almost_equal(bx.alpha, 90.0)
-        np.testing.assert_almost_equal(bx.beta, 90.0)
-        np.testing.assert_almost_equal(bx.gamma, 90.0)
         # Three numbers = rectilinear box
         del self.molecule.Data['boxes']
         geometric.molecule.input = lambda userinput : '11 13 15'
@@ -99,7 +89,17 @@ class TestAlaGRO:
         np.testing.assert_almost_equal(bx.alpha, 70.53, decimal=2)
         np.testing.assert_almost_equal(bx.beta, 109.47, decimal=3)
         np.testing.assert_almost_equal(bx.gamma, 70.53, decimal=3)
-        
+        # A single number = cubic box
+        del self.molecule.Data['boxes']
+        geometric.molecule.input = lambda userinput : '20'
+        self.molecule.require_boxes()
+        bx = self.molecule.boxes[0]
+        np.testing.assert_almost_equal(bx.a, 20.0)
+        np.testing.assert_almost_equal(bx.b, 20.0)
+        np.testing.assert_almost_equal(bx.c, 20.0)
+        np.testing.assert_almost_equal(bx.alpha, 90.0)
+        np.testing.assert_almost_equal(bx.beta, 90.0)
+        np.testing.assert_almost_equal(bx.gamma, 90.0)
 
     def test_add(self):
         # Test adding of Molecule objects and ensure that copies are created when adding
@@ -119,6 +119,19 @@ class TestAlaGRO:
         assert np.allclose(M.xyzs[0], M.xyzs[1])
         assert np.allclose(M.xyzs[1], M.xyzs[2])
         assert np.allclose(M.xyzs[0], M.xyzs[2])
+
+    def test_write(self, localizer):
+        # print(len(self.molecule))
+        # print(self.molecule.xyzs)
+        # self.molecule.write('out.xyz')
+        # M_xyz = geometric.molecule.Molecule('out.xyz')
+        # assert np.allclose(self.molecule.xyzs[0], M_xyz.xyzs[0])
+        for fmt in ['xyz', 'inpcrd', 'pdb', 'qdata', 'arc']:
+            print("Testing reading/writing of %s format for AlaGlu system" % fmt)
+            outfnm = "out.%s" % fmt
+            self.molecule.write(outfnm)
+            M_test = geometric.molecule.Molecule(outfnm)
+            assert np.allclose(self.molecule.xyzs[0], M_test.xyzs[0])
 
     def test_select_stack(self):
         M1 = self.molecule.atom_select(range(22))
