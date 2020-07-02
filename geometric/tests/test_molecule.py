@@ -52,6 +52,54 @@ class TestAlaGRO:
         np.testing.assert_almost_equal(bx.alpha, 90.0)
         np.testing.assert_almost_equal(bx.beta, 90.0)
         np.testing.assert_almost_equal(bx.gamma, 90.0)
+        # This is how to override "ask for user input"
+        # when running unit tests.
+        # A single number = cubic box
+        del self.molecule.Data['boxes']
+        geometric.molecule.input = lambda userinput : '25'
+        self.molecule.require_boxes()
+        bx = self.molecule.boxes[0]
+        np.testing.assert_almost_equal(bx.a, 25.0)
+        np.testing.assert_almost_equal(bx.b, 25.0)
+        np.testing.assert_almost_equal(bx.c, 25.0)
+        np.testing.assert_almost_equal(bx.alpha, 90.0)
+        np.testing.assert_almost_equal(bx.beta, 90.0)
+        np.testing.assert_almost_equal(bx.gamma, 90.0)
+        # Three numbers = rectilinear box
+        del self.molecule.Data['boxes']
+        geometric.molecule.input = lambda userinput : '11 13 15'
+        self.molecule.require_boxes()
+        bx = self.molecule.boxes[0]
+        np.testing.assert_almost_equal(bx.a, 11.0)
+        np.testing.assert_almost_equal(bx.b, 13.0)
+        np.testing.assert_almost_equal(bx.c, 15.0)
+        np.testing.assert_almost_equal(bx.alpha, 90.0)
+        np.testing.assert_almost_equal(bx.beta, 90.0)
+        np.testing.assert_almost_equal(bx.gamma, 90.0)
+        # Six numbers = specify alpha, beta, gamma
+        del self.molecule.Data['boxes']
+        geometric.molecule.input = lambda userinput : '11 13 15 81 82 93.5'
+        self.molecule.require_boxes()
+        bx = self.molecule.boxes[0]
+        np.testing.assert_almost_equal(bx.a, 11.0)
+        np.testing.assert_almost_equal(bx.b, 13.0)
+        np.testing.assert_almost_equal(bx.c, 15.0)
+        np.testing.assert_almost_equal(bx.alpha, 81.0)
+        np.testing.assert_almost_equal(bx.beta, 82.0)
+        np.testing.assert_almost_equal(bx.gamma, 93.5)
+        # Nine numbers = specify box vectors
+        # In this case the box vectors of a truncated octahedral box are given.
+        del self.molecule.Data['boxes']
+        geometric.molecule.input = lambda userinput : '7.65918   7.22115   6.25370   0.00000   0.00000   2.55306   0.00000  -2.55306   3.61057'
+        self.molecule.require_boxes()
+        bx = self.molecule.boxes[0]
+        np.testing.assert_almost_equal(bx.a, 7.659, decimal=3)
+        np.testing.assert_almost_equal(bx.b, 7.659, decimal=3)
+        np.testing.assert_almost_equal(bx.c, 7.659, decimal=3)
+        np.testing.assert_almost_equal(bx.alpha, 70.53, decimal=2)
+        np.testing.assert_almost_equal(bx.beta, 109.47, decimal=3)
+        np.testing.assert_almost_equal(bx.gamma, 70.53, decimal=3)
+        
 
     def test_add(self):
         # Test adding of Molecule objects and ensure that copies are created when adding
@@ -95,3 +143,8 @@ class TestAlaGRO:
         IC_TR = geometric.internal.DelocalizedInternalCoordinates(self.molecule, build=True, connect=False, addcart=False, remove_tr=True)
         assert len(IC.Internals) == self.molecule.na*3
         assert len(IC_TR.Internals) == (self.molecule.na*3 - 6)
+
+    def teardown_method(self, method):
+        # This method is being called after each test case, and it will revert input back to original function
+        geometric.molecule.input = input
+        
