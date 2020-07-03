@@ -172,7 +172,7 @@ class TestAlaGRO:
         assert ref_rmsd_noalign[0] < 1e-10
         assert ref_rmsd_noalign[1] > 1.0
         assert ref_rmsd_noalign[2] > 1.0
-        assert (path_rmsd >= ref_rmsd_align[1:]).all()
+        assert (path_rmsd + 1e-10 >= ref_rmsd_align[1:]).all()
         assert np.allclose(pairwise_rmsd[0], ref_rmsd_align)
 
     def test_find_angles_dihedrals(self):
