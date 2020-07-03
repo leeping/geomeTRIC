@@ -41,7 +41,7 @@ from .errors import FrequencyError
 from .molecule import Molecule, PeriodicTable
 from .nifty import logger, kb, kb_si, hbar, au2kj, au2kcal, ang2bohr, bohr2ang, c_lightspeed, avogadro, cm2au, amu2au, ambervel2au, wq_wait, getWorkQueue, commadash
 
-def calc_cartesian_hessian(coords, molecule, engine, dirname, readfiles=True, verbose=0):
+def calc_cartesian_hessian(coords, molecule, engine, dirname, read_data=True, verbose=0):
     """ 
     Calculate the Cartesian Hessian using finite difference, and/or read data from disk. 
     Data is stored in a folder <prefix>.tmp/hessian, with gradient calculations found in
@@ -57,7 +57,7 @@ def calc_cartesian_hessian(coords, molecule, engine, dirname, readfiles=True, ve
         Object containing methods for calculating energy and gradient
     dirname : str
         Directory name for files to be written, i.e. <prefix>.tmp
-    readfiles : bool
+    read_data : bool
         Read Hessian data from disk if valid
         
     Returns
@@ -70,7 +70,7 @@ def calc_cartesian_hessian(coords, molecule, engine, dirname, readfiles=True, ve
     # Attempt to read existing Hessian data if it exists.
     hesstxt = os.path.join(dirname, "hessian", "hessian.txt")
     hessxyz = os.path.join(dirname, "hessian", "coords.xyz")
-    if readfiles and os.path.exists(hesstxt) and os.path.exists(hessxyz):
+    if read_data and os.path.exists(hesstxt) and os.path.exists(hessxyz):
         Hx = np.loadtxt(hesstxt)
         if Hx.shape[0] == nc:
             hess_mol = Molecule(hessxyz)
@@ -81,20 +81,20 @@ def calc_cartesian_hessian(coords, molecule, engine, dirname, readfiles=True, ve
                 logger.info("Coordinates for Hessian don't match current coordinates, recalculating.\n")
                 bak('hessian.txt', cwd=os.path.join(dirname, "hessian"), start=0)
                 bak('coords.xyz', cwd=os.path.join(dirname, "hessian"), start=0)
-                readfiles=False
+                read_data=False
         else:
             logger.info("Hessian read from file doesn't have the right shape, recalculating.\n")
-            readfiles=False
+            read_data=False
     elif not os.path.exists(hessxyz):
         logger.info("Coordinates for Hessian not found, recalculating.\n")
-        readfiles = False
+        read_data = False
     # Save Hessian to text file
     oldxyz = molecule.xyzs[0].copy()
     molecule.xyzs[0] = coords.reshape(-1, 3)*bohr2ang
     if not os.path.exists(os.path.join(dirname, "hessian")):
         os.makedirs(os.path.join(dirname, "hessian"))
     molecule[0].write(hessxyz)
-    if not readfiles: 
+    if not read_data: 
         if os.path.exists(os.path.join(dirname, "hessian", "displace")):
             shutil.rmtree(os.path.join(dirname, "hessian", "displace"))
     # Calculate Hessian using finite difference
@@ -108,10 +108,10 @@ def calc_cartesian_hessian(coords, molecule, engine, dirname, readfiles=True, ve
             if verbose >= 2: logger.info(" Submitting gradient calculation for coordinate %i/%i\n" % (i+1, nc))
             coords[i] += h
             dirname_d = os.path.join(dirname, "hessian/displace/%03ip" % (i+1))
-            engine.calc_wq(coords, dirname_d, readfiles=readfiles, copydir=dirname)
+            engine.calc_wq(coords, dirname_d, read_data=read_data, copydir=dirname)
             coords[i] -= 2*h
             dirname_d = os.path.join(dirname, "hessian/displace/%03im" % (i+1))
-            engine.calc_wq(coords, dirname_d, readfiles=readfiles, copydir=dirname)
+            engine.calc_wq(coords, dirname_d, read_data=read_data, copydir=dirname)
             coords[i] += h
         wq_wait(wq, print_time=600)
         for i in range(nc):
@@ -126,16 +126,16 @@ def calc_cartesian_hessian(coords, molecule, engine, dirname, readfiles=True, ve
             Hx[i] = (gfwd-gbak)/(2*h)
     else:
         # First calculate a gradient at the central point, for linking scratch files.
-        engine.calc(coords, dirname, readfiles=readfiles)
+        engine.calc(coords, dirname, read_data=read_data)
         for i in range(nc):
             if verbose >= 2: logger.info(" Running gradient calculation for coordinate %i/%i\n" % (i+1, nc))
             elif verbose >= 1 and (i%5 == 0): logger.info("%i / %i gradient calculations complete\n" % (i*2, nc*2))
             coords[i] += h
             dirname_d = os.path.join(dirname, "hessian/displace/%03ip" % (i+1))
-            gfwd = engine.calc(coords, dirname_d, readfiles=readfiles, copydir=dirname)['gradient']
+            gfwd = engine.calc(coords, dirname_d, read_data=read_data, copydir=dirname)['gradient']
             coords[i] -= 2*h
             dirname_d = os.path.join(dirname, "hessian/displace/%03im" % (i+1))
-            gbak = engine.calc(coords, dirname_d, readfiles=readfiles, copydir=dirname)['gradient']
+            gbak = engine.calc(coords, dirname_d, read_data=read_data, copydir=dirname)['gradient']
             coords[i] += h
             Hx[i] = (gfwd-gbak)/(2*h)
             if verbose == 1 and i == (nc-1) : logger.info("%i / %i gradient calculations complete\n" % (nc*2, nc*2))

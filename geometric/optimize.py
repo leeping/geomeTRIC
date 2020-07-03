@@ -215,19 +215,19 @@ class Optimizer(object):
         # Dictionary containing single point properties (energy, gradient)
         # For frequency calculations and multi-step jobs, the gradient from an existing
         # output file may be read in.
-        spcalc = self.engine.calc(self.X, self.dirname, readfiles=(self.Iteration==0))
+        spcalc = self.engine.calc(self.X, self.dirname, read_data=(self.Iteration==0))
         self.E = spcalc['energy']
         self.gradx = spcalc['gradient']
         # Calculate Hessian at the first step, or at each step if desired
         if self.params.hessian == 'each':
             # Hx is assumed to be the Cartesian Hessian at the current step.
             # Otherwise we use the variable name Hx0 to avoid almost certain confusion.
-            self.Hx = calc_cartesian_hessian(self.X, self.molecule, self.engine, self.dirname, readfiles=True, verbose=self.params.verbose)
+            self.Hx = calc_cartesian_hessian(self.X, self.molecule, self.engine, self.dirname, read_data=True, verbose=self.params.verbose)
             if self.params.frequency:
                 self.frequency_analysis(self.Hx, 'iter%03i' % self.Iteration, False)
         elif self.Iteration == 0:
             if self.params.hessian in ['first', 'stop', 'first+last']:
-                self.Hx0 = calc_cartesian_hessian(self.X, self.molecule, self.engine, self.dirname, readfiles=True, verbose=self.params.verbose)
+                self.Hx0 = calc_cartesian_hessian(self.X, self.molecule, self.engine, self.dirname, read_data=True, verbose=self.params.verbose)
                 if self.params.frequency:
                     self.frequency_analysis(self.Hx0, 'first', False)
                 if self.params.hessian == 'stop':
@@ -634,7 +634,7 @@ class Optimizer(object):
             Hx = self.IC.calcHessCart(self.X, self.G, self.H)
             np.savetxt(self.params.write_cart_hess, Hx, fmt='% 14.10f')
         if self.params.hessian in ['last', 'first+last', 'each']:
-            Hx = calc_cartesian_hessian(self.X, self.molecule, self.engine, self.dirname, readfiles=False, verbose=self.params.verbose)
+            Hx = calc_cartesian_hessian(self.X, self.molecule, self.engine, self.dirname, read_data=False, verbose=self.params.verbose)
             if self.params.frequency:
                 self.frequency_analysis(Hx, 'last', True)
         return self.progress

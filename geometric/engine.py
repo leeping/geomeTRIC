@@ -191,7 +191,7 @@ class Engine(object):
     # def __deepcopy__(self, memo):
     #     return copy(self)
 
-    def calc(self, coords, dirname, readfiles=False, copydir=None):
+    def calc(self, coords, dirname, read_data=False, copydir=None):
         """
         Top-level method for a single-point calculation. 
         Calculation will be skipped if results are contained in the hash table, 
@@ -204,7 +204,7 @@ class Engine(object):
             1-dimensional array of shape (3*N_atoms) containing atomic coordinates in Bohr
         dirname : str
             Relative path containing calculation files
-        readfiles : bool, default=False
+        read_data : bool, default=False
             If valid calculation output files exist in dirname, read the results instead of
             running a new calculation
         copydir : str, default=None
@@ -228,10 +228,10 @@ class Engine(object):
         if coord_hash in self.stored_calcs:
             result = self.stored_calcs[coord_hash]['result']
         else:
-            # If the readfiles flag is set to True, then attempt to read the
+            # If the read_data flag is set to True, then attempt to read the
             # result from the temp-folder, then skip the calculation if successful.
             read_success = False
-            if readfiles and os.path.exists(dirname) and hasattr(self, 'read_result'):
+            if read_data and os.path.exists(dirname) and hasattr(self, 'read_result'):
                 try:
                     result = self.read_result(dirname, check_coord=coords)
                     read_success = True
@@ -251,7 +251,7 @@ class Engine(object):
     def calc_new(self, coords, dirname):
         raise NotImplementedError("Not implemented for the base class")
 
-    def calc_wq(self, coords, dirname, readfiles=False, copydir=None):
+    def calc_wq(self, coords, dirname, read_data=False, copydir=None):
         """
         Top-level method for submitting a single-point calculation using Work Queue. 
         Different from calc(), this method does not return results, because the control
@@ -268,7 +268,7 @@ class Engine(object):
             1-dimensional array of shape (3*N_atoms) containing atomic coordinates in Bohr
         dirname : str
             Relative path containing calculation files
-        readfiles : bool, default=False
+        read_data : bool, default=False
             If valid calculation output files exist in dirname, read the results instead of
             running a new calculation
         copydir : str, default=None
@@ -280,10 +280,10 @@ class Engine(object):
         if coord_hash in self.stored_calcs:
             return
         else:
-            # If the readfiles flag is set to True, then attempt to read the
+            # If the read_data flag is set to True, then attempt to read the
             # result from the temp-folder, then skip the calculation if successful.
             read_success = False
-            if readfiles and os.path.exists(dirname) and hasattr(self, 'read_result'):
+            if read_data and os.path.exists(dirname) and hasattr(self, 'read_result'):
                 try:
                     result = self.read_result(dirname, check_coord=coords)
                     read_success = True
@@ -1133,8 +1133,9 @@ class QCEngineAPI(Engine):
         gradient = np.array(ret["return_result"])
         return {'energy':energy, 'gradient':gradient}
 
-    def calc(self, coords, dirname):
+    def calc(self, coords, dirname, **kwargs):
         # overwrites the calc method of base class to skip caching and creating folders
+        # **kwargs: for throwing away other arguments such as read_data and copyfiles.
         return self.calc_new(coords, dirname)
 
 class ConicalIntersection(Engine):
