@@ -151,6 +151,30 @@ class TestAlaGRO:
         M1.xyzs[0][0,0] += 1.0
         assert np.allclose(self.molecule.xyzs[0], M3.xyzs[0])
 
+    def test_align(self):
+        # Test that alignment works
+        # Create an Euler rotation matrix using some arbitrary rotations
+        E = geometric.molecule.EulerMatrix(0.8*np.pi, 1.0*np.pi, -1.2*np.pi)
+        # The rotated structure
+        xyz1 = np.dot(self.molecule.xyzs[0], E)
+        M = self.molecule + self.molecule + self.molecule
+        M.xyzs[1] = xyz1.copy()
+        # Perturb the last geometry, so RMSD is large even after alignment
+        M.xyzs[2] = xyz1.copy() + np.arange(M.na*3).reshape(-1,3)*0.1
+        # Calculate the RMSD a few different ways
+        ref_rmsd_align = M.ref_rmsd(0)
+        path_rmsd = M.pathwise_rmsd()
+        pairwise_rmsd = M.all_pairwise_rmsd()
+        ref_rmsd_noalign = M.ref_rmsd(0, align=False)
+        assert ref_rmsd_align[0] < 1e-10
+        assert ref_rmsd_align[1] < 1e-10
+        assert ref_rmsd_align[2] > 1.0
+        assert ref_rmsd_noalign[0] < 1e-10
+        assert ref_rmsd_noalign[1] > 1.0
+        assert ref_rmsd_noalign[2] > 1.0
+        assert (path_rmsd >= ref_rmsd_align[1:]).all()
+        assert np.allclose(pairwise_rmsd[0], ref_rmsd_align)
+
     def test_find_angles_dihedrals(self):
         a = self.molecule.find_angles()
         assert len(a) == 81
