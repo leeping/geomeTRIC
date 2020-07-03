@@ -349,7 +349,7 @@ class Blank(Engine):
         gradient = np.zeros(len(coords), dtype=float)
         return {'energy':energy, 'gradient':gradient}
 
-class TeraChem(Engine):
+class TeraChem(Engine): # pragma: no cover
     """
     Run a TeraChem energy and gradient calculation.
     """
@@ -819,7 +819,7 @@ class Psi4(Engine):
         gradient = np.array(gradient, dtype=np.float64).ravel()
         return {'energy':energy, 'gradient':gradient}
 
-class QChem(Engine):
+class QChem(Engine): # pragma: no cover
     def __init__(self, molecule, dirname=None, qcdir=None, threads=None):
         super(QChem, self).__init__(molecule)
         self.threads = threads
