@@ -554,7 +554,7 @@ class Optimizer(object):
 
         if params.transition:
             ts_bfgs = False
-            if ts_bfgs:
+            if ts_bfgs: # pragma: no cover
                 logger.info("TS-BFGS Hessian update\n")
                 # yk = Dg; dk = Dy
                 dk = col(self.Y - self.Yprev)
@@ -844,7 +844,7 @@ def run_optimizer(**kwargs):
     logger.info("Time elapsed since start of run_optimizer: %.3f seconds\n" % (time.time()-t0))
     return progress
 
-def main():
+def main(): # pragma: no cover
     # Read user input (look in params.py for full list of options).
     # args is a dictionary containing only user-specified arguments
     # (i.e. keys without provided values are removed.)
