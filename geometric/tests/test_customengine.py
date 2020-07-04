@@ -4,6 +4,9 @@ import tempfile
 import numpy as np
 import geometric
 import geometric.molecule
+from . import addons
+
+localizer = addons.in_folder
 
 Bohr = 0.52917721
 
@@ -34,7 +37,7 @@ class CustomEngine(geometric.engine.Engine):
         return {'energy': energy, 'gradient': gradient.ravel()}
 
 
-def test_customengine():
+def test_customengine(localizer):
     molecule = geometric.molecule.Molecule()
     molecule.elem = ['O', 'H', 'H']
     molecule.xyzs = [np.array((( 0. , 0.3, 0),
