@@ -151,6 +151,30 @@ class TestAlaGRO:
         M1.xyzs[0][0,0] += 1.0
         assert np.allclose(self.molecule.xyzs[0], M3.xyzs[0])
 
+    def test_align(self):
+        # Test that alignment works
+        # Create an Euler rotation matrix using some arbitrary rotations
+        E = geometric.molecule.EulerMatrix(0.8*np.pi, 1.0*np.pi, -1.2*np.pi)
+        # The rotated structure
+        xyz1 = np.dot(self.molecule.xyzs[0], E)
+        M = self.molecule + self.molecule + self.molecule
+        M.xyzs[1] = xyz1.copy()
+        # Perturb the last geometry, so RMSD is large even after alignment
+        M.xyzs[2] = xyz1.copy() + np.arange(M.na*3).reshape(-1,3)*0.1
+        # Calculate the RMSD a few different ways
+        ref_rmsd_align = M.ref_rmsd(0)
+        path_rmsd = M.pathwise_rmsd()
+        pairwise_rmsd = M.all_pairwise_rmsd()
+        ref_rmsd_noalign = M.ref_rmsd(0, align=False)
+        assert ref_rmsd_align[0] < 1e-10
+        assert ref_rmsd_align[1] < 1e-10
+        assert ref_rmsd_align[2] > 1.0
+        assert ref_rmsd_noalign[0] < 1e-10
+        assert ref_rmsd_noalign[1] > 1.0
+        assert ref_rmsd_noalign[2] > 1.0
+        assert (path_rmsd + 1e-10 >= ref_rmsd_align[1:]).all()
+        assert np.allclose(pairwise_rmsd[0], ref_rmsd_align)
+
     def test_find_angles_dihedrals(self):
         a = self.molecule.find_angles()
         assert len(a) == 81
@@ -202,3 +226,23 @@ class TestWaterQCOut:
         assert np.allclose(self.molecule.xyzs[0], M_test.xyzs[0])
         assert np.allclose(self.molecule.qm_energies, M_test.qm_energies)
         assert np.allclose(self.molecule.qm_grads[0], M_test.qm_grads[0])
+
+def test_rings(localizer):
+    ring_size_data = {'tetrahedrane.xyz': [3, 3, 3, 3],
+                      'cholesterol.xyz' : [6, 6, 6, 5],
+                      'bicyclo222octane.xyz' : [6, 6, 6],
+                      'adamantane.xyz' : [6, 6, 6, 6],
+                      'cubane.xyz' : [4, 4, 4, 4, 4, 4],
+                      'coronene.xyz' : [6, 6, 6, 6, 6, 6, 6],
+                      'porphin.xyz' : [5, 16, 5, 5, 5], 
+                      'fenestradiene.xyz' : [6, 4, 5, 4, 6, 5, 6, 6, 4, 5, 4, 6, 5, 6],
+                      'vancomycin.pdb' : [16, 16, 6, 16, 16, 6, 12, 6, 6, 6, 6, 6],
+                      'c60.xyz' : [5, 6, 6, 6, 5, 6, 5, 6, 6, 5, 6, 6, 5, 6, 6, 5, 5, 6, 6, 5, 6, 6, 6, 5, 5, 6, 5, 6, 6, 6, 6, 5]}
+    for fnm in ring_size_data.keys():
+        M = geometric.molecule.Molecule(os.path.join(datad, fnm))
+        ring_sizes = [len(i) for i in M.find_rings(max_size=20)]
+        # Check that the number of rings is correct
+        assert len(ring_sizes) == len(ring_size_data[fnm])
+        # Check that ring sizes are correct and in the expected order
+        assert ring_sizes == ring_size_data[fnm]
+    

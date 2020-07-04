@@ -352,6 +352,20 @@ def image_gradient_hessian(G, H, indices):
     
     return Gs, Hs
 
+def force_positive_definite(H):
+    """
+    Force all eigenvalues to be positive.
+    """
+    # Sorted eigenvalues and corresponding eigenvectors of the Hessian
+    Hvals, Hvecs = sorted_eigh(H, asc=True)
+    Hs = np.zeros_like(H)
+    for i in range(H.shape[0]):
+        if Hvals[i] > 0:
+            Hs += Hvals[i] * np.outer(Hvecs[:,i], Hvecs[:,i])
+        else:
+            Hs -= Hvals[i] * np.outer(Hvecs[:,i], Hvecs[:,i])
+    return Hs
+
 def get_delta_prime_trm(v, X, G, H, IC, verbose=0):
     """
     Returns the Newton-Raphson step given a multiple of the diagonal

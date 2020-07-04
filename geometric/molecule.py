@@ -252,20 +252,48 @@ Elements = ["None",'H','He',
             'Fr','Ra','Ac','Th','Pa','U','Np','Pu','Am','Cm','Bk','Cf','Es','Fm','Md','No','Lr','Rf','Db','Sg','Bh','Hs','Mt']
 
 # Dictionary of atomic masses ; also serves as the list of elements (periodic table)
-PeriodicTable = OrderedDict([('H' , 1.0079), ('He' , 4.0026),
-                             ('Li' , 6.941), ('Be' , 9.0122), ('B' , 10.811), ('C' , 12.0107), ('N' , 14.0067), ('O' , 15.9994), ('F' , 18.9984), ('Ne' , 20.1797),
-                             ('Na' , 22.9897), ('Mg' , 24.305), ('Al' , 26.9815), ('Si' , 28.0855), ('P' , 30.9738), ('S' , 32.065), ('Cl' , 35.453), ('Ar' , 39.948),
-                             ('K' , 39.0983), ('Ca' , 40.078), ('Sc' , 44.9559), ('Ti' , 47.867), ('V' , 50.9415), ('Cr' , 51.9961), ('Mn' , 54.938), ('Fe' , 55.845), ('Co' , 58.9332),
-                             ('Ni' , 58.6934), ('Cu' , 63.546), ('Zn' , 65.39), ('Ga' , 69.723), ('Ge' , 72.64), ('As' , 74.9216), ('Se' , 78.96), ('Br' , 79.904), ('Kr' , 83.8),
-                             ('Rb' , 85.4678), ('Sr' , 87.62), ('Y' , 88.9059), ('Zr' , 91.224), ('Nb' , 92.9064), ('Mo' , 95.94), ('Tc' , 98), ('Ru' , 101.07), ('Rh' , 102.9055),
-                             ('Pd' , 106.42), ('Ag' , 107.8682), ('Cd' , 112.411), ('In' , 114.818), ('Sn' , 118.71), ('Sb' , 121.76), ('Te' , 127.6), ('I' , 126.9045), ('Xe' , 131.293),
-                             ('Cs' , 132.9055), ('Ba' , 137.327), ('La' , 138.9055), ('Ce' , 140.116), ('Pr' , 140.9077), ('Nd' , 144.24), ('Pm' , 145), ('Sm' , 150.36),
-                             ('Eu' , 151.964), ('Gd' , 157.25), ('Tb' , 158.9253), ('Dy' , 162.5), ('Ho' , 164.9303), ('Er' , 167.259), ('Tm' , 168.9342), ('Yb' , 173.04),
-                             ('Lu' , 174.967), ('Hf' , 178.49), ('Ta' , 180.9479), ('W' , 183.84), ('Re' , 186.207), ('Os' , 190.23), ('Ir' , 192.217), ('Pt' , 195.078),
-                             ('Au' , 196.9665), ('Hg' , 200.59), ('Tl' , 204.3833), ('Pb' , 207.2), ('Bi' , 208.9804), ('Po' , 209), ('At' , 210), ('Rn' , 222),
-                             ('Fr' , 223), ('Ra' , 226), ('Ac' , 227), ('Th' , 232.0381), ('Pa' , 231.0359), ('U' , 238.0289), ('Np' , 237), ('Pu' , 244),
-                             ('Am' , 243), ('Cm' , 247), ('Bk' , 247), ('Cf' , 251), ('Es' , 252), ('Fm' , 257), ('Md' , 258), ('No' , 259),
-                             ('Lr' , 262), ('Rf' , 261), ('Db' , 262), ('Sg' , 266), ('Bh' , 264), ('Hs' , 277), ('Mt' , 268)])
+#
+# Atomic mass data was updated on 2020-05-07 from NIST:
+# "Atomic Weights and Isotopic Compositions with Relative Atomic Masses"
+# https://www.nist.gov/pml/atomic-weights-and-isotopic-compositions-relative-atomic-masses
+# using All Elements -> preformatted ASCII table.
+#
+# The standard atomic weight was provided in several different formats:
+# Two numbers in brackets as in [1.00784,1.00811] : The average value of the two limits is used.
+# With parentheses(uncert) as in 4.002602(2) : The parentheses was split off and all significant digits are used.
+# A single number in brackets as in [98] : The single number was used
+# Not provided (for Am, Z=95 and up): The mass number of the lightest isotope was used
+PeriodicTable = OrderedDict([("H", 1.007975), ("He", 4.002602), # First row
+                             ("Li", 6.9675), ("Be", 9.0121831), ("B", 10.8135), ("C", 12.0106), ("N", 14.006855), ("O", 15.99940), ("F", 18.99840316), ("Ne", 20.1797), # Second row Li-Ne
+                             ("Na", 22.98976928), ("Mg", 24.3055), ("Al", 26.9815385), ("Si", 28.085), ("P", 30.973762), ("S", 32.0675), ("Cl", 35.4515), ("Ar", 39.948), # Third row Na-Ar
+                             ("K", 39.0983), ("Ca", 40.078), ("Sc", 44.955908), ("Ti", 47.867), ("V", 50.9415), ("Cr", 51.9961), ("Mn", 54.938044), ("Fe", 55.845), ("Co", 58.933194), # Fourth row K-Kr
+                             ("Ni", 58.6934), ("Cu", 63.546), ("Zn", 65.38), ("Ga", 69.723), ("Ge", 72.63), ("As", 74.921595), ("Se", 78.971), ("Br", 79.904), ("Kr", 83.798),
+                             ("Rb", 85.4678), ("Sr", 87.62), ("Y", 88.90584), ("Zr", 91.224), ("Nb", 92.90637), ("Mo", 95.95), ("Tc", 98.), ("Ru", 101.07), ("Rh", 102.9055), # Fifth row Rb-Xe
+                             ("Pd", 106.42), ("Ag", 107.8682), ("Cd", 112.414), ("In", 114.818), ("Sn", 118.71), ("Sb", 121.76), ("Te", 127.6), ("I", 126.90447), ("Xe", 131.293),
+                             ("Cs", 132.905452), ("Ba", 137.327), ("La", 138.90547), ("Ce", 140.116), ("Pr", 140.90766), ("Nd", 144.242), ("Pm", 145.), ("Sm", 150.36), # Sixth row Cs-Rn
+                             ("Eu", 151.964), ("Gd", 157.25), ("Tb", 158.92535), ("Dy", 162.5), ("Ho", 164.93033), ("Er", 167.259), ("Tm", 168.93422), ("Yb", 173.054),
+                             ("Lu", 174.9668), ("Hf", 178.49), ("Ta", 180.94788), ("W", 183.84), ("Re", 186.207), ("Os", 190.23), ("Ir", 192.217), ("Pt", 195.084),
+                             ("Au", 196.966569), ("Hg", 200.592), ("Tl", 204.3835), ("Pb", 207.2), ("Bi", 208.9804), ("Po", 209.), ("At", 210.), ("Rn", 222.),
+                             ("Fr", 223.), ("Ra", 226.), ("Ac", 227.), ("Th", 232.0377), ("Pa", 231.03588), ("U", 238.02891), ("Np", 237.), ("Pu", 244.), # Seventh row Fr-Og
+                             ("Am", 241.), ("Cm", 243.), ("Bk", 247.), ("Cf", 249.), ("Es", 252.), ("Fm", 257.), ("Md", 258.), ("No", 259.),
+                             ("Lr", 262.), ("Rf", 267.), ("Db", 268.), ("Sg", 271.), ("Bh", 272.), ("Hs", 270.), ("Mt", 276.), ("Ds", 281.),
+                             ("Rg", 280.), ("Cn", 285.), ("Nh", 284.), ("Fl", 289.), ("Mc", 288.), ("Lv", 293.), ("Ts", 292.), ("Og", 294.)])
+
+# Old masses used pre-2020, retained in case it is useful:
+# PeriodicTable = OrderedDict([('H' , 1.0079), ('He' , 4.0026),
+#                              ('Li' , 6.941), ('Be' , 9.0122), ('B' , 10.811), ('C' , 12.0107), ('N' , 14.0067), ('O' , 15.9994), ('F' , 18.9984), ('Ne' , 20.1797),
+#                              ('Na' , 22.9897), ('Mg' , 24.305), ('Al' , 26.9815), ('Si' , 28.0855), ('P' , 30.9738), ('S' , 32.065), ('Cl' , 35.453), ('Ar' , 39.948),
+#                              ('K' , 39.0983), ('Ca' , 40.078), ('Sc' , 44.9559), ('Ti' , 47.867), ('V' , 50.9415), ('Cr' , 51.9961), ('Mn' , 54.938), ('Fe' , 55.845), ('Co' , 58.9332),
+#                              ('Ni' , 58.6934), ('Cu' , 63.546), ('Zn' , 65.39), ('Ga' , 69.723), ('Ge' , 72.64), ('As' , 74.9216), ('Se' , 78.96), ('Br' , 79.904), ('Kr' , 83.8),
+#                              ('Rb' , 85.4678), ('Sr' , 87.62), ('Y' , 88.9059), ('Zr' , 91.224), ('Nb' , 92.9064), ('Mo' , 95.94), ('Tc' , 98), ('Ru' , 101.07), ('Rh' , 102.9055),
+#                              ('Pd' , 106.42), ('Ag' , 107.8682), ('Cd' , 112.411), ('In' , 114.818), ('Sn' , 118.71), ('Sb' , 121.76), ('Te' , 127.6), ('I' , 126.9045), ('Xe' , 131.293),
+#                              ('Cs' , 132.9055), ('Ba' , 137.327), ('La' , 138.9055), ('Ce' , 140.116), ('Pr' , 140.9077), ('Nd' , 144.24), ('Pm' , 145), ('Sm' , 150.36),
+#                              ('Eu' , 151.964), ('Gd' , 157.25), ('Tb' , 158.9253), ('Dy' , 162.5), ('Ho' , 164.9303), ('Er' , 167.259), ('Tm' , 168.9342), ('Yb' , 173.04),
+#                              ('Lu' , 174.967), ('Hf' , 178.49), ('Ta' , 180.9479), ('W' , 183.84), ('Re' , 186.207), ('Os' , 190.23), ('Ir' , 192.217), ('Pt' , 195.078),
+#                              ('Au' , 196.9665), ('Hg' , 200.59), ('Tl' , 204.3833), ('Pb' , 207.2), ('Bi' , 208.9804), ('Po' , 209), ('At' , 210), ('Rn' , 222),
+#                              ('Fr' , 223), ('Ra' , 226), ('Ac' , 227), ('Th' , 232.0381), ('Pa' , 231.0359), ('U' , 238.0289), ('Np' , 237), ('Pu' , 244),
+#                              ('Am' , 243), ('Cm' , 247), ('Bk' , 247), ('Cf' , 251), ('Es' , 252), ('Fm' , 257), ('Md' , 258), ('No' , 259),
+#                              ('Lr' , 262), ('Rf' , 261), ('Db' , 262), ('Sg' , 266), ('Bh' , 264), ('Hs' , 277), ('Mt' , 268)])
 
 def getElement(mass):
     return PeriodicTable.keys()[np.argmin([np.abs(m-mass) for m in PeriodicTable.values()])]
@@ -2500,18 +2528,37 @@ class Molecule(object):
             #print phimod
         return phis
 
-    def find_rings(self, max_size=6):
+    def find_rings(self, max_size=12):
         """
-        Return a list of rings in the molecule. Tested on a DNA base
-        pair and C60.  Warning: Using large max_size for rings
-        (e.g. for finding the macrocycle in porphyrin) could lead to
-        some undefined behavior.
+        Return a list of rings in the molecule.
+        
+        Step 1: To find rings we loop through all triples of two atoms
+        bonded to a central one a...b...c and find all shortest
+        paths connecting a...x...y...c excluding atom b. 
+        Therefore, a...b...c...x...y...a forms a ring.
+
+        This set of rings is then reduced to the "complete set of smallest
+        rings" by taking all smallest rings that contain a given bond and
+        taking the union over all bonds in the system. This procedure
+        eliminates fused rings, i.e. rings that can be formed by taking the
+        union of several smaller ones. Note that this is different from the
+        smallest set of smallest rings (SSSR) as it includes a number of
+        linearly dependent rings, but the outcome is unique for a molecule 
+        unlike SSSR.
+
+        Systems that this is tested for include:
+        cholesterol (4 rings)
+        porphin (5 rings including 16-member macrocycle)
+        cubane (6 rings)
+        [4.6.4.6]fenestradiene from Hulot et al, JACS 2008, 130, 5046-5047 (7 rings)
+        vancomycin (12 rings)
+        C60 (32 rings)
 
         Parameters
         ----------
         max_size : int
-            The maximum ring size.  If a large ring contains smaller
-            sub-rings, they are all mapped into one.
+            The maximum ring size.  Decrease to find fewer rings and increase
+            to find larger rings e.g. macrocycles.
 
         Returns
         -------
@@ -2521,12 +2568,8 @@ class Molecule(object):
             from the lowest number and going along the ring, with the
             second atom being the lower of the two possible choices.
         """
-        friends = []
-        for i in range(self.na):
-            friends.append(self.topology.neighbors(i))
-        # Determine if atom is in a ring
-        self.build_topology()
         # Get triplets of atoms that are in rings
+        self.build_topology()
         triplets = []
         for i in range(self.na):
             g = copy.deepcopy(self.topology)
@@ -2542,80 +2585,67 @@ class Molecule(object):
                         triplets.append((a, i, b))
                     else:
                         triplets.append((b, i, a))
-        # Organize triplets into rings
         rings = []
-        # Triplets are assigned to rings
-        assigned = {}
-        # For each triplet that isn't already counted, see if it belongs to a ring already
-        while set(assigned.keys()) != set(triplets):
-            for t in triplets:
-                if t not in assigned:
-                    # print t, "has not been assigned yet"
-                    # Whether this triplet has been assigned to a ring
-                    has_been_assigned = False
-                    # Create variable for new rings
-                    new_rings = copy.deepcopy(rings)
-                    # Assign triplet to a ring
-                    for iring, ring in enumerate(rings):
-                        # Loop over triplets in the ring
-                        for r in ring:
-                            # Two triplets belong to the same ring if two of the atoms
-                            # are the same AND there exists a path connecting them with the
-                            # center atom deleted.  Check the forward and reverse orientations
-                            if ((r[0] == t[1] and r[1] == t[2]) or
-                                (r[::-1][0] == t[1] and r[::-1][1] == t[2]) or
-                                (r[0] == t[::-1][1] and r[1] == t[::-1][2]) or
-                                (r[::-1][0] == t[::-1][1] and r[1] == t[::-1][2])):
-                                ends = list(set(r).symmetric_difference(t))
-                                mids = set(r).intersection(t)
-                                g = copy.deepcopy(self.topology)
-                                for m in mids: g.remove_node(m)
-                                try:
-                                    PathLength = nx.shortest_path_length(g, ends[0], ends[1])
-                                except nx.exception.NetworkXNoPath:
-                                    PathLength = 0
-                                if PathLength <= 0 or PathLength > (max_size-2):
-                                    # print r, t, "share two atoms but are on different rings"
-                                    continue
-                                if has_been_assigned:
-                                    # This happens if two rings have separately been found but they're actually the same
-                                    # print "trying to assign t=", t, "to r=", r, "but it's already in", rings[assigned[t]]
-                                    # print "Merging", rings[iring], "into", rings[assigned[t]]
-                                    for r1 in rings[iring]:
-                                        new_rings[assigned[t]].append(r1)
-                                    del new_rings[new_rings.index(rings[iring])]
-                                    break
-                                new_rings[iring].append(t)
-                                assigned[t] = iring
-                                has_been_assigned = True
-                                # print t, "assigned to ring", iring
-                                break
-                    # If the triplet was not assigned to a ring,
-                    # then create a new one
-                    if not has_been_assigned:
-                        # print t, "creating new ring", len(new_rings)
-                        assigned[t] = len(new_rings)
-                        new_rings.append([t])
-                    # Now the ring has a new triplet assigned to it
-                    rings = copy.deepcopy(new_rings)
-        # Keep the middle atom in each triplet
-        rings = [sorted(list(set([t[1] for t in r]))) for r in rings]
-        # print rings
-        # Sorted rings start from the lowest atom and go around the ring in ascending order
-        sorted_rings = []
-        for ring in rings:
-            # print "Sorting Ring", ring
-            minr = min(ring)
-            ring.remove(minr)
-            sring = [minr]
-            while len(ring) > 0:
-                for r in sorted(ring):
-                    if sring[-1] in friends[r]:
-                        ring.remove(r)
-                        sring.append(r)
-                        break
-            sorted_rings.append(sring[:])
-        return sorted(sorted_rings, key = lambda val: val[0])
+        for i in range(self.na):
+            g = copy.deepcopy(self.topology)
+            n = list(g.neighbors(i))
+            g.remove_node(i)
+            for a, b in itertools.combinations(n, 2):
+                try:
+                    allPaths = list(nx.all_shortest_paths(g, a, b))
+                except nx.exception.NetworkXNoPath: continue
+                for path in allPaths:
+                    if len(path) >= max_size: continue
+                    ringCandidate = [b, i, a] + path[1:-1]
+                    while ringCandidate[0] != min(ringCandidate):
+                        ringCandidate = ringCandidate[1:] + [ringCandidate[0]]
+                    if ringCandidate[1] > ringCandidate[-1]:
+                        ringCandidate = [ringCandidate[0]] + ringCandidate[1:][::-1]
+                    if ringCandidate not in rings:
+                        # print("adding", ringCandidate, "to rings")
+                        rings.append(ringCandidate)
+
+        def in_ring(r, a, b):
+            # Function to see if a pair of atoms is in a ring.
+            if a not in r or b not in r: return False
+            for i in range(len(r)):
+                j = (i+1) % len(r)
+                if (min(r[i], r[j]), max(r[i], r[j])) == (min(a, b), max(a, b)):
+                    return True
+            return False
+                    
+        for r in rings:
+            for i in range(len(r)-1):
+                if r[i] not in self.topology.neighbors(r[(i+1) % len(r)]):
+                    raise RuntimeError("Atoms %i-%i in ring %s are not bonded" % (r[i], r[i+1], str(r)))
+
+        # Each ring must be one of the smallest rings for at least one of its bonds.
+        # Otherwise, it is a fused ring and can be decomposed.
+        keep_rings = []
+        for i, j in self.topology.edges:
+            min_size = 1e10
+            keep_candidates = []
+            for r in range(len(rings)):
+                if in_ring(rings[r], i, j):
+                    keep_candidates.append(r)
+            if len(keep_candidates) == 0: continue
+            if len(keep_candidates) == 1 and r not in keep_rings:
+                keep_rings.append(r)
+                continue
+            min_size = min([len(rings[r]) for r in keep_candidates])
+            for r in keep_candidates:
+                if len(rings[r]) <= min_size and r not in keep_rings:
+                    keep_rings.append(r)
+                        
+        # for r in range(len(rings)):
+        #     if r in keep_rings:
+        #         print("Keeping ring %s" % ' '.join(['%i' % i for i in rings[r]]))
+        # for r in range(len(rings)):
+        #     if r not in keep_rings:
+        #         print("Discarding ring %s because it is a fused ring" % ' '.join(['%i' % i for i in rings[r]]))
+
+        final_rings = [rings[r] for r in keep_rings]
+        return sorted(final_rings, key = lambda val: (val[0], val[1]))
 
     def order_by_connectivity(self, m, i, currList, max_min_path):
         """

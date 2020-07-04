@@ -1,0 +1,15 @@
+coordinates    start.xyz
+charge         0
+spinmult       1
+run            gradient
+method         rhf
+basis          3-21g
+
+# SCF options
+convthre       1e-6
+
+# Thresholds and precision
+threall        1e-14
+precision      mixed
+threspdp       1e-4
+end
