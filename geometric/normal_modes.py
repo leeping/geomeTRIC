@@ -40,7 +40,7 @@ import os, shutil
 import numpy as np
 from .errors import FrequencyError
 from .molecule import Molecule, PeriodicTable
-from .nifty import logger, kb, kb_si, hbar, au2kj, au2kcal, ang2bohr, bohr2ang, c_lightspeed, avogadro, cm2au, amu2au, ambervel2au, wq_wait, getWorkQueue, commadash
+from .nifty import logger, kb, kb_si, hbar, au2kj, au2kcal, ang2bohr, bohr2ang, c_lightspeed, avogadro, cm2au, amu2au, ambervel2au, wq_wait, getWorkQueue, commadash, bak
 
 def calc_cartesian_hessian(coords, molecule, engine, dirname, read_data=True, verbose=0):
     """ 
@@ -395,7 +395,7 @@ def frequency_analysis(coords, Hessian, elem=None, mass=None, energy=0.0, temper
     freqs_wavenumber = mwHess_wavenumber * np.sqrt(np.abs(ichess_vals)) * np.sign(ichess_vals)
 
     if verbose:
-        logger.info("Vibrational Frequencies (wavenumber) and Cartesian displacements:\n")
+        logger.info("\n-=# Vibrational Frequencies (wavenumber) and Cartesian displacements #=-\n\n")
         i = 0
         while True:
             j = min(i+3, VibDOF)
@@ -528,7 +528,7 @@ def free_energy_harmonic(coords, mass, freqs_wavenumber, energy, temperature, pr
     S_vib = 0.0
     nimag = 0
     if verbose >= 1:
-        logger.info("Mode   Freq(1/cm)     Zero-point  +  Thermal = Evib(kcal/mol) Svib(cal/mol/K)\n")
+        logger.info("\nMode   Freq(1/cm)     Zero-point  +  Thermal = Evib(kcal/mol) Svib(cal/mol/K)\n\n")
     for ifreq, freq in enumerate(freqs_wavenumber):
         if freq < 0:
             nimag += 1

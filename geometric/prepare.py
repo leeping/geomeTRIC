@@ -61,7 +61,7 @@ def get_molecule_engine(**kwargs):
     Engine
         Engine object containing methods for calculating energy and gradient
     """
-    ### Set up based on which quantum chemistry code we're using.
+    ### Set up based on which quantum chemistry code we're using (defaults to TeraChem).
     engine_str = kwargs.get('engine', None)
     customengine = kwargs.get('customengine', None)
     # Path to Molpro executable (used if molpro=True)
@@ -83,7 +83,7 @@ def get_molecule_engine(**kwargs):
     ## MECI calculations create a custom engine that contains two other engines.
     if kwargs.get('meci', None):
         if engine_str.lower() in ['psi4', 'gmx', 'molpro', 'qcengine', 'openmm'] or customengine:
-            logger.warning("MECI optimizations are not tested with engines: psi4, gmx, molpro, qcegine, openmm, customengine. Be Careful!")
+            logger.warning("MECI optimizations are not tested with engines: psi4, gmx, molpro, qcengine, openmm, customengine. Be Careful!")
         ## If 'engine' is provided as the argument to 'meci', then we assume the engine is
         # directly returning the MECI objective function and gradient.
         if kwargs['meci'].lower() == 'engine':
@@ -91,8 +91,8 @@ def get_molecule_engine(**kwargs):
             sub_kwargs['meci'] = None
             M, engine = get_molecule_engine(**sub_kwargs)
         else:
-            meci_sigma = kwargs.get('meci_sigma')
-            meci_alpha = kwargs.get('meci_alpha')
+            meci_sigma = kwargs.get('meci_sigma', 3.5)
+            meci_alpha = kwargs.get('meci_alpha', 0.025)
             sub_engines = {}
             for state in [1, 2]:
                 sub_kwargs = kwargs.copy()
@@ -105,8 +105,8 @@ def get_molecule_engine(**kwargs):
         return M, engine
 
     ## Read radii from the command line.
-    # Ions should have radii of zero.
-    arg_radii = kwargs.get('radii', ["Na","0.0","Cl","0.0","K","0.0"])
+    # Cations should have radii of zero.
+    arg_radii = kwargs.get('radii', ["Na","0.0","K","0.0"])
     if (len(arg_radii) % 2) != 0:
         raise RuntimeError("Must have an even number of arguments for radii")
     nrad = int(len(arg_radii) / 2)
@@ -118,6 +118,7 @@ def get_molecule_engine(**kwargs):
     threads_enabled = False
     if engine_str:
         engine_str = engine_str.lower()
+        if engine_str[:4] == 'tera' : engine_str = 'tera'
         if engine_str not in ['tera', 'qchem', 'psi4', 'gmx', 'molpro', 'openmm', 'qcengine']:
             raise RuntimeError("Valid values of engine are: tera, qchem, psi4, gmx, molpro, openmm, qcengine")
         if customengine:

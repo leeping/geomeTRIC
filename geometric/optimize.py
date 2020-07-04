@@ -697,10 +697,9 @@ def run_optimizer(**kwargs):
     # By default, output should be written to <args.prefix>.log and also printed to the terminal.
     # This behavior may be changed by editing the log.ini file.
     # Output will only be written to log files after the 'logConfig' line is called!
-    logIni = 'config/log.ini'
     if kwargs.get('logIni') is None:
         import geometric.optimize
-        logIni = pkg_resources.resource_filename(geometric.optimize.__name__, logIni)
+        logIni = pkg_resources.resource_filename(geometric.optimize.__name__, 'config/log.ini')
     else:
         logIni = kwargs.get('logIni')
     logfilename = kwargs.get('prefix')
@@ -846,12 +845,14 @@ def run_optimizer(**kwargs):
     return progress
 
 def main():
-    # Read user input (look in params.py for full list of options). 
+    # Read user input (look in params.py for full list of options).
+    # args is a dictionary containing only user-specified arguments
+    # (i.e. keys without provided values are removed.)
     args = parse_optimizer_args(sys.argv[1:])
 
     # Run the optimizer.
     try:
-        run_optimizer(**vars(args))
+        run_optimizer(**args)
     except EngineError:
         logger.info("EngineError:\n" + traceback.format_exc())
         sys.exit(51)

@@ -708,7 +708,7 @@ class Psi4(Engine):
         coords = []
         elems = []
         fragn = []
-        found_molecule, found_geo, found_gradient = False, False, False
+        found_molecule, found_geo, found_gradient, found_symmetry, found_no_reorient, found_no_com = False, False, False, False, False, False
         psi4_temp = [] # store a template of the input file for generating new ones
         for line in open(psi4in):
             if 'molecule' in line:
@@ -725,10 +725,27 @@ class Psi4(Engine):
                     coords.append(ls[1:4])
                 elif '--' in line:
                     fragn.append(len(elems))
+                elif 'symmetry' in line:
+                    found_symmetry = True
+                    if line.split()[1].lower() != 'c1':
+                        raise Psi4EngineError("Symmetry must be set to c1 to prevent rotations of the coordinate frame.")
+                elif 'no_reorient' in line or 'noreorient' in line:
+                    found_no_reorient = True
+                elif 'no_com' in line or 'nocom' in line:
+                    found_no_com = True
+                elif 'units' in line:
+                    if line.split()[1].lower()[:3] != 'ang':
+                        raise Psi4EngineError("Must use Angstroms as coordinate input.")
                 else:
-                    psi4_temp.append(line)
                     if '}' in line:
                         found_molecule = False
+                        if not found_no_com:
+                            psi4_temp.append("no_com\n")
+                        if not found_no_reorient:
+                            psi4_temp.append("no_reorient\n")
+                        if not found_symmetry:
+                            psi4_temp.append("symmetry c1\n")
+                    psi4_temp.append(line)
             else:
                 psi4_temp.append(line)
             if "gradient(" in line:
@@ -818,6 +835,11 @@ class Psi4(Engine):
             raise RuntimeError("Psi4 gradient is not found in %s, please check." % psi4out)
         gradient = np.array(gradient, dtype=np.float64).ravel()
         return {'energy':energy, 'gradient':gradient}
+    
+    def copy_scratch(self, src, dest):
+        # Psi4 scratch file handling is complicated and depends on the type of job being run,
+        # so we will opt not to store and retrieve scratch files for now.
+        return
 
 class QChem(Engine): # pragma: no cover
     def __init__(self, molecule, dirname=None, qcdir=None, threads=None):
@@ -926,6 +948,12 @@ class QChem(Engine): # pragma: no cover
                 s2 = float(line.split()[-1])
         return {'energy':energy, 'gradient':gradient, 's2':s2}
 
+    def copy_scratch(self, src, dest):
+        if not os.path.exists(dest): os.makedirs(dest)
+        if not os.path.exists(os.path.join(src, 'run.d')):
+            raise QChemEngineError("Trying to copy %s but it does not exist" % os.path.join(src, 'run.d'))
+        copy_tree_over(os.path.join(src, 'run.d'), os.path.join(dest, 'run.d'))
+    
 class Gromacs(Engine):
     def __init__(self, molecule):
         super(Gromacs, self).__init__(molecule)

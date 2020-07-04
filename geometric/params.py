@@ -60,12 +60,11 @@ class OptParams(object):
         self.check = kwargs.get('check', 0)
         # More verbose printout
         self.verbose = kwargs.get('verbose', False)
-        # Rational function optimization (experimental)
-        self.rfo = kwargs.get('rfo', False)
         # Starting value of the trust radius
-        self.trust = kwargs.get('trust', 0.1)
+        # Because TS optimization is experimental, use conservative trust radii
+        self.trust = kwargs.get('trust', 0.01 if self.transition else 0.1)
         # Maximum value of trust radius
-        self.tmax = kwargs.get('tmax', 0.3)
+        self.tmax = kwargs.get('tmax', 0.03 if self.transition else 0.3)
         # Minimum value of the trust radius
         self.tmin = kwargs.get('tmin', 0.0 if (self.transition or self.meci) else min(1.2e-3, self.Convergence_drms))
         # Minimum size of a step that can be rejected
@@ -73,6 +72,7 @@ class OptParams(object):
         # Sanity checks on trust radius
         if self.tmax < self.tmin:
             raise ParamError("Max trust radius must be larger than min")
+        # The trust radius should not be outside (tmin, tmax)
         self.trust = min(self.tmax, self.trust)
         self.trust = max(self.tmin, self.trust)
         # Maximum number of optimization cycles
@@ -186,33 +186,42 @@ def str2bool(v):
 
 def parse_optimizer_args(*args):
     
-    """ Read user input. Designed to be called by optimize.main() passing in sys.argv[1:] """
+    """ 
+    Read user input from the command line interface. 
+    Designed to be called by optimize.main() passing in sys.argv[1:] 
+    
+    Avoid setting default values for variables here. The default values of certain variables 
+    depends on the values of other variables. The OptParams() and get_molecule_engine() 
+    functions sets the default values of variables. This also ensures compatibility with
+    the JSON API.
+    """
     
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--coordsys', type=str, default='tric', help='Coordinate system: "cart" for Cartesian, "prim" for Primitive (a.k.a redundant), '
+    parser.add_argument('--coordsys', type=str, help='Coordinate system: "cart" for Cartesian, "prim" for Primitive (a.k.a redundant), '
                         '"dlc" for Delocalized Internal Coordinates, "hdlc" for Hybrid Delocalized Internal Coordinates, "tric-p" for primitive Translation-Rotation'
                         'Internal Coordinates (no delocalization), "tric" for Translation-Rotation Internal Coordinates (default).')
+    # TeraChem as a default option is only for the command line interface.
     parser.add_argument('--engine', type=str, default='tera', help='Specify engine for computing energies and gradients, '
                         '"tera" for TeraChem (default), "qchem" for Q-Chem, "psi4" for Psi4, "openmm" for OpenMM, "gmx" for Gromacs, "molpro" for Molpro.')
-    parser.add_argument('--meci', type=str, default=None, help='Provide second input file and search for minimum-energy conical '
+    parser.add_argument('--meci', type=str, help='Provide second input file and search for minimum-energy conical '
                         'intersection or crossing point between two SCF solutions (TeraChem and Q-Chem supported).'
                         'Or, provide "engine" if the engine directly provides the MECI objective function and gradient.')
-    parser.add_argument('--meci_sigma', type=float, default=3.5, help='Sigma parameter for MECI optimization;'
+    parser.add_argument('--meci_sigma', type=float, help='Sigma parameter for MECI optimization (default 3.5);'
                         'only used if geomeTRIC computes the MECI objective function from 2 energies/gradients.')
-    parser.add_argument('--meci_alpha', type=float, default=0.025, help='Alpha parameter for MECI optimization;'
+    parser.add_argument('--meci_alpha', type=float, help='Alpha parameter for MECI optimization (default 0.025);'
                         'only used if geomeTRIC computes the MECI objective function from 2 energies/gradients.')
-    parser.add_argument('--molproexe', type=str, default=None, help='Specify absolute path of Molpro executable.')
+    parser.add_argument('--molproexe', type=str, help='Specify absolute path of Molpro executable.')
     parser.add_argument('--molcnv', action='store_true', help='Use Molpro style convergence criteria instead of the default.')
-    parser.add_argument('--prefix', type=str, default=None, help='Specify a prefix for log file and temporary directory.')
+    parser.add_argument('--prefix', type=str, help='Specify a prefix for log file and temporary directory.')
     parser.add_argument('--displace', action='store_true', help='Write out the displacements of the coordinates.')
     parser.add_argument('--fdcheck', action='store_true', help='Check internal coordinate gradients using finite difference.')
-    parser.add_argument('--enforce', type=float, default=0.0, help='Enforce exact constraints when within provided tolerance (in a.u. and radian)')
-    parser.add_argument('--conmethod', type=int, default=0, help='Set to 1 to enable updated constraint algorithm.')
-    parser.add_argument('--write_cart_hess', type=str, default=None, help='Convert current Hessian matrix at optimized geometry to Cartesian coords and write to specified file.')
-    parser.add_argument('--epsilon', type=float, default=1e-5, help='Small eigenvalue threshold.')
-    parser.add_argument('--check', type=int, default=0, help='Check coordinates every N steps to see whether it has changed.')
-    parser.add_argument('--verbose', type=int, default=0, help='Set to positive for more verbose printout. 1 = Basic info about optimization step. 2 = Include microiterations.'
-                        '3 = Lots of printout from low-level functions.')
+    parser.add_argument('--enforce', type=float, help='Enforce exact constraints when within provided tolerance (in a.u. and radian, default 0.0)')
+    parser.add_argument('--conmethod', type=int, help='Set to 1 to enable updated constraint algorithm (default 0).')
+    parser.add_argument('--write_cart_hess', type=str, help='Convert current Hessian matrix at optimized geometry to Cartesian coords and write to specified file.')
+    parser.add_argument('--epsilon', type=float, help='Small eigenvalue threshold, default 1e-5.')
+    parser.add_argument('--check', type=int, help='Check coordinates every N steps to see whether it has changed, disabled by default.')
+    parser.add_argument('--verbose', type=int, help='Set to positive for more verbose printout. 0 = default. 1 = Basic info about optimization step.'
+                        '2 = Include microiterations. 3 = Lots of printout from low-level functions.')
     parser.add_argument('--logINI',  type=str, dest='logIni', help='ini file for logging')
     parser.add_argument('--reset', type=str2bool, help='Reset Hessian when eigenvalues are under epsilon. Defaults to True for minimization and False for transition states.')
     parser.add_argument('--transition', action='store_true', help='Search for a first order saddle point / transition state.')
@@ -222,24 +231,27 @@ def parse_optimizer_args(*args):
                         '"stop" : Calculate Hessian for initial structure, then exit. "last" : Calculate Hessian at conclusion of optimization.'
                         '"first+last" : Calculate Hessian for both the first and last structure. Default is "never" for minimization and "initial" for transition state.')
     parser.add_argument('--frequency', type=str2bool, help='Perform frequency analysis whenever Hessian is calculated, default is True.')
-    parser.add_argument('--thermo', type=float, nargs=2, default=[300.,1.0], help='Temperature (K) and pressure (bar) for harmonic free energy following frequency analysis.')
-    parser.add_argument('--wigner', type=int, default=0, help='Number of desired samples from Wigner distribution after frequency analysis. Provide negative number to overwrite any existing samples.')
-    parser.add_argument('--port', type=int, default=0, help='If nonzero, the Work Queue port used to distribute Hessian calculations. Workers must be started separately.')
-    parser.add_argument('--rfo', action='store_true', help='Use rational function optimization (default is trust-radius Newton Raphson).')
-    parser.add_argument('--trust', type=float, default=0.1, help='Starting trust radius.')
-    parser.add_argument('--tmax', type=float, default=0.3, help='Maximum trust radius.')
-    parser.add_argument('--maxiter', type=int, default=300, help='Maximum number of optimization steps.')
-    parser.add_argument('--radii', type=str, nargs="+", default=["Na","0.0"], help='List of atomic radii for coordinate system.')
+    parser.add_argument('--thermo', type=float, nargs=2, help='Temperature (K) and pressure (bar) for harmonic free energy following frequency analysis, default is 300 K and 1.0 bar.')
+    parser.add_argument('--wigner', type=int, help='If nonzero, number  of desired samples from Wigner distribution after frequency analysis. Provide negative number to overwrite any existing samples.')
+    parser.add_argument('--port', type=int, help='If nonzero, the Work Queue port used to distribute Hessian calculations. Workers must be started separately.')
+    parser.add_argument('--trust', type=float, help='Starting trust radius, defaults to 0.1 for energy minimization and 0.01 for TS optimization.')
+    parser.add_argument('--tmax', type=float, help='Maximum trust radius, defaults to 0.3 for energy minimization and 0.03 for TS optimization.')
+    parser.add_argument('--maxiter', type=int, help='Maximum number of optimization steps, default 300.')
+    parser.add_argument('--radii', type=str, nargs="+", help='List of atomic radii for coordinate system. Provide pairs of symbol/radius values such as Na 0.0')
     parser.add_argument('--pdb', type=str, help='Provide a PDB file name with coordinates and resids to split the molecule.')
     parser.add_argument('--coords', type=str, help='Provide coordinates to override the TeraChem input file / PDB file. The LAST frame will be used.')
     parser.add_argument('--frag', action='store_true', help='Fragment the internal coordinate system by deleting bonds between residues.')
     parser.add_argument('--qcdir', type=str, help='Provide an initial Q-Chem scratch folder e.g. supplied initial guess).')
     parser.add_argument('--qccnv', action='store_true', help='Use Q-Chem style convergence criteria instead of the default.')
     parser.add_argument('--qdata', action='store_true', help='Write qdata.txt containing coordinates, energies, gradients for each structure in optimization.')
-    parser.add_argument('--converge', type=str, nargs="+", default=[], help='Custom convergence criteria as key/value pairs.'
+    parser.add_argument('--converge', type=str, nargs="+", help='Custom convergence criteria as key/value pairs.'
                         'Provide the name of a criteria set as "set GAU_LOOSE" or "set TURBOMOLE", and/or set specific criteria using "energy 1e-5" or "grms 1e-3')
     parser.add_argument('--nt', type=int, help='Specify number of threads for running in parallel (for TeraChem this should be number of GPUs)')
     parser.add_argument('input', type=str, help='Input file for calculation')
     parser.add_argument('constraints', type=str, nargs='?', help='Constraint input file (optional)')
-    args = parser.parse_args(*args)
-    return args
+    # Keep all arguments whose values are not None, so that the setting of default values in OptParams() and get_molecule_engine() will work properly.
+    args_dict = {}
+    for k, v in vars(parser.parse_args(*args)).items():
+        if v is not None:
+            args_dict[k] = v
+    return args_dict
