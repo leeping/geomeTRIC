@@ -708,7 +708,7 @@ def run_optimizer(**kwargs):
     verbose = kwargs.get('verbose', False)
     # Get calculation prefix and temporary directory name
     arg_prefix = kwargs.get('prefix', None) #prefix for output file and temporary directory
-    prefix = arg_prefix if arg_prefix is not None else os.path.splitext(os.path.split(inputf)[1])[0]
+    prefix = arg_prefix if arg_prefix is not None else os.path.splitext(inputf)[0]
     logfilename = prefix + ".log"
     # Create a backup if the log file already exists
     backed_up = bak(logfilename)
