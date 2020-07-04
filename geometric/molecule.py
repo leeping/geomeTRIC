@@ -2528,18 +2528,37 @@ class Molecule(object):
             #print phimod
         return phis
 
-    def find_rings(self, max_size=6):
+    def find_rings(self, max_size=12):
         """
-        Return a list of rings in the molecule. Tested on a DNA base
-        pair and C60.  Warning: Using large max_size for rings
-        (e.g. for finding the macrocycle in porphyrin) could lead to
-        some undefined behavior.
+        Return a list of rings in the molecule.
+        
+        Step 1: To find rings we loop through all triples of two atoms
+        bonded to a central one a...b...c and find all shortest
+        paths connecting a...x...y...c excluding atom b. 
+        Therefore, a...b...c...x...y...a forms a ring.
+
+        This set of rings is then reduced to the "complete set of smallest
+        rings" by taking all smallest rings that contain a given bond and
+        taking the union over all bonds in the system. This procedure
+        eliminates fused rings, i.e. rings that can be formed by taking the
+        union of several smaller ones. Note that this is different from the
+        smallest set of smallest rings (SSSR) as it includes a number of
+        linearly dependent rings, but the outcome is unique for a molecule 
+        unlike SSSR.
+
+        Systems that this is tested for include:
+        cholesterol (4 rings)
+        porphin (5 rings including 16-member macrocycle)
+        cubane (6 rings)
+        [4.6.4.6]fenestradiene from Hulot et al, JACS 2008, 130, 5046–5047 (7 rings)
+        vancomycin (12 rings)
+        C60 (32 rings)
 
         Parameters
         ----------
         max_size : int
-            The maximum ring size.  If a large ring contains smaller
-            sub-rings, they are all mapped into one.
+            The maximum ring size.  Decrease to find fewer rings and increase
+            to find larger rings e.g. macrocycles.
 
         Returns
         -------
@@ -2549,12 +2568,8 @@ class Molecule(object):
             from the lowest number and going along the ring, with the
             second atom being the lower of the two possible choices.
         """
-        friends = []
-        for i in range(self.na):
-            friends.append(self.topology.neighbors(i))
-        # Determine if atom is in a ring
-        self.build_topology()
         # Get triplets of atoms that are in rings
+        self.build_topology()
         triplets = []
         for i in range(self.na):
             g = copy.deepcopy(self.topology)
@@ -2570,80 +2585,67 @@ class Molecule(object):
                         triplets.append((a, i, b))
                     else:
                         triplets.append((b, i, a))
-        # Organize triplets into rings
         rings = []
-        # Triplets are assigned to rings
-        assigned = {}
-        # For each triplet that isn't already counted, see if it belongs to a ring already
-        while set(assigned.keys()) != set(triplets):
-            for t in triplets:
-                if t not in assigned:
-                    # print t, "has not been assigned yet"
-                    # Whether this triplet has been assigned to a ring
-                    has_been_assigned = False
-                    # Create variable for new rings
-                    new_rings = copy.deepcopy(rings)
-                    # Assign triplet to a ring
-                    for iring, ring in enumerate(rings):
-                        # Loop over triplets in the ring
-                        for r in ring:
-                            # Two triplets belong to the same ring if two of the atoms
-                            # are the same AND there exists a path connecting them with the
-                            # center atom deleted.  Check the forward and reverse orientations
-                            if ((r[0] == t[1] and r[1] == t[2]) or
-                                (r[::-1][0] == t[1] and r[::-1][1] == t[2]) or
-                                (r[0] == t[::-1][1] and r[1] == t[::-1][2]) or
-                                (r[::-1][0] == t[::-1][1] and r[1] == t[::-1][2])):
-                                ends = list(set(r).symmetric_difference(t))
-                                mids = set(r).intersection(t)
-                                g = copy.deepcopy(self.topology)
-                                for m in mids: g.remove_node(m)
-                                try:
-                                    PathLength = nx.shortest_path_length(g, ends[0], ends[1])
-                                except nx.exception.NetworkXNoPath:
-                                    PathLength = 0
-                                if PathLength <= 0 or PathLength > (max_size-2):
-                                    # print r, t, "share two atoms but are on different rings"
-                                    continue
-                                if has_been_assigned:
-                                    # This happens if two rings have separately been found but they're actually the same
-                                    # print "trying to assign t=", t, "to r=", r, "but it's already in", rings[assigned[t]]
-                                    # print "Merging", rings[iring], "into", rings[assigned[t]]
-                                    for r1 in rings[iring]:
-                                        new_rings[assigned[t]].append(r1)
-                                    del new_rings[new_rings.index(rings[iring])]
-                                    break
-                                new_rings[iring].append(t)
-                                assigned[t] = iring
-                                has_been_assigned = True
-                                # print t, "assigned to ring", iring
-                                break
-                    # If the triplet was not assigned to a ring,
-                    # then create a new one
-                    if not has_been_assigned:
-                        # print t, "creating new ring", len(new_rings)
-                        assigned[t] = len(new_rings)
-                        new_rings.append([t])
-                    # Now the ring has a new triplet assigned to it
-                    rings = copy.deepcopy(new_rings)
-        # Keep the middle atom in each triplet
-        rings = [sorted(list(set([t[1] for t in r]))) for r in rings]
-        # print rings
-        # Sorted rings start from the lowest atom and go around the ring in ascending order
-        sorted_rings = []
-        for ring in rings:
-            # print "Sorting Ring", ring
-            minr = min(ring)
-            ring.remove(minr)
-            sring = [minr]
-            while len(ring) > 0:
-                for r in sorted(ring):
-                    if sring[-1] in friends[r]:
-                        ring.remove(r)
-                        sring.append(r)
-                        break
-            sorted_rings.append(sring[:])
-        return sorted(sorted_rings, key = lambda val: val[0])
+        for i in range(self.na):
+            g = copy.deepcopy(self.topology)
+            n = list(g.neighbors(i))
+            g.remove_node(i)
+            for a, b in itertools.combinations(n, 2):
+                try:
+                    allPaths = list(nx.all_shortest_paths(g, a, b))
+                except nx.exception.NetworkXNoPath: continue
+                for path in allPaths:
+                    if len(path) >= max_size: continue
+                    ringCandidate = [b, i, a] + path[1:-1]
+                    while ringCandidate[0] != min(ringCandidate):
+                        ringCandidate = ringCandidate[1:] + [ringCandidate[0]]
+                    if ringCandidate[1] > ringCandidate[-1]:
+                        ringCandidate = [ringCandidate[0]] + ringCandidate[1:][::-1]
+                    if ringCandidate not in rings:
+                        # print("adding", ringCandidate, "to rings")
+                        rings.append(ringCandidate)
+
+        def in_ring(r, a, b):
+            # Function to see if a pair of atoms is in a ring.
+            if a not in r or b not in r: return False
+            for i in range(len(r)):
+                j = (i+1) % len(r)
+                if (min(r[i], r[j]), max(r[i], r[j])) == (min(a, b), max(a, b)):
+                    return True
+            return False
+                    
+        for r in rings:
+            for i in range(len(r)-1):
+                if r[i] not in self.topology.neighbors(r[(i+1) % len(r)]):
+                    raise RuntimeError("Atoms %i-%i in ring %s are not bonded" % (r[i], r[i+1], str(r)))
+
+        # Each ring must be one of the smallest rings for at least one of its bonds.
+        # Otherwise, it is a fused ring and can be decomposed.
+        keep_rings = []
+        for i, j in self.topology.edges:
+            min_size = 1e10
+            keep_candidates = []
+            for r in range(len(rings)):
+                if in_ring(rings[r], i, j):
+                    keep_candidates.append(r)
+            if len(keep_candidates) == 0: continue
+            if len(keep_candidates) == 1 and r not in keep_rings:
+                keep_rings.append(r)
+                continue
+            min_size = min([len(rings[r]) for r in keep_candidates])
+            for r in keep_candidates:
+                if len(rings[r]) <= min_size and r not in keep_rings:
+                    keep_rings.append(r)
+                        
+        # for r in range(len(rings)):
+        #     if r in keep_rings:
+        #         print("Keeping ring %s" % ' '.join(['%i' % i for i in rings[r]]))
+        # for r in range(len(rings)):
+        #     if r not in keep_rings:
+        #         print("Discarding ring %s because it is a fused ring" % ' '.join(['%i' % i for i in rings[r]]))
+
+        final_rings = [rings[r] for r in keep_rings]
+        return sorted(final_rings, key = lambda val: (val[0], val[1]))
 
     def order_by_connectivity(self, m, i, currList, max_min_path):
         """

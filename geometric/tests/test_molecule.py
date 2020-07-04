@@ -226,3 +226,23 @@ class TestWaterQCOut:
         assert np.allclose(self.molecule.xyzs[0], M_test.xyzs[0])
         assert np.allclose(self.molecule.qm_energies, M_test.qm_energies)
         assert np.allclose(self.molecule.qm_grads[0], M_test.qm_grads[0])
+
+def test_rings(localizer):
+    ring_size_data = {'tetrahedrane.xyz': [3, 3, 3, 3],
+                      'cholesterol.xyz' : [6, 6, 6, 5],
+                      'bicyclo222octane.xyz' : [6, 6, 6],
+                      'adamantane.xyz' : [6, 6, 6, 6],
+                      'cubane.xyz' : [4, 4, 4, 4, 4, 4],
+                      'coronene.xyz' : [6, 6, 6, 6, 6, 6, 6],
+                      'porphin.xyz' : [5, 16, 5, 5, 5], 
+                      'fenestradiene.xyz' : [6, 4, 5, 4, 6, 5, 6, 6, 4, 5, 4, 6, 5, 6],
+                      'vancomycin.pdb' : [16, 16, 6, 16, 16, 6, 12, 6, 6, 6, 6, 6],
+                      'c60.xyz' : [5, 6, 6, 6, 5, 6, 5, 6, 6, 5, 6, 6, 5, 6, 6, 5, 5, 6, 6, 5, 6, 6, 6, 5, 5, 6, 5, 6, 6, 6, 6, 5]}
+    for fnm in ring_size_data.keys():
+        M = geometric.molecule.Molecule(os.path.join(datad, fnm))
+        ring_sizes = [len(i) for i in M.find_rings(max_size=20)]
+        # Check that the number of rings is correct
+        assert len(ring_sizes) == len(ring_size_data[fnm])
+        # Check that ring sizes are correct and in the expected order
+        assert ring_sizes == ring_size_data[fnm]
+    
