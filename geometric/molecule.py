@@ -2550,7 +2550,7 @@ class Molecule(object):
         cholesterol (4 rings)
         porphin (5 rings including 16-member macrocycle)
         cubane (6 rings)
-        [4.6.4.6]fenestradiene from Hulot et al, JACS 2008, 130, 5046–5047 (7 rings)
+        [4.6.4.6]fenestradiene from Hulot et al, JACS 2008, 130, 5046-5047 (7 rings)
         vancomycin (12 rings)
         C60 (32 rings)
 
