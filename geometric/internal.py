@@ -1204,7 +1204,7 @@ class LinearAngle(PrimitiveCoordinate):
                 deriv2[ii, j, :, :] = fderiv
         return deriv2
     
-class MultiAngle(PrimitiveCoordinate):
+class MultiAngle(PrimitiveCoordinate): # pragma: no cover
     def __init__(self, a, b, c):
         if type(a) is int:
             a = (a,)
@@ -1505,7 +1505,7 @@ class Dihedral(PrimitiveCoordinate):
         # printTerm('1x1y',  3.33702e-01)
         # printTerm('1x1z',  5.90389e-02)
 
-class MultiDihedral(PrimitiveCoordinate):
+class MultiDihedral(PrimitiveCoordinate): # pragma: no cover
     def __init__(self, a, b, c, d):
         if type(a) is int:
             a = (a, )
