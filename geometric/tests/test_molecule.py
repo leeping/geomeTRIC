@@ -246,3 +246,9 @@ def test_rings(localizer):
         # Check that ring sizes are correct and in the expected order
         assert ring_sizes == ring_size_data[fnm]
     
+def test_rotate_bond(localizer):
+    M = geometric.molecule.Molecule(os.path.join(datad, 'neu5ac.pdb'))
+    M1, success1 = M.rotate_check_clash(0, (14, 16, 18, 20), printLevel=1)
+    M2, success2 = M.rotate_check_clash(0, (14, 16, 18, 20), thresh_hyd=0.8, thresh_hvy=1.2)
+    assert success1 == False
+    assert success2 == True

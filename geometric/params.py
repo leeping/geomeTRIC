@@ -284,7 +284,7 @@ def parse_optimizer_args(*args):
                             'Provide pairs of symbol/radius values such as Na 0.0 Fe 1.5\n ')
     grp_modify.add_argument('--pdb', type=str, help='PDB file name with coordinates and resids. TRIC will add T+R coordinates for each residue.\n ')
     grp_modify.add_argument('--coords', type=str, help='Coordinate file to override the QM input file / PDB file. The LAST frame will be used.\n ')
-    grp_modify.add_argument('--frag', type=str2bool, help='Provide "yes" delete bonds between residues, producing\n'
+    grp_modify.add_argument('--frag', type=str2bool, help='Provide "yes" to delete bonds between residues, producing\n'
                             'separate fragments in the internal coordinate system.')
     
     grp_output = parser.add_argument_group('output', 'Control the format and amount of the output')
