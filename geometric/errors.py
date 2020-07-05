@@ -83,3 +83,9 @@ class ConicalIntersectionEngineError(EngineError):
 
 class GeomOptNotConvergedError(Error):
     pass
+
+class GeomOptStructureError(Error):
+    pass
+
+class LinearTorsionError(GeomOptStructureError):
+    pass

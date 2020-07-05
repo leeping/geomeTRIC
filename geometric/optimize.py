@@ -54,7 +54,7 @@ from .step import brent_wiki, Froot, calc_drms_dmax, get_cartesian_norm, rebuild
 from .prepare import get_molecule_engine, parse_constraints
 from .params import OptParams, parse_optimizer_args
 from .nifty import row, col, flat, bohr2ang, ang2bohr, logger, bak, createWorkQueue
-from .errors import InputError, HessianExit, EngineError, GeomOptNotConvergedError
+from .errors import InputError, HessianExit, EngineError, GeomOptNotConvergedError, GeomOptStructureError, LinearTorsionError
 
 class Optimizer(object):
     def __init__(self, coords, molecule, IC, engine, dirname, params):
@@ -211,6 +211,8 @@ class Optimizer(object):
         """
         Calculate the energy and Cartesian gradients of the current structure.
         """
+        # Check to confirm that the structure has nothing that would cause a cryptic error
+        self.checkStructure()
         ### Calculate Energy and Gradient ###
         # Dictionary containing single point properties (energy, gradient)
         # For frequency calculations and multi-step jobs, the gradient from an existing
@@ -535,6 +537,7 @@ class Optimizer(object):
             self.CoordCounter += 1
         # Check for large rotations (debugging purposes)
         if self.params.verbose >= 1: self.IC.largeRots()
+        # Check for large rotations in linear molecules
         if self.IC.linearRotCheck():
             logger.info("Large rotations in linear molecules - refreshing Rotator reference points and DLC vectors\n")
             self.refreshCoordinates()
@@ -638,6 +641,21 @@ class Optimizer(object):
             if self.params.frequency:
                 self.frequency_analysis(Hx, 'last', True)
         return self.progress
+
+    def checkStructure(self):
+        """
+        A function that checks for problematic structures and throws an error before
+        calling any QC method.
+        """
+        # Check for three consecutive atoms in torsion angle becoming linear
+        torsion_constraint_linear_angles = self.IC.torsionConstraintLinearAngles(self.X)
+        if torsion_constraint_linear_angles:
+            errorStr = "> Atoms Angle\n"
+            for key, val in torsion_constraint_linear_angles.items():
+                errorStr += "> %i-%i-%i %6.2f\n" % (key[0]+1, key[1]+1, key[2]+1, val)
+            raise LinearTorsionError("A constrained torsion has three consecutive atoms\n"
+                                     "forming a nearly linear angle, making the torsion angle poorly defined.\n"+errorStr)
+        
 
 class OPT_STATE(object):
     """ This describes the state of an OptObject during the optimization process
@@ -858,6 +876,9 @@ def main(): # pragma: no cover
         sys.exit(51)
     except GeomOptNotConvergedError:
         logger.info("Geometry Converge Failed Error:\n" + traceback.format_exc())
+        sys.exit(50)
+    except GeomOptStructureError:
+        logger.info("Structure Error:\n" + traceback.format_exc())
         sys.exit(50)
     except HessianExit:
         logger.info("Exiting normally.\n")

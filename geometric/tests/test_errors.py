@@ -3,14 +3,16 @@ Unit and regression tests for geometric.errors module
 """
 
 import pytest
+import os, shutil
 
 import geometric
-from geometric.errors import EngineError, GeomOptNotConvergedError
+from geometric.errors import EngineError, GeomOptNotConvergedError, LinearTorsionError
 from geometric.errors import Psi4EngineError, QChemEngineError, TeraChemEngineError, ConicalIntersectionEngineError, \
     OpenMMEngineError, GromacsEngineError, MolproEngineError, QCEngineAPIEngineError
 
 from . import addons
 localizer = addons.in_folder
+datad = addons.datad
 
 def test_error_types():
     """ Test error types """
@@ -130,3 +132,10 @@ gradient('hf')
     with pytest.raises(GeomOptNotConvergedError):
         # run the test optimization
         geometric.optimize.Optimize(M.xyzs[0].flatten(), M, IC, engine, 'tmp', params)
+
+@addons.using_psi4
+def test_linear_torsion_error(localizer):
+    shutil.copy2(os.path.join(datad, 'linang.psi4in'), os.getcwd())
+    shutil.copy2(os.path.join(datad, 'linalg_torsion_constraints.txt'), os.getcwd())
+    with pytest.raises(LinearTorsionError):
+        geometric.optimize.run_optimizer(engine='psi4', input='linang.psi4in', constraints='linalg_torsion_constraints.txt')
