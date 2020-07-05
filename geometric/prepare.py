@@ -327,12 +327,23 @@ def parse_constraints(molecule, constraints_string):
     objs = []
     vals = []
     coords = molecule.xyzs[0].flatten() * ang2bohr
+    in_options = False
     for line in constraints_string.split('\n'):
+        # Skip over the options block in the constraints file
+        if '$options' in line:
+            in_options = True
+            logger.info("-> Additional optimizer options provided in the constraints file:\n")
+        if in_options:
+            if '$end' in line:
+                in_options = False
+            if len(line) > 0: logger.info("-> " + line+"\n")
+            continue
+        # End skipping over the options block
         line = line.split("#")[0].strip().lower()
-        # This is a list-of-lists. The intention is to create a multidimensional grid
-        # of constraint values if necessary.
         if len(line) == 0: continue
         logger.info(line+'\n')
+        # This is a list-of-lists. The intention is to create a multidimensional grid
+        # of constraint values if necessary.
         if line.startswith("$"):
             mode = line.replace("$","")
         else:
