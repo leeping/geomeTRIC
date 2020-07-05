@@ -1,1 +1,1 @@
-geometric-optimize --psi4 --nt 4 input.dat constraints.txt
+geometric-optimize --engine psi4 --nt 4 input.dat constraints.txt
