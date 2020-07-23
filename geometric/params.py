@@ -324,7 +324,8 @@ def parse_optimizer_args(*args):
             args_dict[k] = v
 
     # Check that the input file exists
-    if not os.path.exists(args_dict['input']):
+    # OpenMM .xml files don't have to be in the current folder.
+    if not args_dict['input'].endswith('.xml') and not os.path.exists(args_dict['input']):
         raise RuntimeError("Input file does not exist")
     
     # Parse the constraints file for additional command line options to be added

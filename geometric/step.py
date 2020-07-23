@@ -412,7 +412,9 @@ def get_delta_prime_trm(v, X, G, H, IC, verbose=0):
     try:
         Hi = invert_svd(HT)
     except:
-        logger.info("\x1b[1;91mSVD Error - increasing v by 0.001 and trying again\x1b[0m\n")
+        ht_txt = 'HT.v_%.5f.txt' % v
+        np.savetxt(ht_txt, HT, fmt='% 14.10f')
+        logger.info("\x1b[1;91mSVD Error - saving %s, increasing v by 0.001 and trying again\x1b[0m (% .5f -> % .5f)\n" % (ht_txt, v, v+0.001))
         return get_delta_prime_trm(v+0.001, X, G, H, IC)
     dyc = flat(-1 * np.dot(Hi,col(GC)))
     dy = dyc[:len(G)]

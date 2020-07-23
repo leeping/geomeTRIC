@@ -616,7 +616,10 @@ class OpenMM(Engine):
         else:
             logger.info("xml file not in the current folder, treating as a force field XML file and setting up in gas phase.\n")
         if not xmlSystem:
-            forcefield = app.ForceField(xml)
+            try:
+                forcefield = app.ForceField(xml)
+            except ValueError:
+                raise OpenMMEngineError('Provided input file is not an installed force field XML file')
             system = forcefield.createSystem(pdb.topology, nonbondedMethod=app.NoCutoff, constraints=None, rigidWater=False)
         # apply opls combination rule if we are using it
         if self.combination == 'opls':
