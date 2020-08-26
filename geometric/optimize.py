@@ -306,9 +306,9 @@ class Optimizer(object):
 
         # At the start of the loop, the optimization variables, function value, gradient and Hessian are known.
         # (i.e. self.Y, self.E, self.G, self.H)
-        if params.verbose: self.IC.Prims.printRotations(self.X)
+        if params.verbose: self.IC.printRotations(self.X)
         Eig = self.SortedEigenvalues()
-        Emin = Eig[1].real
+        Emin = Eig[0].real
         if params.transition:
             v0 = 1.0
         elif Emin < params.epsilon:

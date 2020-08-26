@@ -3399,6 +3399,9 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         """ Determine whether a molecule has rotated by an amount larger than some threshold (hardcoded in Prims.largeRots()). """
         return self.Prims.largeRots()
 
+    def printRotations(self, xyz):
+        return self.Prims.printRotations(xyz)
+
     def calcDiff(self, coord1, coord2):
         """ Calculate difference in internal coordinates (coord1-coord2), accounting for changes in 2*pi of angles. """
         PMDiff = self.Prims.calcDiff(coord1, coord2)
