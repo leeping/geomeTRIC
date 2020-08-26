@@ -881,6 +881,8 @@ class QChem(Engine): # pragma: no cover
         if self.qcdir and not os.path.exists(os.path.join(dirname, 'run.d')):
             self.qcdir = False
             self.M.edit_qcrems({'scf_guess':None})
+        # If symmetry is enabled by default in Q-Chem, it will mess up finite difference Hessian computations and possibly other things.
+        self.M.edit_qcrems({'symmetry':'off', 'sym_ignore':'true'})
         self.M[0].write(os.path.join(dirname, 'run.in'))
         try:
             # Run Q-Chem
