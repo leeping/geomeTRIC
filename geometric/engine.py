@@ -49,7 +49,7 @@ import os
 from .molecule import Molecule
 from .nifty import bak, eqcgmx, fqcgmx, bohr2ang, logger, getWorkQueue, queue_up_src_dest, rootdir, splitall, copy_tree_over
 from .errors import EngineError, CheckCoordError, Psi4EngineError, QChemEngineError, TeraChemEngineError, \
-    ConicalIntersectionEngineError, OpenMMEngineError, GromacsEngineError, MolproEngineError, QCEngineAPIEngineError
+    ConicalIntersectionEngineError, OpenMMEngineError, GromacsEngineError, MolproEngineError, QCEngineAPIEngineError, GaussianEngineError
 
 #=============================#
 #| Useful TeraChem functions |#
@@ -685,6 +685,124 @@ class OpenMM(Engine):
 
     def copy_scratch(self, src, dest):
         return
+
+class Gaussian(Engine):
+    """
+    Run a Gaussian energy and gradient calculation.
+    """
+    def __init__(self, molecule, exe=None):
+        super(Gaussian, self).__init__(molecule)
+        if exe.lower() in ("g16", "g09"):
+            self.gaussian_exe = exe.lower()
+        else:
+            raise ValueError("Only g16 and g09 are supported.")
+
+    def load_gaussian_input(self, gaussian_input):
+        """
+        We can read the .com files using molecule but we can not write them so use the template method.
+
+        Note only Gaussian cartesian coordinates are supported
+        Example input file:
+
+        %Mem=6GB
+        %NProcShared=2
+        %Chk=lig
+        # B3LYP/6-31G(d) Opt=ModRedundant
+
+        water energy
+
+        0   1
+        O  -0.464   0.177   0.0
+        H  -0.464   1.137   0.0
+        H   0.441  -0.143   0.0
+
+
+        """
+        reading_molecule, found_geo, found_force = False, False, False
+        gauss_temp = []  # store a template of the input file for generating new ones
+        with open(gaussian_input) as gauss_in:
+            for line in gauss_in:
+                match = re.search("^[A-Z][a-z]*(.*[-+]?[0-9]*\.?[0-9]+)*", line)
+                if match is not None:
+                    reading_molecule = True
+                    if not found_geo:
+                        found_geo = True
+                        gauss_temp.append("$!geometry@here")
+
+                elif reading_molecule:
+                    if line.strip() == '':
+                        reading_molecule = False
+                        gauss_temp.append(line)
+                        gauss_temp.append("$!optblock@here")
+
+                else:
+                    gauss_temp.append(line)
+
+                if "force" in line.lower():
+                    found_force = True
+        if not found_force:
+            raise RuntimeError("Gaussian inputfile %s should have force command." % gaussian_input)
+        self.gauss_temp = gauss_temp
+
+    def calc_new(self, coords, dirname):
+        """
+        Run the gaussian single point calculation using the given exe.
+        """
+        if not os.path.exists(dirname): os.makedirs(dirname)
+        # Convert coordinates back to the xyz file
+        self.M.xyzs[0] = coords.reshape(-1, 3) * bohr2ang
+        # Write Psi4 input.dat
+        with open(os.path.join(dirname, 'gaussian.com'), 'w') as outfile:
+            for line in self.gauss_temp:
+                if line == '$!geometry@here':
+                    for i, (e, c) in enumerate(zip(self.M.elem, self.M.xyzs[0])):
+                        outfile.write("%-7s %13.7f %13.7f %13.7f\n" % (e, c[0], c[1], c[2]))
+                else:
+                    outfile.write(line)
+        try:
+            # Run Gaussian
+            subprocess.check_call('%s < gaussian.com > gaussian.log %% formck lig.chk lig.fchk' % self.gaussian_exe, cwd=dirname, shell=True)
+            # Read energy and gradients from Gaussian output
+            result = self.read_result(dirname)
+        except (OSError, IOError, RuntimeError, subprocess.CalledProcessError):
+            raise GaussianEngineError
+        return result
+
+    def read_result(self, dirname, check_coord=False):
+        """
+        Read the result of the output file to get the gradient and energy.
+        """
+        if check_coord is not None:
+            raise CheckCoordError("Coordinate checking not implemented")
+        energy, gradient = None, None
+        # first get the energy from the formatted checkpoint file, works for all methods
+        fchk_out = os.path.join(dirname, "lig.fchk")
+        with open(fchk_out) as fchk:
+            for line in fchk:
+                if "Total Energy" in line:
+                    energy = float(line.split()[-1])
+                    break
+        # now we get the gradient from the output in Hartrees/Bohr
+        gaussian_out = os.path.join(dirname, 'gaussian.log')
+        with open(gaussian_out) as outfile:
+            found_grad = False
+            for line in outfile:
+                line_strip = line.strip()
+                if " Forces (Hartrees/Bohr)" in line_strip:
+                    found_grad = True
+                    gradient = []
+                elif found_grad:
+                    ls = line_strip.split()
+                    if len(ls) == 5 and ls[0].isdigit() and ls[1].isdigit():
+                        gradient.append([-float(g) for g in ls[2:]])
+                    elif "Cartesian Forces:  Max" in line:
+                        found_grad = False
+        if energy is None:
+            raise RuntimeError("Gaussian energy is not found in %s, please check." % fchk_out)
+        if gradient is None:
+            raise RuntimeError("Gaussian gradient is not found in %s, please check." % gaussian_out)
+        gradient = np.array(gradient, dtype=np.float64).ravel()
+        return {'energy':energy, 'gradient':gradient}
 
 class Psi4(Engine):
     """

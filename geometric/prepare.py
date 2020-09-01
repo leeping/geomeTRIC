@@ -38,10 +38,11 @@ from __future__ import division
 import os
 import itertools
 import numpy as np
+import shutil
 
 import os
 from .internal import Distance, Angle, Dihedral, CartesianX, CartesianY, CartesianZ, TranslationX, TranslationY, TranslationZ, RotationA, RotationB, RotationC
-from .engine import set_tcenv, load_tcin, TeraChem, ConicalIntersection, Psi4, QChem, Gromacs, Molpro, OpenMM, QCEngineAPI
+from .engine import set_tcenv, load_tcin, TeraChem, ConicalIntersection, Psi4, QChem, Gromacs, Molpro, OpenMM, QCEngineAPI, Gaussian
 from .rotate import calc_fac_dfac
 from .molecule import Molecule, Elements
 from .nifty import logger, isint, uncommadash, bohr2ang, ang2bohr
@@ -119,7 +120,7 @@ def get_molecule_engine(**kwargs):
     if engine_str:
         engine_str = engine_str.lower()
         if engine_str[:4] == 'tera' : engine_str = 'tera'
-        if engine_str not in ['tera', 'qchem', 'psi4', 'gmx', 'molpro', 'openmm', 'qcengine']:
+        if engine_str not in ['tera', 'qchem', 'psi4', 'gmx', 'molpro', 'openmm', 'qcengine', "gaussian"]:
             raise RuntimeError("Valid values of engine are: tera, qchem, psi4, gmx, molpro, openmm, qcengine")
         if customengine:
             raise RuntimeError("engine and customengine cannot simultaneously be set")
@@ -218,6 +219,20 @@ def get_molecule_engine(**kwargs):
             if molproexe is not None:
                 engine.set_molproexe(molproexe)
             threads_enabled = True
+        elif engine_str == "gaussian":
+            logger.info("Gaussian engine selected. Expecting Gaussian input for gradient calculation. \n")
+            M = Molecule(inputf, radii=radii, fragment=frag)
+            # now work out which gaussian version we have
+            if shutil.which("g16") is not None:
+                exe = "g16"
+            elif shutil.which("g09") is not None:
+                exe = "g09"
+            else:
+                raise ValueError("Neither g16 or g09 was found, please check the environment.")
+            engine = Gaussian(molecule=M, exe=exe)
+            logger.info("The gaussian engine exe is set as %s" % engine.gaussian_exe)
+            # load the template into the engine
+            engine.load_gaussian_input(inputf)
         elif engine_str == 'qcengine':
             logger.info("QCEngine selected.\n")
             schema = kwargs.get('qcschema', False)
