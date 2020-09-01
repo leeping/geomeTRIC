@@ -733,7 +733,6 @@ class Gaussian(Engine):
                     if line.strip() == '':
                         reading_molecule = False
                         gauss_temp.append(line)
-                        gauss_temp.append("$!optblock@here")
 
                 else:
                     gauss_temp.append(line)
