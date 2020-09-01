@@ -760,7 +760,7 @@ class Gaussian(Engine):
                     outfile.write(line)
         try:
             # Run Gaussian
-            subprocess.check_call('%s < gaussian.com > gaussian.log && formchk lig.chk lig.fchk' % self.gaussian_exe, cwd=dirname, shell=True)
+            subprocess.check_call('%s < gaussian.com > gaussian.log && formchk lig.chk lig.fchk > form_log.txt' % self.gaussian_exe, cwd=dirname, shell=True)
             # Read energy and gradients from Gaussian output
             result = self.read_result(dirname)
         except (OSError, IOError, RuntimeError, subprocess.CalledProcessError):
