@@ -767,7 +767,7 @@ class Gaussian(Engine):
             raise GaussianEngineError
         return result
 
-    def read_result(self, dirname, check_coord=False):
+    def read_result(self, dirname, check_coord=None):
         """
         Read the result of the output file to get the gradient and energy.
         """
