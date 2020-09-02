@@ -722,7 +722,7 @@ class Gaussian(Engine):
         gauss_temp = []  # store a template of the input file for generating new ones
         with open(gaussian_input) as gauss_in:
             for line in gauss_in:
-                match = re.search("^[A-Z][a-z]*(.*[-+]?[0-9]*\.?[0-9]+)*", line)
+                match = re.search("^[A-Z][a-z]*(.*[-+]?[0-9]*.?[0-9]+)*", line)
                 if match is not None:
                     reading_molecule = True
                     if not found_geo:
@@ -750,7 +750,7 @@ class Gaussian(Engine):
         if not os.path.exists(dirname): os.makedirs(dirname)
         # Convert coordinates back to the xyz file
         self.M.xyzs[0] = coords.reshape(-1, 3) * bohr2ang
-        # Write Psi4 input.dat
+        # Write Gaussian com file
         with open(os.path.join(dirname, 'gaussian.com'), 'w') as outfile:
             for line in self.gauss_temp:
                 if line == '$!geometry@here':

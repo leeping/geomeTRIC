@@ -252,3 +252,35 @@ def test_rotate_bond(localizer):
     M2, success2 = M.rotate_check_clash(0, (14, 16, 18, 20), thresh_hyd=0.8, thresh_hvy=1.2)
     assert success1 == False
     assert success2 == True
+
+
+def test_gaussian_input_single():
+    """
+    Test reading a gaussian input.
+    """
+    molecule = geometric.molecule.Molecule(os.path.join(datad, "ethane.com"))
+    assert molecule.Data["charge"] == 0
+    assert molecule.Data["mult"] == 1
+    assert molecule.Data["ftype"] == "com"
+    assert len(molecule.molecules) == 1
+    xyz = np.array([[-4.13498124, 0.70342204, 0.],
+           [-3.53650966, -0.1651672, -0.17967886],
+           [-4.07172084, 1.36057017, -0.84205371],
+           [-5.15338585, 0.41046458, 0.148081],
+           [-3.62163902, 1.42937832, 1.25740497],
+           [-3.68306794, 2.48719615, 1.10858318],
+           [-4.22133413, 1.15219316, 2.09909028],
+           [-2.60384227, 1.1531436, 1.43819258]])
+    assert molecule.xyzs[0].tolist() == xyz.tolist()
+    assert molecule.Data["comms"] == ["ethane"]
+    assert molecule.Data["elem"] == ['C', 'H', 'H', 'H', 'C', 'H', 'H', 'H']
+    assert molecule.Data["bonds"] == [(0, 1), (0, 2), (0, 3), (0, 4), (4, 5), (4, 6), (4, 7)]
+
+
+def test_gaussian_input_multiple():
+    """
+    Test reading a gaussian input with multiple molecules.
+    """
+    molecule = geometric.molecule.Molecule(os.path.join(datad, "waters.com"))
+    assert len(molecule.molecules) == 6
+    assert molecule.Data["bonds"] == [(0, 1), (0, 2), (3, 4), (3, 5), (6, 7), (6, 8), (9, 10), (9, 11), (12, 13), (12, 14), (15, 16), (15, 17)]
