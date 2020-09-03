@@ -10,6 +10,7 @@ from geometric.nifty import bohr2ang
 import numpy as np
 import tempfile
 import os
+import platform
 from . import addons
 
 datad = addons.datad
@@ -42,6 +43,9 @@ def test_find_gaussian_missing():
     """
     Make sure an error is raised if gaussian 09/16 is not available.
     """
+    major, minor, _ = platform.python_version_tuple()
+    if not int(major) >= 3 and int(minor) >= 5:
+        pytest.skip("Python version below 3.5 shutil.which not available.")
     kwargs = {"engine": "gaussian", "input": os.path.join(datad, "ethane.com")}
     with pytest.raises(ValueError):
         _ = get_molecule_engine(**kwargs)
@@ -123,7 +127,9 @@ def test_calc_new_gaussian():
     Test calculating the force using gaussian.
     Note this is expected to fail due to gaussian not being installed.
     """
-
+    major, minor, _ = platform.python_version_tuple()
+    if not int(major) >= 3 and int(minor) >= 5:
+        pytest.skip("Python version below 3.5 TemporaryDirectory not available.")
     molecule = Molecule(os.path.join(datad, "ethane.com"))
     engine = Gaussian(molecule=molecule, exe="g09")
     engine.load_gaussian_input(os.path.join(datad, "ethane.com"))
