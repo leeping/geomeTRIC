@@ -64,8 +64,58 @@ def test_gaussian_template():
     molecule = Molecule(os.path.join(datad, "ethane.com"))
     engine = Gaussian(molecule=molecule, exe="g09")
     engine.load_gaussian_input(os.path.join(datad, "ethane.com"))
-    assert engine.gauss_temp == ['%Mem=6GB\n', '%NProcShared=2\n', '%Chk=lig\n', '# hf/6-31G(d) force\n', '\n',
+    assert engine.gauss_temp == ['%Mem=6GB\n', '%NProcShared=2\n', '%Chk=ligand\n', '# hf/6-31G(d) Force=NoStep\n', '\n',
                                  'ethane\n', '\n', '0 1\n', '$!geometry@here', '\n', '\n']
+
+
+def test_setting_threads():
+    """
+    For an input file with threads make sure we can overwrite them to our desired value.
+    """
+    molecule = Molecule(os.path.join(datad, "ethane.com"))
+    engine = Gaussian(molecule=molecule, exe="g09", threads=30)
+    engine.load_gaussian_input(os.path.join(datad, "ethane.com"))
+    assert "%NProcShared=30\n" in engine.gauss_temp
+
+
+def test_adding_threads_value():
+    """
+    If we read an input file with no threads set but want them make sure they are added.
+    """
+    molecule = Molecule(os.path.join(datad, "ethane_no_data.com"))
+    engine = Gaussian(molecule=molecule, exe="g09", threads=30)
+    engine.load_gaussian_input(os.path.join(datad, "ethane_no_data.com"))
+    assert "%NProcShared=30\n" in engine.gauss_temp
+
+
+def test_adding_threads_none():
+    """
+    If we have an input with no threads and threads is None make sure we write 1.
+    """
+    molecule = Molecule(os.path.join(datad, "ethane_no_data.com"))
+    engine = Gaussian(molecule=molecule, exe="g09", threads=None)
+    engine.load_gaussian_input(os.path.join(datad, "ethane_no_data.com"))
+    assert "%NProcShared=1\n" in engine.gauss_temp
+
+
+def test_checkpoint_name():
+    """
+    If the user supplies a file with a different checkpoint name make sure we overwrite it.
+    """
+    molecule = Molecule(os.path.join(datad, "ethane_wrong_name.com"))
+    engine = Gaussian(molecule=molecule, exe="g09", threads=None)
+    engine.load_gaussian_input(os.path.join(datad, "ethane_wrong_name.com"))
+    assert "%Chk=ligand\n" in engine.gauss_temp
+
+
+def test_checkpoint_missing():
+    """
+    If the user passes a file with no checkpoint line make sure it is added.
+    """
+    molecule = Molecule(os.path.join(datad, "ethane_no_data.com"))
+    engine = Gaussian(molecule=molecule, exe="g09", threads=None)
+    engine.load_gaussian_input(os.path.join(datad, "ethane_no_data.com"))
+    assert "%Chk=ligand\n" in engine.gauss_temp
 
 
 def test_calc_new_gaussian():

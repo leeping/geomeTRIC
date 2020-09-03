@@ -1,6 +1,4 @@
 %Mem=6GB
-%NProcShared=2
-%Chk=lig
 # hf/6-31G(d) Force=NoStep
 
 ethane

@@ -690,8 +690,9 @@ class Gaussian(Engine):
     """
     Run a Gaussian energy and gradient calculation.
     """
-    def __init__(self, molecule, exe=None):
+    def __init__(self, molecule, exe=None, threads=None):
         super(Gaussian, self).__init__(molecule)
+        self.threads = threads
         if exe.lower() in ("g16", "g09"):
             self.gaussian_exe = exe.lower()
         else:
@@ -701,13 +702,15 @@ class Gaussian(Engine):
         """
         We can read the .com files using molecule but we can not write them so use the template method.
 
-        Note only Gaussian cartesian coordinates are supported
+        Note only Gaussian cartesian coordinates are supported.
+        We also edit the checkpoint file name and change the processors flag if not present.
+
         Example input file:
 
         %Mem=6GB
         %NProcShared=2
         %Chk=lig
-        # B3LYP/6-31G(d) Opt=ModRedundant
+        # B3LYP/6-31G(d) Force=NoStep
 
         water energy
 
@@ -722,7 +725,7 @@ class Gaussian(Engine):
         gauss_temp = []  # store a template of the input file for generating new ones
         with open(gaussian_input) as gauss_in:
             for line in gauss_in:
-                match = re.search("^[A-Z][a-z]*(.*[-+]?[0-9]*.?[0-9]+)*", line)
+                match = re.search(r"^ *[A-Z][a-z]?(.*[-+]?([0-9]*\.)?[0-9]+){3}$", line)
                 if match is not None:
                     reading_molecule = True
                     if not found_geo:
@@ -734,13 +737,34 @@ class Gaussian(Engine):
                         reading_molecule = False
                         gauss_temp.append(line)
 
+                elif "%nprocshared" in line.lower():
+                    # we should replace the line with our threads value
+                    if self.threads is not None:
+                        gauss_temp.append("%NProcShared=" + str(self.threads) + "\n")
+                    else:
+                        gauss_temp.append(line)
+
+                elif "%chk" in line.lower():
+                    # we should replace it with what we want
+                    gauss_temp.append("%Chk=ligand\n")
+
                 else:
                     gauss_temp.append(line)
 
-                if "force" in line.lower():
+                if "force=nostep" in line.lower():
                     found_force = True
         if not found_force:
-            raise RuntimeError("Gaussian inputfile %s should have force command." % gaussian_input)
+            raise RuntimeError("Gaussian inputfile %s should have force=nostep command." % gaussian_input)
+
+        # now we need to make sure the chk point file and threads were set
+        if not any("%chk" in command.lower() for command in gauss_temp):
+            # insert at the top
+            gauss_temp.insert(0, "%Chk=ligand\n")
+        if not any("%nprocshared" in command.lower() for command in gauss_temp):
+            # if threads is not none set it else use 1 thread
+            thread_str = "%NProcShared=" + str(self.threads or 1)
+            gauss_temp.insert(0, thread_str + "\n")
+
         self.gauss_temp = gauss_temp
 
     def calc_new(self, coords, dirname):
@@ -760,7 +784,7 @@ class Gaussian(Engine):
                     outfile.write(line)
         try:
             # Run Gaussian
-            subprocess.check_call('%s < gaussian.com > gaussian.log && formchk lig.chk lig.fchk > form_log.txt' % self.gaussian_exe, cwd=dirname, shell=True)
+            subprocess.check_call('%s < gaussian.com > gaussian.log && formchk ligand.chk ligand.fchk > form_log.txt' % self.gaussian_exe, cwd=dirname, shell=True)
             # Read energy and gradients from Gaussian output
             result = self.read_result(dirname)
         except (OSError, IOError, RuntimeError, subprocess.CalledProcessError):
@@ -775,7 +799,7 @@ class Gaussian(Engine):
             raise CheckCoordError("Coordinate checking not implemented")
         energy, gradient = None, None
         # first get the energy from the formatted checkpoint file, works for all methods
-        fchk_out = os.path.join(dirname, "lig.fchk")
+        fchk_out = os.path.join(dirname, "ligand.fchk")
         with open(fchk_out) as fchk:
             for line in fchk:
                 if "Total Energy" in line:
