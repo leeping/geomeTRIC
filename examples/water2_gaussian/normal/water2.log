@@ -31,7 +31,7 @@ geometric-optimize called with the following command line:
                                     [91m())))))))))))))))))))))))).[0m                
                                          [91m())))))))))))))),[0m                     
 
--=# [1;94m geomeTRIC started. Version: 0.9.5.1+215.gc0b60f4 [0m #=-
+-=# [1;94m geomeTRIC started. Version: 0.9.5.1+218.g6732f3e [0m #=-
 Gaussian engine selected. Expecting Gaussian input for gradient calculation. 
 The gaussian engine exe is set as g0918 internal coordinates being used (instead of 18 Cartesians)
 Internal coordinate system (atoms numbered from 1):
@@ -108,4 +108,4 @@ Converged! =D
     #| translation and rotation coordinates", J. Chem, Phys. 144, 214108.     |#
     #| http://dx.doi.org/10.1063/1.4952956                                    |#
     #==========================================================================#
-    Time elapsed since start of run_optimizer: 20.664 seconds
+    Time elapsed since start of run_optimizer: 19.552 seconds

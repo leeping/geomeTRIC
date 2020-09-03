@@ -1,7 +1,6 @@
 %Mem=6GB
 %NProcShared=2
-%Chk=lig
-# hf/sto-3g force
+# hf/sto-3g Force=NoStep
 
 water
 
