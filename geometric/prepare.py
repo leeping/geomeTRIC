@@ -230,6 +230,7 @@ def get_molecule_engine(**kwargs):
             else:
                 raise ValueError("Neither g16 or g09 was found, please check the environment.")
             engine = Gaussian(molecule=M, exe=exe, threads=threads)
+            threads_enabled = True
             logger.info("The gaussian engine exe is set as %s" % engine.gaussian_exe)
             # load the template into the engine
             engine.load_gaussian_input(inputf)
