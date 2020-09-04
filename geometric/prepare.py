@@ -83,8 +83,8 @@ def get_molecule_engine(**kwargs):
 
     ## MECI calculations create a custom engine that contains two other engines.
     if kwargs.get('meci', None):
-        if engine_str.lower() in ['psi4', 'gmx', 'molpro', 'qcengine', 'openmm'] or customengine:
-            logger.warning("MECI optimizations are not tested with engines: psi4, gmx, molpro, qcengine, openmm, customengine. Be Careful!")
+        if engine_str.lower() in ['psi4', 'gmx', 'molpro', 'qcengine', 'openmm', 'gaussian'] or customengine:
+            logger.warning("MECI optimizations are not tested with engines: psi4, gmx, molpro, qcengine, openmm, gaussian, customengine. Be Careful!")
         ## If 'engine' is provided as the argument to 'meci', then we assume the engine is
         # directly returning the MECI objective function and gradient.
         if kwargs['meci'].lower() == 'engine':

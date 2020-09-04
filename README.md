@@ -6,15 +6,15 @@
 This is a geometry optimization code for molecular structures.
 The code works by calling external software for the energy and 
 gradient through wrapper functions.  Q-Chem, TeraChem, Psi4, 
-and Molpro are supported quantum chemistry codes through the
-command line interface.  The PySCF and QCArchive packages 
-also provide interfaces to geomeTRIC for optimization. MM 
-optimizations using OpenMM and Gromacs are also supported 
-through the command line interface.
+Molpro, and Gaussian 09/16 are supported quantum chemistry
+codes through the command line interface.  The PySCF and
+QCArchive packages also provide interfaces to geomeTRIC for
+optimization. MM optimizations using OpenMM and Gromacs are
+also supported through the command line interface.
 
 Authors: Lee-Ping Wang, Chenchen Song
 
-Contributors: Yudong Qiu (Psi4 engine, error handling); Daniel G. A. Smith (Testing framework, QCEngine JSON API); Sebastian Lee (Molpro engine); Chaya Stern (Travis, Conda); Qiming Sun (Custom engine); Alberto Gobbi (Batch energy/gradient, logging); Josh Horton (convergence criteria)
+Contributors: Yudong Qiu (Psi4 engine, error handling); Daniel G. A. Smith (Testing framework, QCEngine JSON API); Sebastian Lee (Molpro engine); Chaya Stern (Travis, Conda); Qiming Sun (Custom engine); Alberto Gobbi (Batch energy/gradient, logging); Josh Horton (Convergence criteria, Gaussian engine)
 
 Contact Email: leeping@ucdavis.edu
 
@@ -40,7 +40,7 @@ Generally, you will need a .xyz file for the coordinates and
 one of the supported quantum chemistry software packages installed
 on your system.
 
-Supported QM packages are: TeraChem, Q-Chem, Molpro, and Psi4.
+Supported QM packages are: TeraChem, Q-Chem, Molpro, Psi4, and Gaussian 09/16.
 Supported MM packages are: OpenMM, Gromacs.
 
 Please refer to the example calculations for how to run the code.  
