@@ -121,7 +121,7 @@ def get_molecule_engine(**kwargs):
         engine_str = engine_str.lower()
         if engine_str[:4] == 'tera' : engine_str = 'tera'
         if engine_str not in ['tera', 'qchem', 'psi4', 'gmx', 'molpro', 'openmm', 'qcengine', "gaussian"]:
-            raise RuntimeError("Valid values of engine are: tera, qchem, psi4, gmx, molpro, openmm, qcengine")
+            raise RuntimeError("Valid values of engine are: tera, qchem, psi4, gmx, molpro, openmm, qcengine, gaussian")
         if customengine:
             raise RuntimeError("engine and customengine cannot simultaneously be set")
         if engine_str == 'tera':

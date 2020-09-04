@@ -11,9 +11,22 @@ import numpy as np
 import tempfile
 import os
 import platform
+import shutil
 from . import addons
 
 datad = addons.datad
+
+
+def get_gaussian_version():
+    """
+    Try and work out the gaussian version if it can not be found return none.
+    """
+    if shutil.which("g16") is not None:
+        return "g16"
+    elif shutil.which("g09") is not None:
+        return "g09"
+    else:
+        return None
 
 
 def test_gaussian_version_wrong():
@@ -137,7 +150,13 @@ def test_calc_new_gaussian():
     with tempfile.TemporaryDirectory() as temp:
         os.chdir(temp)
         # now we want to run calc new to make sure the file is written correctly
-        with pytest.raises(GaussianEngineError):
+        g_version = get_gaussian_version()
+        if g_version is None:
+            with pytest.raises(GaussianEngineError):
+                engine.calc(coords=molecule.xyzs[0] / bohr2ang, dirname="ethane.tmp")
+
+        else:
+            engine.gaussian_exe = g_version
             engine.calc(coords=molecule.xyzs[0] / bohr2ang, dirname="ethane.tmp")
 
         # now we want to read the file back in to make sure it is correct
@@ -150,7 +169,7 @@ def test_calc_new_gaussian():
         os.chdir(home)
 
 
-def test_read_results_gaussain():
+def test_read_results_gaussian():
     """
     Test reading the results from a fchk and log gaussian file.
     """
