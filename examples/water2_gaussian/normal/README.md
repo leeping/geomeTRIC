@@ -1,0 +1,1 @@
+An example optimization using gaussian where the threads have been set in the input file.

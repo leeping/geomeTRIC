@@ -75,6 +75,9 @@ class GromacsEngineError(EngineError):
 class MolproEngineError(EngineError):
     pass
 
+class GaussianEngineError(EngineError):
+    pass
+
 class QCEngineAPIEngineError(EngineError):
     pass
 
