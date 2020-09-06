@@ -46,3 +46,10 @@ Supported MM packages are: OpenMM, Gromacs.
 Please refer to the example calculations for how to run the code.  
 The commands to execute the code are contained in "command.sh".
 
+## Citation
+
+If this code has benefited your research, please support us by citing our publication:
+
+Wang, L.-P.; Song, C.C. (2016) "Geometry optimization made simple
+with translation and rotation coordinates", J. Chem, Phys. 144, 214108.
+DOI: 10.1063/1.4952956
