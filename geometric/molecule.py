@@ -3182,16 +3182,18 @@ class Molecule(object):
             line = line.strip().expandtabs()
             # Everything after exclamation point is a comment
             sline = line.split('!')[0].split()
-            if len(sline) == 2:
+            if re.match(r"^ *[A-Z][a-z]?(.*[-+]?([0-9]*\.)?[0-9]+){3}$", line) is not None:
+                inxyz = 1
+                if sline[0].capitalize() in PeriodicTable and isfloat(sline[1]) and isfloat(sline[2]) and isfloat(
+                        sline[3]):
+                    elem.append(sline[0])
+                    xyz.append(np.array([float(sline[1]), float(sline[2]), float(sline[3])]))
+
+            elif len(sline) == 2:
                 if isint(sline[0]) and isint(sline[1]):
                     charge = int(sline[0])
                     mult = int(sline[1])
                     title_ln = ln - 2
-            elif len(sline) == 4:
-                inxyz = 1
-                if sline[0].capitalize() in PeriodicTable and isfloat(sline[1]) and isfloat(sline[2]) and isfloat(sline[3]):
-                    elem.append(sline[0])
-                    xyz.append(np.array([float(sline[1]),float(sline[2]),float(sline[3])]))
             elif inxyz:
                 break
             ln += 1
