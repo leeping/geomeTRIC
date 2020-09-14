@@ -177,9 +177,9 @@ def str2bool(v):
     """ Allows command line options such as "yes" and "True" to be converted into Booleans. """
     if isinstance(v, bool):
         return v
-    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+    if v.lower() in ('yes', 'on', 'true', 't', 'y', '1'):
         return True
-    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+    elif v.lower() in ('no', 'off', 'false', 'f', 'n', '0'):
         return False
     else:
         raise argparse.ArgumentTypeError('Boolean value expected.')
@@ -249,6 +249,10 @@ def parse_optimizer_args(*args):
     grp_jobtype.add_argument('--meci', type=str, help='Provide second input file and search for minimum-energy conical\n '
                              'intersection or crossing point between two SCF solutions (TeraChem and Q-Chem supported).\n'
                              'Or, provide "engine" if the engine directly provides the MECI objective function and gradient.')
+    grp_jobtype.add_argument('--meci_sigma', type=float, help='Sigma parameter for MECI penalty function (default 3.5).\n'
+                            'Not used if the engine computes the MECI objective function directly.\n ')
+    grp_jobtype.add_argument('--meci_alpha', type=float, help='Alpha parameter for MECI penalty function (default 0.025).\n'
+                             'Not used if the engine computes the MECI objective function directly.')
 
     grp_hessian = parser.add_argument_group('hessian', 'Control the calculation of Hessian (force constant) matrices and derived quantities')
     grp_hessian.add_argument('--hessian', type=str, help='Specify when to calculate Cartesian Hessian using finite difference of gradient.\n'
@@ -259,12 +263,12 @@ def parse_optimizer_args(*args):
                              '"each" : Calculate for each step in the optimization (costly).\n'
                              '"stop" : Calculate Hessian for initial structure, then exit.\n'
                              'file:<path> : Read initial Hessian data in NumPy format from path, e.g. file:folder/hessian.txt\n ')
+    grp_hessian.add_argument('--port', type=int, help='Work Queue port used to distribute Hessian calculations. Workers must be started separately.')
     grp_hessian.add_argument('--frequency', type=str2bool, help='Perform frequency analysis whenever Hessian is calculated, default is yes/true.\n ')
     grp_hessian.add_argument('--thermo', type=float, nargs=2, help='Temperature (K) and pressure (bar) for harmonic free energy\n'
                              'following frequency analysis, default is 300 K and 1.0 bar.\n ')
     grp_hessian.add_argument('--wigner', type=int, help='Number of desired samples from Wigner distribution after frequency analysis.\n'
                              'Provide negative number to overwrite any existing samples.\n ')
-    grp_hessian.add_argument('--port', type=int, help='Work Queue port used to distribute Hessian calculations. Workers must be started separately.')
     
     grp_optparam = parser.add_argument_group('optparam', 'Control various aspects of the optimization algorithm')
     grp_optparam.add_argument('--maxiter', type=int, help='Maximum number of optimization steps, default 300.\n ')
@@ -297,13 +301,7 @@ def parse_optimizer_args(*args):
     grp_output.add_argument('--qdata', type=str2bool, help='Provide "yes" to write qdata.txt containing coordinates, energies, gradients for each structure.\n ')
     grp_output.add_argument('--logINI',  type=str, dest='logIni', help='.ini file for customizing logging output.\n ')
     grp_output.add_argument('--write_cart_hess', type=str, help='Write approximate cartesian Hessian at optimized geometry to specified file.')
-                        
-    grp_meci = parser.add_argument_group('meci', 'Relevant for conical intersection optimization')
-    grp_meci.add_argument('--meci_sigma', type=float, help='Sigma parameter for MECI penalty function (default 3.5).\n'
-                        'Not used if the engine computes the MECI objective function directly.\n ')
-    grp_meci.add_argument('--meci_alpha', type=float, help='Alpha parameter for MECI penalty function (default 0.025).\n'
-                        'Not used if the engine computes the MECI objective function directly.')
-    
+
     grp_software = parser.add_argument_group('molpro', 'Options specific for certain software packages')
     grp_software.add_argument('--molproexe', type=str, help='Specify absolute path of Molpro executable.\n ')
     grp_software.add_argument('--molcnv', type=str2bool, help='Provide "yes" to use Molpro style convergence criteria instead of the default.\n ')
