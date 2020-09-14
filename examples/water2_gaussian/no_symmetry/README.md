@@ -1,0 +1,1 @@
+An example optimization using gaussian where the symmetry has been completely disabled.
