@@ -2775,6 +2775,8 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                 rcov = Radii[Elements.index(self.elem[ic.b])-1] + Radii[Elements.index(self.elem[ic.c])-1]
                 # Hdiag.append(0.1)
                 Hdiag.append(0.023)
+                # The value recommended in Schlegel's paper does not appear to improve performance for larger systems.
+                # Hdiag.append(max(0.0023, 0.0023-0.07*(r-rcov)))
             elif type(ic) is OutOfPlane:
                 r1 = xyzs[ic.b]-xyzs[ic.a]
                 r2 = xyzs[ic.c]-xyzs[ic.a]
