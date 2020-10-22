@@ -1,4 +1,4 @@
-.. options:
+.. _options:
 
 Option Index
 ============

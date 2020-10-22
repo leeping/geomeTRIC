@@ -11,8 +11,9 @@ GeomeTRIC Documentation for Users and Contributors
    :caption: Contents:
 
    install
-   usage
+   quickstart
    constraints
+   meci
    engines
    options
    citation
