@@ -1,3 +1,4 @@
 ## docs/requirements.txt 
 
-sphinxcontrib-ansi
+sphinx=3.2.1
+sphinxcontrib-ansi=0.6.0
