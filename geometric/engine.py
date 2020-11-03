@@ -598,14 +598,13 @@ class OpenMM(Engine):
         modeller = app.Modeller(pdb.topology, pdb.positions)
         xmlSystem = False
         self.combination = None
+        self.n_virtual_sites = 0
         if os.path.exists(xml):
             xmlStr = open(xml).read()
             # check if we have opls combination rules if the xml is present
             try:
                 self.combination = ET.fromstring(xmlStr).find('NonbondedForce').attrib['combination']
-            except AttributeError:
-                pass
-            except KeyError:
+            except (AttributeError, KeyError):
                 pass
             try:
                 # If the user has provided an OpenMM system, we can use it directly
