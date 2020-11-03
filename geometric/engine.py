@@ -595,6 +595,7 @@ class OpenMM(Engine):
         except ImportError:
             raise ImportError("OpenMM computation object requires the 'simtk' package. Please pip or conda install 'openmm' from omnia channel.")
         pdb = app.PDBFile(pdb)
+        modeller = app.Modeller(pdb.topology, pdb.positions)
         xmlSystem = False
         self.combination = None
         if os.path.exists(xml):
@@ -620,7 +621,12 @@ class OpenMM(Engine):
                 forcefield = app.ForceField(xml)
             except ValueError:
                 raise OpenMMEngineError('Provided input file is not an installed force field XML file')
-            system = forcefield.createSystem(pdb.topology, nonbondedMethod=app.NoCutoff, constraints=None, rigidWater=False)
+            try:
+                system = forcefield.createSystem(modeller.topology, nonbondedMethod=app.NoCutoff, constraints=None, rigidWater=False)
+            except ValueError:
+                modeller.addExtraParticles(forcefield)
+                system = forcefield.createSystem(modeller.topology, nonbondedMethod=app.NoCutoff, constraints=None, rigidWater=False)
+                self.n_virtual_sites = sum([system.isVirtualSite(indx) for indx in range(system.getNumParticles())])
         # apply opls combination rule if we are using it
         if self.combination == 'opls':
             logger.info("\nUsing geometric combination rules\n")
@@ -636,13 +642,18 @@ class OpenMM(Engine):
         try:
             self.M.xyzs[0] = coords.reshape(-1, 3) * bohr2ang
             pos = [Vec3(self.M.xyzs[0][i,0]/10, self.M.xyzs[0][i,1]/10, self.M.xyzs[0][i,2]/10) for i in range(self.M.na)]*u.nanometer
+            for virtual_site in range(self.n_virtual_sites):
+                pos.extend([Vec3(0, 0, 0)]*u.nanometer)
             self.simulation.context.setPositions(pos)
+            if self.n_virtual_sites:
+                self.simulation.context.computeVirtualSites()
             state = self.simulation.context.getState(getEnergy=True, getForces=True)
             energy = state.getPotentialEnergy().value_in_unit(u.kilojoule_per_mole) / eqcgmx
             gradient = state.getForces(asNumpy=True).flatten() / fqcgmx
+            gradient = gradient[:-self.n_virtual_sites*3]
         except:
             raise OpenMMEngineError
-        return {'energy':energy, 'gradient':gradient}
+        return {'energy': energy, 'gradient': gradient}
 
     @staticmethod
     def opls(system):
