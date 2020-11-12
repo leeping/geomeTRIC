@@ -158,7 +158,7 @@ def test_combination_detection(localizer):
 @addons.using_openmm
 def test_opls_energy(localizer):
     """Test the opls energy evaluation of the molecule."""
-    M, engine = geometric.optimize.get_molecule_engine(engine='openmm', pdb=os.path.join(datad, 'captan.pdb'),input=os.path.join(datad, 'captan.xml'))
+    M, engine = geometric.optimize.get_molecule_engine(engine='openmm', pdb=os.path.join(datad, 'captan.pdb'), input=os.path.join(datad, 'captan.xml'))
     coords = M.xyzs[0].flatten() * geometric.nifty.ang2bohr
     spcalc = engine.calc_new(coords, None)
     energy = spcalc['energy']
@@ -189,3 +189,24 @@ def test_opls_energy(localizer):
                           -1.77472314e-03,  2.30695485e-03,  1.01002642e-03])
     assert abs(energy - -0.004563862119216744) < 1e-5
     assert np.allclose(grad, opls_grad, atol=1e-5)
+
+@addons.using_openmm
+def test_virtual_sites(localizer):
+    """Test the addition of virtual sites to the OpenMM system."""
+    M, engine = geometric.optimize.get_molecule_engine(engine='openmm', pdb=os.path.join(datad, 'ethanol.pdb'), input=os.path.join(datad, 'ethanol.xml'))
+    coords = M.xyzs[0].flatten() * geometric.nifty.ang2bohr
+    spcalc = engine.calc_new(coords, None)
+    energy = 0.005817895871452842
+    gradient = np.array([
+         0.01886338, -0.00923309,  0.00377672,
+         0.01808848,  0.02594277,  0.01314610,
+        -0.03097291, -0.01713883, -0.01148461,
+        -0.00799188,  0.00639807, -0.00549201,
+        -0.00642366, -0.01005831, -0.00344108,
+        -0.00042284,  0.01310114,  0.00968930,
+        -0.00362527, -0.00661770, -0.00802060,
+        -0.00224794, -0.01636116, -0.00189956,
+         0.01473265,  0.01396710,  0.00372573,
+    ])
+    assert abs(spcalc['energy'] - energy) < 1e-5
+    assert np.allclose(spcalc['gradient'], gradient, atol=1e-5)
