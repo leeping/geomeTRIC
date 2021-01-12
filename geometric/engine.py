@@ -120,12 +120,15 @@ def edit_tcin(fin=None, fout=None, options=None, defaults=None, reqxyz=True, ign
     for k, v in options.items():
         Answer[k] = v
     # Append defaults to the end
+    Answer2 = Answer.copy()
     for k, v in defaults.items():
         if k not in Answer.keys():
-            Answer[k] = v
+            Answer2[k] = v
+    Answer = Answer2.copy()
     for k, v in Answer.items():
         if v is None:
-            del Answer[k]
+            del Answer2[k]
+    Answer = Answer2.copy()
     # Print to the output if provided
     havekeys = []
     if fout is not None:
