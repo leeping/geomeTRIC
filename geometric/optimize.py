@@ -109,7 +109,7 @@ class Optimizer(object):
 
     def get_cartesian_norm(self, dy, verbose=None):
         if not verbose: verbose = self.params.verbose
-        return get_cartesian_norm(self.X, dy, self.IC, self.params.enforce, self.params.verbose)
+        return get_cartesian_norm(self.X, dy, self.IC, self.params.enforce, self.params.verbose, self.params.usedmax)
 
     def get_delta_prime(self, v0, verbose=None):
         # This method can be called at a different verbose level than the master

@@ -569,7 +569,7 @@ def free_energy_harmonic(coords, mass, freqs_wavenumber, energy, temperature, pr
     if nimag > 0:
         out_lines.append("Note: Free energy does not include contribution from %i imaginary mode(s)\n" % nimag)
     out_lines.append("\n")
-    out_lines.append("Gibbs free energy contributions calculated at @ %.2f K:\n" % T)
+    out_lines.append("Free energy contributions calculated at @ %.2f K:\n" % T)
     out_lines.append("Zero-point vibrational energy:                              %12.4f kcal/mol \n" % ZPVE)
     out_lines.append("H   (Trans + Rot + Vib = Tot): %8.4f + %8.4f + %8.4f = %8.4f kcal/mol \n" % (H_trans, E_rot, E_vib, H_tot))
     out_lines.append("S   (Trans + Rot + Vib = Tot): %8.4f + %8.4f + %8.4f = %8.4f cal/mol/K\n" % (S_trans, S_rot, S_vib, S_tot))

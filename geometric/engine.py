@@ -450,6 +450,8 @@ class TeraChem(Engine): # pragma: no cover
                 self.tcin['purify'] = 'no'
             if 'mixguess' not in self.tcin: 
                 self.tcin['mixguess'] = "0.0"
+            if self.casscf:
+                self.tcin['scf'] = 'diis'
             self.tcin['casguess' if self.casscf else 'guess'] = ' '.join(orbital_files)
         elif self.initguess_mode != 'none':
             # If scratch files from previous calc do not exist, then copy initial guess files
@@ -460,6 +462,7 @@ class TeraChem(Engine): # pragma: no cover
                     raise TeraChemEngineError("%s guess file is missing and this code shouldn't be called" % f)
             if self.initguess_mode == 'file':
                 self.tcin['casguess' if self.casscf else 'guess'] = ' '.join(self.initguess_files)
+                if self.casscf: self.tcin['scf'] = 'diis'
             elif self.initguess_mode != 'none':
                 self.tcin['guess'] = ' '.join([self.initguess_mode] + self.initguess_files)
             copied_files = self.initguess_files[:]
@@ -523,8 +526,10 @@ class TeraChem(Engine): # pragma: no cover
         # Specify WQ input and output files
         in_files = [('%s/run.in' % dirname, 'run.in'), ('%s/%s' % (dirname, start_xyz), start_xyz)]
         if self.qmmm:
-            in_files += [(os.path.join(dirname, self.qmindices_name), self.qmindices_name),
-                         (os.path.join(dirname, self.prmtop_name), self.prmtop_name)]
+            qmindices_filename = os.path.split(self.qmindices_name)[1]
+            prmtop_filename = os.path.split(self.prmtop_name)[1]
+            in_files += [("%s/%s" % (dirname, qmindices_filename), qmindices_filename)]
+            in_files += [("%s/%s" % (dirname, prmtop_filename), prmtop_filename)]
         for f in guessfnms:
             in_files.append((os.path.join(dirname, f), f))
         out_files = [('%s/run.out' % dirname, 'run.out')]

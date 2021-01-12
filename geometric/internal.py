@@ -2081,13 +2081,20 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         molecule.build_topology()
         if 'resid' in molecule.Data.keys():
             frags = []
+            residues = []
             current_resid = -1
             for i in range(molecule.na):
                 if molecule.resid[i] != current_resid:
-                    frags.append([i])
+                    residues.append([i])
                     current_resid = molecule.resid[i]
                 else:
-                    frags[-1].append(i)
+                    residues[-1].append(i)
+            # A single residue is not always guaranteed to be contiguous
+            for res in residues:
+                residue_select = molecule.atom_select(res)
+                residue_select.build_topology()
+                for sub_mol in residue_select.molecules:
+                    frags.append([res[i] for i in sub_mol])
         else:
             frags = [m.nodes() for m in molecule.molecules]
         # coordinates in Angstrom
