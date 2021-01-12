@@ -38,10 +38,11 @@ from __future__ import division
 import os
 import itertools
 import numpy as np
+import shutil
 
 import os
 from .internal import Distance, Angle, Dihedral, CartesianX, CartesianY, CartesianZ, TranslationX, TranslationY, TranslationZ, RotationA, RotationB, RotationC
-from .engine import set_tcenv, load_tcin, TeraChem, ConicalIntersection, Psi4, QChem, Gromacs, Molpro, OpenMM, QCEngineAPI
+from .engine import set_tcenv, load_tcin, TeraChem, ConicalIntersection, Psi4, QChem, Gromacs, Molpro, OpenMM, QCEngineAPI, Gaussian
 from .rotate import calc_fac_dfac
 from .molecule import Molecule, Elements
 from .nifty import logger, isint, uncommadash, bohr2ang, ang2bohr
@@ -82,8 +83,8 @@ def get_molecule_engine(**kwargs):
 
     ## MECI calculations create a custom engine that contains two other engines.
     if kwargs.get('meci', None):
-        if engine_str.lower() in ['psi4', 'gmx', 'molpro', 'qcengine', 'openmm'] or customengine:
-            logger.warning("MECI optimizations are not tested with engines: psi4, gmx, molpro, qcengine, openmm, customengine. Be Careful!")
+        if engine_str.lower() in ['psi4', 'gmx', 'molpro', 'qcengine', 'openmm', 'gaussian'] or customengine:
+            logger.warning("MECI optimizations are not tested with engines: psi4, gmx, molpro, qcengine, openmm, gaussian, customengine. Be Careful!")
         ## If 'engine' is provided as the argument to 'meci', then we assume the engine is
         # directly returning the MECI objective function and gradient.
         if kwargs['meci'].lower() == 'engine':
@@ -119,8 +120,8 @@ def get_molecule_engine(**kwargs):
     if engine_str:
         engine_str = engine_str.lower()
         if engine_str[:4] == 'tera' : engine_str = 'tera'
-        if engine_str not in ['tera', 'qchem', 'psi4', 'gmx', 'molpro', 'openmm', 'qcengine']:
-            raise RuntimeError("Valid values of engine are: tera, qchem, psi4, gmx, molpro, openmm, qcengine")
+        if engine_str not in ['tera', 'qchem', 'psi4', 'gmx', 'molpro', 'openmm', 'qcengine', "gaussian"]:
+            raise RuntimeError("Valid values of engine are: tera, qchem, psi4, gmx, molpro, openmm, qcengine, gaussian")
         if customengine:
             raise RuntimeError("engine and customengine cannot simultaneously be set")
         if engine_str == 'tera':
@@ -218,6 +219,21 @@ def get_molecule_engine(**kwargs):
             if molproexe is not None:
                 engine.set_molproexe(molproexe)
             threads_enabled = True
+        elif engine_str == "gaussian":
+            logger.info("Gaussian engine selected. Expecting Gaussian input for gradient calculation. \n")
+            M = Molecule(inputf, radii=radii, fragment=frag)
+            # now work out which gaussian version we have
+            if shutil.which("g16") is not None:
+                exe = "g16"
+            elif shutil.which("g09") is not None:
+                exe = "g09"
+            else:
+                raise ValueError("Neither g16 or g09 was found, please check the environment.")
+            engine = Gaussian(molecule=M, exe=exe, threads=threads)
+            threads_enabled = True
+            logger.info("The gaussian engine exe is set as %s" % engine.gaussian_exe)
+            # load the template into the engine
+            engine.load_gaussian_input(inputf)
         elif engine_str == 'qcengine':
             logger.info("QCEngine selected.\n")
             schema = kwargs.get('qcschema', False)
@@ -327,12 +343,23 @@ def parse_constraints(molecule, constraints_string):
     objs = []
     vals = []
     coords = molecule.xyzs[0].flatten() * ang2bohr
+    in_options = False
     for line in constraints_string.split('\n'):
+        # Skip over the options block in the constraints file
+        if '$options' in line:
+            in_options = True
+            logger.info("-> Additional optimizer options provided in the constraints file:\n")
+        if in_options:
+            if '$end' in line:
+                in_options = False
+            if len(line) > 0: logger.info("-> " + line+"\n")
+            continue
+        # End skipping over the options block
         line = line.split("#")[0].strip().lower()
-        # This is a list-of-lists. The intention is to create a multidimensional grid
-        # of constraint values if necessary.
         if len(line) == 0: continue
         logger.info(line+'\n')
+        # This is a list-of-lists. The intention is to create a multidimensional grid
+        # of constraint values if necessary.
         if line.startswith("$"):
             mode = line.replace("$","")
         else:

@@ -2418,15 +2418,16 @@ class Molecule(object):
                 minj = M_rot_C.atomname[minAtoms_C[1]]
                 print("    Closest (Hvy) : rot-frame %i atoms %s-%s %.2f" % (minFrame_C, mini, minj, minDist_C))
             Success = True
-        else:
+        elif printLevel >= 1:
+            print("\n    \x1b[1;91mFailed - clash found. Thresh(H, Hvy) = (%.2f, %.2f)\x1b[0m" % (thresh_hyd, thresh_hvy))
             if haveClash_H:
                 mini = M_rot_H.atomname[minAtoms_H[0]]
                 minj = M_rot_H.atomname[minAtoms_H[1]]
-                if printLevel >= 2: print("    Clash (Hyd) : rot-frame %i atoms %s-%s %.2f" % (minFrame_H, mini, minj, minDist_H))
+                print("    Clash (Hyd) : rot-frame %i atoms %s-%s %.2f" % (minFrame_H, mini, minj, minDist_H))
             if haveClash_C:
                 mini = M_rot_C.atomname[minAtoms_C[0]]
                 minj = M_rot_C.atomname[minAtoms_C[1]]
-                if printLevel >= 2: print("    Clash (Hvy) : rot-frame %i atoms %s-%s %.2f" % (minFrame_C, mini, minj, minDist_C))
+                print("    Clash (Hvy) : rot-frame %i atoms %s-%s %.2f" % (minFrame_C, mini, minj, minDist_C))
         return M_rot_H, Success
 
     def find_angles(self):
@@ -3181,16 +3182,18 @@ class Molecule(object):
             line = line.strip().expandtabs()
             # Everything after exclamation point is a comment
             sline = line.split('!')[0].split()
-            if len(sline) == 2:
+            if re.match(r"^ *[A-Z][a-z]?(.*[-+]?([0-9]*\.)?[0-9]+){3}$", line) is not None:
+                inxyz = 1
+                if sline[0].capitalize() in PeriodicTable and isfloat(sline[1]) and isfloat(sline[2]) and isfloat(
+                        sline[3]):
+                    elem.append(sline[0])
+                    xyz.append(np.array([float(sline[1]), float(sline[2]), float(sline[3])]))
+
+            elif len(sline) == 2:
                 if isint(sline[0]) and isint(sline[1]):
                     charge = int(sline[0])
                     mult = int(sline[1])
                     title_ln = ln - 2
-            elif len(sline) == 4:
-                inxyz = 1
-                if sline[0].capitalize() in PeriodicTable and isfloat(sline[1]) and isfloat(sline[2]) and isfloat(sline[3]):
-                    elem.append(sline[0])
-                    xyz.append(np.array([float(sline[1]),float(sline[2]),float(sline[3])]))
             elif inxyz:
                 break
             ln += 1

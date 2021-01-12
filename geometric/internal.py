@@ -2081,13 +2081,20 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         molecule.build_topology()
         if 'resid' in molecule.Data.keys():
             frags = []
+            residues = []
             current_resid = -1
             for i in range(molecule.na):
                 if molecule.resid[i] != current_resid:
-                    frags.append([i])
+                    residues.append([i])
                     current_resid = molecule.resid[i]
                 else:
-                    frags[-1].append(i)
+                    residues[-1].append(i)
+            # A single residue is not always guaranteed to be contiguous
+            for res in residues:
+                residue_select = molecule.atom_select(res)
+                residue_select.build_topology()
+                for sub_mol in residue_select.molecules:
+                    frags.append([res[i] for i in sub_mol])
         else:
             frags = [m.nodes() for m in molecule.molecules]
         # coordinates in Angstrom
@@ -2479,6 +2486,36 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                 Internal.reset(xyz)
         for rot in self.Rotators.values():
             rot.reset(xyz)
+
+    def torsionConstraintLinearAngles(self, coords, thre=175):
+        """
+        Check if a torsion constrained optimization is about to fail
+        because three consecutive atoms are nearly linear.
+        """
+        
+        coords = coords.copy().reshape(-1, 3)
+        
+        def measure_angle_degrees(i, j, k):
+            x1 = coords[i]
+            x2 = coords[j]
+            x3 = coords[k]
+            v1 = x1-x2
+            v2 = x3-x2
+            n = np.dot(v1,v2)/(np.linalg.norm(v1)*np.linalg.norm(v2))
+            angle = np.arccos(n)
+            return angle * 180/ np.pi
+
+        linear_torsion_angles = {}
+        for Internal in self.cPrims:
+            if type(Internal) is Dihedral:
+                a, b, c, d = Internal.a, Internal.b, Internal.c, Internal.d
+                abc = measure_angle_degrees(a, b, c)
+                bcd = measure_angle_degrees(b, c, d)
+                if abc > thre:
+                    linear_torsion_angles[(a, b, c)] = abc
+                elif bcd > thre:
+                    linear_torsion_angles[(b, c, d)] = bcd
+        return linear_torsion_angles
 
     def linearRotCheck(self):
         # Check if certain problems might be happening due to rotations of linear molecules.
@@ -3357,6 +3394,10 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
     def __ne__(self, other):
         return not self.__eq__(other)
 
+    def torsionConstraintLinearAngles(self, coords, thre=175):
+        """ Check if certain problems might be happening due to three consecutive atoms in a torsion angle becoming linear. """
+        return self.Prims.torsionConstraintLinearAngles(coords, thre)
+    
     def linearRotCheck(self):
         """ Check if certain problems might be happening due to rotations of linear molecules. """
         return self.Prims.linearRotCheck()
@@ -3364,6 +3405,9 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
     def largeRots(self):
         """ Determine whether a molecule has rotated by an amount larger than some threshold (hardcoded in Prims.largeRots()). """
         return self.Prims.largeRots()
+
+    def printRotations(self, xyz):
+        return self.Prims.printRotations(xyz)
 
     def calcDiff(self, coord1, coord2):
         """ Calculate difference in internal coordinates (coord1-coord2), accounting for changes in 2*pi of angles. """

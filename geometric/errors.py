@@ -75,6 +75,9 @@ class GromacsEngineError(EngineError):
 class MolproEngineError(EngineError):
     pass
 
+class GaussianEngineError(EngineError):
+    pass
+
 class QCEngineAPIEngineError(EngineError):
     pass
 
@@ -82,4 +85,10 @@ class ConicalIntersectionEngineError(EngineError):
     pass
 
 class GeomOptNotConvergedError(Error):
+    pass
+
+class GeomOptStructureError(Error):
+    pass
+
+class LinearTorsionError(GeomOptStructureError):
     pass

@@ -1,2 +1,2 @@
 cp ../captan.pdb .
-geometric-optimize --pdb captan.pdb --openmm state.xml
+geometric-optimize --pdb captan.pdb --engine openmm state.xml
