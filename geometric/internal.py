@@ -2778,10 +2778,13 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                 else:
                     Hdiag.append(0.1)
             elif type(ic) in [Dihedral, MultiDihedral]:
-                r = np.linalg.norm(xyzs[ic.b]-xyzs[ic.c])
-                rcov = Radii[Elements.index(self.elem[ic.b])-1] + Radii[Elements.index(self.elem[ic.c])-1]
+                r = (np.linalg.norm(xyzs[ic.b]-xyzs[ic.c]))*ang2bohr
+                rcov = (Radii[Elements.index(self.elem[ic.b])-1] + Radii[Elements.index(self.elem[ic.c])-1])*ang2bohr
                 # Hdiag.append(0.1)
-                Hdiag.append(0.023)
+                # Hdiag.append(0.023)
+                # Hdiag.append(0.005)
+                # Hdiag.append(0.005 - 0.07*min(0.0, r-rcov))
+                Hdiag.append(min(0.023, 0.005 - 0.07*min(0.0, r-rcov)))
             elif type(ic) is OutOfPlane:
                 r1 = xyzs[ic.b]-xyzs[ic.a]
                 r2 = xyzs[ic.c]-xyzs[ic.a]
