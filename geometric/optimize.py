@@ -106,7 +106,14 @@ class Optimizer(object):
         # Sanity check - if there's only one atom, it will probably crash
         if self.molecule.na < 2:
             raise InputError("Geometry optimizer assumes there are at least two atoms in the system")
-
+        # Detect poor quality steps dominated by net translation and rotation.
+        # Minimum ratio of (total displacement / aligned displacement), hard-coded parameter.
+        self.lowq_tr_thre  = 5.0
+        # Counter of poor quality steps dominated by net translation/rotation.
+        self.lowq_tr_count = 0
+        # Number of poor quality steps before starting to project out net force/torque, hard-coded parameter.
+        self.lowq_tr_limit = 1
+        
     def get_cartesian_norm(self, dy, verbose=None):
         if not verbose: verbose = self.params.verbose
         return get_cartesian_norm(self.X, dy, self.IC, self.params.enforce, self.params.verbose, self.params.usedmax)
@@ -206,7 +213,6 @@ class Optimizer(object):
                            outfnm='%s.vdata_%s' % (prefix, suffix), note='Iteration %i Energy % .8f%s' % (self.Iteration, self.E, ' (Optimized Structure)' if afterOpt else ''),
                            wigner=((self.params.wigner, os.path.join(self.dirname, 'wigner')) if do_wigner else None))
 
-
     def calcEnergyForce(self):
         """
         Calculate the energy and Cartesian gradients of the current structure.
@@ -218,6 +224,18 @@ class Optimizer(object):
         # For frequency calculations and multi-step jobs, the gradient from an existing
         # output file may be read in.
         spcalc = self.engine.calc(self.X, self.dirname, read_data=(self.Iteration==0))
+        if self.params.subfrctor == 2 or (self.params.subfrctor == 1 and (self.lowq_tr_count >= self.lowq_tr_limit)):
+            # Subtract out the overall translational and rotational components of the force
+            netfrc_torque_mol = deepcopy(self.molecule)
+            netfrc_torque_mol.xyzs = [self.X.reshape(-1, 3)*bohr2ang]
+            netfrc_torque_mol.qm_grads = [spcalc['gradient'].reshape(-1,3)]
+            qm_grads_proj = netfrc_torque_mol.remove_netforce_torque(mass=True)[0].flatten()
+            ## Currently unclear whether mass weighting makes a different when projecting out the torques.
+            # print("Net force/torque before projection:", netfrc_torque_mol.calc_netforce_torque())
+            # netfrc_torque_mol.qm_grads = [qm_grads_proj.reshape(-1,3)]
+            # print("Net force/torque after  projection:", netfrc_torque_mol.calc_netforce_torque(mass=False))
+            # print("Force difference: %.3e" % np.linalg.norm(spcalc['gradient'] - qm_grads_proj))
+            spcalc['gradient'] = qm_grads_proj
         self.E = spcalc['energy']
         self.gradx = spcalc['gradient']
         # Calculate Hessian at the first step, or at each step if desired
@@ -414,18 +432,24 @@ class Optimizer(object):
         # Project out the degrees of freedom that are constrained
         rms_gradient, max_gradient = self.calcGradNorm()
         rms_displacement, max_displacement = calc_drms_dmax(self.X, self.Xprev)
+        rms_displacement_noalign, max_displacement_noalign = calc_drms_dmax(self.X, self.Xprev, align=False)
         # The ratio of the actual energy change to the expected change
         Quality = (self.E-self.Eprev)/self.expect
-        colors = {}
-        colors['quality'] = "\x1b[0m"
         # 2020-03-10: Step quality thresholds are hard-coded here.
-        # At the moment, no need to set them as variables.
+        # Check convergence criteria
+        Converged_energy = np.abs(self.E-self.Eprev) < params.Convergence_energy
+        Converged_grms = rms_gradient < params.Convergence_grms
+        Converged_gmax = max_gradient < params.Convergence_gmax
+        Converged_drms = rms_displacement < params.Convergence_drms
+        Converged_dmax = max_displacement < params.Convergence_dmax
+        # Set step state and log colors
+        colors = {}
         if params.transition:
             if Quality > 0.8 and Quality < 1.2: step_state = StepState.Good
             elif Quality > 0.5 and Quality < 1.5: step_state = StepState.Okay
             elif Quality > 0.0 and Quality < 2.0: step_state = StepState.Poor
             else:
-                colors['energy'] = "\x1b[91m"
+                colors['energy'] = "\x1b[92m" if Converged_energy else "\x1b[91m"
                 colors['quality'] = "\x1b[91m"
                 step_state = StepState.Reject
         else:
@@ -433,16 +457,11 @@ class Optimizer(object):
             elif Quality > 0.25: step_state = StepState.Okay
             elif Quality > 0.0: step_state = StepState.Poor
             else:
-                colors['energy'] = "\x1b[91m"
+                colors['energy'] = "\x1b[92m" if Converged_energy else "\x1b[91m"
                 colors['quality'] = "\x1b[91m"
                 step_state = StepState.Poor if Quality > -1.0 else StepState.Reject
-        # Check convergence criteria
-        Converged_energy = np.abs(self.E-self.Eprev) < params.Convergence_energy
-        Converged_grms = rms_gradient < params.Convergence_grms
-        Converged_gmax = max_gradient < params.Convergence_gmax
-        Converged_drms = rms_displacement < params.Convergence_drms
-        Converged_dmax = max_displacement < params.Convergence_dmax
         if 'energy' not in colors: colors['energy'] = "\x1b[92m" if Converged_energy else "\x1b[0m"
+        if 'quality' not in colors: colors['quality'] = "\x1b[0m"
         colors['grms'] = "\x1b[92m" if Converged_grms else "\x1b[0m"
         colors['gmax'] = "\x1b[92m" if Converged_gmax else "\x1b[0m"
         colors['drms'] = "\x1b[92m" if Converged_drms else "\x1b[0m"
@@ -492,10 +511,19 @@ class Optimizer(object):
         
         ### Adjust Trust Radius and/or Reject Step ###
         prev_trust = self.trust
+        # logger.info(" check-frctor: rmsd = %.5f rmsd_noalign = %.5f ratio = %.5f\n" %
+        #             (rms_displacement, rms_displacement_noalign, rms_displacement_noalign / rms_displacement))
         if step_state in (StepState.Poor, StepState.Reject):
             new_trust = max(params.tmin, min(self.trust, self.cnorm)/2)
             self.trustprint = "\x1b[91m-\x1b[0m" if new_trust < self.trust else "="
             self.trust = new_trust
+            # A poor quality step that is dominated by overall translation/rotation
+            # is a sign that projecting out the net force and torque may be needed
+            if self.params.subfrctor == 1 and ((rms_displacement_noalign / rms_displacement) > self.lowq_tr_thre):
+                self.lowq_tr_count += 1
+                if self.lowq_tr_count == self.lowq_tr_limit :
+                    logger.info("Poor-quality step dominated by net translation/rotation detected; ")
+                    logger.info("will project out net forces and torques past this point.\n")
         elif step_state == StepState.Good:
             new_trust = min(params.tmax, np.sqrt(2)*self.trust)
             self.trustprint = "\x1b[92m+\x1b[0m" if new_trust > self.trust else "="
@@ -506,12 +534,17 @@ class Optimizer(object):
         if step_state == StepState.Reject:
             if prev_trust <= params.thre_rj:
                 logger.info("\x1b[93mNot rejecting step - trust below %.3e\x1b[0m\n" % params.thre_rj)
+            elif rms_displacement <= 1.2*params.thre_rj:
+                # The "1.2" prevents rejecting / repeating the step and then accepting the step based on trust <= params.thre_rj
+                logger.info("\x1b[93mNot rejecting step - RMS displacement below %.3e\x1b[0m\n" % (1.2*params.thre_rj))
             elif (not params.transition) and self.E < self.Eprev:
                 logger.info("\x1b[93mNot rejecting step - energy decreases during minimization\x1b[0m\n")
+            elif Converged_energy:
+                logger.info("\x1b[93mNot rejecting step - energy change meets convergence criteria\x1b[0m\n")
             elif self.farConstraints:
                 logger.info("\x1b[93mNot rejecting step - far from constraint satisfaction\x1b[0m\n")
             else:
-                logger.info("\x1b[93mStep Is Rejected\x1b[0m\n")
+                logger.info("\x1b[93mRejecting step - quality is lower than -1.0\x1b[0m\n")
                 self.trustprint = "\x1b[1;91mx\x1b[0m"
                 self.Y = self.Yprev.copy()
                 self.X = self.Xprev.copy()

@@ -71,7 +71,7 @@ class OptParams(object):
         self.usedmax = kwargs.get('usedmax', False)
         # Minimum size of a step that can be rejected
         # self.thre_rj = kwargs.get('thre_rj', 1e-4 if (self.transition or self.meci) else 1e-2)
-        self.thre_rj = kwargs.get('thre_rj', 1e-4 if (self.transition or self.meci) else self.tmin)
+        self.thre_rj = kwargs.get('thre_rj', min(self.tmin, 1e-4) if (self.transition or self.meci) else self.tmin)
         # Sanity checks on trust radius
         if self.tmax < self.tmin:
             raise ParamError("Max trust radius must be larger than min")
@@ -119,6 +119,16 @@ class OptParams(object):
         # Reset Hessian to guess whenever eigenvalues drop below epsilon
         self.reset = kwargs.get('reset', None)
         if self.reset is None: self.reset = not (self.transition or self.meci or self.hessian == 'each')
+        # Subtract net force and torque components from the gradient.
+        # In DFT calcs, there is often a small nonzero torque that is
+        # inconsistent with the energy change (W. Swope, personal communication).
+        # This torque component may cause geomeTRIC to fail to converge because
+        # it induces a gradual rotation of the structure that does not reduce the energy.
+        # Enabling this option eliminates the net force/torque component, which
+        # should speed convergence in these cases.
+        # In other cases (e.g. Fe4N catalyst), enabling this option can slow convergence.
+        # 0 = never project; 1 = auto-detect (default); 2 = always project
+        self.subfrctor = kwargs.get('subfrctor', 1)
 
     def convergence_criteria(self, **kwargs):
         criteria = kwargs.get('converge', [])
@@ -161,6 +171,8 @@ class OptParams(object):
         self.Convergence_molpro_dmax = kwargs.get('convergence_molpro_dmax', 1.2e-3)
 
     def printInfo(self):
+        if self.subfrctor == 2:
+            logger.info(' Net force and torque will be projected out of gradient.\n')
         if self.transition:
             logger.info(' Transition state optimization requested.\n')
         if self.hessian == 'first':
@@ -286,7 +298,9 @@ def parse_optimizer_args(*args):
     grp_optparam.add_argument('--reset', type=str2bool, help='Reset approximate Hessian to guess when eigenvalues are under epsilon.\n '
                               'Defaults to True for minimization and False for transition states.\n ')
     grp_optparam.add_argument('--epsilon', type=float, help='Small eigenvalue threshold for resetting Hessian, default 1e-5.\n ')
-    grp_optparam.add_argument('--check', type=int, help='Check coordinates every <N> steps and rebuild coordinate system, disabled by default.')
+    grp_optparam.add_argument('--check', type=int, help='Check coordinates every <N> steps and rebuild coordinate system, disabled by default.\n')
+    grp_optparam.add_argument('--subfrctor', type=int, help='Project out net force and torque components from nuclear gradient.\n'
+                              '0 = never project; 1 = auto-detect (default); 2 = always project.')
 
     grp_modify = parser.add_argument_group('structure', 'Modify the starting molecular structure or connectivity')
     grp_modify.add_argument('--radii', type=str, nargs="+", help='List of atomic radii for construction of coordinate system.\n '
