@@ -370,7 +370,7 @@ elif "geometric" in __name__:
 #===========================#
 
 ## One bohr equals this many angstroms
-bohr2ang = 0.529177210
+bohr2ang     = 0.529177210903      # Previous value: 0.529177210
 
 def unmangle(M1, M2):
     """
@@ -1673,9 +1673,15 @@ class Molecule(object):
     #|     For doing useful things       |#
     #=====================================#
 
-    def center_of_mass(self):
-        totMass = sum([PeriodicTable.get(self.elem[i], 0.0) for i in range(self.na)])
-        return np.array([np.sum([xyz[i,:] * PeriodicTable.get(self.elem[i], 0.0) / totMass for i in range(xyz.shape[0])],axis=0) for xyz in self.xyzs])
+    def center_of_mass(self, mass=True):
+        """
+        Calculate the center of mass. If mass=False, then return the geometric center.
+        """
+        if mass:
+            totMass = sum([PeriodicTable.get(self.elem[i], 0.0) for i in range(self.na)])
+            return np.array([np.sum([xyz[i,:] * PeriodicTable.get(self.elem[i], 0.0) / totMass for i in range(xyz.shape[0])],axis=0) for xyz in self.xyzs])
+        else:
+            return np.array([np.mean(self.xyzs[i], axis=0) for i in range(len(self))])
 
     def radius_of_gyration(self):
         totMass = sum([PeriodicTable[self.elem[i]] for i in range(self.na)])
@@ -1686,6 +1692,74 @@ class Molecule(object):
             xyz1 -= coms[i]
             rgs.append(np.sqrt(np.sum([PeriodicTable[self.elem[i]]*np.dot(x,x) for i, x in enumerate(xyz1)])/totMass))
         return np.array(rgs)
+
+    def moment_of_inertia(self, mass=True):
+        """ Calculate moment of inertia in amu * angstrom**2. 
+        If mass = False, then all masses will be set to one."""
+        moments = []
+        for i in range(len(self)):
+            I = np.zeros((3,3))
+            xyz = self.xyzs[i]
+            coms = self.center_of_mass(mass=mass)
+            dxyz = xyz - coms[i, np.newaxis, :]
+            for j, xj in enumerate(dxyz):
+                factor = PeriodicTable[self.elem[j]] if mass else 1.0
+                I += factor*(np.dot(xj,xj)*np.eye(3) - np.outer(xj,xj))
+            moments.append(I)
+        return moments
+        
+    def calc_netforce_torque(self, mass=True):
+        """ Calculate net force and torque vectors
+        in units of hartree/bohr and hartree/bohr*bohr respectively.
+
+        These are actually the "negative" of the net force and torque
+        because the factor of -1 to convert grad into force has not been applied.
+
+        Requires forces to be entered into qm_grads.
+        """
+        netforces = []
+        torques = []
+        coms = self.center_of_mass(mass=mass)
+        if len(self.qm_grads) != len(self):
+            raise RuntimeError('qm_grads length does not match number of structures')
+        if self.qm_grads[0].shape != (self.na, 3):
+            raise RuntimeError('qm_grads element does not have the wrong shape (n_atoms, 3)')
+        for i in range(len(self)):
+            netforces.append(np.sum(self.qm_grads[i], axis=0))
+            torque_vec = np.zeros(3, dtype=float)
+            dxyz = (self.xyzs[i] - coms[i][np.newaxis, :])/bohr2ang
+            for j in range(self.na):
+                torque_vec += np.cross(dxyz[j], self.qm_grads[i][j])
+            torques.append(torque_vec)
+        return np.array(netforces), np.array(torques)
+
+    def remove_netforce_torque(self, mass=True):
+        """ Calculate net force and torque-less analogue of qm_grads. """
+        netforces, torques = self.calc_netforce_torque(mass=mass)
+        coms = self.center_of_mass(mass=mass)
+        moments = self.moment_of_inertia(mass=mass)
+        grad_proj = [frc.copy() for frc in self.qm_grads]
+        for i in range(len(self)):
+            # The purely translational component of the force on each atom
+            trans_frc = netforces[i] / self.na
+            grad_proj[i] -= trans_frc[np.newaxis, :]
+            dxyz = (self.xyzs[i] - coms[i][np.newaxis, :])/bohr2ang
+            # Moment of inertia in amu bohr**2
+            moment_au = moments[i]/bohr2ang**2
+            for j in range(self.na):
+                # The purely rotational component of the force on each atom.
+                # L = angular momentum, I = moment of inertia, w = angular velocity
+                # T = torque, v = perpendicular component of velocity
+                # F = perpendicular component of force, the desired quantity
+                #
+                # Start with F = m (dv/dt) = m (dw/dt x r)
+                # dw/dt = I^-1.dL/dt = I^-1.T
+                # Therefore F = m (I^-1.T) x r
+                I_torque = np.dot(np.linalg.pinv(moment_au), torques[i])
+                factor = PeriodicTable[self.elem[j]] if mass else 1.0
+                torque_frc = factor*np.cross(I_torque, dxyz[j])
+                grad_proj[i][j] -= torque_frc
+        return grad_proj
 
     def rigid_water(self):
         """ If one atom is oxygen and the next two are hydrogen, make the water molecule rigid. """
