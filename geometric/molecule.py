@@ -1233,6 +1233,7 @@ class Molecule(object):
                           'in'      : 'qcin',
                           'qcin'    : 'qcin',
                           'com'     : 'gaussian',
+                          'gjf'     : 'gaussian',
                           'rst'     : 'inpcrd',
                           'out'     : 'qcout',
                           'esp'     : 'qcesp',

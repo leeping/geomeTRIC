@@ -756,13 +756,18 @@ class Gaussian(Engine):
                     # we should replace it with what we want
                     gauss_temp.append("%Chk=ligand\n")
 
+                elif line.startswith('#'):
+                    self.route_line = line
+
+                    if "force=nostep" in line.lower():
+                        found_force = True
+                    gauss_temp.append("$!route@here")
+
                 else:
                     gauss_temp.append(line)
 
-                if "force=nostep" in line.lower():
-                    found_force = True
         if not found_force:
-            raise RuntimeError("Gaussian inputfile %s should have force=nostep command." % gaussian_input)
+            raise RuntimeError("Gaussian inputfile %s should have force=nostep in route line." % gaussian_input)
 
         # now we need to make sure the chk point file and threads were set
         if not any("%chk" in command.lower() for command in gauss_temp):
@@ -785,7 +790,12 @@ class Gaussian(Engine):
         # Write Gaussian com file
         with open(os.path.join(dirname, 'gaussian.com'), 'w') as outfile:
             for line in self.gauss_temp:
-                if line == '$!geometry@here':
+                if line == '$!route@here':
+                    if 'guess' not in self.route_line.lower() and os.path.exists(os.path.join(dirname, 'ligand.chk')):
+                        outfile.write(self.route_line.replace('\n','') + " Guess=Read\n")
+                    else:
+                        outfile.write(self.route_line)
+                elif line == '$!geometry@here':
                     for i, (e, c) in enumerate(zip(self.M.elem, self.M.xyzs[0])):
                         outfile.write("%-7s %13.7f %13.7f %13.7f\n" % (e, c[0], c[1], c[2]))
                 else:

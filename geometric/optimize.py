@@ -511,7 +511,7 @@ class Optimizer(object):
         
         ### Adjust Trust Radius and/or Reject Step ###
         prev_trust = self.trust
-        # logger.info(" check-frctor: rmsd = %.5f rmsd_noalign = %.5f ratio = %.5f\n" %
+        # logger.info(" Check force/torque: rmsd = %.5f rmsd_noalign = %.5f ratio = %.5f\n" %
         #             (rms_displacement, rms_displacement_noalign, rms_displacement_noalign / rms_displacement))
         if step_state in (StepState.Poor, StepState.Reject):
             new_trust = max(params.tmin, min(self.trust, self.cnorm)/2)
