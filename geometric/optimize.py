@@ -211,7 +211,7 @@ class Optimizer(object):
         # Call the frequency analysis function with an input Hessian, with most arguments populated from self.params
         frequency_analysis(self.X, hessian, self.molecule.elem, energy=self.E, temperature=self.params.temperature, pressure=self.params.pressure, verbose=self.params.verbose, 
                            outfnm='%s.vdata_%s' % (prefix, suffix), note='Iteration %i Energy % .8f%s' % (self.Iteration, self.E, ' (Optimized Structure)' if afterOpt else ''),
-                           wigner=((self.params.wigner, os.path.join(self.dirname, 'wigner')) if do_wigner else None))
+                           wigner=((self.params.wigner, os.path.join(self.dirname, 'wigner')) if do_wigner else None), ignore=self.params.ignore_modes)
 
     def calcEnergyForce(self):
         """

@@ -116,6 +116,9 @@ class OptParams(object):
         self.wigner = kwargs.get('wigner', 0)
         if self.wigner and not self.frequency:
             raise ParamError('Wigner sampling requires frequency analysis')
+        # Ignore N lowest force constants when computing free energy
+        # (may be used when comparing two free energies when some of the modes are imaginary)
+        self.ignore_modes = kwargs.get('ignore_modes', 0)
         # Reset Hessian to guess whenever eigenvalues drop below epsilon
         self.reset = kwargs.get('reset', None)
         if self.reset is None: self.reset = not (self.transition or self.meci or self.hessian == 'each')
@@ -284,6 +287,8 @@ def parse_optimizer_args(*args):
                              'following frequency analysis, default is 300 K and 1.0 bar.\n ')
     grp_hessian.add_argument('--wigner', type=int, help='Number of desired samples from Wigner distribution after frequency analysis.\n'
                              'Provide negative number to overwrite any existing samples.\n ')
+    grp_hessian.add_argument('--ignore_modes', type=int, help='Number of modes to ignore when computing harmonic free energy (default 0).\n'
+                             'The lowest/most negative force constants are ignored first.\n ')
     
     grp_optparam = parser.add_argument_group('optparam', 'Control various aspects of the optimization algorithm')
     grp_optparam.add_argument('--maxiter', type=int, help='Maximum number of optimization steps, default 300.\n ')

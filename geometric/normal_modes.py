@@ -153,7 +153,7 @@ def calc_cartesian_hessian(coords, molecule, engine, dirname, read_data=True, ve
             shutil.rmtree(os.path.join(dirname, "hessian", "displace"))
     return Hx
 
-def frequency_analysis(coords, Hessian, elem=None, mass=None, energy=0.0, temperature=300.0, pressure=1.0, verbose=0, outfnm=None, note=None, wigner=None):
+def frequency_analysis(coords, Hessian, elem=None, mass=None, energy=0.0, temperature=300.0, pressure=1.0, verbose=0, outfnm=None, note=None, wigner=None, ignore=0):
     """
     Parameters
     ----------
@@ -185,7 +185,9 @@ def frequency_analysis(coords, Hessian, elem=None, mass=None, energy=0.0, temper
         If provided, should be a 2-tuple containing (nSamples, dirname)
         containing the output folder and number of samples and the output folder
         to which samples should be written
-
+    ignore : int
+        Ignore the free energy contributions from the lowest N vibrational modes
+        (including negative force constants if there are any). 
     Returns
     -------
     freqs_wavenumber : np.array
@@ -421,7 +423,7 @@ def frequency_analysis(coords, Hessian, elem=None, mass=None, energy=0.0, temper
             i += 3
 
     # Write results to file (can be parsed by ForceBalance)
-    G_tot_au, components, out_lines = free_energy_harmonic(coords, mass, freqs_wavenumber, energy, temperature, pressure, verbose)
+    G_tot_au, components, out_lines = free_energy_harmonic(coords, mass, freqs_wavenumber, energy, temperature, pressure, verbose, ignore)
     if outfnm:
         write_vdata(freqs_wavenumber, normal_modes_cart, coords, elem, outfnm, out_lines, note=note)
         logger.info("Vibrational analysis written to %s\n" % outfnm)
@@ -435,7 +437,7 @@ def frequency_analysis(coords, Hessian, elem=None, mass=None, energy=0.0, temper
         wigner_sample(coords, mass, elem, freqs_wavenumber, normal_modes, temperature, nSample, dirname, overwrite)
     return freqs_wavenumber, normal_modes_cart, G_tot_au
 
-def free_energy_harmonic(coords, mass, freqs_wavenumber, energy, temperature, pressure, verbose = 0):
+def free_energy_harmonic(coords, mass, freqs_wavenumber, energy, temperature, pressure, verbose = 0, ignore = 0):
     """
     Calculate Gibbs free energy (i.e. thermochemical analysis) of a system where
     translation / rotation / vibration degrees of freedom are approximated using
@@ -460,6 +462,8 @@ def free_energy_harmonic(coords, mass, freqs_wavenumber, energy, temperature, pr
         Pressure (in bar) for which the free energy corrections are to be computed
     verbose : int
         Print debugging info
+    ignore : int
+        Ignore contributions of lowest N vibrational modes to free energy
     """
     # Create a copy of coords and reshape into a 2D array
     coords = coords.copy().reshape(-1, 3)
@@ -528,9 +532,13 @@ def free_energy_harmonic(coords, mass, freqs_wavenumber, energy, temperature, pr
     S_vib = 0.0
     nimag = 0
     if verbose >= 1:
-        logger.info("\nMode   Freq(1/cm)     Zero-point  +  Thermal = Evib(kcal/mol) Svib(cal/mol/K)\n\n")
+        logger.info("\nMode   Freq(1/cm)     Zero-point  +  Thermal = Evib(kcal/mol) Svib(cal/mol/K) DG(ZPE+Thermal-TS)\n\n")
     for ifreq, freq in enumerate(freqs_wavenumber):
-        if freq < 0:
+        if ifreq < ignore:
+            e_vib1 = 0.0
+            s_vib1 = 0.0
+            zpve1 = 0.0
+        elif freq < 0:
             nimag += 1
             e_vib1 = 0.0
             s_vib1 = 0.0
@@ -552,7 +560,8 @@ def free_energy_harmonic(coords, mass, freqs_wavenumber, energy, temperature, pr
             # F = E - TS -> S = (E-F)/T
             s_vib1 = 1000*(zpve1+e_vib1-f_vib1)/T
         if verbose >= 1:
-            logger.info("%4i   % 10.4f       %8.4f    %8.4f         %8.4f        %8.4f\n" % (ifreq, freq, zpve1, e_vib1, zpve1+e_vib1, s_vib1))
+            logger.info("%4i   % 10.4f       %8.4f    %8.4f         %8.4f        %8.4f        %8.4f\n" % 
+                        (ifreq, freq, zpve1, e_vib1, zpve1+e_vib1, s_vib1, zpve1+e_vib1 - T*s_vib1/1000))
         ZPVE += zpve1
         E_vib += e_vib1
         S_vib += s_vib1
@@ -566,6 +575,8 @@ def free_energy_harmonic(coords, mass, freqs_wavenumber, energy, temperature, pr
     out_lines = ["\n"]
     out_lines.append("== Summary of harmonic free energy analysis ==\n")
     out_lines.append("Note: Rotational symmetry is set to 1 regardless of true symmetry\n")
+    if ignore > 0:
+        out_lines.append("Note: Free energy ignores contributions from %i lowest force constants\n" % ignore)
     if nimag > 0:
         out_lines.append("Note: Free energy does not include contribution from %i imaginary mode(s)\n" % nimag)
     out_lines.append("\n")
