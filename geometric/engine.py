@@ -224,7 +224,7 @@ class Engine(object):
                 Optional output containing expectation value of <S^2> operator, used in
                 crossing point optimizations
         """
-        coord_hash = hash(coords.tostring())
+        coord_hash = hash(coords.tobytes())
         if coord_hash in self.stored_calcs:
             result = self.stored_calcs[coord_hash]['result']
         else:
@@ -276,7 +276,7 @@ class Engine(object):
             prior to starting a calculation (e.g. when calculating the Hessian we want to use SCF
             guess of the midpoint)
         """
-        coord_hash = hash(coords.tostring())
+        coord_hash = hash(coords.tobytes())
         if coord_hash in self.stored_calcs:
             return
         else:
@@ -320,7 +320,7 @@ class Engine(object):
                 Optional output containing expectation value of <S^2> operator, used in
                 crossing point optimizations
         """
-        coord_hash = hash(coords.tostring())
+        coord_hash = hash(coords.tobytes())
         if coord_hash in self.stored_calcs:
             result = self.stored_calcs[coord_hash]['result']
         else:
