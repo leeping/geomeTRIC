@@ -1765,7 +1765,7 @@ class InternalCoordinates(object):
         """
         global CacheWarning
         t0 = time.time()
-        xhash = hash(xyz.tostring())
+        xhash = hash(xyz.tobytes())
         ht = time.time() - t0
         if xhash in self.stored_wilsonB:
             ans = self.stored_wilsonB[xhash]
