@@ -93,7 +93,7 @@ def get_molecule_engine(**kwargs):
             sub_kwargs['meci'] = None
             M, engine = get_molecule_engine(**sub_kwargs)
         # Otherwise, sub_engines is a list of engines to compute the energy and gradient of the individual states
-        # for which the MECI is requested.  Each state corresponds to an individual input file.  
+        # for which the MECI is requested.  Each state corresponds to an individual input file.
         # By convention, the 'base' input is state 0 and the other state(s) are passed via the kwargs['meci'] list.
         else:
             meci_sigma = kwargs.get('meci_sigma', 3.5)
@@ -123,9 +123,11 @@ def get_molecule_engine(**kwargs):
     threads_enabled = False
     if engine_str:
         engine_str = engine_str.lower()
-        if engine_str[:4] == 'tera' : engine_str = 'tera'
-        if engine_str not in ['tera', 'qchem', 'psi4', 'gmx', 'molpro', 'openmm', 'qcengine', "gaussian"]:
-            raise RuntimeError("Valid values of engine are: tera, qchem, psi4, gmx, molpro, openmm, qcengine, gaussian")
+        if engine_str[:4] == 'tera':
+            engine_str = 'tera'
+        implemented_engines = ('tera', 'qchem', 'psi4', 'gmx', 'molpro', 'openmm', 'qcengine', "gaussian", "ase")
+        if engine_str not in implemented_engines:
+            raise RuntimeError("Valid values of engine are: " + ", ".join(implemented_engines))
         if customengine:
             raise RuntimeError("engine and customengine cannot simultaneously be set")
         if engine_str == 'tera':
@@ -133,7 +135,7 @@ def get_molecule_engine(**kwargs):
             set_tcenv()
             tcin = load_tcin(inputf)
             # The QM-MM interface is designed on the following ideas:
-            # 1) We are only optimizing the QM portion of the system 
+            # 1) We are only optimizing the QM portion of the system
             # (until we implement fast inversion of G matrices and Hessians)
             # 2) The geomeTRIC optimizer only "sees" the part of the molecule being optimized.
             # 3) The TeraChem engine writes .rst7 files instead of .xyz files by inserting the
@@ -266,7 +268,7 @@ def get_molecule_engine(**kwargs):
             schema = kwargs.get('qcschema', None)
             if schema is None:
                 raise RuntimeError("QCEngineAPI option requires a QCSchema")
-    
+
             program = kwargs.get('qce_program', None)
             if program is None:
                 raise RuntimeError("QCEngineAPI option requires a qce_program option")
@@ -280,7 +282,7 @@ def get_molecule_engine(**kwargs):
         M = engine.M
     else:
         raise RuntimeError("Neither engine name nor customengine object was provided.\n")
-    
+
     # If --coords is provided via command line, use final coordinate set in the provided file
     # to override all previously provided coordinates.
     arg_coords = kwargs.get('coords', None)
