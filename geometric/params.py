@@ -34,10 +34,15 @@ POSSIBILITY OF SUCH DAMAGE.
 """
 
 from __future__ import division
-import os, argparse
+
+import argparse
+import os
+
 import numpy as np
+
 from .errors import ParamError
 from .nifty import logger
+
 
 class OptParams(object):
     """
@@ -240,8 +245,8 @@ def parse_optimizer_args(*args):
     grp_univ.add_argument('--engine', type=str, help='Specify engine for computing energies and gradients.\n'
                           '"tera" = TeraChem (default)         "qchem" = Q-Chem\n'
                           '"psi4" = Psi4                       "openmm" = OpenMM (pass a force field or XML input file)\n'
-                          '"molpro" = Molpro                   "gmx" = Gromacs (pass conf.gro; requires topol.top and shot.mdp\n '
-                          '"gaussian" = Gaussian09/16\n ')
+                          '"molpro" = Molpro                   "gmx" = Gromacs (pass conf.gro; requires topol.top and shot.mdp\n'
+                          '"gaussian" = Gaussian09/16          "ase" = ASE calculator, use --ase-class/--ase-kwargs\n ')
     grp_univ.add_argument('--nt', type=int, help='Specify number of threads for running in parallel\n(for TeraChem this should be number of GPUs)')
 
     grp_jobtype = parser.add_argument_group('jobtype', 'Control the type of optimization job')
@@ -309,10 +314,10 @@ def parse_optimizer_args(*args):
     grp_software.add_argument('--qccnv', type=str2bool, help='Provide "yes" to Use Q-Chem style convergence criteria instead of the default.\n ')
 
     grp_ase = parser.add_argument_group('ASE', 'ASE calculator specific options')
-    grp_ase.add_argument('--ase-calc', type=str,
+    grp_ase.add_argument('--ase-class', type=str,
                          help='ASE calculator import path, eg. "ase.calculators.lj.LennardJones"')
-    grp_ase.add_argument('--ase-calc-kwargs', type=str, help='ASE calculator keyword args, as JSON dictionary, '
-                                                             'eg. {"param_filename":"path/to/file.xml"}')
+    grp_ase.add_argument('--ase-kwargs', type=str, help='ASE calculator keyword args, as JSON dictionary, '
+                                                        'eg. {"param_filename":"path/to/file.xml"}')
 
     grp_debug = parser.add_argument_group('debug', 'Relevant for development and debugging')
     grp_debug.add_argument('--displace', type=str2bool, help='Provide "yes" to write out displacements of the internal coordinates.\n ')

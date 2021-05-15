@@ -122,8 +122,10 @@ def get_molecule_engine(**kwargs):
     if engine_str:
         engine_str = engine_str.lower()
         if engine_str[:4] == 'tera' : engine_str = 'tera'
-        if engine_str not in ['tera', 'qchem', 'psi4', 'gmx', 'molpro', 'openmm', 'qcengine', "gaussian"]:
-            raise RuntimeError("Valid values of engine are: tera, qchem, psi4, gmx, molpro, openmm, qcengine, gaussian")
+
+        implemented_engines = ('tera', 'qchem', 'psi4', 'gmx', 'molpro', 'openmm', 'qcengine', "gaussian", "ase")
+        if engine_str not in implemented_engines:
+            raise RuntimeError("Valid values of engine are: " + ", ".join(implemented_engines))
         if customengine:
             raise RuntimeError("engine and customengine cannot simultaneously be set")
         if engine_str == 'tera':
@@ -251,8 +253,8 @@ def get_molecule_engine(**kwargs):
             logger.info("ASE-Calculator engine selected. \n")
             M = Molecule(kwargs.get("input"), radii=radii, fragment=frag)
 
-            ase_class_name = kwargs.get("ase_calc")
-            ase_kwargs = kwargs.get("ase_calc_kwargs", "{}")
+            ase_class_name = kwargs.get("ase_class")
+            ase_kwargs = kwargs.get("ase_kwargs", "{}")
 
             logger.info(f"   ASE  calculator:{ase_class_name}\n")
             logger.info(f"   ASE calc kwargs:{ase_kwargs}\n")
