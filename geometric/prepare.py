@@ -39,8 +39,10 @@ import os
 import itertools
 import numpy as np
 import shutil
+import json
 
 import os
+from .ase_engine import EngineASE
 from .internal import Distance, Angle, Dihedral, CartesianX, CartesianY, CartesianZ, TranslationX, TranslationY, TranslationZ, RotationA, RotationB, RotationC
 from .engine import set_tcenv, load_tcin, TeraChem, ConicalIntersection, Psi4, QChem, Gromacs, Molpro, OpenMM, QCEngineAPI, Gaussian
 from .rotate import calc_fac_dfac
@@ -129,7 +131,7 @@ def get_molecule_engine(**kwargs):
             set_tcenv()
             tcin = load_tcin(inputf)
             # The QM-MM interface is designed on the following ideas:
-            # 1) We are only optimizing the QM portion of the system 
+            # 1) We are only optimizing the QM portion of the system
             # (until we implement fast inversion of G matrices and Hessians)
             # 2) The geomeTRIC optimizer only "sees" the part of the molecule being optimized.
             # 3) The TeraChem engine writes .rst7 files instead of .xyz files by inserting the
@@ -239,12 +241,27 @@ def get_molecule_engine(**kwargs):
             schema = kwargs.get('qcschema', False)
             if schema is False:
                 raise RuntimeError("QCEngineAPI option requires a QCSchema")
-    
+
             program = kwargs.get('qce_program', False)
             if program is False:
                 raise RuntimeError("QCEngineAPI option requires a qce_program option")
             engine = QCEngineAPI(schema, program)
             M = engine.M
+        elif engine_str == "ase":
+            logger.info("ASE-Calculator engine selected. \n")
+            M = Molecule(kwargs.get("input"), radii=radii, fragment=frag)
+
+            ase_class_name = kwargs.get("ase_calc")
+            ase_kwargs = kwargs.get("ase_calc_kwargs", "{}")
+
+            logger.info(f"   ASE  calculator:{ase_class_name}\n")
+            logger.info(f"   ASE calc kwargs:{ase_kwargs}\n")
+
+            engine = EngineASE.from_calculator_string(
+                M,
+                ase_class_name,
+                **json.loads(ase_kwargs),
+            )
         else:
             raise RuntimeError("Failed to create an engine object, this might be a bug in get_molecule_engine")
     elif customengine:
@@ -253,7 +270,7 @@ def get_molecule_engine(**kwargs):
         M = engine.M
     else:
         raise RuntimeError("Neither engine name nor customengine object was provided.\n")
-    
+
     # If --coords is provided via command line, use final coordinate set in the provided file
     # to override all previously provided coordinates.
     arg_coords = kwargs.get('coords', None)

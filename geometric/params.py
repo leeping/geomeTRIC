@@ -107,7 +107,7 @@ class OptParams(object):
         # Perform a frequency analysis whenever a cartesian Hessian is computed
         self.frequency = kwargs.get('frequency', None)
         if self.frequency is None: self.frequency = True
-        # Temperature and pressure for harmonic free energy 
+        # Temperature and pressure for harmonic free energy
         self.temperature, self.pressure = kwargs.get('thermo', [300.0, 1.0])
         # Number of desired samples from Wigner distribution
         self.wigner = kwargs.get('wigner', 0)
@@ -186,20 +186,20 @@ def str2bool(v):
 
 class ArgumentParserWithFile(argparse.ArgumentParser):
     """
-    Customized argument parser which can read a constraints file and 
+    Customized argument parser which can read a constraints file and
     parse text in between $options and $<anything_else> flags as
     command line arguments, to supplement any arguments not provided
     on the command line.
 
     The syntax in the constraints file can come after  look like:
     $options
-    
+
     $end
     """
     def __init__(self, *args, **kwargs):
         self.in_options = False
         super(ArgumentParserWithFile, self).__init__(*args, **kwargs)
-        
+
     def convert_arg_line_to_args(self, line):
         line = line.split("#")[0].strip() # Don't lower-case because may be case sensitive
         if '$options' in line:
@@ -211,21 +211,21 @@ class ArgumentParserWithFile(argparse.ArgumentParser):
             s[0] = '--'+s[0]
             return s
         return []
-    
+
 def parse_optimizer_args(*args):
-    
-    """ 
-    Read user input from the command line interface. 
-    Designed to be called by optimize.main() passing in sys.argv[1:] 
-    
-    Avoid setting default values for variables here. The default values of certain variables 
-    depends on the values of other variables. The OptParams() and get_molecule_engine() 
+
+    """
+    Read user input from the command line interface.
+    Designed to be called by optimize.main() passing in sys.argv[1:]
+
+    Avoid setting default values for variables here. The default values of certain variables
+    depends on the values of other variables. The OptParams() and get_molecule_engine()
     functions sets the default values of variables. This also ensures compatibility with
     the JSON API.
     """
-    
+
     parser = ArgumentParserWithFile(add_help=False, formatter_class=argparse.RawTextHelpFormatter, fromfile_prefix_chars='@')
-    
+
     grp_univ = parser.add_argument_group('universal', 'Relevant to every job')
     grp_univ.add_argument('input', type=str, help='REQUIRED positional argument: Quantum chemistry or MM input file for calculation\n ')
     grp_univ.add_argument('constraints', type=str, nargs='?', help='OPTIONAL positional argument: File containing constraint specifications and/or additional options\n ')
@@ -243,7 +243,7 @@ def parse_optimizer_args(*args):
                           '"molpro" = Molpro                   "gmx" = Gromacs (pass conf.gro; requires topol.top and shot.mdp\n '
                           '"gaussian" = Gaussian09/16\n ')
     grp_univ.add_argument('--nt', type=int, help='Specify number of threads for running in parallel\n(for TeraChem this should be number of GPUs)')
-    
+
     grp_jobtype = parser.add_argument_group('jobtype', 'Control the type of optimization job')
     grp_jobtype.add_argument('--transition', type=str2bool, help='Provide "yes" to Search for a first order saddle point / transition state.\n ')
     grp_jobtype.add_argument('--meci', type=str, help='Provide second input file and search for minimum-energy conical\n '
@@ -269,7 +269,7 @@ def parse_optimizer_args(*args):
                              'following frequency analysis, default is 300 K and 1.0 bar.\n ')
     grp_hessian.add_argument('--wigner', type=int, help='Number of desired samples from Wigner distribution after frequency analysis.\n'
                              'Provide negative number to overwrite any existing samples.\n ')
-    
+
     grp_optparam = parser.add_argument_group('optparam', 'Control various aspects of the optimization algorithm')
     grp_optparam.add_argument('--maxiter', type=int, help='Maximum number of optimization steps, default 300.\n ')
     grp_optparam.add_argument('--converge', type=str, nargs="+", help='Custom convergence criteria as key/value pairs.\n'
@@ -291,7 +291,7 @@ def parse_optimizer_args(*args):
     grp_modify.add_argument('--coords', type=str, help='Coordinate file to override the QM input file / PDB file. The LAST frame will be used.\n ')
     grp_modify.add_argument('--frag', type=str2bool, help='Provide "yes" to delete bonds between residues, producing\n'
                             'separate fragments in the internal coordinate system.')
-    
+
     grp_output = parser.add_argument_group('output', 'Control the format and amount of the output')
     grp_output.add_argument('--prefix', type=str, help='Specify a prefix for log file and temporary directory.\n'
                             'Defaults to the input file path (incl. file name with extension removed).\n ')
@@ -308,13 +308,19 @@ def parse_optimizer_args(*args):
     grp_software.add_argument('--qcdir', type=str, help='Provide an initial Q-Chem scratch folder (e.g. supplied initial guess).\n ')
     grp_software.add_argument('--qccnv', type=str2bool, help='Provide "yes" to Use Q-Chem style convergence criteria instead of the default.\n ')
 
+    grp_ase = parser.add_argument_group('ASE', 'ASE calculator specific options')
+    grp_ase.add_argument('--ase-calc', type=str,
+                         help='ASE calculator import path, eg. "ase.calculators.lj.LennardJones"')
+    grp_ase.add_argument('--ase-calc-kwargs', type=str, help='ASE calculator keyword args, as JSON dictionary, '
+                                                             'eg. {"param_filename":"path/to/file.xml"}')
+
     grp_debug = parser.add_argument_group('debug', 'Relevant for development and debugging')
     grp_debug.add_argument('--displace', type=str2bool, help='Provide "yes" to write out displacements of the internal coordinates.\n ')
     grp_debug.add_argument('--fdcheck', type=str2bool, help='Provide "yes" to check internal coordinate gradients using finite difference.')
 
     grp_help = parser.add_argument_group('help', 'Get help')
     grp_help.add_argument('-h', '--help', action='help', help='Show this help message and exit')
-    
+
     # Keep all arguments whose values are not None, so that the setting of default values
     # in OptParams() and get_molecule_engine() will work properly.
     args_dict = {}
@@ -326,7 +332,7 @@ def parse_optimizer_args(*args):
     # OpenMM .xml files don't have to be in the current folder.
     if not args_dict['input'].endswith('.xml') and not os.path.exists(args_dict['input']):
         raise RuntimeError("Input file does not exist")
-    
+
     # Parse the constraints file for additional command line options to be added
     if 'constraints' in args_dict:
         if not os.path.exists(args_dict['constraints']):
@@ -343,5 +349,5 @@ def parse_optimizer_args(*args):
     # Set any defaults that are neither provided on the command line nor in the options file
     if 'engine' not in args_dict:
         args_dict['engine'] = 'tera'
-        
+
     return args_dict
