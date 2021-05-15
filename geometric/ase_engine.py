@@ -13,8 +13,6 @@ except ModuleNotFoundError:
 
 import importlib
 
-import numpy as np
-
 from .engine import Engine, EngineError
 from .molecule import Molecule
 
@@ -55,7 +53,7 @@ class EngineASE(Engine):
 
     def update_atoms(self, coords):
         # sets the positions, given in Bohr
-        self.ase_atoms.set_positions(np.reshape(coords, newshape=(len(self.ase_atoms), 3)) / units.Bohr)
+        self.ase_atoms.set_positions(coords.reshape(-1, 3) * units.Bohr)
 
     def calc_new(self, coords, dirname):
         """
@@ -91,9 +89,13 @@ class EngineASE(Engine):
         energy = self.calculator.get_potential_energy(self.ase_atoms)
 
         return {
-            "energy": energy / units.Hartree,
-            "gradient": - forces.flatten() * units.Bohr / units.Hartree
+            "energy": energy / units.Hartree,  # eV -> Ha
+            "gradient": - forces.flatten() / units.Hartree * units.Bohr  # eV/A -> Ha/Bohr
         }
 
     def calc_wq_new(self, coords, dirname):
         raise NotImplementedError
+
+    def copy_scratch(self, src, dest):
+        # this does nothing for ASE for now
+        return
