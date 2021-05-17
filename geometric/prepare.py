@@ -256,8 +256,8 @@ def get_molecule_engine(**kwargs):
             ase_class_name = kwargs.get("ase_class")
             ase_kwargs = kwargs.get("ase_kwargs", "{}")
 
-            logger.info(f"   ASE  calculator:{ase_class_name}\n")
-            logger.info(f"   ASE calc kwargs:{ase_kwargs}\n")
+            logger.info("   ASE  calculator:{}\n".format(ase_class_name))
+            logger.info("   ASE calc kwargs:{}\n".format(ase_kwargs))
 
             engine = EngineASE.from_calculator_string(
                 M,
