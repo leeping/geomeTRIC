@@ -9,7 +9,9 @@ try:
     from ase import Atoms
     from ase import units
 except ModuleNotFoundError:
-    pass
+    Calculator = None
+    Atoms = None
+    units = None
 
 import importlib
 
