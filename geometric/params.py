@@ -312,12 +312,10 @@ def parse_optimizer_args(*args):
     grp_software.add_argument('--molcnv', type=str2bool, help='Provide "yes" to use Molpro style convergence criteria instead of the default.\n ')
     grp_software.add_argument('--qcdir', type=str, help='Provide an initial Q-Chem scratch folder (e.g. supplied initial guess).\n ')
     grp_software.add_argument('--qccnv', type=str2bool, help='Provide "yes" to Use Q-Chem style convergence criteria instead of the default.\n ')
-
-    grp_ase = parser.add_argument_group('ASE', 'ASE calculator specific options')
-    grp_ase.add_argument('--ase-class', type=str,
-                         help='ASE calculator import path, eg. "ase.calculators.lj.LennardJones"')
-    grp_ase.add_argument('--ase-kwargs', type=str, help='ASE calculator keyword args, as JSON dictionary, '
-                                                        'eg. {"param_filename":"path/to/file.xml"}')
+    grp_software.add_argument('--ase-class', type=str,
+                              help='ASE calculator import path, eg. "ase.calculators.lj.LennardJones"')
+    grp_software.add_argument('--ase-kwargs', type=str, help='ASE calculator keyword args, as JSON dictionary, '
+                                                             'eg. {"param_filename":"path/to/file.xml"}')
 
     grp_debug = parser.add_argument_group('debug', 'Relevant for development and debugging')
     grp_debug.add_argument('--displace', type=str2bool, help='Provide "yes" to write out displacements of the internal coordinates.\n ')
