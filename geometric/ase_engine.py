@@ -4,6 +4,12 @@ ASE-engine, perform energy and force calculations with ASE-compatible calculator
 Copyright 2021 Tamas K. Stenczel
 """
 
+# python 2 madness
+try:
+    ModuleNotFoundError
+except NameError:
+    ModuleNotFoundError = ImportError
+
 try:
     from ase.calculators.calculator import Calculator
     from ase import Atoms
