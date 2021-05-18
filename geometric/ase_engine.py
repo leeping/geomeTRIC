@@ -8,7 +8,7 @@ try:
     from ase.calculators.calculator import Calculator
     from ase import Atoms
     from ase import units
-except ModuleNotFoundError:
+except (ModuleNotFoundError, ImportError):
     Calculator = None
     Atoms = None
     units = None
