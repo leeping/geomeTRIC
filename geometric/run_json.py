@@ -191,7 +191,11 @@ def geometric_run_json(in_json_dict):
     # Default logger configuration (prevents extra newline from being printed)
     logIni = pkg_resources.resource_filename(geometric.optimize.__name__, 'config/logJson.ini')
     import logging.config
-    logging.config.fileConfig(logIni,disable_existing_loggers=False)
+    try:
+        logging.config.fileConfig(logIni,disable_existing_loggers=False)
+    except KeyError:
+        # No formatters configured
+        pass
 
     # Set a temporary logger to capture output
     log_stream = RawStreamHandler(stream=StringIO())
