@@ -704,6 +704,24 @@ def Optimize(coords, molecule, IC, engine, dirname, params):
     optimizer = Optimizer(coords, molecule, IC, engine, dirname, params)
     return optimizer.optimizeGeometry()
 
+
+def set_up_coordinate_system(molecule, coordsys, conmethod, CVals, Cons=None):
+    # First item in tuple: The class to be initialized
+    # Second item in tuple: Whether to connect non-bonded fragments
+    # Third item in tuple: Whether to throw in all Cartesians (no effect if second item is True)
+    coord_sys_dict = {'cart': (CartesianCoordinates, False, False),
+                      'prim': (PrimitiveInternalCoordinates, True, False),
+                      'dlc': (DelocalizedInternalCoordinates, True, False),
+                      'hdlc': (DelocalizedInternalCoordinates, False, True),
+                      'tric-p': (PrimitiveInternalCoordinates, False, False),
+                      'tric': (DelocalizedInternalCoordinates, False, False)}
+    coord_class, connect, addcart = coord_sys_dict[coordsys.lower()]
+
+    return coord_class(molecule, build=True, connect=connect, addcart=addcart, constraints=Cons,
+                       cvals=CVals,
+                       conmethod=conmethod)
+
+
 def run_optimizer(**kwargs):
     """
     Run geometry optimization, constrained optimization, or
@@ -779,20 +797,10 @@ def run_optimizer(**kwargs):
     #=========================================#
     #| Set up the internal coordinate system |#
     #=========================================#
-    # First item in tuple: The class to be initialized
-    # Second item in tuple: Whether to connect nonbonded fragments
-    # Third item in tuple: Whether to throw in all Cartesians (no effect if second item is True)
-    CoordSysDict = {'cart':(CartesianCoordinates, False, False),
-                    'prim':(PrimitiveInternalCoordinates, True, False),
-                    'dlc':(DelocalizedInternalCoordinates, True, False),
-                    'hdlc':(DelocalizedInternalCoordinates, False, True),
-                    'tric-p':(PrimitiveInternalCoordinates, False, False),
-                    'tric':(DelocalizedInternalCoordinates, False, False)}
     coordsys = kwargs.get('coordsys', 'tric')
-    CoordClass, connect, addcart = CoordSysDict[coordsys.lower()]
+    IC = set_up_coordinate_system(M, coordsys, params.conmethod,
+                                  CVals[0] if CVals is not None else None, Cons)
 
-    IC = CoordClass(M, build=True, connect=connect, addcart=addcart, constraints=Cons, cvals=CVals[0] if CVals is not None else None,
-                    conmethod=params.conmethod)
     #========================================#
     #| End internal coordinate system setup |#
     #========================================#
@@ -831,7 +839,7 @@ def run_optimizer(**kwargs):
         for ic, CVal in enumerate(CVals):
             if len(CVals) > 1:
                 logger.info("---=== Scan %i/%i : Constrained Optimization ===---\n" % (ic+1, len(CVals)))
-            IC = CoordClass(M, build=True, connect=connect, addcart=addcart, constraints=Cons, cvals=CVal, conmethod=params.conmethod)
+            IC = set_up_coordinate_system(M, coordsys=coordsys, conmethod=params.conmethod, CVals=CVals, Cons=Cons)
             IC.printConstraints(coords, thre=-1)
             if len(CVals) > 1:
                 params.xyzout = prefix+"_scan-%03i.xyz" % (ic+1)
