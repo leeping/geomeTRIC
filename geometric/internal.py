@@ -1359,8 +1359,7 @@ class Dihedral(PrimitiveCoordinate):
         vec3 = xyz[d] - xyz[c]
         cross1 = np.cross(vec2, vec3)
         cross2 = np.cross(vec1, vec2)
-        arg1 = np.sum(np.multiply(vec1, cross1)) * \
-               np.sqrt(np.sum(vec2**2))
+        arg1 = np.sum(np.multiply(vec1, cross1)) * np.sqrt(np.sum(vec2**2))
         arg2 = np.sum(np.multiply(cross1, cross2))
         answer = np.arctan2(arg1, arg2)
         return answer
@@ -1556,8 +1555,7 @@ class MultiDihedral(PrimitiveCoordinate): # pragma: no cover
         vec3 = xyzd - xyz[c]
         cross1 = np.cross(vec2, vec3)
         cross2 = np.cross(vec1, vec2)
-        arg1 = np.sum(np.multiply(vec1, cross1)) * \
-               np.sqrt(np.sum(vec2**2))
+        arg1 = np.sum(np.multiply(vec1, cross1)) * np.sqrt(np.sum(vec2**2))
         arg2 = np.sum(np.multiply(cross1, cross2))
         answer = np.arctan2(arg1, arg2)
         return answer
@@ -1654,8 +1652,7 @@ class OutOfPlane(PrimitiveCoordinate):
         vec3 = xyz[d] - xyz[c]
         cross1 = np.cross(vec2, vec3)
         cross2 = np.cross(vec1, vec2)
-        arg1 = np.sum(np.multiply(vec1, cross1)) * \
-               np.sqrt(np.sum(vec2**2))
+        arg1 = np.sum(np.multiply(vec1, cross1)) * np.sqrt(np.sum(vec2**2))
         arg2 = np.sum(np.multiply(cross1, cross2))
         answer = np.arctan2(arg1, arg2)
         return answer
@@ -1739,7 +1736,7 @@ def convert_angstroms_degrees(prims, values):
 
 CacheWarning = False
 
-class InternalCoordinates(object):
+class InternalCoordinates(PrimitiveCoordinate):
     def __init__(self):
         self.stored_wilsonB = OrderedDict()
 
@@ -2062,6 +2059,7 @@ class InternalCoordinates(object):
 class PrimitiveInternalCoordinates(InternalCoordinates):
     def __init__(self, molecule, connect=False, addcart=False, constraints=None, cvals=None, **kwargs):
         super(PrimitiveInternalCoordinates, self).__init__()
+        if kwargs.get('chain', False): return
         self.connect = connect
         self.addcart = addcart
         self.Internals = []
@@ -2799,7 +2797,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
 
     
 class DelocalizedInternalCoordinates(InternalCoordinates):
-    def __init__(self, molecule, imagenr=0, build=False, connect=False, addcart=False, constraints=None, cvals=None, remove_tr=False, cart_only=False, conmethod=0):
+    def __init__(self, molecule, imagenr=0, build=False, connect=False, addcart=False, constraints=None, cvals=None, remove_tr=False, cart_only=False, chain=False, conmethod=0, **kwargs):
         super(DelocalizedInternalCoordinates, self).__init__()
         # cart_only is just because of how I set up the class structure.
         if cart_only: return
@@ -2815,13 +2813,23 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         # Add Cartesian coordinates to all.
         self.addcart = addcart
         # The DLC contains an instance of primitive internal coordinates.
-        self.Prims = PrimitiveInternalCoordinates(molecule, connect=connect, addcart=addcart, constraints=constraints, cvals=cvals)
+        if chain:
+            if constraints is not None:
+                raise RuntimeError("constraints don't work with chain coordinates")
+            if remove_tr:
+                raise RuntimeError("remove_tr doesn't work with chain coordinates")
+            self.Prims = ChainCoordinates(molecule, connect=connect, addcart=addcart, **kwargs)
+            self.ImageICs = self.Prims.ImageICs
+            self.nim = self.Prims.nim
+            xyz = np.array(molecule.xyzs).flatten() * ang2bohr
+        else:
+            self.Prims = PrimitiveInternalCoordinates(molecule, connect=connect, addcart=addcart, constraints=constraints, cvals=cvals)
+            xyz = molecule.xyzs[imagenr].flatten() * ang2bohr
         self.na = molecule.na
         # Whether constraints have been enforced previously
         self.enforced = False
         self.enforce_fail_printed = False
         # Build the DLC's. This takes some time, so we have the option to turn it off.
-        xyz = molecule.xyzs[imagenr].flatten() * ang2bohr
         if build:
             self.build_dlc(xyz)
         self.remove_tr = remove_tr
@@ -3442,7 +3450,13 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         PrimDers = self.Prims.second_derivatives(coords)
         Answer2 = np.tensordot(self.Vecs, PrimDers, axes=(0, 0))
         return np.array(Answer2)
-    
+
+    def calcDisplacement(self, xyz, imgDisp, imgRef):
+        return self.Prims.calcDisplacement(xyz, imgDisp, imgRef)
+
+    def applyCartesianGrad(self, xyz, gradq, imgApply, imgRef):
+        return self.Prims.applyCartesianGrad(xyz, gradq, imgApply, imgRef)   
+ 
     def GInverse(self, xyz):
         return self.GInverse_SVD(xyz)
 
@@ -3487,4 +3501,444 @@ class CartesianCoordinates(PrimitiveInternalCoordinates):
             raise RuntimeError('Do not use constraints with Cartesian coordinates')
 
     def guess_hessian(self, xyz):
-        return 0.5*np.eye(len(xyz.flatten()))
+        return np.eye(len(xyz.flatten()))
+
+class ImagePrim(PrimitiveCoordinate):
+    def __init__(self, ic, na, nr):
+        self.ic = ic
+        self.na = na
+        self.nr = nr
+        self.isAngular = ic.isAngular
+        self.isPeriodic = ic.isPeriodic
+
+    def get_type(self):
+        # Because type(ImagePrim) always returns ImagePrim,
+        # it would be nice to get the type of the IC that it contains.
+        return type(self.ic)
+        
+    def __repr__(self):
+        return "Image %i %s" % (self.nr, repr(self.ic))
+        
+    def __eq__(self, other):
+        if type(self) is not type(other): return False
+        if self.nr != other.nr: return False
+        return self.ic == other.ic
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+        
+    def value(self, xyz):
+        xyz = xyz.reshape(-1,self.na,3)
+        return self.ic.value(xyz[self.nr])
+        
+    def derivative(self, xyz):
+        xyz = xyz.reshape(-1,self.na,3)
+        derivatives = np.zeros_like(xyz)
+        derivatives[self.nr, :, :] = self.ic.derivative(xyz[self.nr])
+        derivatives = derivatives.reshape(-1,3)
+        return derivatives
+    
+class SquaredDisplacement(object):
+    def __init__(self, Prims, na, imgDisp, imgRef, w=1.0, head=None, tail=None):
+        self.Prims = Prims
+        self.na = na
+        self.imgDisp = imgDisp
+        self.imgRef = imgRef
+        self.w = w
+        self.isAngular = False
+        self.isPeriodic = False
+        self.head = head.copy() if head is not None else None
+        self.tail = tail.copy() if head is not None else None
+
+    def get_type(self):
+        # Because type(ImagePrim) always returns ImagePrim,
+        # it would be nice to get the type of the IC that it contains.
+        return type(self)
+
+    def __repr__(self):
+        return "MSD between Images %i-%i (Using IC %i)" % (self.imgDisp, self.imgRef, self.imgRef)
+
+    def __eq__(self, other):
+        if type(self) is not type(other): return False
+        if self.imgDisp != other.imgDisp: return False
+        if self.imgRef != other.imgRef: return False
+        if len(self.Prims.Internals) != len(other.Prims.Internals): return False
+        if self.w != other.w: return False
+        if self.na != other.na: return False
+        for i, j in zip(self.Prims.Internals, other.Prims.Internals):
+            if i != j:
+                return False
+        return True
+    
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    def value(self, xyz):
+        xyz = xyz.reshape(-1,self.na,3)
+        if self.head is not None: xyz[0]  = self.head.copy()
+        if self.tail is not None: xyz[-1] = self.tail.copy()
+        PMDiff = self.Prims.calcDiff(xyz[self.imgDisp], xyz[self.imgRef])
+        return self.w*np.dot(PMDiff, PMDiff)
+
+    def derivative(self, xyz):
+        xyz = xyz.reshape(-1,self.na,3)
+        if self.head is not None: xyz[0]  = self.head.copy()
+        if self.tail is not None: xyz[-1] = self.tail.copy()
+        nimg = xyz.shape[0]
+        derivatives = np.zeros_like(xyz)
+        PMDiff = self.Prims.calcDiff(xyz[self.imgDisp], xyz[self.imgRef])
+        for i, ic in enumerate(self.Prims.Internals):
+            if self.imgDisp > 0 and self.imgDisp < (nimg-1):
+                derivatives[self.imgDisp, :, :] += 2*PMDiff[i]*ic.derivative(xyz[self.imgDisp])
+            derivatives[self.imgRef, :, :]  -= 2*PMDiff[i]*ic.derivative(xyz[self.imgRef])
+        derivatives = derivatives.reshape(-1,3)
+        return self.w*derivatives
+
+class RMSDisplacement(PrimitiveCoordinate):
+    def __init__(self, Prims, na, imgDisp, imgRef, w=1.0, head=None, tail=None):
+        self.Prims = Prims
+        self.na = na
+        self.imgDisp = imgDisp
+        self.imgRef = imgRef
+        self.w = w
+        self.isAngular = False
+        self.isPeriodic = False
+        self.head = head.copy() if head is not None else None
+        self.tail = tail.copy() if head is not None else None
+
+    def get_type(self):
+        # Because type(ImagePrim) always returns ImagePrim,
+        # it would be nice to get the type of the IC that it contains.
+        return type(self)
+
+    def __repr__(self):
+        return "RMSD between Images %i-%i (Using IC %i)" % (self.imgDisp, self.imgRef, self.imgRef)
+
+    def __eq__(self, other):
+        if type(self) is not type(other): return False
+        if self.imgDisp != other.imgDisp: return False
+        if self.imgRef != other.imgRef: return False
+        if len(self.Prims.Internals) != len(other.Prims.Internals): return False
+        if self.w != other.w: return False
+        if self.na != other.na: return False
+        for i, j in zip(self.Prims.Internals, other.Prims.Internals):
+            if i != j:
+                return False
+        return True
+    
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    def value(self, xyz):
+        xyz = xyz.reshape(-1,self.na,3)
+        if self.head is not None: xyz[0]  = self.head.copy()
+        if self.tail is not None: xyz[-1] = self.tail.copy()
+        PMDiff = self.Prims.calcDiff(xyz[self.imgDisp], xyz[self.imgRef])
+        return self.w*np.sqrt(np.dot(PMDiff, PMDiff))
+
+    def derivative(self, xyz):
+        xyz = xyz.reshape(-1,self.na,3)
+        if self.head is not None: xyz[0]  = self.head.copy()
+        if self.tail is not None: xyz[-1] = self.tail.copy()
+        nimg = xyz.shape[0]
+        val = self.value(xyz)
+        derivatives = np.zeros_like(xyz)
+        PMDiff = self.Prims.calcDiff(xyz[self.imgDisp], xyz[self.imgRef])
+        for i, ic in enumerate(self.Prims.Internals):
+            if self.imgDisp > 0 and self.imgDisp < (nimg-1):
+                derivatives[self.imgDisp, :, :] += PMDiff[i]*ic.derivative(xyz[self.imgDisp])
+            derivatives[self.imgRef, :, :]  -= PMDiff[i]*ic.derivative(xyz[self.imgRef])
+        derivatives = derivatives.reshape(-1,3)
+        derivatives /= val
+        return self.w**2*derivatives
+ 
+class ChainKink(object):
+    def __init__(self, Prims, na, img1, img2, imgRef, w=1.0, head=None, tail=None):
+        self.Prims = Prims
+        self.na = na
+        self.img1 = img1
+        self.img2 = img2
+        self.imgRef = imgRef
+        self.w = w
+        self.isAngular = False
+        self.isPeriodic = False
+        self.head = head.copy() if head is not None else None
+        self.tail = tail.copy() if head is not None else None
+
+    def get_type(self):
+        # Because type(ImagePrim) always returns ImagePrim,
+        # it would be nice to get the type of the IC that it contains.
+        return type(self)
+
+    def __repr__(self):
+        return "Kink between Images %i-%i-%i (Using IC %i)" % (self.img1, self.imgRef, self.img2, self.imgRef)
+
+    def __eq__(self, other):
+        if type(self) is not type(other): return False
+        if self.img1 != other.img1: return False
+        if self.img2 != other.img2: return False
+        if self.imgRef != other.imgRef: return False
+        if len(self.Prims.Internals) != len(other.Prims.Internals): return False
+        if self.w != other.w: return False
+        if self.na != other.na: return False
+        for i, j in zip(self.Prims.Internals, other.Prims.Internals):
+            if i != j:
+                return False
+        return True
+    
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    def value(self, xyz):
+        xyz = xyz.reshape(-1,self.na,3)
+        if self.head is not None: xyz[0]  = self.head.copy()
+        if self.tail is not None: xyz[-1] = self.tail.copy()
+        PMDiffAB = self.Prims.calcDiff(xyz[self.img1], xyz[self.imgRef])
+        PMDiffCB = self.Prims.calcDiff(xyz[self.img2], xyz[self.imgRef])
+        UnitAB = PMDiffAB / np.linalg.norm(PMDiffAB)
+        UnitCB = PMDiffCB / np.linalg.norm(PMDiffCB)
+        Answer = np.linalg.norm(UnitAB + UnitCB)
+        return self.w*Answer
+        # 3N is for Cartesians but we keep it for other ICs for consistency
+        # N3 = len(self.Prims.Internals)*3
+        # return self.w*np.sqrt(np.dot(PMDiff, PMDiff)/N3)
+
+    def derivative(self, xyz):
+        xyz = xyz.reshape(-1,self.na,3)
+        derivatives = np.zeros_like(xyz)
+        if self.head is not None: xyz[0]  = self.head.copy()
+        if self.tail is not None: xyz[-1] = self.tail.copy()
+        PMDiffAB = self.Prims.calcDiff(xyz[self.img1], xyz[self.imgRef])
+        PMDiffCB = self.Prims.calcDiff(xyz[self.img2], xyz[self.imgRef])
+        UnitAB = PMDiffAB / np.linalg.norm(PMDiffAB)
+        UnitCB = PMDiffCB / np.linalg.norm(PMDiffCB)
+        DerivAB = self.Prims.derivatives(xyz[self.img1]) - self.Prims.derivatives(xyz[self.imgRef])
+        DerivCB = self.Prims.derivatives(xyz[self.img2]) - self.Prims.derivatives(xyz[self.imgRef])
+        UDerivAB = np.dot(d_unit_vector(PMDiffAB, ndim=len(PMDiffAB)), DerivAB.reshape(DerivAB.shape[0], -1))
+        UDerivCB = np.dot(d_unit_vector(PMDiffCB, ndim=len(PMDiffCB)), DerivCB.reshape(DerivCB.shape[0], -1))
+        # Answer = np.dot(UDerivAB + UDerivCB, UnitAB + UnitCB)/np.linalg.norm(UnitAB + UnitCB)
+        DerivA = self.Prims.derivatives(xyz[self.img1])
+        UDerivAB_A = np.dot(d_unit_vector(PMDiffAB, ndim=len(PMDiffAB)), DerivA.reshape(DerivA.shape[0], -1))
+        DerivB = self.Prims.derivatives(xyz[self.imgRef])
+        UDerivAB_B = -np.dot(d_unit_vector(PMDiffAB, ndim=len(PMDiffAB)), DerivB.reshape(DerivB.shape[0], -1))
+        UDerivCB_B = -np.dot(d_unit_vector(PMDiffCB, ndim=len(PMDiffCB)), DerivB.reshape(DerivB.shape[0], -1))
+        DerivC = self.Prims.derivatives(xyz[self.img2])
+        UDerivCB_C = np.dot(d_unit_vector(PMDiffCB, ndim=len(PMDiffCB)), DerivC.reshape(DerivC.shape[0], -1))
+        Answer_A = np.dot(UDerivAB_A.T, UnitAB + UnitCB)/np.linalg.norm(UnitAB + UnitCB)
+        Answer_B = np.dot(UDerivAB_B.T + UDerivCB_B.T, UnitAB + UnitCB)/np.linalg.norm(UnitAB + UnitCB)
+        Answer_C = np.dot(UDerivCB_C.T, UnitAB + UnitCB)/np.linalg.norm(UnitAB + UnitCB)
+        derivatives[self.img1] = Answer_A.reshape(-1,3)
+        derivatives[self.imgRef] = Answer_B.reshape(-1,3)
+        derivatives[self.img2] = Answer_C.reshape(-1,3)
+        if self.head is not None: derivatives[0] *= 0.0
+        if self.tail is not None: derivatives[-1] *= 0.0
+        return self.w*derivatives.reshape(-1,3)
+
+        # Answer = Answer.reshape(-1,3)
+        # return self.w*Answer
+
+        # if self.head is not None: xyz[0]  = self.head.copy()
+        # if self.tail is not None: xyz[-1] = self.tail.copy()
+        # nimg = xyz.shape[0]
+        # val = self.value(xyz)
+        # derivatives = np.zeros_like(xyz)
+        # PMDiff = self.Prims.calcDiff(xyz[self.imgDisp], xyz[self.imgRef])
+        # for i, ic in enumerate(self.Prims.Internals):
+        #     if self.imgDisp > 0 and self.imgDisp < (nimg-1):
+        #         derivatives[self.imgDisp, :, :] += PMDiff[i]*ic.derivative(xyz[self.imgDisp])
+        #     derivatives[self.imgRef, :, :]  -= PMDiff[i]*ic.derivative(xyz[self.imgRef])
+        # derivatives = derivatives.reshape(-1,3)
+        # N3 = len(self.Prims.Internals)*3
+        # derivatives /= (val*N3)
+        # return self.w*derivatives
+           
+class EmptyCoordinates(object):
+    def __init__(self, molecule, connect=False, addcart=False, constraints=None, cvals=None, **kwargs):
+        super(EmptyCoordinates, self).__init__()
+        self.na = molecule.na
+        self.connect = connect
+        self.addcart = addcart
+        self.Internals = []
+        self.cPrims = []
+        self.cVals = []
+        self.Rotators = OrderedDict()
+        self.elem = molecule.elem
+    
+
+class ChainCoordinates(PrimitiveInternalCoordinates):
+    """
+
+    Global internal coordinate system for a chain of states.
+    Comprised of internal coordinates for each image (excluding
+    initial and final), also contains mean squared displacement
+    between pairs of images as a coordinate (experimental).
+
+    """
+    def __init__(self, molecule, connect=False, addcart=False, **kwargs):
+        super(ChainCoordinates, self).__init__(molecule, connect=connect, addcart=addcart, chain=True, **kwargs)
+        self.ic_displace = kwargs.get('ic_displace', False)
+        self.connect = connect
+        self.addcart = addcart
+        self.nim = len(molecule)
+        self.na = molecule.na
+        self.Internals = []
+        self.cPrims = []
+        self.cVals = []
+        if 'constraints' in kwargs and kwargs['constraints'] is not None:
+            raise RuntimeError('Do not use constraints with Cartesian coordinates')
+        self.elem = molecule.elem
+        self.ImageICs = [EmptyCoordinates(molecule[0], **kwargs)]
+        self.CartICs = [EmptyCoordinates(molecule[0], **kwargs)]
+        for i in range(1, len(molecule)-1):
+            if kwargs.get('cartesian', False):
+                self.ImageICs.append(CartesianCoordinates(molecule[i], **kwargs))
+            else:
+                self.ImageICs.append(PrimitiveInternalCoordinates(molecule[i], connect=connect, addcart=addcart, **kwargs))
+                self.CartICs.append(CartesianCoordinates(molecule[i], **kwargs))
+        self.ImageICs.append(EmptyCoordinates(molecule[-1], **kwargs))
+        self.CartICs.append(EmptyCoordinates(molecule[-1], **kwargs))
+        self.Internals = []
+        for i, imageIC in self.ICIter():
+            for ic in imageIC.Internals:
+                self.Internals.append(ImagePrim(ic, self.na, i))
+        guessw = kwargs.get('guessw', 0.1)
+        # kwargs['cartesian'] = True
+        if kwargs.get('cartesian', True):
+            print("cartesian, w =", guessw)
+            for i, imageIC in self.ICIter():
+                self.Internals.append(RMSDisplacement(imageIC, self.na, i-1, i, head=molecule.xyzs[0]*ang2bohr, tail=molecule.xyzs[-1]*ang2bohr, w=guessw))
+            self.Internals.append(RMSDisplacement(imageIC, self.na, i+1, i, head=molecule.xyzs[0]*ang2bohr, tail=molecule.xyzs[-1]*ang2bohr, w=guessw))
+        else:
+            if self.ic_displace:
+                print("icdisp, w =", guessw)
+                for i, imageIC in self.ICIter():
+                    self.Internals.append(RMSDisplacement(imageIC, self.na, i-1, i, head=molecule.xyzs[0]*ang2bohr, tail=molecule.xyzs[-1]*ang2bohr, w=guessw))
+                self.Internals.append(RMSDisplacement(imageIC, self.na, i+1, i, head=molecule.xyzs[0]*ang2bohr, tail=molecule.xyzs[-1]*ang2bohr, w=guessw))
+            else:
+                print("ccdisp, w =", guessw)
+                for i, cartIC in self.CCIter():
+                    self.Internals.append(RMSDisplacement(cartIC, self.na, i-1, i, head=molecule.xyzs[0]*ang2bohr, tail=molecule.xyzs[-1]*ang2bohr, w=guessw))
+                self.Internals.append(RMSDisplacement(cartIC, self.na, i+1, i, head=molecule.xyzs[0]*ang2bohr, tail=molecule.xyzs[-1]*ang2bohr, w=guessw))
+                
+        # for i, imageIC in self.ICIter():
+        #     self.Internals.append(ChainKink(imageIC, self.na, i-1, i+1, i, head=molecule.xyzs[0]*ang2bohr, tail=molecule.xyzs[-1]*ang2bohr))
+
+    def __repr__(self):
+        lines = ["Internal coordinate system (atoms numbered from 1):"]
+        typedict = OrderedDict()
+        for Internal in self.Internals:
+            lines.append(Internal.__repr__())
+            if str(Internal.get_type()) not in typedict:
+                typedict[str(Internal.get_type())] = 1
+            else:
+                typedict[str(Internal.get_type())] += 1
+        if len(lines) > 100:
+            # Print only summary if too many
+            lines = []
+        for k, v in list(typedict.items()):
+            lines.append("%s : %i" % (k, v))
+        return '\n'.join(lines)
+
+    def clearCache(self):
+        super(ChainCoordinates, self).clearCache()
+        for i, c in self.ICIter():
+            c.clearCache()
+        for i, c in self.CCIter():
+            c.clearCache()
+    
+    def ICIter(self):
+        answer = []
+        for i, imageIC in enumerate(self.ImageICs):
+            if i > 0 and i < (len(self.ImageICs)-1):
+                answer.append((i, imageIC))
+        return iter(answer)
+
+    def CCIter(self):
+        answer = []
+        for i, cartIC in enumerate(self.CartICs):
+            if i > 0 and i < (len(self.CartICs)-1):
+                answer.append((i, cartIC))
+        return iter(answer)
+
+    def calcDisplacement(self, xyz, imgDisp, imgRef):
+        xyz = xyz.reshape(-1,self.na,3)
+        PMDiff = self.ImageICs[imgRef].calcDiff(xyz[imgDisp], xyz[imgRef])
+        return PMDiff
+
+    def applyCartesianGrad(self, xyz, gradq, imgApply, imgRef):
+        """
+        Given a gradient applied to imgDisp but expressed in the coordinate system of imgRef, 
+        calculate the gradient in the coordinate system of imgDisp.
+        """
+        xyz = xyz.reshape(-1,self.na,3)
+        Bmat = self.ImageICs[imgRef].wilsonB(xyz[imgApply])
+        Gx = np.array(np.matrix(Bmat.T)*np.matrix(gradq).T).flatten()
+        return Gx
+
+    def getRotatorNorms(self):
+        return sum([imageIC.getRotatorNorms() for imageIC in self.ImageICs[1:-1]])
+
+    def getRotatorDots(self):
+        return sum([imageIC.getRotatorDots() for imageIC in self.ImageICs[1:-1]])
+
+    def resetRotations(self, xyz):
+        for i, imageIC in self.ICIter():
+            xyz = xyz.reshape(self.nim,self.na,3)
+            imageIC.resetRotations(xyz[self.nim])
+            
+    def printRotations(self, xyz):
+        for i, imageIC in self.ICIter():
+            print("Image %i" % (i))
+            xyz = xyz.reshape(self.nim,self.na,3)
+            imageIC.printRotations(xyz[self.nim])
+
+    def largeRots(self):
+        return any([imageIC.largeRots() for imageIC in self.ImageICs[1:-1]])
+
+    def makeConstraints(self, molecule, constraints, cvals):
+        raise RuntimeError("Not implemented for ChainCoordinates")
+
+    def remove_TR(self, xyz):
+        raise RuntimeError("Not implemented for ChainCoordinates")
+
+    def derivatives(self, xyz):
+        self.calculate(xyz)
+        answer = []
+        for Internal in self.Internals:
+            answer.append(Internal.derivative(xyz))
+        #     print Internal, np.linalg.norm(Internal.derivative(xyz))
+        # raw_input()
+        # This array has dimensions:
+        # 1) Number of internal coordinates
+        # 2) Number of atoms
+        # 3) 3
+        return np.array(answer)
+
+    def guess_hessian(self, coords, k=1.0):
+        """
+        Build a guess Hessian that roughly follows Schlegel's guidelines. 
+        """
+        coords = coords.reshape(self.nim,-1)
+        totvar = len(self.Internals)
+        H = np.zeros((totvar, totvar), dtype=float)
+        curr = 0
+        for i, imageIC in self.ICIter():
+            nvar = len(imageIC.Internals)
+            H[curr:curr+nvar, curr:curr+nvar] = imageIC.guess_hessian(coords[i])
+            curr += nvar
+        for i in range(curr, len(self.Internals)):
+            # if type(self.Internals[i]) is RMSDisplacement:
+            H[i,i] = k
+            # else:
+            #     H[i,i] = 1.0
+            #     raise RuntimeError("Got an unexpected IC (%s)" % str(type(self.Internals[i])))
+            # if type(self.Internals[i]) is RMSDisplacement:
+            # H[i, i] = k
+            curr += 1
+        return H
+
+    # def value(self, xyz):
+    #     xyzImg = xyz.reshape(self.nim, self.na, 3)
+    #     vals = []
+    #     for i in range(self.nim):
+    #         vals.append(self.ImageCoords
