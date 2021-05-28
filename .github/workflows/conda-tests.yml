@@ -1,0 +1,56 @@
+name: Tests and Coverage
+
+on: [ push ]
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [ 3.6, 3.7, 3.8, 3.9 ]
+      max-parallel: 5
+    env:
+      coverage-on-version: 3.9
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Add conda to system path
+        run: |
+          # $CONDA is an environment variable pointing to the root of the miniconda directory
+          echo $CONDA/bin >> $GITHUB_PATH
+
+      - name: Install dependencies with Conda
+        run: |
+          conda install -c defaults -c conda-forge -c psi4 -c omnia \
+                        # Psi test depends
+                        psi4 qcengine \
+                        # OpenMM test depends
+                        openmm \
+                        # geomeTRIC base depends
+                        numpy networkx \
+                        ase \
+                        # Testing
+                        pytest codecov pytest-cov \
+
+          # Build and install package
+          python setup.py develop --no-deps
+
+      - name: Test with pytest - plain
+        if: env.coverage-on-version != matrix.python-version
+        run: |
+          pytest -v geometric/tests/
+
+      - name: Test with pytest - coverage
+        if: env.coverage-on-version == matrix.python-version
+        run: |
+          pytest -v --cov=geometric  geometric/tests/
+
+          # Run a Psi4 command line test if possible
+          cd examples/water2_psi4
+          coverage run `which geometric-optimize` --engine psi4 water2.psi4in
+          cd ../..
