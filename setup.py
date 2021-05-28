@@ -1,8 +1,6 @@
-import versioneer
 from setuptools import find_packages, setup
 
-with open("README.md", "r") as fh:
-    long_description = fh.read()
+import versioneer
 
 with open("README.md", "r") as fh:
     long_description = fh.read()
@@ -24,9 +22,6 @@ setup(
         'numpy>=1.11',
         'networkx',
         'six',
-    ],
-    extras_require=[
-        'ase',
     ],
     tests_require=[
         'pytest',
