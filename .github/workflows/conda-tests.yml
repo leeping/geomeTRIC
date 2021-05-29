@@ -26,16 +26,7 @@ jobs:
 
       - name: Install dependencies with Conda
         run: |
-          conda install -c defaults -c conda-forge -c psi4 -c omnia \
-                        # Psi test depends
-                        psi4 qcengine \
-                        # OpenMM test depends
-                        openmm \
-                        # geomeTRIC base depends
-                        numpy networkx \
-                        ase \
-                        # Testing
-                        pytest codecov pytest-cov
+          conda install -c defaults -c conda-forge -c psi4 -c omnia psi4 qcengine openmm numpy networkx ase pytest codecov pytest-cov
 
           # Build and install package
           python setup.py develop --no-deps
