@@ -26,7 +26,7 @@ jobs:
 
       - name: Install dependencies with Conda
         run: |
-          conda install -c defaults -c conda-forge -c psi4 -c omnia psi4 qcengine openmm numpy networkx ase pytest codecov pytest-cov
+          conda install -c defaults -c conda-forge numpy networkx ase pytest codecov pytest-cov
 
           # Build and install package
           python setup.py develop --no-deps
