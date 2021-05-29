@@ -26,7 +26,9 @@ jobs:
 
       - name: Install dependencies with Conda
         run: |
-          conda install -c defaults -c conda-forge numpy networkx ase pytest codecov pytest-cov
+          # conda install -c defaults -c conda-forge numpy networkx ase pytest codecov pytest-cov
+          python devtools/scripts/create_conda_env.py -n=test -p=${{ matrix.python-version }} devtools/conda-envs/omm_psi4_rdkit.yaml
+          conda activate test
 
           # Build and install package
           python setup.py develop --no-deps
@@ -45,3 +47,9 @@ jobs:
           cd examples/water2_psi4
           coverage run `which geometric-optimize` --engine psi4 water2.psi4in
           cd ../..
+
+      - name: Codecov
+        uses: codecov/codecov-action@v1.5.0
+        with:
+          fail_ci_if_error: true # optional (default = false)
+          verbose: true # optional (default = false)
