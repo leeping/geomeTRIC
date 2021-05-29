@@ -35,7 +35,7 @@ jobs:
                         numpy networkx \
                         ase \
                         # Testing
-                        pytest codecov pytest-cov \
+                        pytest codecov pytest-cov
 
           # Build and install package
           python setup.py develop --no-deps
