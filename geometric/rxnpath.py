@@ -13,10 +13,9 @@ from geometric.params import OptParams
 from geometric.step import get_delta_prime_trm, brent_wiki, trust_step, calc_drms_dmax
 from geometric.engine import set_tcenv, load_tcin, TeraChem, Psi4, QChem, Gromacs, Blank
 from geometric.internal import *
-from geometric.nifty import flat, row, col, pmat2d, printcool, createWorkQueue, getWorkQueue, wq_wait
+from geometric.nifty import flat, row, col, pmat2d, printcool, createWorkQueue, getWorkQueue, wq_wait, ang2bohr, bohr2ang, kcal2au, au2kcal, au2evang
 from geometric.molecule import Molecule, EqualSpacing
 from copy import deepcopy
-from geometric.global_vars import *
 
 def rms_gradient(gradx):
     """ Return the RMS of a Cartesian gradient. """
@@ -175,7 +174,7 @@ class Structure(object):
         """
         if xyz is None: xyz = self.cartesians
         Bmat = self.IC.wilsonB(xyz)
-        Gx = np.array(np.matrix(Bmat.T)*np.matrix(gradq).T).flatten()
+        Gx = np.dot(Bmat.T, np.array(gradq).T).flatten()
         return Gx
 
     def ConvertCartGradToIC(self, gradx, xyz=None):
@@ -219,9 +218,9 @@ class Structure(object):
             self.IC = CoordinateSystem(self.M, 'tric')
         else:
             self.IC = CoordinateSystem(self.M, self.coordtype)
-        optCoords = Optimize(self.cartesians, self.M, self.IC, self.engine, self.tmpdir, opt_params, xyzout=os.path.join(self.tmpdir,'optimize.xyz'))
+        optCoords = Optimize(self.cartesians, self.M, self.IC, self.engine, self.tmpdir, opt_params)#, xyzout=os.path.join(self.tmpdir,'optimize.xyz'))
         # Update the information in this object
-        self.cartesians = optCoords
+        self.cartesians = np.array(optCoords[-1].xyzs).flatten()*ang2bohr
         # Rebuild the internal coordinate system
         self.IC = CoordinateSystem(self.M, self.coordtype)
         self.CalcInternals()
@@ -238,7 +237,7 @@ class Chain(object):
         molecule : Molecule object, N frames
             Contains the properties of the molecule (elements, connectivity etc).
         engine : Engine object
-            Wrapper around quantum chemistry or code (currently not a ForceBalance engine)
+            Wrapper around quantum chemistry code (currently not a ForceBalance engine)
         tmpdir : string
             Temporary directory (relative to root) that the calculation temporary files will be written to.
         coords : np.ndarray, optional
@@ -489,7 +488,7 @@ class Chain(object):
                 # then reduce trust radius by 50% and try again
                 # (up to three times)
                 for i in range(3):
-                    froot.target /= 2 #Division
+                    froot.target /= 2 
                     if self.params.verbose: print("\x1b[93mReducing target to %.3e\x1b[0m" % froot.target)
                     froot.above_flag = True
                     iopt = brent_wiki(froot.evaluate, 0.0, iopt, froot.target, cvg=0.1, verbose=self.params.verbose)
@@ -503,8 +502,8 @@ class Chain(object):
             dy, expect = trust_step(iopt, v0, X, G, H, None, False, self.params.verbose)
         # Expected energy change should be calculated from PlainGrad
         GP = self.get_global_grad("total", "plain")
-        expect = flat(0.5*np.matrix(row(dy))*HP*np.matrix(col(dy)))[0] + np.dot(dy,GP)
-        expectG = flat(H*np.matrix(col(dy))) + G
+        expect = flat(0.5*np.dot(np.dot(row(dy),np.array(HP)),col(dy)))[0] + np.dot(dy,GP)
+        expectG = flat(np.dot(np.array(H),col(dy))) + G
         return dy, expect, expectG, ForceRebuild
 
     def align(self):
@@ -1142,7 +1141,8 @@ class ElasticBand(Chain):
         Bmat = self.GlobalIC.wilsonB(xyz)
 
         def GetCartesianGradient(component, projection):
-            answer = np.array(np.matrix(Bmat.T)*np.matrix(self.get_global_grad(component, projection)).T).flatten()
+            answer = np.dot(np.array(Bmat.T), np.array(self.get_global_grad(component, projection)).T).flatten()
+            print ("get_global_grad in GetCartesianGradient",self.get_global_grad(component, projection))
             answer = answer.reshape(len(self), -1)
             if component in ['total', 'potential']:
                 answer[0] = self.Structures[0].grad_cartesian
@@ -1191,7 +1191,7 @@ class ElasticBand(Chain):
     def CalcRMSCartGrad(self, igrad):
         xyz = self.get_cartesian_all(endpts=True)
         Bmat = self.GlobalIC.wilsonB(xyz)
-        cGrad = np.array(np.matrix(Bmat.T)*np.matrix(igrad).T).reshape(len(self), -1)
+        cGrad = np.dot(np.array(Bmat.T), np.array(igrad).T).reshape(len(self), -1)
         # The average gradient in eV/Angstrom
         avgg = np.mean([rms_gradient(cGrad[n]) for n in range(1, len(cGrad)-1)])*au2evang
         return avgg
@@ -1222,7 +1222,7 @@ class ElasticBand(Chain):
         Bmat = self.GlobalIC.wilsonB(xyz)
 
         def GetCartesianGradient(component, projection):
-            answer = np.array(np.matrix(Bmat.T)*np.matrix(self.get_global_grad(component, projection)).T).flatten()
+            answer = np.dot(np.array(Bmat.T), np.array(self.get_global_grad(component, projection)).T).flatten()
             return answer.reshape(len(self), -1)
 
         totGrad = GetCartesianGradient("total", "working")
@@ -1810,8 +1810,8 @@ class ElasticBand(Chain):
                 fMinus_plain = self.get_grad_all("spring", "plain")
                 fMinus_projected = self.get_grad_all("spring", "projected")
                 self.Structures[n].internals[j] += h
-                fDiff_plain = (fPlus_plain - fMinus_plain)/(2*h) # Division
-                fDiff_projected = (fPlus_projected - fMinus_projected)/(2*h) # Division
+                fDiff_plain = (fPlus_plain - fMinus_plain)/(2*h)
+                fDiff_projected = (fPlus_projected - fMinus_projected)/(2*h) 
                 self.spring_hessian_plain[:, currvar] = fDiff_plain
                 self.spring_hessian_projected[:, currvar] = fDiff_projected
                 currvar += 1
@@ -1842,7 +1842,7 @@ class ElasticBand(Chain):
             cminus.ComputeProjectedGrad()
             gminus_plain = cminus.get_global_grad("spring", "plain")
             gminus_proj = cminus.get_global_grad("spring", "projected")
-            self.spring_hessian_plain[i, :] = (gplus_plain-gminus_plain)/(2*h) # Division
+            self.spring_hessian_plain[i, :] = (gplus_plain-gminus_plain)/(2*h) 
             self.spring_hessian_projected[i, :] = (gplus_proj-gminus_proj)/(2*h)
         print("Spring Hessian took %.3f seconds" % (time.time() - t0))
 
@@ -1889,7 +1889,7 @@ class ElasticBand(Chain):
                 cminus.ComputeChain()
                 gminus_plain = cminus.get_global_grad("total", "plain")
                 gminus_work = cminus.get_global_grad("total", "working")
-                self.guess_hessian_plain[i, :] = (gplus_plain-gminus_plain)/(2*h) # Division
+                self.guess_hessian_plain[i, :] = (gplus_plain-gminus_plain)/(2*h) 
                 self.guess_hessian_working[i, :] = (gplus_work-gminus_work)/(2*h)
             self.guess_hessian_plain = 0.5 * (self.guess_hessian_plain + self.guess_hessian_plain.T)
             self.guess_hessian_working = 0.5 * (self.guess_hessian_working + self.guess_hessian_working.T)
@@ -1948,7 +1948,7 @@ class ElasticBand(Chain):
             gminus_plain = spgrad_minus_plain + vgrad_minus_plain
             gminus_proj = spgrad_minus_proj + vgrad_minus_proj
 
-            self.guess_hessian_plain[i, :] = (gplus_plain-gminus_plain)/(2*h) # Division
+            self.guess_hessian_plain[i, :] = (gplus_plain-gminus_plain)/(2*h) 
             self.guess_hessian_projected[i, :] = (gplus_proj-gminus_proj)/(2*h)
             if self.plain == 0:
                 self.guess_hessian_working[i, :] = (gplus_proj-gminus_proj)/(2*h)
@@ -2044,7 +2044,7 @@ def get_molecule_engine(args):
     # Read radii from the command line.
     if (len(args.radii) % 2) != 0:
         raise RuntimeError("Must have an even number of arguments for radii")
-    nrad = int(len(args.radii) // 2)
+    nrad = int(len(args.radii)/2)
     radii = {}
     for i in range(nrad):
         radii[args.radii[2*i].capitalize()] = float(args.radii[2*i+1])
@@ -2272,11 +2272,11 @@ def RebuildHessian(H, chain, chain_hist, params, projection):
         G = g_seq[i]
         Yprev = y_seq[i-1]
         Gprev = g_seq[i-1]
-        Dy   = np.matrix(col(Y - Yprev))
-        Dg   = np.matrix(col(G - Gprev))
-        print(i, np.linalg.norm(Dy), np.linalg.norm(Dg))
-        Mat1 = (Dg*Dg.T)/(Dg.T*Dy)[0,0] #Division 
-        Mat2 = ((H*Dy)*(H*Dy).T)/(Dy.T*H*Dy)[0,0]
+        Dy   = col(Y - Yprev)
+        Dg   = col(G - Gprev)
+        Mat1 = np.dot(Dg, Dg.T)/np.dot(Dg.T, Dy)[0,0]  
+        Mat2 = np.dot(np.dot(np.array(H), Dy), np.dot(np.array(H), Dy).T)/np.dot((np.dot(Dy.T, np.array(H)),Dy))[0,0]
+        print ("Mats in RebuildHessian", Mat1, Mat2)
         # Hstor = H.copy()
         H += Mat1-Mat2
     if np.min(np.linalg.eigh(H)[0]) < params.epsilon and params.reset:
@@ -2336,12 +2336,12 @@ def recover(chain_hist, params, forceCart):
 def BFGSUpdate(Y, Yprev, G, Gprev, H, params):
     verbose = params.verbose
     # BFGS Hessian update
-    Dy = np.matrix(col(Y - Yprev))
-    Dg = np.matrix(col(G - Gprev))
+    Dy = col(Y - Yprev) 
+    Dg = col(G - Gprev)
     # Catch some abnormal cases of extremely small changes.
     if np.linalg.norm(Dg) < 1e-6 or np.linalg.norm(Dy) < 1e-6: return False
-    Mat1 = (Dg*Dg.T)/(Dg.T*Dy)[0,0]
-    Mat2 = ((H*Dy)*(H*Dy).T)/(Dy.T*H*Dy)[0,0]
+    Mat1 = np.dot(Dg,Dg.T)/np.dot(Dg.T,Dy)[0,0]
+    Mat2 = np.dot(np.dot(H,Dy), np.dot(H,Dy).T)/np.dot(np.dot(Dy.T,H),Dy)[0,0]
     Eig = np.linalg.eigh(H)[0]
     Eig.sort()
     ndy = np.array(Dy).flatten()/np.linalg.norm(np.array(Dy))
@@ -2373,7 +2373,7 @@ def OptimizeChain(chain, engine, params):
         print("Skipping optimization of endpoints")
     else:
         printcool("First optimizing chain endpoints")
-        chain.OptimizeEndpoints(params.gmax)
+        chain.OptimizeEndpoints(params.maxg)
     printcool("Now optimizing the chain")
     chain.respace(0.01)
     chain.delete_insert(1.0)
@@ -2517,7 +2517,7 @@ def OptimizeChain(chain, engine, params):
         # print "-= Chain Properties =-"
         print()
         print(" %13s %13s %13s %13s %11s %14s %13s" % ("GAvg(eV/Ang)", "GMax(eV/Ang)", "Length(Ang)", "DeltaE(kcal)", "RMSD(Ang)", "TrustRad(Ang)", "Step Quality"))
-        print("@%13s %13s %13s %13s %11s  %8.4f (%s)  %13s" % ("% 8.4f  " % chain.avgg, "% 8.4f  " % chain.maxg, "% 8.4f  " % sum(chain.calc_spacings()), "% 8.4f  " % (au2kcal*dE/len(chain)), #Division 
+        print("@%13s %13s %13s %13s %11s  %8.4f (%s)  %13s" % ("% 8.4f  " % chain.avgg, "% 8.4f  " % chain.maxg, "% 8.4f  " % sum(chain.calc_spacings()), "% 8.4f  " % (au2kcal*dE/len(chain)), 
                                                                "% 8.4f  " % (ChainRMSD(chain, c_hist[-1])), trust, trustprint, "% 6.2f (%s)" % (Quality, Describe)))
         # print "Grad rms max  : % 8.4f % 8.4f eV/Ang" % (chain.avgg, chain.maxg)
         # print "Energy Change : % 8.4f kcal/mol" % (au2kcal*dE/len(chain))

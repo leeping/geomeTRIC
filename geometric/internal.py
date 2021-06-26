@@ -3486,7 +3486,7 @@ class CartesianCoordinates(PrimitiveInternalCoordinates):
     primitive internal coordinates.
     """
     def __init__(self, molecule, **kwargs):
-        super(CartesianCoordinates, self).__init__(molecule)
+        super(CartesianCoordinates, self).__init__(molecule, **kwargs)
         self.Internals = []
         self.cPrims = []
         self.cVals = []
