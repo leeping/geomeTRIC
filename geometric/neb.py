@@ -1142,7 +1142,6 @@ class ElasticBand(Chain):
 
         def GetCartesianGradient(component, projection):
             answer = np.dot(np.array(Bmat.T), np.array(self.get_global_grad(component, projection)).T).flatten()
-            print ("get_global_grad in GetCartesianGradient",self.get_global_grad(component, projection))
             answer = answer.reshape(len(self), -1)
             if component in ['total', 'potential']:
                 answer[0] = self.Structures[0].grad_cartesian
@@ -2050,7 +2049,7 @@ def get_molecule_engine(args):
         radii[args.radii[2*i].capitalize()] = float(args.radii[2*i+1])
     # Create the Molecule object. The correct file to pass in depends on which engine is used,
     # so the command line interface could be improved at some point in the future
-    if args.engine.lower() not in ['tera', 'none', 'blank']:
+    if args.engine.lower() not in ['tera', 'psi4', 'none', 'blank']:
         M = Molecule(args.input, radii=radii)
     elif args.coords is not None:
         M = Molecule(args.coords, radii=radii)[0]
@@ -2059,10 +2058,11 @@ def get_molecule_engine(args):
     # Read in the coordinates from the "--coords" command line option
     if args.coords is not None:
         Mxyz = Molecule(args.coords)
-        if args.engine.lower() not in ['tera', 'none', 'blank'] and M.elem != Mxyz.elem:
+        if args.engine.lower() not in ['tera', 'psi4', 'none', 'blank'] and M.elem != Mxyz.elem:
             raise RuntimeError("Atoms don't match for input file and coordinates file. Please add a single structure into the input")
         M.xyzs = Mxyz.xyzs
         M.comms = Mxyz.comms
+        M.elem = Mxyz.elem
     # Select from the list of available engines
     if args.engine.lower() == 'qchem':
         Engine = QChem(M[0])
@@ -2077,7 +2077,7 @@ def get_molecule_engine(args):
         # The Psi4 interface actually uses TeraChem input
         # LPW: This should be changed to match what Yudong has in optimize.py
         if args.engine.lower() == 'psi4':
-            Psi4exe = which('psi4')
+            Psi4exe = shutil.which('psi4')
             if len(Psi4exe) == 0: raise RuntimeError("Please make sure psi4 executable is in your PATH")
         elif 'tera' in args.engine.lower():
             set_tcenv()
@@ -2112,7 +2112,21 @@ def get_molecule_engine(args):
             guessfnms = []
         if args.engine.lower() == 'psi4':
             Engine = Psi4(M[0])
-            Engine.set_nt(args.nt)
+            os.remove("%s_2.in" %args.input.split(".")[0])
+            with open("%s_2.in" %args.input.split(".")[0], 'a') as file_obj:
+                file_obj.write("molecule {\n")
+                file_obj.write("%i %i\n" %(M.charge, M.mult))
+                coords = M.xyzs[0]
+                for i, element in enumerate(M[0].elem):
+                    if i == len(M[0].elem)-1:
+                        file_obj.write("%-5s % 15.10f % 15.10f % 15.10f\n}\n" % (element, coords[i][0], coords[i][1], coords[i][2]))
+                    else:
+                        file_obj.write("%-5s % 15.10f % 15.10f % 15.10f\n" % (element, coords[i][0], coords[i][1], coords[i][2]))
+                file_obj.write("\nset basis %s\n" %tcin['basis']) 
+                file_obj.write("\ngradient(\'%s\')" %tcin['method'])
+            
+            Engine.load_psi4_input("%s_2.in" %args.input.split(".")[0])
+            #Engine.set_nt(args.nt)
         else:
             Engine = TeraChem(M[0], tcin)
             if args.nt != 1:
