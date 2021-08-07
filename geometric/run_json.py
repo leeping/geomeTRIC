@@ -40,6 +40,8 @@ import geometric
 import json
 import traceback
 import pkg_resources
+import argparse
+import os
 
 try:
     from cStringIO import StringIO      # Python 2
@@ -55,7 +57,7 @@ def parse_input_json_dict(in_json_dict):
     Parse an input json dictionary into options, example:
     in_json_dict = {
         "schema_name": "qc_schema_optimization_input",
-        "schema_version" 1,
+        "schema_version": 1,
         "keywords": {
             "coordsys": "tric",
             "conv": 1.e-7
@@ -198,15 +200,30 @@ def geometric_run_json(in_json_dict):
     logger.addHandler(log_stream)
 
     input_opts = parse_input_json_dict(in_json_dict)
-    keyword_dict = input_opts.get('keywords', {})
- 
-    chain = False
-    if "images" in keyword_dict:
-        M, engine = geometric.neb.get_molecule_engine(**input_opts)
+    qcschema = input_opts.get('qcschema') 
+    key_dict = qcschema.pop('keywords')
+
+    if 'images' in key_dict:
+        NEB = True 
+        Opt = False
+        parser = geometric.neb.build_args()
+        args_list = []
+        for key, val in key_dict.items():
+            arg = "--" + key 
+            args_list.extend([arg, str(val)])
+        args_list.extend(['chains'])
+
+        args = parser.parse_args(args_list)    
+        args.qcschema = qcschema
+        args.qce_engine = input_opts.get('qce_program') #Software packages for energy and gradient calculation (psi4 or terachem)
+
+        M, engine = geometric.neb.get_molecule_engine(args)
         M.align()
-        chain = True
-        
+        tmpdir = args.input + ".tmp"
+        os.mkdir(tmpdir)
     else:
+        NEB = False 
+        Opt = True
         M, engine = geometric.optimize.get_molecule_engine(**input_opts)
 
     # Get initial coordinates in bohr
@@ -223,13 +240,7 @@ def geometric_run_json(in_json_dict):
         Cons, CVals = geometric.prepare.parse_constraints(M, constraints_string)
 
     # set up the internal coordinate system
-    if chain:
-        coordsys = input_opts.get('coordsys')
-        params = geometric.neb.ChainOptParams(**input_opts["extras"])
-    else:
-        coordsys = input_opts.get('coordsys', 'tric')
-        params = geometric.optimize.OptParams(**input_opts)
-
+    coordsys = input_opts.get('coordsys', 'tric')
     CoordSysDict = {
         'cart': (geometric.internal.CartesianCoordinates, False, False),
         'prim': (geometric.internal.PrimitiveInternalCoordinates, True, False),
@@ -254,19 +265,22 @@ def geometric_run_json(in_json_dict):
         logger.info("%i internal coordinates being used (instead of %i Cartesians)\n" % (len(IC.Internals), 3 * M.na))
     logger.info(IC)
     logger.info("\n")
-
+    
+    if NEB:
+        params = geometric.neb.ChainOptParams(**vars(args))
+        chain = geometric.neb.ElasticBand(M, engine=engine, tmpdir=tmpdir, coordtype=args.coordsys, params=params, plain=args.plain, ic_displace=args.icdisp)
+    else:
+        params = geometric.optimize.OptParams(**input_opts)
 
     try:
         # Run the optimization
-        if Cons is None and not chain:
+        if Cons is None and Opt:
             # Run a standard geometry optimization
             geometric.optimize.Optimize(coords, M, IC, engine, None, params)
-
-        elif chain:
-            tmpdir = "./test.tmp" 
-            Band = geometric.neb.ElasticBand(M, engine=engine, tmpdir=tmpdir, coordtype=coordsys, params=params, plain=0)
-            geometric.neb.OptimizeChain(Band, engine, params)
-
+        elif NEB: 
+            # Run a NEB chain optimization
+            print ("Running an NEB calculation.")
+            geometric.neb.OptimizeChain(chain, engine, params)
         else:
             # Run a constrained geometry optimization
             if isinstance(IC, (geometric.internal.CartesianCoordinates,

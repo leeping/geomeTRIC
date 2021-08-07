@@ -312,7 +312,7 @@ def printcool(text,sym="#",bold=False,color=2,ansi=None,bottom='-',minwidth=50,c
     @return bar The bottom bar is returned for the user to print later, e.g. to mark off a 'section'
     """
     def newlen(l):
-        return len(re.sub(r"\x1b\[[0-9;]*m","",l))
+        return len(re.sub("\x1b\[[0-9;]*m","",l))
     text = text.split('\n')
     width = max(minwidth,max([newlen(line) for line in text]))
     bar = ''.join([sym2 for i in range(width + 6)])
@@ -323,7 +323,7 @@ def printcool(text,sym="#",bold=False,color=2,ansi=None,bottom='-',minwidth=50,c
         if type(center) is list: c1 = center[ln]
         else: c1 = center
         if c1:
-            padleft = ' ' * (int((width - newlen(line))/2))
+            padleft = ' ' * (int((width - newlen(line))//2))
         else:
             padleft = ''
         padright = ' '* (width - newlen(line) - len(padleft))

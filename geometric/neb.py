@@ -11,7 +11,7 @@ from scipy.linalg import sqrtm
 from geometric.optimize import Optimize
 from geometric.params import OptParams
 from geometric.step import get_delta_prime_trm, brent_wiki, trust_step, calc_drms_dmax
-from geometric.engine import set_tcenv, load_tcin, TeraChem, Psi4, QChem, Gromacs, Blank
+from geometric.engine import set_tcenv, load_tcin, TeraChem, Psi4, QChem, QCEngineAPI, Gromacs, Blank
 from geometric.internal import *
 from geometric.nifty import flat, row, col, pmat2d, printcool, createWorkQueue, getWorkQueue, wq_wait, ang2bohr, bohr2ang, kcal2au, au2kcal, au2evang
 from geometric.molecule import Molecule, EqualSpacing
@@ -1085,7 +1085,11 @@ class ElasticBand(Chain):
                 M += self.Structures[n].M
             grms = rms_gradient(self.Structures[n].grad_cartesian)*au2evang
             M.comms[i] = "Climbing Image - Chain %i Image %i Energy % 16.10f (%+.3f kcal/mol) RMSGrad %.3f eV/Ang" % (cycle, n, enes[n], eneKcal[n], grms)
-        M.write(self.params.prefix+".tsClimb.xyz")
+
+        if self.params.prefix == None:
+            M.write("chains.tsClimb.xyz")
+        else:
+            M.write(self.params.prefix+".tsClimb.xyz")
     
     def PrintStatus(self):
         enes = np.array([s.energy for s in self.Structures])
@@ -2013,21 +2017,21 @@ class ElasticBand(Chain):
     def SaveToDisk(self, fout='chain.xyz'):
         super(ElasticBand, self).SaveToDisk(fout)
         # This is for debugging
-        if self.coordtype is 'cart':
-            Mout = deepcopy(self.Structures[0].M)
-            # LPW: Print out spring gradients for debugging
-            spForces = [-au2evang*self.get_grad(i, "spring", "working").reshape(-1,3) for i in range(1, len(self)-1)]
-            spForces = [spForces[0]*0.0] + spForces + [spForces[0]*0.0] 
-            # print [s.shape for s in spForces]
-            Mout.xyzs = spForces
-            Mout.comms = ["Spring Force for Image %i/%i" % (i+1, len(self)) for i in range(len(self))]
-            Mout.write(fout.replace('chain','spForces'))
-            # Do the same thing for potential gradients
-            vForces = [-au2evang*self.get_grad(i, "potential", "working").reshape(-1,3) for i in range(1, len(self)-1)]
-            vForces = [vForces[0]*0.0] + vForces + [vForces[0]*0.0] 
-            Mout.xyzs = vForces
-            Mout.comms = ["Potential Force for Image %i/%i" % (i+1, len(self)) for i in range(len(self))]
-            Mout.write(fout.replace('chain','vForces'))
+       # if self.coordtype is 'cart':
+       #     Mout = deepcopy(self.Structures[0].M)
+       #     # LPW: Print out spring gradients for debugging
+       #     spForces = [-au2evang*self.get_grad(i, "spring", "working").reshape(-1,3) for i in range(1, len(self)-1)]
+       #     spForces = [spForces[0]*0.0] + spForces + [spForces[0]*0.0] 
+       #     # print [s.shape for s in spForces]
+       #     Mout.xyzs = spForces
+       #     Mout.comms = ["Spring Force for Image %i/%i" % (i+1, len(self)) for i in range(len(self))]
+       #     Mout.write(fout.replace('chain','spForces'))
+       #     # Do the same thing for potential gradients
+       #     vForces = [-au2evang*self.get_grad(i, "potential", "working").reshape(-1,3) for i in range(1, len(self)-1)]
+       #     vForces = [vForces[0]*0.0] + vForces + [vForces[0]*0.0] 
+       #     Mout.xyzs = vForces
+       #     Mout.comms = ["Potential Force for Image %i/%i" % (i+1, len(self)) for i in range(len(self))]
+       #     Mout.write(fout.replace('chain','vForces'))
 
     def OptimizeEndpoints(self, gtol=None):
         self.Structures[0].OptimizeGeometry(gtol)
@@ -2049,7 +2053,7 @@ def get_molecule_engine(args):
         radii[args.radii[2*i].capitalize()] = float(args.radii[2*i+1])
     # Create the Molecule object. The correct file to pass in depends on which engine is used,
     # so the command line interface could be improved at some point in the future
-    if args.engine.lower() not in ['tera', 'psi4', 'none', 'blank']:
+    if args.engine.lower() not in ['tera', 'psi4', 'qcengine', 'none', 'blank']:
         M = Molecule(args.input, radii=radii)
     elif args.coords is not None:
         M = Molecule(args.coords, radii=radii)[0]
@@ -2058,7 +2062,7 @@ def get_molecule_engine(args):
     # Read in the coordinates from the "--coords" command line option
     if args.coords is not None:
         Mxyz = Molecule(args.coords)
-        if args.engine.lower() not in ['tera', 'psi4', 'none', 'blank'] and M.elem != Mxyz.elem:
+        if args.engine.lower() not in ['tera', 'psi4', 'qcengine', 'none', 'blank'] and M.elem != Mxyz.elem:
             raise RuntimeError("Atoms don't match for input file and coordinates file. Please add a single structure into the input")
         M.xyzs = Mxyz.xyzs
         M.comms = Mxyz.comms
@@ -2071,6 +2075,8 @@ def get_molecule_engine(args):
         if M.na != 3:
             raise RuntimeError("LEPS potential assumes three atoms")
         Engine = LEPS(M[0])
+    elif args.engine.lower() == 'qcengine':
+        Engine = QCEngineAPI(args.qcschema, args.qce_engine)   
     elif args.engine.lower() in ['none', 'blank']:
         Engine = Blank(M[0])
     else:
@@ -2085,7 +2091,7 @@ def get_molecule_engine(args):
             raise RuntimeError('Engine not recognized or not specified (choose qchem, leps, terachem, psi4, reaxff)')
         tcin = load_tcin(args.input)
         M.charge = tcin['charge']
-        M.mult = tcin.get('spinmult',1)
+        M.mult = tcin['spinmult']
         if 'guess' in tcin:
             for f in tcin['guess'].split():
                 if not os.path.exists(f):
@@ -2630,7 +2636,7 @@ def plot_matrix(mat):
     fig.subplots_adjust(left=0.15, right=0.95, bottom=0.1, top=0.9)
     fig.savefig('plot.png')
 
-def main():
+def build_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--coordsys', type=str, default='cart', help='Coordinate system: "cart" for Cartesian, "prim" for Primitive (a.k.a redundant), '
                    '"dlc" for Delocalized Internal Coordinates, "hdlc" for Hybrid Delocalized Internal Coordinates, "tric" for Translation-Rotation'
@@ -2666,13 +2672,19 @@ def main():
     parser.add_argument('--ncimg', type=int, default=1, help='Number of climbing images to expect.')
     parser.add_argument('--nt', type=int, default=1, help='Specify number of threads for running in parallel (for TeraChem this should be number of GPUs)')
     parser.add_argument('input', type=str, help='TeraChem or Q-Chem input file')
-    
+
+    return parser
+
+def main():
+    parser = build_args() 
+
     print(' '.join(sys.argv))
-    
+
     args = parser.parse_args(sys.argv[1:])
 
     M, engine = get_molecule_engine(args)
     M.align()
+
     if args.port != 0:
         createWorkQueue(args.port, debug=args.verbose)
     if args.prefix is None:
@@ -2682,7 +2694,6 @@ def main():
     # Make the initial chain
     if args.sepdir:
         tmpdir = os.path.join(tmpdir, 'chain_%04i' % 0)
-
     params = ChainOptParams(**vars(args))
     chain = ElasticBand(M, engine=engine, tmpdir=tmpdir, coordtype=args.coordsys, params=params, plain=args.plain, ic_displace=args.icdisp)
     if args.fdcheckg:
