@@ -1277,12 +1277,12 @@ class Molpro(Engine):
         return {'energy':energy, 'gradient':gradient}
 
 class QCEngineAPI(Engine):
-    def __init__(self, schema, program):
+    def __init__(self, schema, program, client=None):
         try:
             import qcengine
         except ImportError:
             raise ImportError("QCEngine computation object requires the 'qcengine' package. Please pip or conda install 'qcengine'.")
-
+        self.client = client
         self.schema = schema
         self.program = program
         self.schema["driver"] = "gradient"
@@ -1318,10 +1318,89 @@ class QCEngineAPI(Engine):
         gradient = np.array(ret["return_result"])
         return {'energy':energy, 'gradient':gradient}
 
+    def calc_qcf(self, coords):
+        """
+        When client is not None, this function will submit a job to qcfractal server and return a unique ID. 
+        """
+        import qcportal
+        new_schema = deepcopy(self.schema)
+        new_schema["molecule"]["geometry"] = coords.tolist()
+        new_schema.pop("program", None)
+    
+        key = [qcportal.models.KeywordSet(values = {'maxiter':200})]
+        key_id = self.client.add_keywords(key)[0]
+        response = qcportal.FractalClient.add_compute(self.client, program = self.program, method = new_schema['model']['method'], basis = new_schema['model']['basis'], driver = 'gradient', molecule = new_schema['molecule'], keywords = key_id)
+        return response.ids[0]
+
+    def wait_qcf(self, ids, wait=100):
+        """
+        This function will wait and check the calculations.
+        ----------------
+        ids : list
+            list of submitted job ids. 
+        """
+        import time
+
+        cycle = 0
+        while True:    
+            resubmit = 0
+            complete = 0
+            if cycle > 50:
+                raise RuntimeError("Stuck in a while loop. Iterated %i times" %cycle)
+            if resubmit > 5 or complete > len(ids):
+                raise QCEngineAPIEngineError("SCF convergence failure or wait_qcf function error")
+            for i in ids:
+                record = self.client.query_results(id = i)[0]
+                status = record.status.split(".")[-1] 
+                if status == "COMPLETE":
+                    complete += 1
+                    #print("Completed", complete)
+
+                elif status == "INCOMPLETE":
+                    #print("Incompleted")
+                    complete = 0
+
+                elif status == "ERROR":
+                    err = self.client.query_tasks(id = i)
+                    self.client.modify_tasks('restart', err)
+                    complete = 0
+                    resubmit += 1
+                    print("Error result detected and resubmitted")
+                else:
+                    complete = 0
+
+            if complete == len(ids):
+                print ("All the calculations in qcfractal server are completed!")
+                break
+            else:
+                cycle += 1 
+
+            print("Waiting for qcfractal calculations...")
+            time.sleep(wait)
+
+    def read_qcf(self, ids):
+        """
+        This function will get energy and gradient.
+        -----------------
+        ids : str
+            id for a submitted (completed) job 
+        """
+        record = self.client.query_results(id = ids)[0]
+        energy = record.properties.return_energy
+        gradient = np.array(record.return_result, dtype=np.float64).ravel()
+        return {'energy':energy, 'gradient':gradient}
+
+
     def calc(self, coords, dirname, **kwargs):
         # overwrites the calc method of base class to skip caching and creating folders
         # **kwargs: for throwing away other arguments such as read_data and copyfiles.
-        return self.calc_new(coords, dirname)
+        if self.client == None:
+            result = self.calc_new(coords, dirname)
+        elif self.client != None:
+            resp_id = self.calc_qcf(coords) 
+            self.wait_qcf([resp_id])
+            result = self.read_qcf(resp_id)
+        return result
 
 class ConicalIntersection(Engine):
     """

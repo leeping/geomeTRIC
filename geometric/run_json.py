@@ -209,13 +209,15 @@ def geometric_run_json(in_json_dict):
         parser = geometric.neb.build_args()
         args_list = []
         for key, val in key_dict.items():
-            arg = "--" + key 
-            args_list.extend([arg, str(val)])
+            if key != "client":
+                arg = "--" + key 
+                args_list.extend([arg, str(val)])
         args_list.extend(['chains'])
 
         args = parser.parse_args(args_list)    
         args.qcschema = qcschema
         args.qce_engine = input_opts.get('qce_program') #Software packages for energy and gradient calculation (psi4 or terachem)
+        args.client = key_dict['client']
 
         M, engine = geometric.neb.get_molecule_engine(args)
         M.align()

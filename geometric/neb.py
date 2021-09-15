@@ -8,13 +8,17 @@ import itertools
 import numpy as np
 # from guppy import hpy
 from scipy.linalg import sqrtm
-from geometric.optimize import Optimize
-from geometric.params import OptParams
-from geometric.step import get_delta_prime_trm, brent_wiki, trust_step, calc_drms_dmax
-from geometric.engine import set_tcenv, load_tcin, TeraChem, Psi4, QChem, QCEngineAPI, Gromacs, Blank
-from geometric.internal import *
-from geometric.nifty import flat, row, col, pmat2d, printcool, createWorkQueue, getWorkQueue, wq_wait, ang2bohr, bohr2ang, kcal2au, au2kcal, au2evang
-from geometric.molecule import Molecule, EqualSpacing
+from .optimize import Optimize
+from .params import OptParams
+from .step import get_delta_prime_trm, brent_wiki, trust_step, calc_drms_dmax
+from .engine import set_tcenv, load_tcin, TeraChem, Psi4, QChem, QCEngineAPI, Gromacs, Blank
+from .internal import *
+from .nifty import flat, row, col, pmat2d, printcool, createWorkQueue, getWorkQueue, wq_wait, ang2bohr, bohr2ang, kcal2au, au2kcal, au2evang
+from .molecule import Molecule, EqualSpacing
+from .errors import EngineError, CheckCoordError, Psi4EngineError, QChemEngineError, TeraChemEngineError, \
+    ConicalIntersectionEngineError, OpenMMEngineError, GromacsEngineError, MolproEngineError, QCEngineAPIEngineError, GaussianEngineError
+
+
 from copy import deepcopy
 
 def rms_gradient(gradx):
@@ -200,9 +204,19 @@ class Structure(object):
 
     def QueueEnergyGradient(self):
         self.engine.calc_wq(self.cartesians, self.tmpdir)
-        
+            
     def GetEnergyGradient(self):
         result = self.engine.read_wq(self.cartesians, self.tmpdir)
+        self.energy = result['energy']
+        self.grad_cartesian = result['gradient']
+        self.grad_internal = self.IC.calcGrad(self.cartesians, self.grad_cartesian)
+
+    def QCPortalEnergyGradient(self):
+        resp_id = self.engine.calc_qcf(self.cartesians)
+        return resp_id
+
+    def GetQCEnergyGradient(self, cal_id):
+        result = self.engine.read_qcf(cal_id)
         self.energy = result['energy']
         self.grad_cartesian = result['gradient']
         self.grad_internal = self.IC.calcGrad(self.cartesians, self.grad_cartesian)
@@ -293,10 +307,19 @@ class Chain(object):
         """ Compute energies and gradients for each structure. """
         # This is the parallel point.
         wq = getWorkQueue()
-        if wq is None:
+        engine_name = type(self.engine).__name__
+        if wq is None and engine_name != "QCEngineAPI" and (engine_name == "QCEngineAPI" and self.engine.client==None): #If work queue and qcfractal aren't available, just run calculations locally.
             for i in range(len(self)):
                 self.Structures[i].ComputeEnergyGradient()
-        else:
+        elif engine_name == "QCEngineAPI" and self.engine.client!=None: #Else if client is known, submit jobs to qcfractal server.
+            ids=[]
+            for i in range(len(self)):
+                resp = self.Structures[i].QCPortalEnergyGradient()
+                ids.append(resp)
+            self.engine.wait_qcf(ids)
+            for i, value in enumerate(ids):
+                self.Structures[i].GetQCEnergyGradient(value)
+        else: #If work queue is available, handle jobs with the work queue.
             for i in range(len(self)):
                 self.Structures[i].QueueEnergyGradient()
             wq_wait(wq, print_time=600)
@@ -2076,7 +2099,7 @@ def get_molecule_engine(args):
             raise RuntimeError("LEPS potential assumes three atoms")
         Engine = LEPS(M[0])
     elif args.engine.lower() == 'qcengine':
-        Engine = QCEngineAPI(args.qcschema, args.qce_engine)   
+        Engine = QCEngineAPI(args.qcschema, args.qce_engine, args.client)   
     elif args.engine.lower() in ['none', 'blank']:
         Engine = Blank(M[0])
     else:
