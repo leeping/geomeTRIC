@@ -153,7 +153,7 @@ def calc_cartesian_hessian(coords, molecule, engine, dirname, read_data=True, ve
             shutil.rmtree(os.path.join(dirname, "hessian", "displace"))
     return Hx
 
-def frequency_analysis(coords, Hessian, elem=None, mass=None, energy=0.0, temperature=300.0, pressure=1.0, verbose=0, outfnm=None, note=None, wigner=None):
+def frequency_analysis(coords, Hessian, elem=None, mass=None, energy=0.0, temperature=300.0, pressure=1.0, verbose=0, outfnm=None, note=None, wigner=None, normalized=True):
     """
     Parameters
     ----------
@@ -185,6 +185,9 @@ def frequency_analysis(coords, Hessian, elem=None, mass=None, energy=0.0, temper
         If provided, should be a 2-tuple containing (nSamples, dirname)
         containing the output folder and number of samples and the output folder
         to which samples should be written
+    normalized : bool
+        If True, normalize the un-mass-weighted Cartesian displacements of each normal mode (default)
+        If False, return the un-normalized vectors (necessary for IR and Raman intensities)
 
     Returns
     -------
@@ -198,7 +201,7 @@ def frequency_analysis(coords, Hessian, elem=None, mass=None, energy=0.0, temper
     # Create a copy of coords and reshape into a 2D array
     coords = coords.copy().reshape(-1, 3)
     na = coords.shape[0]
-    if mass:
+    if mass is not None:
         mass = np.array(mass)
         assert len(mass) == na
     elif elem:
@@ -389,7 +392,8 @@ def frequency_analysis(coords, Hessian, elem=None, mass=None, energy=0.0, temper
     
     # Undo mass weighting to get Cartesian displacements
     normal_modes_cart = normal_modes * invsqrtm3[np.newaxis, :]
-    normal_modes_cart /= np.linalg.norm(normal_modes_cart, axis=1)[:, np.newaxis]
+    if normalized:
+        normal_modes_cart /= np.linalg.norm(normal_modes_cart, axis=1)[:, np.newaxis]
 
     # Convert IC Hessian eigenvalues to wavenumbers
     freqs_wavenumber = mwHess_wavenumber * np.sqrt(np.abs(ichess_vals)) * np.sign(ichess_vals)
