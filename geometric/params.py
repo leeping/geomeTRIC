@@ -66,7 +66,7 @@ class OptParams(object):
         # Maximum value of trust radius
         self.tmax = kwargs.get('tmax', 0.03 if self.transition else 0.3)
         # Minimum value of the trust radius
-        self.tmin = kwargs.get('tmin', 0.0 if (self.transition or self.meci) else min(1.2e-3, self.Convergence_drms))
+        self.tmin = kwargs.get('tmin', 1e-4 if (self.transition or self.meci) else min(1.2e-3, self.Convergence_drms))
         # Use maximum component instead of RMS displacement when applying trust radius.
         self.usedmax = kwargs.get('usedmax', False)
         # Minimum size of a step that can be rejected
@@ -190,6 +190,7 @@ class OptParams(object):
             logger.info(' Hessian will be computed for both first and last step.\n')
         elif self.hessian.startswith('file:'):
             logger.info(' Hessian data will be read from file: %s\n' % self.hessian[5:])
+        logger.info("Lower bound for rejected steps = %.2e\n" % self.thre_rj)
 
 def str2bool(v):
     """ Allows command line options such as "yes" and "True" to be converted into Booleans. """
@@ -297,6 +298,7 @@ def parse_optimizer_args(*args):
                               'and/or set specific criteria using key/value pairs e.g. "energy 1e-5 grms 1e-3"\n ')
     grp_optparam.add_argument('--trust', type=float, help='Starting trust radius, defaults to 0.1 (energy minimization) or 0.01 (TS optimization).\n ')
     grp_optparam.add_argument('--tmax', type=float, help='Maximum trust radius, defaults to 0.3 (energy minimization) or 0.03 (TS optimization).\n ')
+    grp_optparam.add_argument('--thre_rj', type=float, help='Do not reject steps when the trust radius is below this threshold (method-dependent).\n ')
     grp_optparam.add_argument('--usedmax', type=str2bool, help='Use maximum component instead of RMS displacement when applying trust radius.\n ')
     grp_optparam.add_argument('--enforce', type=float, help='Enforce exact constraints when within provided tolerance (in a.u./radian, default 0.0)\n ')
     grp_optparam.add_argument('--conmethod', type=int, help='Set to 1 to enable updated constraint algorithm (default 0).\n ')
