@@ -340,6 +340,12 @@ class Engine(object):
         logger.warning("copy_scratch not implemented for this engine\n")
         return
 
+    def save_guess_files(self, dirname):
+        return
+
+    def load_guess_files(self, dirname):
+        return
+
 class Blank(Engine):
     """
     Always return zero energy and gradient.
@@ -471,6 +477,16 @@ class TeraChem(Engine): # pragma: no cover
             copied_files = self.initguess_files[:]
         return copied_files
 
+    def save_guess_files(self, dirname):
+        for f in self.orbital_filenames():
+            shutil.copy2(os.path.join(dirname, self.scr, f), os.path.join(dirname, self.scr, f+".sav"))
+        
+    def load_guess_files(self, dirname):
+        for f in self.orbital_filenames():
+            if os.path.exists(os.path.join(dirname, self.scr, f+".sav")):
+                logger.info("Restoring guess file from %s\n" % os.path.join(dirname, self.scr, f+".sav"))
+                shutil.copy2(os.path.join(dirname, self.scr, f+".sav"), os.path.join(dirname, self.scr, f))
+
     def calc_new(self, coords, dirname):
         # Ensure guess files are in the correct locations
         self.copy_guess_files(dirname)
@@ -482,8 +498,8 @@ class TeraChem(Engine): # pragma: no cover
         edit_tcin(fout="%s/run.in" % dirname, options=self.tcin)
         # Back up any existing output files
         # Commented out (should be enabled during debuggin')
-        # bak('run.out', cwd=dirname, start=0)
-        # bak(start_xyz, cwd=dirname, start=0)
+        bak('run.out', cwd=dirname, start=0)
+        bak(start_xyz, cwd=dirname, start=0)
         # Convert coordinates back to the xyz file
         self.M.xyzs[0] = coords.reshape(-1, 3) * bohr2ang
         if self.qmmm:

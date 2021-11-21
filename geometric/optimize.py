@@ -113,6 +113,8 @@ class Optimizer(object):
         self.lowq_tr_count = 0
         # Number of poor quality steps before starting to project out net force/torque, hard-coded parameter.
         self.lowq_tr_limit = 1
+        # Recalculate the Hessian after a trigger - for example if the energy changes by a lot during TS optimization.
+        self.recalcHess = False
         
     def get_cartesian_norm(self, dy, verbose=None):
         if not verbose: verbose = self.params.verbose
@@ -239,12 +241,19 @@ class Optimizer(object):
         self.E = spcalc['energy']
         self.gradx = spcalc['gradient']
         # Calculate Hessian at the first step, or at each step if desired
-        if self.params.hessian == 'each':
+        if self.params.hessian == 'each' or self.recalcHess:
             # Hx is assumed to be the Cartesian Hessian at the current step.
             # Otherwise we use the variable name Hx0 to avoid almost certain confusion.
             self.Hx = calc_cartesian_hessian(self.X, self.molecule, self.engine, self.dirname, read_data=True, verbose=self.params.verbose)
             if self.params.frequency:
                 self.frequency_analysis(self.Hx, 'iter%03i' % self.Iteration, False)
+            if self.recalcHess:
+                logger.info(">>> Recomputed the Hessian from scratch <<<\n")
+                self.H0 = self.IC.calcHess(self.X, self.gradx, self.Hx)
+                self.H = self.H0.copy()
+                if self.params.hessian != 'each':
+                    delattr(self, 'Hx')
+                self.recalcHess = False
         elif self.Iteration == 0:
             if self.params.hessian in ['first', 'stop', 'first+last']:
                 self.Hx0 = calc_cartesian_hessian(self.X, self.molecule, self.engine, self.dirname, read_data=True, verbose=self.params.verbose)
@@ -447,11 +456,14 @@ class Optimizer(object):
         if params.transition:
             if Quality > 0.8 and Quality < 1.2: step_state = StepState.Good
             elif Quality > 0.5 and Quality < 1.5: step_state = StepState.Okay
-            elif Quality > 0.0 and Quality < 2.0: step_state = StepState.Poor
+            elif Quality > 0.0 and Quality < 2.0: 
+                step_state = StepState.Poor
+                # self.recalcHess = True
             else:
                 colors['energy'] = "\x1b[92m" if Converged_energy else "\x1b[91m"
                 colors['quality'] = "\x1b[91m"
                 step_state = StepState.Reject
+                # self.recalcHess = True
         else:
             if Quality > 0.75: step_state = StepState.Good
             elif Quality > 0.25: step_state = StepState.Okay
@@ -537,7 +549,8 @@ class Optimizer(object):
             elif rms_displacement <= 1.2*params.thre_rj:
                 # The "1.2" prevents rejecting / repeating the step and then accepting the step based on trust <= params.thre_rj
                 logger.info("\x1b[93mNot rejecting step - RMS displacement below %.3e\x1b[0m\n" % (1.2*params.thre_rj))
-            elif (not params.transition) and self.E < self.Eprev:
+            # elif (not params.transition) and self.E < self.Eprev:
+            elif self.E < self.Eprev:
                 logger.info("\x1b[93mNot rejecting step - energy decreases during minimization\x1b[0m\n")
             elif Converged_energy:
                 logger.info("\x1b[93mNot rejecting step - energy change meets convergence criteria\x1b[0m\n")
@@ -551,11 +564,14 @@ class Optimizer(object):
                 self.gradx = self.Gxprev.copy()
                 self.G = self.Gprev.copy()
                 self.E = self.Eprev
+                self.engine.load_guess_files(self.dirname)
+                self.recalcHess = False
                 return
 
         # Append steps to history (for rebuilding Hessian)
         self.X_hist.append(self.X)
         self.Gx_hist.append(self.gradx)
+        self.engine.save_guess_files(self.dirname)
 
         ### Rebuild Coordinate System if Necessary ###
         UpdateHessian = (not self.params.hessian == 'each')
@@ -660,6 +676,11 @@ class Optimizer(object):
             if self.state == OPT_STATE.NEEDS_EVALUATION:
                 self.calcEnergyForce()
                 self.evaluateStep()
+            if self.recalcHess:
+                # If a Hessian recalculation is needed at this point, we need to
+                # call calcEnergyForce() which will compute the cartesian Hessian,
+                # convert it to IC, and then store it.
+                self.calcEnergyForce()
         if self.state == OPT_STATE.FAILED:
             raise GeomOptNotConvergedError("Optimizer.optimizeGeometry() failed to converge.")
         # If we want to save the Hessian used by the optimizer (in Cartesian coordinates)
