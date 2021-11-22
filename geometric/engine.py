@@ -1351,49 +1351,109 @@ class ConicalIntersection(Engine):
     Compute conical intersection objective function with penalty constraint.
     Implements the theory from Levine, Coe and Martinez, J. Phys. Chem. B 2008.
     """
-    def __init__(self, molecule, engine1, engine2, sigma, alpha):
-        self.engines = {1: engine1, 2: engine2}
+    def __init__(self, molecule, engines, sigma, alpha):
+        self.engines = deepcopy(engines)
         self.sigma = sigma
         self.alpha = alpha
         super(ConicalIntersection, self).__init__(molecule)
 
+    # def calc_new(self, coords, dirname):
+    #     EDict = OrderedDict()
+    #     GDict = OrderedDict()
+    #     SDict = OrderedDict()
+    #     for istate in [1, 2]:
+    #         state_dnm = os.path.join(dirname, 'state_%i' % istate)
+    #         if not os.path.exists(state_dnm): os.makedirs(state_dnm)
+    #         try:
+    #             spcalc = self.engines[istate].calc(coords, state_dnm)
+    #         except EngineError:
+    #             raise ConicalIntersectionEngineError
+    #         EDict[istate] = spcalc['energy']
+    #         GDict[istate] = spcalc['gradient']
+    #         SDict[istate] = spcalc.get('s2', 0.0)
+    #     # Determine the higher energy state
+    #     if EDict[2] > EDict[1]:
+    #         I = 2
+    #         J = 1
+    #     else:
+    #         I = 1
+    #         J = 2
+    #     # Calculate energy and gradient avg and differences
+    #     EAvg = 0.5*(EDict[I]+EDict[J])
+    #     EDif = EDict[I]-EDict[J]
+    #     GAvg = 0.5*(GDict[I]+GDict[J])
+    #     GDif = GDict[I]-GDict[J]
+    #     GAng = np.dot(GDict[I], GDict[J])/(np.linalg.norm(GDict[I])*np.linalg.norm(GDict[J]))
+    #     # Compute penalty function
+    #     Penalty = EDif**2 / (EDif + self.alpha)
+    #     # Compute objective function and gradient
+    #     Obj = EAvg + self.sigma * Penalty
+    #     ObjGrad = GAvg + self.sigma * (EDif**2 + 2*self.alpha*EDif)/(EDif+self.alpha)**2 * GDif
+    #     logger.info("EI= % .8f EJ= % .8f S2I= %.4f S2J= %.4f CosGrad= % .4f <E>= % .8f Gap= %.8f Pen= %.8f Obj= % .8f\n"
+    #                 % (EDict[I], EDict[J], SDict[I], SDict[J], GAng, EAvg, EDif, Penalty, Obj))
+    #     return {'energy':Obj, 'gradient':ObjGrad}
+
     def calc_new(self, coords, dirname):
-        EDict = OrderedDict()
-        GDict = OrderedDict()
-        SDict = OrderedDict()
-        for istate in [1, 2]:
+        n_states = len(self.engines)
+        n_states2 = n_states * (n_states - 1) / 2
+        E_states = []
+        G_states = []
+        S_states = []
+        for istate in range(n_states):
             state_dnm = os.path.join(dirname, 'state_%i' % istate)
             if not os.path.exists(state_dnm): os.makedirs(state_dnm)
             try:
                 spcalc = self.engines[istate].calc(coords, state_dnm)
             except EngineError:
                 raise ConicalIntersectionEngineError
-            EDict[istate] = spcalc['energy']
-            GDict[istate] = spcalc['gradient']
-            SDict[istate] = spcalc.get('s2', 0.0)
+            E_states.append(spcalc['energy'])
+            G_states.append(spcalc['gradient'])
+            S_states.append(spcalc.get('s2', 0.0))
+        E_states = np.array(E_states)
+        E_order = np.argsort(E_states)
+        EAvg = 0.0
+        GAvg = np.zeros_like(G_states[0])
+        EPen = 0.0
+        GPen = np.zeros_like(G_states[0])
+        
+        for i in range(n_states):
+            I = E_order[i]
+            EAvg += E_states[I] / n_states
+            GAvg += G_states[I] / n_states
+            for j in range(i+1, n_states):
+                J = E_order[j]
+                EDif = E_states[J] - E_states[I]
+                GDif = G_states[J] - G_states[I]
+                EPen += self.sigma * EDif**2 / ((EDif + self.alpha) * n_states2)
+                GPen += self.sigma * (EDif**2 + 2*self.alpha*EDif)/((EDif+self.alpha)**2 * n_states2) * GDif
+                GAng = np.dot(G_states[I], G_states[J])/(np.linalg.norm(G_states[I])*np.linalg.norm(G_states[J]))
+                logger.info("E[%i]= % .8f E[%i]= % .8f S2[%i]= %.4f S2[%i]= %.4f Gap=%.8f CosGrad= % .4f\n"
+                            % (I, E_states[I], J, E_states[J], I, S_states[I], J, S_states[J], EDif, GAng))
+
+        Obj = EAvg + EPen
+        ObjGrad = GAvg + GPen
+        
+
         # Determine the higher energy state
-        if EDict[2] > EDict[1]:
-            I = 2
-            J = 1
-        else:
-            I = 1
-            J = 2
+        # if EDict[2] > EDict[1]:
+        #     I = 2
+        #     J = 1
+        # else:
+        #     I = 1
+        #     J = 2
         # Calculate energy and gradient avg and differences
-        EAvg = 0.5*(EDict[I]+EDict[J])
-        EDif = EDict[I]-EDict[J]
-        GAvg = 0.5*(GDict[I]+GDict[J])
-        GDif = GDict[I]-GDict[J]
-        GAng = np.dot(GDict[I], GDict[J])/(np.linalg.norm(GDict[I])*np.linalg.norm(GDict[J]))
-        # Compute penalty function
-        Penalty = EDif**2 / (EDif + self.alpha)
-        # Compute objective function and gradient
-        Obj = EAvg + self.sigma * Penalty
-        ObjGrad = GAvg + self.sigma * (EDif**2 + 2*self.alpha*EDif)/(EDif+self.alpha)**2 * GDif
-        logger.info("EI= % .8f EJ= % .8f S2I= %.4f S2J= %.4f CosGrad= % .4f <E>= % .8f Gap= %.8f Pen= %.8f Obj= % .8f\n"
-                    % (EDict[I], EDict[J], SDict[I], SDict[J], GAng, EAvg, EDif, Penalty, Obj))
+        # EAvg = 0.5*(EDict[I]+EDict[J])
+        # EDif = EDict[I]-EDict[J]
+        # GAvg = 0.5*(GStates[I]+GDict[J])
+        # GDif = GDict[I]-GDict[J]
+        # # Compute penalty function
+        # Penalty = EDif**2 / (EDif + self.alpha)
+        # # Compute objective function and gradient
+        # Obj = EAvg + self.sigma * Penalty
+        # ObjGrad = GAvg + self.sigma * (EDif**2 + 2*self.alpha*EDif)/(EDif+self.alpha)**2 * GDif
         return {'energy':Obj, 'gradient':ObjGrad}
 
     def number_output(self, dirname, calcNum):
-        for istate in [1, 2]:
+        for istate in range(len(self.engines)):
             state_dnm = os.path.join(dirname, 'state_%i' % istate)
             self.engines[istate].number_output(state_dnm, calcNum)

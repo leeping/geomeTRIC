@@ -82,27 +82,29 @@ def get_molecule_engine(**kwargs):
     qcdir = kwargs.get('qcdir', None)
 
     ## MECI calculations create a custom engine that contains two other engines.
+    print("MECI kwarg:", kwargs['meci'])
     if kwargs.get('meci', None):
         if engine_str.lower() in ['psi4', 'gmx', 'molpro', 'qcengine', 'openmm', 'gaussian'] or customengine:
             logger.warning("MECI optimizations are not tested with engines: psi4, gmx, molpro, qcengine, openmm, gaussian, customengine. Be Careful!")
         ## If 'engine' is provided as the argument to 'meci', then we assume the engine is
         # directly returning the MECI objective function and gradient.
-        if kwargs['meci'].lower() == 'engine':
+        if len(kwargs['meci']) == 1 and kwargs['meci'][0].lower() == 'engine':
             sub_kwargs = kwargs.copy()
             sub_kwargs['meci'] = None
             M, engine = get_molecule_engine(**sub_kwargs)
         else:
             meci_sigma = kwargs.get('meci_sigma', 3.5)
             meci_alpha = kwargs.get('meci_alpha', 0.025)
-            sub_engines = {}
-            for state in [1, 2]:
+            sub_engines = []
+            # State number 0 is always the 'base' input file.
+            for alt_state in range(len(kwargs['meci'])+1):
                 sub_kwargs = kwargs.copy()
-                if state == 2:
-                    sub_kwargs['input'] = kwargs['meci']
+                if alt_state > 0:
+                    sub_kwargs['input'] = kwargs['meci'][alt_state-1]
                 sub_kwargs['meci'] = None
                 M, sub_engine = get_molecule_engine(**sub_kwargs)
-                sub_engines[state] = sub_engine
-            engine = ConicalIntersection(M, sub_engines[1], sub_engines[2], meci_sigma, meci_alpha)
+                sub_engines.append(sub_engine)
+            engine = ConicalIntersection(M, sub_engines, meci_sigma, meci_alpha)
         return M, engine
 
     ## Read radii from the command line.

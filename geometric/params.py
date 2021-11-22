@@ -265,7 +265,7 @@ def parse_optimizer_args(*args):
     
     grp_jobtype = parser.add_argument_group('jobtype', 'Control the type of optimization job')
     grp_jobtype.add_argument('--transition', type=str2bool, help='Provide "yes" to Search for a first order saddle point / transition state.\n ')
-    grp_jobtype.add_argument('--meci', type=str, help='Provide second input file and search for minimum-energy conical\n '
+    grp_jobtype.add_argument('--meci', type=str, nargs="+", help='Provide second input file and search for minimum-energy conical\n '
                              'intersection or crossing point between two SCF solutions (TeraChem and Q-Chem supported).\n'
                              'Or, provide "engine" if the engine directly provides the MECI objective function and gradient.')
     grp_jobtype.add_argument('--meci_sigma', type=float, help='Sigma parameter for MECI penalty function (default 3.5).\n'
