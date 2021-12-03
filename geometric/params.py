@@ -66,12 +66,16 @@ class OptParams(object):
         # Maximum value of trust radius
         self.tmax = kwargs.get('tmax', 0.03 if self.transition else 0.3)
         # Minimum value of the trust radius
-        self.tmin = kwargs.get('tmin', 1e-4 if (self.transition or self.meci) else min(1.2e-3, self.Convergence_drms))
+        self.tmin = kwargs.get('tmin', min(1e-4 if (self.transition or self.meci) else 1.2e-3, self.Convergence_drms))
         # Use maximum component instead of RMS displacement when applying trust radius.
         self.usedmax = kwargs.get('usedmax', False)
         # Minimum size of a step that can be rejected
         # self.thre_rj = kwargs.get('thre_rj', 1e-4 if (self.transition or self.meci) else 1e-2)
         self.thre_rj = kwargs.get('thre_rj', min(self.tmin, 1e-4) if (self.transition or self.meci) else self.tmin)
+        # Prevents infinite loop where step is rejected, trust radius stays the same, and an identical step is taken.
+        if self.tmin > self.thre_rj:
+            logger.info("Setting minimum trust radius to %.1e (= thre_rj)")
+            self.tmin = self.thre_rj
         # Sanity checks on trust radius
         if self.tmax < self.tmin:
             raise ParamError("Max trust radius must be larger than min")

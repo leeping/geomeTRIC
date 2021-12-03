@@ -47,7 +47,7 @@ import re
 import os
 
 from .molecule import Molecule
-from .nifty import bak, eqcgmx, fqcgmx, bohr2ang, logger, getWorkQueue, queue_up_src_dest, rootdir, splitall, copy_tree_over
+from .nifty import bak, au2ev, eqcgmx, fqcgmx, bohr2ang, logger, getWorkQueue, queue_up_src_dest, rootdir, splitall, copy_tree_over
 from .errors import EngineError, CheckCoordError, Psi4EngineError, QChemEngineError, TeraChemEngineError, \
     ConicalIntersectionEngineError, OpenMMEngineError, GromacsEngineError, MolproEngineError, QCEngineAPIEngineError, GaussianEngineError
 
@@ -1357,42 +1357,6 @@ class ConicalIntersection(Engine):
         self.alpha = alpha
         super(ConicalIntersection, self).__init__(molecule)
 
-    # def calc_new(self, coords, dirname):
-    #     EDict = OrderedDict()
-    #     GDict = OrderedDict()
-    #     SDict = OrderedDict()
-    #     for istate in [1, 2]:
-    #         state_dnm = os.path.join(dirname, 'state_%i' % istate)
-    #         if not os.path.exists(state_dnm): os.makedirs(state_dnm)
-    #         try:
-    #             spcalc = self.engines[istate].calc(coords, state_dnm)
-    #         except EngineError:
-    #             raise ConicalIntersectionEngineError
-    #         EDict[istate] = spcalc['energy']
-    #         GDict[istate] = spcalc['gradient']
-    #         SDict[istate] = spcalc.get('s2', 0.0)
-    #     # Determine the higher energy state
-    #     if EDict[2] > EDict[1]:
-    #         I = 2
-    #         J = 1
-    #     else:
-    #         I = 1
-    #         J = 2
-    #     # Calculate energy and gradient avg and differences
-    #     EAvg = 0.5*(EDict[I]+EDict[J])
-    #     EDif = EDict[I]-EDict[J]
-    #     GAvg = 0.5*(GDict[I]+GDict[J])
-    #     GDif = GDict[I]-GDict[J]
-    #     GAng = np.dot(GDict[I], GDict[J])/(np.linalg.norm(GDict[I])*np.linalg.norm(GDict[J]))
-    #     # Compute penalty function
-    #     Penalty = EDif**2 / (EDif + self.alpha)
-    #     # Compute objective function and gradient
-    #     Obj = EAvg + self.sigma * Penalty
-    #     ObjGrad = GAvg + self.sigma * (EDif**2 + 2*self.alpha*EDif)/(EDif+self.alpha)**2 * GDif
-    #     logger.info("EI= % .8f EJ= % .8f S2I= %.4f S2J= %.4f CosGrad= % .4f <E>= % .8f Gap= %.8f Pen= %.8f Obj= % .8f\n"
-    #                 % (EDict[I], EDict[J], SDict[I], SDict[J], GAng, EAvg, EDif, Penalty, Obj))
-    #     return {'energy':Obj, 'gradient':ObjGrad}
-
     def calc_new(self, coords, dirname):
         n_states = len(self.engines)
         n_states2 = n_states * (n_states - 1) / 2
@@ -1415,11 +1379,21 @@ class ConicalIntersection(Engine):
         GAvg = np.zeros_like(G_states[0])
         EPen = 0.0
         GPen = np.zeros_like(G_states[0])
-        
+
+        report_blk1 = []
+        report_blk2 = []
+        report_blk3 = []
+
         for i in range(n_states):
             I = E_order[i]
             EAvg += E_states[I] / n_states
             GAvg += G_states[I] / n_states
+            atomgrad = np.sqrt(np.sum((G_states[I].reshape(-1,3))**2, axis=1))
+            rms_gradient = np.sqrt(np.mean(atomgrad**2))
+            max_gradient = np.max(atomgrad)
+            report_blk1.append("%5i % 18.10f %7.4f %9.3e %9.3e   " % (I, E_states[I], S_states[I], rms_gradient, max_gradient))
+            report_blk2_str = ""
+            report_blk3_str = ""
             for j in range(i+1, n_states):
                 J = E_order[j]
                 EDif = E_states[J] - E_states[I]
@@ -1427,30 +1401,26 @@ class ConicalIntersection(Engine):
                 EPen += self.sigma * EDif**2 / ((EDif + self.alpha) * n_states2)
                 GPen += self.sigma * (EDif**2 + 2*self.alpha*EDif)/((EDif+self.alpha)**2 * n_states2) * GDif
                 GAng = np.dot(G_states[I], G_states[J])/(np.linalg.norm(G_states[I])*np.linalg.norm(G_states[J]))
-                logger.info("E[%i]= % .8f E[%i]= % .8f S2[%i]= %.4f S2[%i]= %.4f Gap=%.8f CosGrad= % .4f\n"
-                            % (I, E_states[I], J, E_states[J], I, S_states[I], J, S_states[J], EDif, GAng))
+                report_blk2_str += " %8.5f" % (EDif * au2ev)
+                report_blk3_str += " % 8.4f" % GAng
+            report_blk2.append(report_blk2_str)
+            report_blk3.append(report_blk3_str)
+
+        width1 = max([len(line) for line in report_blk1])
+        width2 = max([len(line) for line in report_blk2])
+        width3 = max([len(line) for line in report_blk3])
+
+
+                # logger.info("E[%i]= % .7f E[%i]= % .7f S2[%i]= %.4f S2[%i]= %.4f Gap=%.7f CosGrad= % .4f\n"
+                #             % (I, E_states[I], J, E_states[J], I, S_states[I], J, S_states[J], EDif, GAng))
 
         Obj = EAvg + EPen
         ObjGrad = GAvg + GPen
         
-
-        # Determine the higher energy state
-        # if EDict[2] > EDict[1]:
-        #     I = 2
-        #     J = 1
-        # else:
-        #     I = 1
-        #     J = 2
-        # Calculate energy and gradient avg and differences
-        # EAvg = 0.5*(EDict[I]+EDict[J])
-        # EDif = EDict[I]-EDict[J]
-        # GAvg = 0.5*(GStates[I]+GDict[J])
-        # GDif = GDict[I]-GDict[J]
-        # # Compute penalty function
-        # Penalty = EDif**2 / (EDif + self.alpha)
-        # # Compute objective function and gradient
-        # Obj = EAvg + self.sigma * Penalty
-        # ObjGrad = GAvg + self.sigma * (EDif**2 + 2*self.alpha*EDif)/(EDif+self.alpha)**2 * GDif
+        logger.info(">>> MECI Report: <E> = % 18.10f Penalty = %15.10f <<<\n" % (EAvg, EPen))
+        logger.info("%5s %18s %7s %9s %9s   %%%is   %%%is\n" % ("State", "Energy (a.u.)", "<S^2>", "G_rms", "G_max", width2, width3) % ("Gaps (eV)", "Cos(^Gi,^Gj)"))
+        for ln in range(len(report_blk1)):
+            logger.info("%%%is%%%is   %%%is\n" % (width1, width2, width3) % (report_blk1[ln], report_blk2[ln], report_blk3[ln]))
         return {'energy':Obj, 'gradient':ObjGrad}
 
     def number_output(self, dirname, calcNum):
