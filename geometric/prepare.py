@@ -237,9 +237,11 @@ def get_molecule_engine(**kwargs):
         elif engine_str == 'qcengine':
             logger.info("QCEngine selected.\n")
             schema = kwargs.get('qcschema', False)
+            client = kwargs.get('client', False)
             if schema is False:
                 raise RuntimeError("QCEngineAPI option requires a QCSchema")
-    
+            if client:
+                print("QCFractal client:", client)
             program = kwargs.get('qce_program', False)
             if program is False:
                 raise RuntimeError("QCEngineAPI option requires a qce_program option")

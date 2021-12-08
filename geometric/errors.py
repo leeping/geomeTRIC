@@ -84,6 +84,9 @@ class QCEngineAPIEngineError(EngineError):
 class ConicalIntersectionEngineError(EngineError):
     pass
 
+class QCAIOptimizationError(EngineError):
+    pass
+
 class GeomOptNotConvergedError(Error):
     pass
 

@@ -51,7 +51,6 @@ except ImportError:
 import logging
 from .nifty import logger, RawStreamHandler, commadash
 
-
 def parse_input_json_dict(in_json_dict):
     """
     Parse an input json dictionary into options, example:
@@ -186,6 +185,13 @@ def make_constraints_string(constraints_dict):
 
     return "\n".join(constraints_repr)
 
+def parse_key(key_dict):
+    args_list = []
+    for key, val in key_dict.items():
+        if key != "client":
+            arg = "--" + key 
+            args_list.extend([arg, str(val)])
+    return args_list
 
 def geometric_run_json(in_json_dict):
     """ Take a input dictionary loaded from json, and return an output dictionary for json """
@@ -200,32 +206,40 @@ def geometric_run_json(in_json_dict):
     logger.addHandler(log_stream)
 
     input_opts = parse_input_json_dict(in_json_dict)
+    print ("input_opts obtained")
     qcschema = input_opts.get('qcschema') 
-    key_dict = qcschema.pop('keywords')
-
+    key_dict = qcschema.pop('keywords', None)
+    print ("key_dict", key_dict)
+    
+    print ("inputopts", input_opts)
     if 'images' in key_dict:
         NEB = True 
         Opt = False
+        ew = False
         parser = geometric.neb.build_args()
-        args_list = []
-        for key, val in key_dict.items():
-            if key != "client":
-                arg = "--" + key 
-                args_list.extend([arg, str(val)])
-        args_list.extend(['chains'])
-
+        if 'ew' in key_dict:
+            ew = True
+            del key_dict['ew']
+        args_list = parse_key(key_dict)
+        if ew:
+            args_list.extend(['--ew'])
         args = parser.parse_args(args_list)    
         args.qcschema = qcschema
         args.qce_engine = input_opts.get('qce_program') #Software packages for energy and gradient calculation (psi4 or terachem)
         args.client = key_dict['client']
-
         M, engine = geometric.neb.get_molecule_engine(args)
         M.align()
         tmpdir = args.input + ".tmp"
         os.mkdir(tmpdir)
+           
     else:
         NEB = False 
         Opt = True
+        TS = False
+        temp_method = qcschema['model']['method'].split('-')
+        if temp_method[0].upper() == 'TS':
+            TS = True
+            input_opts['qcschema']['model']['method'] = temp_method[-1]
         M, engine = geometric.optimize.get_molecule_engine(**input_opts)
 
     # Get initial coordinates in bohr
@@ -273,6 +287,8 @@ def geometric_run_json(in_json_dict):
         chain = geometric.neb.ElasticBand(M, engine=engine, tmpdir=tmpdir, coordtype=args.coordsys, params=params, plain=args.plain, ic_displace=args.icdisp)
     else:
         params = geometric.optimize.OptParams(**input_opts)
+        params.transition = TS
+        print(params.transition)
 
     try:
         # Run the optimization
@@ -280,8 +296,8 @@ def geometric_run_json(in_json_dict):
             # Run a standard geometry optimization
             geometric.optimize.Optimize(coords, M, IC, engine, None, params)
         elif NEB: 
-            # Run a NEB chain optimization
-            print ("Running an NEB calculation.")
+            # Run an NEB chain optimization
+            print ("Running an NEB calculation through QCAI.")
             geometric.neb.OptimizeChain(chain, engine, params)
         else:
             # Run a constrained geometry optimization

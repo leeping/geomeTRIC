@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 from __future__ import print_function
 from __future__ import division
 
@@ -16,9 +15,7 @@ from .internal import *
 from .nifty import flat, row, col, pmat2d, printcool, createWorkQueue, getWorkQueue, wq_wait, ang2bohr, bohr2ang, kcal2au, au2kcal, au2evang
 from .molecule import Molecule, EqualSpacing
 from .errors import EngineError, CheckCoordError, Psi4EngineError, QChemEngineError, TeraChemEngineError, \
-    ConicalIntersectionEngineError, OpenMMEngineError, GromacsEngineError, MolproEngineError, QCEngineAPIEngineError, GaussianEngineError
-
-
+    ConicalIntersectionEngineError, OpenMMEngineError, GromacsEngineError, MolproEngineError, QCEngineAPIEngineError, GaussianEngineError, QCAIOptimizationError
 from copy import deepcopy
 
 def rms_gradient(gradx):
@@ -110,7 +107,10 @@ class Structure(object):
         self.grad_cartesian = None
         # The gradient in internal coordinates
         self.grad_internal = None
-
+        self.qcfserver = False
+        if type(self.engine).__name__ == "QCEngineAPI" and self.engine.client != False:       
+            self.qcfserver = True
+        
     def clearCalcs(self, clearEngine=True):
         self.energy = None
         self.grad_cartesian = None
@@ -191,7 +191,13 @@ class Structure(object):
         
     def ComputeEnergyGradient(self):
         """ Compute energies and Cartesian gradients for the current structure. """
-        result = self.engine.calc(self.cartesians, self.tmpdir)
+        if self.qcfserver == True:
+            res = self.engine.calc_qcf(self.cartesians)
+            self.engine.wait_qcf([res])
+            result = self.engine.read_qcf(res)
+        else:    
+            result = self.engine.calc(self.cartesians, self.tmpdir)
+        print("Compute EG done")
         self.energy = result['energy'] 
         self.grad_cartesian = result['gradient'] 
         self.grad_internal = self.IC.calcGrad(self.cartesians, self.grad_cartesian)
@@ -232,14 +238,56 @@ class Structure(object):
             self.IC = CoordinateSystem(self.M, 'tric')
         else:
             self.IC = CoordinateSystem(self.M, self.coordtype)
-        optCoords = Optimize(self.cartesians, self.M, self.IC, self.engine, self.tmpdir, opt_params)#, xyzout=os.path.join(self.tmpdir,'optimize.xyz'))
-        # Update the information in this object
-        self.cartesians = np.array(optCoords[-1].xyzs).flatten()*ang2bohr
+
+        if self.qcfserver == False:  
+            print("No QCFractal server")
+            optCoords = Optimize(self.cartesians, self.M, self.IC, self.engine, self.tmpdir, opt_params)#, xyzout=os.path.join(self.tmpdir,'optimize.xyz')) 
+            print("Optimize done", optCoords)
+            self.cartesian = np.array(optCoords[-1].xyzs).flatten()*ang2bohr
+        else:
+            """
+            Optimization procedure through QCAI
+            """
+            import time
+            print("QCAI optimiztion starts")
+            new_schema = deepcopy(self.engine.schema)
+            new_schema['molecule']['geometry'] = self.cartesians.reshape(-1,3)
+            qcel_mol = new_schema['molecule']
+            model = new_schema['model']
+            opt_qcschema = { 
+                    "keywords": None,
+                    "qc_spec": {
+                        "driver": "gradient",
+                        "method": model["method"],
+                        "basis": model["basis"],
+                        "program": self.engine.program
+                            }
+                        }
+            r=self.engine.client.add_procedure("optimization", "geometric",opt_qcschema, [qcel_mol])
+            proc_id = r.ids
+            loop = 0 
+            while True:
+                proc = self.engine.client.query_procedures(id=proc_id)[0] #OptimizationRecord
+                status = proc.status.split('.')[-1].upper().strip()
+                if status == "INCOMPLETE":
+                    time.sleep(50)
+                    loop += 1
+                elif status == "ERROR":
+                    print("Error detected")
+                    res = self.engine.client.modify_tasks("restart",proc.id)
+                    print(res.n_updated,"ERROR status optimization resubmitted")
+                    loop += 1
+                elif status == "COMPLETE":
+                    optCoords = proc.get_final_molecule().geometry     
+                    print("QCAI Optimization is done.")
+                    break
+            self.cartesian = np.array(optCoords).flatten()
+            print(self.cartesian)
         # Rebuild the internal coordinate system
         self.IC = CoordinateSystem(self.M, self.coordtype)
         self.CalcInternals()
         self.ComputeEnergyGradient()
-
+       
 class Chain(object):
     """ Class representing a chain of states. """
     def __init__(self, molecule, engine, tmpdir, coordtype, params, coords=None, ic_displace=False):
@@ -292,6 +340,9 @@ class Chain(object):
         # self.GlobalIC.checkFiniteDifference(self.get_cartesian_all(endpts=True))
         self.nvars = len(self.GlobalIC.Internals)
         # raw_input()
+        self.qcfserver = False
+        if type(self.engine).__name__ == "QCEngineAPI" and self.engine.client != False:       
+            self.qcfserver = True
 
     def UpdateTempDir(self, iteration):
         self.tmpdir = os.path.join(os.path.split(self.tmpdir)[0], 'chain_%04i' % iteration)
@@ -307,11 +358,10 @@ class Chain(object):
         """ Compute energies and gradients for each structure. """
         # This is the parallel point.
         wq = getWorkQueue()
-        engine_name = type(self.engine).__name__
-        if wq is None and engine_name != "QCEngineAPI" and (engine_name == "QCEngineAPI" and self.engine.client==None): #If work queue and qcfractal aren't available, just run calculations locally.
+        if wq is None and self.qcfserver==False: #If work queue and qcfractal aren't available, just run calculations locally.
             for i in range(len(self)):
                 self.Structures[i].ComputeEnergyGradient()
-        elif engine_name == "QCEngineAPI" and self.engine.client!=None: #Else if client is known, submit jobs to qcfractal server.
+        elif self.qcfserver==True: #Else if client is known, submit jobs to qcfractal server.
             ids=[]
             for i in range(len(self)):
                 resp = self.Structures[i].QCPortalEnergyGradient()
@@ -400,19 +450,6 @@ class Chain(object):
         """
         cplus = self.TakeStep(dy, verbose=False)
         return ChainRMSD(self, cplus)
-        # rmsds = []
-        # maxds = []
-        # Xnew = self.GlobalIC.newCartesian(self.get_cartesian_all(endpts=True), dy, verbose=verbose)
-        # Xnew = Xnew.reshape(-1, 3*self.na)
-        # for n in range(1, len(self)-1):
-        #     S = self.Structures[n]
-        #     rmsd, maxd = calc_drms_dmax(Xnew[n], S.cartesians, align=False)
-        #     rmsds.append(rmsd)
-        #     maxds.append(maxd)
-        # cplus = self.TakeStep(dy, verbose=False)
-        # print "getCartesianNorm:", ChainRMSD(self, cplus), np.max(np.array(rmsds))
-        # # The RMSD of the chain is tentatively defined as the maximum RMSD over all images.
-        # return np.max(np.array(rmsds))
 
     def clearCalcs(self, clearEngine=True):
         for s in self.Structures:
@@ -452,29 +489,15 @@ class Chain(object):
             v0 = self.params.epsilon-Emin
         else:
             v0 = 0.0
-        #print "Hessian Eigenvalues (Working) : %.5e %.5e %.5e ... %.5e %.5e %.5e" % (Eig[0],Eig[1],Eig[2],Eig[-3],Eig[-2],Eig[-1])
         print("Hessian Eigenvalues (Working) :", " ".join(["% .4e" % i for i in Eig[:5]]), "...", " ".join(["% .4e" % i for i in Eig[-5:]]))
         if np.sum(np.array(Eig) < 0.0) > 5:
             print("%i Negative Eigenvalues" % (np.sum(np.array(Eig) < 0.0)))
         if Eig[0] != EigP[0]:
-            #print "Hessian Eigenvalues (Plain)   : %.4e %.4e %.4e ... %.4e %.4e %.4e" % (EigP[0],EigP[1],EigP[2],EigP[-3],EigP[-2],EigP[-1])
             print("Hessian Eigenvalues (Plain)   :", " ".join(["% .4e" % i for i in EigP[:5]]), "...", " ".join(["% .4e" % i for i in EigP[-5:]]))
             if np.sum(np.array(EigP) < 0.0) > 5:
                 print("%i Negative Eigenvalues" % (np.sum(np.array(EigP) < 0.0)))
         if finish: return
 
-        # Step 0: Zero-out elements of G and H corresponding to images that are locked
-        # (old)
-        # currvar = 0
-        # for n in range(1, len(self)-1):
-        #     S = self.Structures[n]
-        #     if self.locks[n]:
-        #         # print "Locking image", n
-        #         G[currvar:currvar+S.nICs] = 0.0
-        #         H[currvar:currvar+S.nICs, :] = 0.0
-        #         H[:, currvar:currvar+S.nICs] = 0.0
-        #     currvar += S.nICs
-        # Step 1: Compute the length of an unrestricted step
         if Eig[0] < 0.0:
             dy, expect, _ = get_delta_prime_trm(0.0, X, G, np.eye(len(G)), None, False)
             print("\x1b[95mTaking steepest descent rather than Newton-Raphson step\x1b[0m")
@@ -487,8 +510,6 @@ class Chain(object):
         # Cartesian coordinate step size
         # params.verbose = True
         cnorm = self.getCartesianNorm(dy, self.params.verbose)
-        # print inorm, cnorm
-        # raw_input()
         # Flag that determines whether internal coordinates need to be rebuilt
         if self.params.verbose: print("dy(i): %.4f dy(c) -> target: %.4f -> %.4f" % (inorm, cnorm, trust))
         if cnorm > 1.1 * trust:
@@ -561,8 +582,6 @@ class Chain(object):
             Cnew.Structures[n].cartesians = Xnew
             currvar += S.nICs
         Cnew.clearCalcs()
-        # Cnew.kmats = self.kmats
-        # Cnew.metrics = self.metrics
         Cnew.haveMetric = True
         return Cnew
 
@@ -585,20 +604,13 @@ class Chain(object):
         currvar = 0
         # LPW 2017-04-08: Because we're creating a new Chain object that represents the step taken, this copy operation is deemed necessary
         Cnew = deepcopy(self)
-        # print "dy:", dy
-        # print self.get_cartesian_all(endpts=True)
-        # verbose = True
         Xnew = self.GlobalIC.newCartesian(self.get_cartesian_all(endpts=True), dy, verbose=verbose)
-        # print "Obtained new Cartesian"
-        # print (Xnew-X0).reshape(len(self), self.na ,3)
         Xnew = Xnew.reshape(-1, 3*self.na)
         for n in range(1, len(self)-1):
             if not self.locks[n]:
                 Cnew.M.xyzs[n] = Xnew[n].reshape(-1, 3)*bohr2ang
                 Cnew.Structures[n].cartesians = Xnew[n]
         Cnew.clearCalcs(clearEngine=False)
-        # Cnew.kmats = self.kmats
-        # Cnew.metrics = self.metrics
         Cnew.haveMetric = True
         if printStep:
             Xold = self.get_cartesian_all(endpts=True)
@@ -731,7 +743,7 @@ class Chain(object):
 class ElasticBand(Chain):
     def __init__(self, molecule, engine, tmpdir, coordtype, params, coords=None, plain=False, ic_displace=False):
         super(ElasticBand, self).__init__(molecule, engine, tmpdir, coordtype, params, coords=coords, ic_displace=ic_displace)
-        self.k = self.params.nebk * kcal2au * ang2bohr ** 2
+        self.k = self.params.nebk*kcal2au/ang2bohr ** 2
         # Number of atoms
         self.na = molecule.na
         # Use plain elastic band?
@@ -752,6 +764,7 @@ class ElasticBand(Chain):
         self._global_grads = OrderedDict()
         self.haveMetric = False
         self.climbSet = False
+        
 
     def clearCalcs(self, clearEngine=True):
         super(ElasticBand, self).clearCalcs(clearEngine=clearEngine)
@@ -1118,10 +1131,6 @@ class ElasticBand(Chain):
         enes = np.array([s.energy for s in self.Structures])
         enes -= np.min(enes)
         enes *= au2kcal
-        # taus = [self.get_tangent(i) for i in range(1, len(self)-1)]
-        # This is for IC-tangents, experimental
-        # taus = [self.Structures[i].ConvertICGradToCart(self.get_tangent(i)) for i in range(1, len(self)-1)]
-        # taus = [t / np.linalg.norm(t) for t in taus]
         symbols = ["(min)"]
         for i in range(1, len(self)-1):
             if enes[i-1] == enes[i]:
@@ -1185,25 +1194,13 @@ class ElasticBand(Chain):
         maxg = np.max([rms_gradient(totGrad[n]) for n in range(1, len(totGrad)-1)])*au2evang
         print("Gradients (eV/Ang)    :", end=' ') # % avgg
         print(' '.join(["%7.3f" % (rms_gradient(totGrad[n])*au2evang) for n in range(len(totGrad))]))
-        # print "Potential Grad        :", # % avgg
-        # print ' '.join(["%7.3f" % (rms_gradient(vGrad[n])*au2evang) for n in range(len(totGrad))])
-        # print "Spring Grad           :", # % avgg
-        # print ' '.join(["%7.3f" % (rms_gradient(spGrad[n])*au2evang) for n in range(len(totGrad))])
         print("Straightness          :", end=' ') # % avgg
         print(' '.join(["%7.3f" % (straight[n]) for n in range(len(totGrad))]))
-        # print "Band Energy           : %.10f(Pot) + %.10f(Spr) = %.10f(Tot)" % (self.PotBandEnergy, self.SprBandEnergy, self.TotBandEnergy)
         self.avgg = avgg
         self.maxg = maxg
         printDiffs = False
         if not printDiffs: return
         for n in range(1, len(self)-1):
-            # print "Image", n
-            # if hasattr(self.Structures[n].IC, 'Prims'):
-            #     ICP = self.Structures[n].IC.Prims
-            # else:
-            #     ICP = self.Structures[n].IC
-            # drplus = self.Structures[n].IC.calcDiff(self.Structures[n+1].cartesians, self.Structures[n].cartesians)
-            # drminus = self.Structures[n].IC.calcDiff(self.Structures[n-1].cartesians, self.Structures[n].cartesians)
             ICP = self.GlobalIC.ImageICs[n].Internals
             drplus = self.GlobalIC.calcDisplacement(xyz, n+1, n)
             drminus = self.GlobalIC.calcDisplacement(xyz, n-1, n)
@@ -1253,9 +1250,6 @@ class ElasticBand(Chain):
 
         totGrad = GetCartesianGradient("total", "working")
 
-        # totGrad = ([self.Structures[0].grad_cartesian] + 
-        #            [self.Structures[i].ConvertICGradToCart(self.get_grad(i, "total", "working")) for i in range(1, len(self)-1)] +
-        #            [self.Structures[-1].grad_cartesian])
         rmsGrad = [rms_gradient(totGrad[n])*au2evang for n in range(len(totGrad))]
 
         avgg = np.mean(rmsGrad[1:-1])
@@ -1275,8 +1269,6 @@ class ElasticBand(Chain):
                     cenes.append(enes[i])
             # Keep up to "ncimg" climbing images
             climbers = sorted(list(np.array(climbers)[np.argsort(np.array(cenes))[::-1]][:self.params.ncimg]))
-            # nc = max(self.params.ncimg, len(climbers))
-            # climbers = np.argsort(enes)[::-1][:nc]
             if self.climbSet and climbers != self.climbers:
                 recompute = True
             if len(climbers) > 0:
@@ -1324,15 +1316,8 @@ class ElasticBand(Chain):
         xyz = self.get_cartesian_all(endpts=True)
         for n in range(1, len(self)-1):
             if self.ic_displace:
-                # ic_next = self.Structures[n].CalcInternals(coords=self.Structures[n+1].cartesians)
-                # ic_curr = self.Structures[n].internals
-                # ic_prev = self.Structures[n].CalcInternals(coords=self.Structures[n-1].cartesians)
-                # drplus = np.dot(self.metrics[n], (ic_next - ic_curr))
-                # drminus = np.dot(self.metrics[n], (ic_curr - ic_prev))
                 drplus = self.GlobalIC.calcDisplacement(xyz, n+1, n)
                 drminus = -self.GlobalIC.calcDisplacement(xyz, n-1, n)
-                # drplus = self.Structures[n].IC.calcDiff(self.Structures[n+1].cartesians, self.Structures[n].cartesians)
-                # drminus = self.Structures[n].IC.calcDiff(self.Structures[n-1].cartesians, self.Structures[n].cartesians)
             else:
                 cc_next = self.Structures[n+1].cartesians
                 cc_curr = self.Structures[n].cartesians
@@ -1359,11 +1344,9 @@ class ElasticBand(Chain):
                 absdvmin = min(absdvplus, absdvminus)
                 if enes[n+1] > enes[n-1]:
                     # The energy of "next" exceeds "previous".
-                    # dr = drplus*absdvmax/np.linalg.norm(drplus) + drminus*absdvmin/np.linalg.norm(drminus)
                     dr = drplus*absdvmax + drminus*absdvmin
                 else:
                     # The energy of "previous" exceeds "next".
-                    # dr = drplus*absdvmin/np.linalg.norm(drplus) + drminus*absdvmax/np.linalg.norm(drminus)
                     dr = drplus*absdvmin + drminus*absdvmax
             ndr = np.linalg.norm(dr)
             tau = dr / ndr 
@@ -1380,15 +1363,8 @@ class ElasticBand(Chain):
         xyz = self.get_cartesian_all(endpts=True)
         for n in range(1, len(self)-1):
             if self.ic_displace:
-                # ic_next = self.Structures[n].CalcInternals(coords=self.Structures[n+1].cartesians)
-                # ic_curr = self.Structures[n].internals
-                # ic_prev = self.Structures[n].CalcInternals(coords=self.Structures[n-1].cartesians)
-                # drplus = np.dot(self.metrics[n], (ic_next - ic_curr))
-                # drminus = np.dot(self.metrics[n], (ic_curr - ic_prev))
                 drplus = self.GlobalIC.calcDisplacement(xyz, n+1, n)
                 drminus = -self.GlobalIC.calcDisplacement(xyz, n-1, n)
-                # drplus = self.Structures[n].IC.calcDiff(self.Structures[n+1].cartesians, self.Structures[n].cartesians)
-                # drminus = self.Structures[n].IC.calcDiff(self.Structures[n-1].cartesians, self.Structures[n].cartesians)
             else:
                 cc_next = self.Structures[n+1].cartesians
                 cc_curr = self.Structures[n].cartesians
@@ -1400,37 +1376,6 @@ class ElasticBand(Chain):
             ndrminus = drminus / np.linalg.norm(drminus)
             tau /= np.linalg.norm(ndrplus+ndrminus)
 
-            # drplus /= np.linalg.norm(drplus)
-            # drminus /= np.linalg.norm(drminus)
-            # tau = 0.0 # Stopped coding here
-            # Energy differences along the band
-            # dvplus = enes[n+1]-enes[n]
-            # dvminus = enes[n]-enes[n-1]
-            # if dvplus > 0 and dvminus > 0:
-            #     # Case 1: The energy is increasing as we go along the chain
-            #     # We use the displacement vector pointing "upward" as the
-            #     # tangent.
-            #     dr = drplus
-            # elif dvplus < 0 and dvminus < 0:
-            #     # Case 2: The energy is decreasing as we go along the chain
-            #     dr = drminus
-            # else:
-            #     # Case 3: We're at a local maximum or a local minimum.
-            #     # We compute an energy-weighted tangent
-            #     absdvplus = abs(dvplus)
-            #     absdvminus = abs(dvminus)
-            #     absdvmax = max(absdvplus, absdvminus)
-            #     absdvmin = min(absdvplus, absdvminus)
-            #     if enes[n+1] > enes[n-1]:
-            #         # The energy of "next" exceeds "previous".
-            #         # dr = drplus*absdvmax/np.linalg.norm(drplus) + drminus*absdvmin/np.linalg.norm(drminus)
-            #         dr = drplus*absdvmax + drminus*absdvmin
-            #     else:
-            #         # The energy of "previous" exceeds "next".
-            #         # dr = drplus*absdvmin/np.linalg.norm(drplus) + drminus*absdvmax/np.linalg.norm(drminus)
-            #         dr = drplus*absdvmin + drminus*absdvmax
-            # ndr = np.linalg.norm(dr)
-            # tau = dr / ndr
             self.set_tangent(n, tau)
 
     def ComputeBandEnergy(self):
@@ -1438,20 +1383,13 @@ class ElasticBand(Chain):
         self.PotBandEnergy = 0.0
         self.TotBandEnergy = 0.0
         xyz = self.get_cartesian_all(endpts=True)
-        # print "ComputeBandEnergy:"
-        # print xyz.reshape(len(self), self.na, 3)
+        energies = np.array([self.Structures[n].energy for n in range(len(self))])
+        print ("energies", energies)
+
         for n in range(1, len(self)-1):
             if self.ic_displace:
-                # ic_next = self.Structures[n].CalcInternals(coords=self.Structures[n+1].cartesians)
-                # ic_curr = self.Structures[n].internals
-                # ic_prev = self.Structures[n].CalcInternals(coords=self.Structures[n-1].cartesians)
-                # drplus = np.dot(self.metrics[n], ic_next - ic_curr)
-                # drminus = np.dot(self.metrics[n], ic_curr - ic_prev)
-                # ndrplus = np.linalg.norm(drplus)
-                # ndrminus = np.linalg.norm(drminus)
                 drplus = self.GlobalIC.calcDisplacement(xyz, n+1, n)
                 drminus = self.GlobalIC.calcDisplacement(xyz, n-1, n)
-                # print "ComputeBandEnergy:", n, np.linalg.norm(drplus), np.linalg.norm(drminus)
             else:
                 cc_next = self.Structures[n+1].cartesians
                 cc_curr = self.Structures[n].cartesians
@@ -1464,19 +1402,30 @@ class ElasticBand(Chain):
             # doubled for non-end springs
             fplus = 0.5 if n == (len(self)-2) else 0.25
             fminus = 0.5 if n == 1 else 0.25
-            if self.ic_displace:
-                # self.SprBandEnergy += fplus*self.k*np.dot(drplus, np.dot(self.kmats[n], drplus))
-                # self.SprBandEnergy += fminus*self.k*np.dot(drminus, np.dot(self.kmats[n], drminus))
-                self.SprBandEnergy += fplus*self.k*np.dot(drplus, drplus)
-                self.SprBandEnergy += fminus*self.k*np.dot(drminus, drminus)
-                # print "ComputeBandEnergy: %i % .6f % .6f" % (n, fplus*self.k*np.dot(drplus, np.dot(self.kmats[n], drplus)), fminus*self.k*np.dot(drminus, np.dot(self.kmats[n], drminus)))
-                # print "image %i drplus, drminus:" % n
-                # print ' '.join(['% .6f' % i for i in drplus])
-                # print ' '.join(['% .6f' % i for i in drminus])
-                # print "eplus, eminus:", fplus*self.k*np.dot(drplus, drplus), fminus*self.k*np.dot(drminus, drminus)
+            if self.params.ew:
+                #HP_ew 
+                E_i = energies[n]
+                E_ref = min(energies[0], energies[-1]) # Reference energy can be either reactant or product. Lower energy is picked here.
+                print("reference E", E_ref)
+                E_max = max(energies)
+                print("maxE", E_max)
+                k_max = self.k*2
+                k_min = self.k/2
+                a = (E_max - energies[n])/(E_max - E_ref)
+                print("weigh", a)
+                if E_i > E_ref:
+                    k_new = (1-a)*k_max + a*k_min
+                else:
+                    k_new = k_min 
             else:
-                self.SprBandEnergy += fplus*self.k*ndrplus ** 2
-                self.SprBandEnergy += fminus*self.k*ndrminus ** 2
+                k_new = self.k
+            print ("force constant", k_new)
+            if self.ic_displace:
+                self.SprBandEnergy += fplus*k_new*np.dot(drplus, drplus)
+                self.SprBandEnergy += fminus*k_new*np.dot(drminus, drminus)
+            else:
+                self.SprBandEnergy += fplus*k_new*ndrplus ** 2
+                self.SprBandEnergy += fminus*k_new*ndrminus ** 2
             self.PotBandEnergy += self.Structures[n].energy
         self.TotBandEnergy = self.SprBandEnergy + self.PotBandEnergy
 
@@ -1496,9 +1445,6 @@ class ElasticBand(Chain):
             fplus = 1.0 if n == (len(self)-2) else 0.5
             fminus = 1.0 if n == 1 else 0.5
             force_v = -self.Structures[n].grad_internal
-            # ic_next = self.Structures[n].CalcInternals(coords=self.Structures[n+1].cartesians)
-            # ic_curr = self.Structures[n].internals
-            # ic_prev = self.Structures[n].CalcInternals(coords=self.Structures[n-1].cartesians)
             drplus = self.Structures[n].IC.calcDiff(self.Structures[n+1].cartesians, self.Structures[n].cartesians)
             drminus = self.Structures[n].IC.calcDiff(self.Structures[n-1].cartesians, self.Structures[n].cartesians)
             ndrplus = np.linalg.norm(drplus)
@@ -1534,36 +1480,46 @@ class ElasticBand(Chain):
     def ComputeProjectedGrad_IC(self):
         xyz = self.get_cartesian_all(endpts=True).reshape(len(self),-1)
         grad_v_c = np.array([self.Structures[n].grad_cartesian for n in range(len(self))])
+        energies = np.array([self.Structures[n].energy for n in range(len(self))])
+        print("energies in Projected Grad",energies)
         grad_v_i = self.GlobalIC.calcGrad(xyz, grad_v_c.flatten())
         grad_v_p_c = np.zeros_like(grad_v_c)
         force_s_c = np.zeros_like(grad_v_c)
         force_s_p_c = np.zeros_like(grad_v_c)
         straight = self.calc_straightness(xyz)
 
-        # if not hasattr(self, 'prevGrad'):
-        #     self.prevGrad = OrderedDict()
-        #     self.prevB = OrderedDict()
-        #     printStuff = False
-        # else:
-        #     printStuff = True
-
         for n in range(1, len(self)-1):
             fplus = 1.0 if n == (len(self)-2) else 0.5
             fminus = 1.0 if n == 1 else 0.5
             drplus = self.GlobalIC.calcDisplacement(xyz, n+1, n)
             drminus = self.GlobalIC.calcDisplacement(xyz, n-1, n)
-            force_s_Plus  = fplus*self.k*drplus
-            force_s_Minus = fminus*self.k*drminus
+            if self.params.ew:
+                #HP_ew 
+                E_i = energies[n]
+                E_ref = min(energies[0], energies[-1]) # Reference energy can be either reactant or product. Lower energy is picked here.
+                print("reference E", E_ref)
+                E_max = max(energies)
+                print("maxE", E_max)
+                k_max = self.k*2
+                k_min = self.k/2
+                a = (E_max - energies[n])/(E_max - E_ref)
+                print("weigh", a)
+                if E_i > E_ref:
+                    k_new = (1-a)*k_max + a*k_min
+                else:
+                    k_new = k_min 
+            else:
+                k_new = self.k
+            print ("force constant", k_new)
+            force_s_Plus  = fplus*k_new*drplus
+            force_s_Minus = fminus*k_new*drminus
             factor = 1.0 + 16*(1.0-straight[n])**2
             force_s_c[n] += self.GlobalIC.applyCartesianGrad(xyz, factor*(force_s_Plus+force_s_Minus), n, n)
-            # Bmat = self.GlobalIC.ImageICs[n].wilsonB(xyz.reshape(len(self), -1)[n])
-            # fMinus_cart = np.array(np.matrix(Bmat.T)*np.matrix(force_s_Minus).T).flatten()
-            # fPlus_cart = np.array(np.matrix(Bmat.T)*np.matrix(force_s_Plus).T).flatten()
             tau = self.get_tangent(n)
             # Force from the spring in the tangent direction
             ndrplus = np.linalg.norm(drplus)
             ndrminus = np.linalg.norm(drminus)
-            force_s_p_c[n] = self.GlobalIC.applyCartesianGrad(xyz, self.k*(ndrplus-ndrminus)*tau, n, n)
+            force_s_p_c[n] = self.GlobalIC.applyCartesianGrad(xyz, k_new*(ndrplus-ndrminus)*tau, n, n)
             # Now get the perpendicular component of the force from the potential
             grad_v_im = self.GlobalIC.ImageICs[n].calcGrad(xyz[n], grad_v_c[n])
             grad_v_p_c[n] = self.GlobalIC.applyCartesianGrad(xyz, grad_v_im-np.dot(grad_v_im,tau)*tau, n, n)
@@ -1571,49 +1527,11 @@ class ElasticBand(Chain):
             if self.climbSet and n in self.climbers:
                 # The force in the direction of the tangent is reversed
                 grad_v_p_c[n] = self.GlobalIC.applyCartesianGrad(xyz, grad_v_im-2*np.dot(grad_v_im,tau)*tau, n, n)
-                # force_s_c[n] *= 0.0
-                # force_s_p_c[n] *= 0.0
-            # if printStuff:
-            #     print "Image %i:" % n
-            #     print self.GlobalIC.ImageICs[n]
-            #     print "(Int)  %i->%i % 8.4f % 8.4f" % (n-1, n, np.linalg.norm(force_s_Minus), np.linalg.norm(force_s_Minus-self.prevGrad[(n, n-1, n, 1)]))
-            #     print "Now :", " ".join(["% 8.4f" % i for i in force_s_Minus])
-            #     print "Prev:", " ".join(["% 8.4f" % i for i in self.prevGrad[(n, n-1, n, 1)]])
-            #     print "Diff:", " ".join(["% 8.4f" % i for i in force_s_Minus-self.prevGrad[(n, n-1, n, 1)]])
-            #     print "(Int)  %i->%i % 8.4f % 8.4f" % (n+1, n, np.linalg.norm(force_s_Plus), np.linalg.norm(force_s_Plus-self.prevGrad[(n, n+1, n, 1)]))
-            #     print "Now :", " ".join(["% 8.4f" % i for i in force_s_Plus])
-            #     print "Prev:", " ".join(["% 8.4f" % i for i in self.prevGrad[(n, n+1, n, 1)]])
-            #     print "Diff:", " ".join(["% 8.4f" % i for i in force_s_Plus-self.prevGrad[(n, n+1, n, 1)]])
-            #     print "(Cart) %i->%i % 8.4f % 8.4f" % (n-1, n, np.linalg.norm(fMinus_cart)*au2evang, np.linalg.norm(fMinus_cart-self.prevGrad[(n, n-1, n)])*au2evang)
-            #     print "Now :", " ".join(["% 8.4f" % i for i in fMinus_cart])
-            #     print "Prev:", " ".join(["% 8.4f" % i for i in self.prevGrad[(n, n-1, n)]])
-            #     print "Diff:", " ".join(["% 8.4f" % i for i in fMinus_cart-self.prevGrad[(n, n-1, n)]])
-            #     print "(Cart) %i->%i % 8.4f % 8.4f" % (n+1, n, np.linalg.norm(fPlus_cart)*au2evang, np.linalg.norm(fPlus_cart-self.prevGrad[(n, n+1, n)])*au2evang)
-            #     print "Now :", " ".join(["% 8.4f" % i for i in fPlus_cart])
-            #     print "Prev:", " ".join(["% 8.4f" % i for i in self.prevGrad[(n, n+1, n)]])
-            #     print "Diff:", " ".join(["% 8.4f" % i for i in fPlus_cart-self.prevGrad[(n, n+1, n)]])
-            #     print "WilsonB (Now):"
-            #     print "\n".join([" ".join(["% 8.4f" % j for j in i]) for i in Bmat])
-            #     print "WilsonB (Prev):"
-            #     print "\n".join([" ".join(["% 8.4f" % j for j in i]) for i in self.prevB[n]])
-            #     print "WilsonB (Diff):"
-            #     print "\n".join([" ".join(["% 8.4f" % j for j in i]) for i in Bmat-self.prevB[n]])
-            # self.prevGrad[(n, n-1, n)] = fMinus_cart.copy()
-            # self.prevGrad[(n, n+1, n)] = fPlus_cart.copy()
-            # self.prevGrad[(n, n-1, n, 1)] = force_s_Minus
-            # self.prevGrad[(n, n+1, n, 1)] = force_s_Plus
-            # self.prevB[n] = Bmat.copy()
 
             if n > 1:
                 force_s_c[n-1] -= self.GlobalIC.applyCartesianGrad(xyz, force_s_Minus, n-1, n)
-                # if printStuff:
-                #     print "(Cart) %i->%i % 8.4f % 8.4f" % (n, n-1, np.linalg.norm(self.GlobalIC.applyCartesianGrad(xyz, force_s_Minus, n-1, n))*au2evang, np.linalg.norm(self.GlobalIC.applyCartesianGrad(xyz, force_s_Minus, n-1, n)-self.prevGrad[(n, n, n-1)])*au2evang)
-                # self.prevGrad[(n, n, n-1)] = self.GlobalIC.applyCartesianGrad(xyz, force_s_Minus, n-1, n)
             if n < len(self)-2:
                 force_s_c[n+1] -= self.GlobalIC.applyCartesianGrad(xyz, force_s_Plus, n+1, n)
-                # if printStuff:
-                #     print "(Cart) %i->%i % 8.4f % 8.4f" % (n, n+1, np.linalg.norm(self.GlobalIC.applyCartesianGrad(xyz, force_s_Plus, n+1, n))*au2evang, np.linalg.norm(self.GlobalIC.applyCartesianGrad(xyz, force_s_Plus, n+1, n)-self.prevGrad[(n, n, n+1)])*au2evang)
-                # self.prevGrad[(n, n, n+1)] = self.GlobalIC.applyCartesianGrad(xyz, force_s_Plus, n+1, n)
 
         for n in range(1, len(self)-1):
             if self.climbSet and n in self.climbers:
@@ -1623,8 +1541,6 @@ class ElasticBand(Chain):
                 force_s_c[n] *= 0.0
                 force_s_p_c[n] *= 0.0
 
-        # print "ComputeProjectedGrad_IC: force_s_c (eV/Ang)    :", # % avgg
-        # print ' '.join(["%7.4f" % (rms_gradient(force_s_c[n])*au2evang) for n in range(len(force_s_c))])
         xyz = self.get_cartesian_all(endpts=True).reshape(len(self),-1)
         grad_v_c = np.array([self.Structures[n].grad_cartesian for n in range(len(self))])
         grad_v_i = self.GlobalIC.calcGrad(xyz, grad_v_c.flatten())
@@ -1637,69 +1553,12 @@ class ElasticBand(Chain):
         self.set_global_grad(grad_s_i, "spring", "plain")
         self.set_global_grad(grad_s_p_i, "spring", "projected")
 
-        # Bmat = self.GlobalIC.wilsonB(xyz)
-        # def GetCartesianGradient(component, projection):
-        #     answer = np.array(np.matrix(Bmat.T)*np.matrix(self.get_global_grad(component, projection)).T).flatten()
-        #     return answer.reshape(len(self), -1)
-
-        # totGrad = GetCartesianGradient("total", "working")
-        # print "ComputeProjectedGrad_IC: Gradients (eV/Ang)    :", # % avgg
-        # print ' '.join(["%7.4f" % (rms_gradient(totGrad[n])*au2evang) for n in range(len(totGrad))])
-
-            # force_s_plus  = fplus*self.k*np.dot(self.kmats[n],drplus)
-            # force_s_minus = fminus*self.k*np.dot(self.kmats[n],drminus)
-            # force_s_plus_onNext_c = self.Structures[n].ConvertICGradToCart(-force_s_plus, xyz=self.Structures[n+1].cartesians)
-            # force_s_plus_onNext_i = self.Structures[n+1].ConvertCartGradToIC(force_s_plus_onNext_c)
-            # force_s_minus_onPrev_c = self.Structures[n].ConvertICGradToCart(-force_s_minus, xyz=self.Structures[n-1].cartesians)
-            # force_s_minus_onPrev_i = self.Structures[n-1].ConvertCartGradToIC(force_s_minus_onPrev_c)
-
-        # self._grads = OrderedDict()
-        # force_s_Carts = [np.zeros(3*self.na, dtype=float) for n in range(len(self))]
-        # for n in range(1, len(self)-1):
-        #     tau = self.get_tangent(n)
-        #     # Force from the potential
-        #     fplus = 1.0 if n == (len(self)-2) else 0.5
-        #     fminus = 1.0 if n == 1 else 0.5
-        #     force_v = -self.Structures[n].grad_internal
-        #     # ic_next = self.Structures[n].CalcInternals(coords=self.Structures[n+1].cartesians)
-        #     # ic_curr = self.Structures[n].internals
-        #     # ic_prev = self.Structures[n].CalcInternals(coords=self.Structures[n-1].cartesians)
-        #     drplus = self.Structures[n].IC.calcDiff(self.Structures[n+1].cartesians, self.Structures[n].cartesians)
-        #     drminus = self.Structures[n].IC.calcDiff(self.Structures[n-1].cartesians, self.Structures[n].cartesians)
-        #     ndrplus = np.linalg.norm(drplus)
-        #     ndrminus = np.linalg.norm(drminus)
-        #     force_s_plus  = fplus*self.k*np.dot(self.kmats[n],drplus)
-        #     force_s_minus = fminus*self.k*np.dot(self.kmats[n],drminus)
-        #     force_s_plus_onNext_c = self.Structures[n].ConvertICGradToCart(-force_s_plus, xyz=self.Structures[n+1].cartesians)
-        #     force_s_plus_onNext_i = self.Structures[n+1].ConvertCartGradToIC(force_s_plus_onNext_c)
-        #     force_s_minus_onPrev_c = self.Structures[n].ConvertICGradToCart(-force_s_minus, xyz=self.Structures[n-1].cartesians)
-        #     force_s_minus_onPrev_i = self.Structures[n-1].ConvertCartGradToIC(force_s_minus_onPrev_c)
-        #     # Okay, this still needs some work.
-        #     # Force from the spring in the tangent direction
-        #     force_s_p = self.k*(ndrplus-ndrminus)*tau
-        #     # Now get the perpendicular component of the force from the potential
-        #     force_v_p = force_v - np.dot(force_v,tau)*tau
-        #     # We should be working with gradients
-        #     grad_s_p = -1.0*force_s_p
-        #     grad_v = -1.0*force_v
-        #     grad_v_p = -1.0*force_v_p
-        #     grad_s = -1.0*(force_s_plus+force_s_minus)
-        #     grad_s_onNext = -1.0*(force_s_plus_onNext_i)
-        #     grad_s_onPrev = -1.0*(force_s_minus_onPrev_i)
-        #     self.add_grad(n, grad_v, "potential", "plain")
-        #     self.add_grad(n, grad_v_p, "potential", "projected")
-        #     self.add_grad(n, grad_s_p, "spring", "projected")
-        #     self.add_grad(n, grad_s, "spring", "plain")
-        #     if n > 1:
-        #         self.add_grad(n-1, grad_s_onPrev, "spring", "plain")
-        #     if n < len(self)-2:
-        #         self.add_grad(n+1, grad_s_onNext, "spring", "plain")
-
     def ComputeProjectedGrad_CC(self):
         xyz = self.get_cartesian_all(endpts=True).reshape(len(self),-1)
         grad_v_c = np.array([self.Structures[n].grad_cartesian for n in range(len(self))])
         grad_v_i = self.GlobalIC.calcGrad(xyz, grad_v_c.flatten())
         grad_v_p_c = np.zeros_like(grad_v_c)
+        energies = np.array([self.Structures[n].energy for n in range(len(self))])
         force_s_c = np.zeros_like(grad_v_c)
         force_s_p_c = np.zeros_like(grad_v_c)
         straight = self.calc_straightness(xyz)
@@ -1716,20 +1575,32 @@ class ElasticBand(Chain):
             ndrplus = np.linalg.norm(cc_next - cc_curr)
             ndrminus = np.linalg.norm(cc_curr - cc_prev)
             # Plain elastic band force
-            force_s = self.k*(cc_prev + cc_next - 2*cc_curr)
+
+            if self.params.ew:
+                #HP_ew 
+                E_i = energies[n]
+                E_ref = min(energies[0], energies[-1]) # Reference energy can be either reactant or product. Lower energy is picked here.
+                print("reference E", E_ref)
+                E_max = max(energies)
+                print("maxE", E_max)
+                k_max = self.k*2
+                k_min = self.k/2
+                a = (E_max - energies[n])/(E_max - E_ref)
+                print("weigh", a)
+                if E_i > E_ref:
+                    k_new = (1-a)*k_max + a*k_min
+                else:
+                    k_new = k_min 
+            else:
+                k_new = self.k
+            print ("force constant", k_new)
+
+            force_s = k_new*(cc_prev + cc_next - 2*cc_curr)
             force_s_para = np.dot(force_s,tau)*tau
             force_s_ortho = force_s - force_s_para
             factor = 256*(1.0-straight[n])**4
-            # force_s = force_s_para + factor*force_s_ortho
-            
-            # force_s *= factor
-            # factor_out += " %.5f" % (factor)
-
-            # dot_para = np.dot(force_s, force_s_para) / (np.linalg.norm(force_s) * np.linalg.norm(force_s_para))
-            # dot_ortho = np.dot(force_s, force_s_ortho) / (np.linalg.norm(force_s) * np.linalg.norm(force_s_ortho))
-            # print "Image %2i Para %.4f (%.4f) Ortho %.4f (%.4f) Dot %.4f" % (n, np.linalg.norm(force_s_para), dot_para, np.linalg.norm(force_s_ortho), dot_ortho, dot_para**2 + dot_ortho**2)
             # Force from the spring in the tangent direction
-            force_s_p = self.k*(ndrplus-ndrminus)*tau
+            force_s_p = k_new*(ndrplus-ndrminus)*tau
             # Now get the perpendicular component of the force from the potential
             force_v_p = force_v - np.dot(force_v,tau)*tau
             if self.climbSet and n in self.climbers:
@@ -1749,18 +1620,6 @@ class ElasticBand(Chain):
             force_s_p_c[n] = force_s
             force_s_c[n] = force_s
 
-            # Now convert all forces to internal coordinates
-            # grad_v = self.Structures[n].IC.calcGrad(cc_curr, grad_v)
-            # grad_v_p = self.Structures[n].IC.calcGrad(cc_curr, grad_v_p)
-            # grad_s = self.Structures[n].IC.calcGrad(cc_curr, grad_s)
-            # grad_s_p = self.Structures[n].IC.calcGrad(cc_curr, grad_s_p)
-            # # Set gradient components
-            # self.add_grad(n, grad_v, "potential", "plain")
-            # self.add_grad(n, grad_v_p, "potential", "projected")
-            # self.add_grad(n, grad_s, "spring", "plain")
-            # self.add_grad(n, grad_s_p, "spring", "projected")
-        # print factor_out
-
         grad_s_i = self.GlobalIC.calcGrad(xyz, -force_s_c.flatten())
         grad_v_p_i = self.GlobalIC.calcGrad(xyz, grad_v_p_c.flatten())
         grad_s_p_i = self.GlobalIC.calcGrad(xyz, -force_s_p_c.flatten())
@@ -1779,17 +1638,13 @@ class ElasticBand(Chain):
         for n in range(1, len(self)-1):
             S = self.Structures[n]
             for iic in range(S.nICs):
-                # print "== On Coordinate %i, %s ==" % (n, repr(S.IC.Internals[iic]))
                 dy = np.zeros(self.nvars, dtype=float)
                 dy[ivar] += h
                 cplus = self.TakeStep(dy, verbose=False)
-                # print ' '.join(['% .6f' % i for i in dy])
-                # print ' '.join(['% .6f' % i for i in (cplus.get_internal_all() - self.get_internal_all())])
                 cplus.ComputeChain(order=0)
                 eplus = cplus.TotBandEnergy
                 dy[ivar] -= 2*h
                 cminus = self.TakeStep(dy, verbose=False)
-                # print ' '.join(['% .6f' % i for i in (cminus.get_internal_all() - self.get_internal_all())])
                 cminus.ComputeChain(order=0)
                 eminus = cminus.TotBandEnergy
                 fdiff = (eplus-eminus)/(2*h)
@@ -1802,17 +1657,13 @@ class ElasticBand(Chain):
         G = self.get_global_grad("total", "plain")
         h = 1e-5
         for i in range(self.nvars):
-            # print "== On Coordinate %i, %s ==" % (n, repr(S.IC.Internals[iic]))
             dy = np.zeros(self.nvars, dtype=float)
             dy[i] += h
             cplus = self.TakeStep(dy, verbose=False)
-            # print ' '.join(['% .6f' % j for j in dy])
-            # print ' '.join(['% .6f' % j for j in (cplus.get_internal_all() - self.get_internal_all())])
             cplus.ComputeChain(order=0)
             eplus = cplus.TotBandEnergy
             dy[i] -= 2*h
             cminus = self.TakeStep(dy, verbose=False)
-            # print ' '.join(['% .6f' % j for j in (cminus.get_internal_all() - self.get_internal_all())])
             cminus.ComputeChain(order=0)
             eminus = cminus.TotBandEnergy
             fdiff = (eplus-eminus)/(2*h)
@@ -1990,21 +1841,6 @@ class ElasticBand(Chain):
 
         print("Guess Hessian took %.3f seconds" % (time.time() - t0))
 
-        # self.ComputeSpringHessian()
-        # # self.spring_hessian_plain = np.zeros((self.nvars, self.nvars), dtype=float)
-        # # self.spring_hessian_projected = np.zeros((self.nvars, self.nvars), dtype=float)
-        # guess_hessian_potential = self.GlobalIC.guess_hessian(self.get_cartesian_all(endpts=True))
-        # self.guess_hessian_plain = guess_hessian_potential + self.spring_hessian_plain
-        # self.guess_hessian_projected = guess_hessian_potential + self.spring_hessian_projected
-        # # Symmetrize
-        # self.guess_hessian_plain = 0.5 * (self.guess_hessian_plain + self.guess_hessian_plain.T)
-        # self.guess_hessian_projected = 0.5 * (self.guess_hessian_projected + self.guess_hessian_projected.T)
-        # # When plain is set to 1 or 2, we do not project out the perpendicular component of the spring force.
-        # if self.plain >= 1:
-        #     self.guess_hessian_working = self.guess_hessian_plain.copy()
-        # else:
-        #     self.guess_hessian_working = self.guess_hessian_projected.copy()
-
     def ComputeMetric(self):
         if self.haveMetric: return
         currvar = 0
@@ -2013,13 +1849,6 @@ class ElasticBand(Chain):
         self.metrics = [None for i in range(len(self))]
         errs = []
         for n in range(1, len(self)-1):
-            # self.kmats[n] = np.diag(np.diag(np.array(self.Structures[n].IC.guess_hessian(self.Structures[n].cartesians))))
-            # self.kmats[n] = np.array(self.Structures[n].IC.guess_hessian(self.Structures[n].cartesians))
-            # Apply matrix square-root
-            # for i in range(0):
-            #     self.kmats[n] = np.array(sqrtm(self.kmats[n]))
-            # for i in range(self.kmats[n].shape[0]):
-            #     self.kmats[n][i,i] = 1.0 + i
             self.kmats[n] = np.eye(len(self.GlobalIC.ImageICs[n].Internals))
             self.metrics[n] = np.array(sqrtm(self.kmats[n]))
             errs.append(np.linalg.norm(np.abs(np.dot(self.metrics[n], self.metrics[n]) - self.kmats[n])))
@@ -2039,32 +1868,15 @@ class ElasticBand(Chain):
 
     def SaveToDisk(self, fout='chain.xyz'):
         super(ElasticBand, self).SaveToDisk(fout)
-        # This is for debugging
-       # if self.coordtype is 'cart':
-       #     Mout = deepcopy(self.Structures[0].M)
-       #     # LPW: Print out spring gradients for debugging
-       #     spForces = [-au2evang*self.get_grad(i, "spring", "working").reshape(-1,3) for i in range(1, len(self)-1)]
-       #     spForces = [spForces[0]*0.0] + spForces + [spForces[0]*0.0] 
-       #     # print [s.shape for s in spForces]
-       #     Mout.xyzs = spForces
-       #     Mout.comms = ["Spring Force for Image %i/%i" % (i+1, len(self)) for i in range(len(self))]
-       #     Mout.write(fout.replace('chain','spForces'))
-       #     # Do the same thing for potential gradients
-       #     vForces = [-au2evang*self.get_grad(i, "potential", "working").reshape(-1,3) for i in range(1, len(self)-1)]
-       #     vForces = [vForces[0]*0.0] + vForces + [vForces[0]*0.0] 
-       #     Mout.xyzs = vForces
-       #     Mout.comms = ["Potential Force for Image %i/%i" % (i+1, len(self)) for i in range(len(self))]
-       #     Mout.write(fout.replace('chain','vForces'))
 
     def OptimizeEndpoints(self, gtol=None):
         self.Structures[0].OptimizeGeometry(gtol)
         self.Structures[-1].OptimizeGeometry(gtol)
+        print("Optimizing End Points are done.")
         self.M.xyzs[0] = self.Structures[0].M.xyzs[0]
         self.M.xyzs[-1] = self.Structures[-1].M.xyzs[0]
         # The Structures are what store the individual Cartesian coordinates for each frame.
         self.Structures = [Structure(self.M[i], self.engine, os.path.join(self.tmpdir, "struct_%%0%ii" % len(str(len(self))) % i), self.coordtype) for i in range(len(self))]
-        # The total number of variables being optimized
-        # self.nvars = sum([self.Structures[n].nICs for n in range(1, len(self)-1)])
 
 def get_molecule_engine(args):
     # Read radii from the command line.
@@ -2141,8 +1953,10 @@ def get_molecule_engine(args):
             guessfnms = []
         if args.engine.lower() == 'psi4':
             Engine = Psi4(M[0])
-            os.remove("%s_2.in" %args.input.split(".")[0])
-            with open("%s_2.in" %args.input.split(".")[0], 'a') as file_obj:
+            psi4_in = "%s_2.in" %args.input.split(".")[0]
+            if os.path.exists(psi4_in):
+                os.remove(psit_in)
+            with open(psi4_in, 'a') as file_obj:
                 file_obj.write("molecule {\n")
                 file_obj.write("%i %i\n" %(M.charge, M.mult))
                 coords = M.xyzs[0]
@@ -2155,7 +1969,6 @@ def get_molecule_engine(args):
                 file_obj.write("\ngradient(\'%s\')" %tcin['method'])
             
             Engine.load_psi4_input("%s_2.in" %args.input.split(".")[0])
-            #Engine.set_nt(args.nt)
         else:
             Engine = TeraChem(M[0], tcin)
             if args.nt != 1:
@@ -2182,11 +1995,12 @@ class ChainOptParams(object):
         self.avgg = kwargs.get('avgg', 0.025)
         self.align = kwargs.get('align', False)
         self.sepdir = kwargs.get('sepdir', False)
+        self.ew = kwargs.get('ew', False)
         self.climb = kwargs.get('climb', 0.5)
         self.ncimg = kwargs.get('ncimg', 1)
         self.history = kwargs.get('history', 1)
         self.maxcyc = kwargs.get('maxcyc', 100)
-        self.nebk = kwargs.get('nebk', 1.0)
+        self.nebk = kwargs.get('nebk', 0.1)
         # Experimental feature that avoids resetting the Hessian
         self.skip = kwargs.get('skip', False)
         self.noopt = kwargs.get('noopt', False)
@@ -2363,7 +2177,6 @@ def recover(chain_hist, params, forceCart):
         for i in range(len(newchain)):
             c.Structures[i].IC = deepcopy(newchain.Structures[i].IC)
         c.ComputeChain()
-    # newchain.ComputeChain()
     newchain.SetFlags()
     newchain.ComputeGuessHessian()
     HW = newchain.guess_hessian_working.copy()
@@ -2393,7 +2206,6 @@ def BFGSUpdate(Y, Yprev, G, Gprev, H, params):
     if verbose: 
         print("Denoms: %.3e %.3e" % ((Dg.T*Dy)[0,0], (Dy.T*H*Dy)[0,0]), end=' ')
         print("Dots: %.3e %.3e" % (np.dot(ndg, ndy), np.dot(ndy, nhdy)), end=' ')
-    # H1 = H.copy()
     H += Mat1-Mat2
     Eig1 = np.linalg.eigh(H)[0]
     Eig1.sort()
@@ -2412,15 +2224,13 @@ def OptimizeChain(chain, engine, params):
     # Threshold below which chains should not be rejected
     ThreRJ = 0.001
     # Optimize the endpoints of the chain
-    if params.noopt:
-        print("Skipping optimization of endpoints")
-    else:
-        printcool("First optimizing chain endpoints")
-        chain.OptimizeEndpoints(params.maxg)
-    printcool("Now optimizing the chain")
+    print("First, optimizing endpoints images")
+    chain.OptimizeEndpoints(params.maxg)
+    print("Now optimizing the chain")
     chain.respace(0.01)
     chain.delete_insert(1.0)
     if params.align: chain.align()
+    if params.ew: print("Energy weighted NEB calculation.")
     chain.ComputeMetric()
     chain.ComputeChain(cyc=0)
     t0 = time.time()
@@ -2460,10 +2270,7 @@ def OptimizeChain(chain, engine, params):
         #| gradients, and Hessians are synchronized.          |#
         #======================================================#
         optCycle += 1
-        print()
         print("-=# Optimization cycle %i #=-" % (optCycle))
-        # h = hpy()
-        # print h.heap()
         #=======================================#
         #|    Obtain an optimization step      |#
         #|    and update Cartesian coordinates |#
@@ -2492,16 +2299,6 @@ def OptimizeChain(chain, engine, params):
             print("\x1b[1;93mSkipping optimization step\x1b[0m")
             optCycle -= 1
             continue
-        # elif (optCycle>LastRebuild and optCycle%50 == 0):#
-        #     print "Rebuilding coordinate system."
-        #     r0 = params.reset
-        #     params.reset = True
-        #     chain, Y, GW, GP, HW, HP = recover(c_hist, params, False)
-        #     params.reset = r0
-        #     print "\x1b[1;93mSkipping optimization step\x1b[0m"
-        #     LastRebuild=optCycle
-        #     optCycle -= 1
-        #     continue
         else:
             LastForce = 0
         # Before updating any of our variables, copy current variables to "previous"
@@ -2514,15 +2311,14 @@ def OptimizeChain(chain, engine, params):
         bump = cnorm > 0.8 * trust
         # Update the internal coordinates
         # Obtain a new chain with the step applied
-        #respaced = chain.respace(0.5)
         chain = chain.TakeStep(dy, printStep=False)
         respaced = chain.delete_insert(1.5)
         if params.align: chain.align()
         if params.sepdir: chain.UpdateTempDir(optCycle)
         print("Time since last ComputeChain: %.3f s" % (time.time() - t0))
         chain.ComputeChain(cyc=optCycle)
+        print ("ComputeChain Done.")
         t0 = time.time()
-        # chain.SetFlags(params.gtol, params.climb)
         Y1 = Y + dy
         Y = chain.get_internal_all()
         GW = chain.get_global_grad("total", "working")
@@ -2540,8 +2336,6 @@ def OptimizeChain(chain, engine, params):
             chain.SaveToDisk(fout='chain.xyz' if params.sepdir else 'chain_%04i.xyz' % optCycle)
             continue
         dE = chain.TotBandEnergy - c_hist[-1].TotBandEnergy
-        # Step Quality
-        # Quality = (chain.TotBandEnergy - c_hist[-1].TotBandEnergy)/expect
         dE = chain.TotBandEnergy - c_hist[-1].TotBandEnergy
         if dE > 0.0 and expect > 0.0 and dE > expect:
             Quality = (2*expect-dE)/expect 
@@ -2551,22 +2345,13 @@ def OptimizeChain(chain, engine, params):
         eGC = chain.CalcRMSCartGrad(expectG)
         GPC = chain.CalcRMSCartGrad(GW_prev)
         QualityG = 2.0 - GC/max(eGC, GPC/2, params.avgg/2) 
-        # This is debug printout
-        # print "|Grad|= % .5f expectG= % .5f QualityG= % .5f" % (GC, eGC, QualityG)
-        # QualityG = 1.0
         Quality = max(Quality, QualityG)
         Quality = QualityG
         Describe = "Good" if Quality > ThreHQ else ("Okay" if Quality > ThreLQ else ("Poor" if Quality > -1.0 else "Reject"))
-        # print "-= Chain Properties =-"
         print()
         print(" %13s %13s %13s %13s %11s %14s %13s" % ("GAvg(eV/Ang)", "GMax(eV/Ang)", "Length(Ang)", "DeltaE(kcal)", "RMSD(Ang)", "TrustRad(Ang)", "Step Quality"))
         print("@%13s %13s %13s %13s %11s  %8.4f (%s)  %13s" % ("% 8.4f  " % chain.avgg, "% 8.4f  " % chain.maxg, "% 8.4f  " % sum(chain.calc_spacings()), "% 8.4f  " % (au2kcal*dE/len(chain)), 
                                                                "% 8.4f  " % (ChainRMSD(chain, c_hist[-1])), trust, trustprint, "% 6.2f (%s)" % (Quality, Describe)))
-        # print "Grad rms max  : % 8.4f % 8.4f eV/Ang" % (chain.avgg, chain.maxg)
-        # print "Energy Change : % 8.4f kcal/mol" % (au2kcal*dE/len(chain))
-        # print "RMSD          : % 8.4f Ang" % (ChainRMSD(chain, c_hist[-1]))
-        # print "Step Quality  : % 8.4f (%s)" % (Quality, Describe)
-        # print "Trust Radius  : % 8.4f (%s)" % (trust, trustprint)
         chain.SaveToDisk(fout='chain.xyz' if params.sepdir else 'chain_%04i.xyz' % optCycle)
         #=======================================#
         #|    Check convergence criteria       |#
@@ -2574,11 +2359,6 @@ def OptimizeChain(chain, engine, params):
         # if chain.avgg < params.gtol:
         if chain.maxg < params.maxg and chain.avgg < params.avgg:
             print("--== Optimization Converged. ==--")
-            # print "Converged! =D"
-            # chain.ComputeGuessHessian(full=True)
-            # HW = chain.guess_hessian_working.copy()
-            # HP = chain.guess_hessian_plain.copy()
-            # chain.CalcInternalStep(trust, HW, HP, params)
             break
         if optCycle >= params.maxcyc:
             print("--== Maximum optimization cycles reached. ==--")
@@ -2686,15 +2466,15 @@ def build_args():
     parser.add_argument('--icdisp', action='store_true', help='Compute displacements using internal coordinates.')
     parser.add_argument('--sepdir', action='store_true', help='Store each chain in a separate folder.')
     parser.add_argument('--skip', action='store_true', help='Skip Hessian updates that would introduce negative eigenvalues.')
-    parser.add_argument('--noopt', action='store_true', help='Skip pre-optimization of chain endpoints.')
     parser.add_argument('--plain', type=int, default=0, help='1: Use plain elastic band for spring force. 2: Use plain elastic band for spring AND potential.')
-    parser.add_argument('--nebk', type=float, default=1.0, help='NEB spring constant in units of kcal/mol/Angstrom..')
+    parser.add_argument('--nebk', type=float, default=1, help='NEB spring constant in units of kcal/mol/Ang^2.')
+    parser.add_argument('--ew', action='store_true', help='Energy weighted NEB calculation (k range is nebk - nebk/10)')
     parser.add_argument('--history', type=int, default=1, help='Chain history to keep in memory; note chains are very memory intensive, >1 GB each')
     parser.add_argument('--maxcyc', type=int, default=100, help='Maximum number of chain optimization cycles to perform')
     parser.add_argument('--climb', type=float, default=0.5, help='Activate climbing image for max-energy points when max gradient falls below this threshold.')
     parser.add_argument('--ncimg', type=int, default=1, help='Number of climbing images to expect.')
     parser.add_argument('--nt', type=int, default=1, help='Specify number of threads for running in parallel (for TeraChem this should be number of GPUs)')
-    parser.add_argument('input', type=str, help='TeraChem or Q-Chem input file')
+    parser.add_argument('--input', type=str, help='TeraChem or Q-Chem input file')
 
     return parser
 

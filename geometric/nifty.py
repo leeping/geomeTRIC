@@ -323,7 +323,7 @@ def printcool(text,sym="#",bold=False,color=2,ansi=None,bottom='-',minwidth=50,c
         if type(center) is list: c1 = center[ln]
         else: c1 = center
         if c1:
-            padleft = ' ' * (int((width - newlen(line))//2))
+            padleft = ' ' * (int((width - newlen(line))/2))
         else:
             padleft = ''
         padright = ' '* (width - newlen(line) - len(padleft))

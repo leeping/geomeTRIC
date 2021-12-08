@@ -69,6 +69,8 @@ def calc_cartesian_hessian(coords, molecule, engine, dirname, read_data=True, ve
     """
     nc = len(coords)
     # Attempt to read existing Hessian data if it exists.
+    if dirname == None:
+        dirname = './'
     hesstxt = os.path.join(dirname, "hessian", "hessian.txt")
     hessxyz = os.path.join(dirname, "hessian", "coords.xyz")
     if read_data and os.path.exists(hesstxt) and os.path.exists(hessxyz):
