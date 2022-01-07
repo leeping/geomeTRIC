@@ -490,7 +490,7 @@ def parse_constraints(molecule, constraints_string):
                     #     logger.info("Large rotation: Your constraint may not work\n")
                     if mode == "set":
                         # Get the periodic image that is inside of the pi-sphere.
-                        theta3 = (theta1 + np.pi) * (2*np.pi) - np.pi
+                        theta3 = (theta1 + np.pi) % (2*np.pi) - np.pi
                         c = np.cos(theta3/2.0)
                         s = np.sin(theta3/2.0)
                         q = np.array([c, u[0]*s, u[1]*s, u[2]*s])
