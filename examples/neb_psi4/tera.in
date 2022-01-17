@@ -1,0 +1,6 @@
+coordinates       initial.xyz
+run               minimize
+method            b3lyp
+spinmult          1
+charge            -1
+basis             6-31g*

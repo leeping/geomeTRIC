@@ -1336,7 +1336,6 @@ class QCEngineAPI(Engine):
         """
         import time
         subs=len(ids) #Number of submissions
-        time.sleep(subs*2) #This initial sleep provides some time to the qcfractal server to see whether the calculations are duplicates. 
         cycle = 0
         resubmit = 0
         while True:    
@@ -1360,11 +1359,9 @@ class QCEngineAPI(Engine):
                     if error == 0:
                         print("Error detected")
                     res = self.client.modify_tasks('restart', err.base_result)
-                    print(res.n_updated)
                     error += 1
                     resubmit += 1
                 else:
-                    print(status)
                     incomplete += 1
 
             if complete == subs:
@@ -1373,7 +1370,6 @@ class QCEngineAPI(Engine):
             else:
                 cycle += 1 
             waittime = (incomplete+error)*10
-            print("waiting %i seconds" %waittime)
             time.sleep(waittime)
 
     def read_qcf(self, ids):

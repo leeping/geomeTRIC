@@ -36,6 +36,8 @@ To install the latest release from conda-forge, run "conda install -c conda-forg
 To execute the geometry optimizer, run "geometric-optimize".
 Use "-h" to see the list of command line options.
 
+"geometric-neb" can be used to execute the Nudged Elastic Band method.
+
 Generally, you will need a .xyz file for the coordinates and 
 one of the supported quantum chemistry software packages installed
 on your system.

@@ -199,6 +199,8 @@ def frequency_analysis(coords, Hessian, elem=None, mass=None, energy=0.0, temper
     normal_modes_cart : np.array
         n_vibmodes*n_atoms length array containing un-mass-weighted Cartesian displacements 
         of each normal mode
+    G_tot_au : float
+        Total free energy
     """
     # Create a copy of coords and reshape into a 2D array
     coords = coords.copy().reshape(-1, 3)
@@ -819,7 +821,7 @@ def main():
     coords = M.xyzs[0] / bohr2ang
     mass = np.array([PeriodicTable[M.elem[j]] for j in range(M.na)])
     hessian = np.loadtxt("hessian.txt")
-    frequencies, displacements = frequency_analysis(coords, hessian, elem=M.elem, mass=mass, verbose=True)
+    frequencies, displacements, freeenergy = frequency_analysis(coords, hessian, elem=M.elem, mass=mass, verbose=True)
 
 if __name__ == "__main__":
     main()

@@ -83,7 +83,6 @@ def parse_input_json_dict(in_json_dict):
         "program": "rdkit"
     }
     """
-
     in_json_dict = copy.deepcopy(in_json_dict)
     input_opts = in_json_dict['keywords']
     input_specification = in_json_dict['input_specification']
@@ -206,32 +205,29 @@ def geometric_run_json(in_json_dict):
     logger.addHandler(log_stream)
 
     input_opts = parse_input_json_dict(in_json_dict)
-    print ("input_opts obtained")
     qcschema = input_opts.get('qcschema') 
-    key_dict = qcschema.pop('keywords', None)
-    print ("key_dict", key_dict)
-    
-    print ("inputopts", input_opts)
-    if 'images' in key_dict:
-        NEB = True 
-        Opt = False
+    print ("Input Detail:", input_opts)
+    if 'images' in input_opts:
+        NEB = True
+        Opt = False 
         ew = False
-        parser = geometric.neb.build_args()
-        if 'ew' in key_dict:
+        parser = geometric.neb.build_args() 
+        if 'ew' in input_opts:
             ew = True
-            del key_dict['ew']
-        args_list = parse_key(key_dict)
+            del input_opts['ew']
+        args_list = parse_key(input_opts) 
         if ew:
             args_list.extend(['--ew'])
-        args = parser.parse_args(args_list)    
+        
+        args, unkonwn = parser.parse_known_args(args_list)
+            
         args.qcschema = qcschema
-        args.qce_engine = input_opts.get('qce_program') #Software packages for energy and gradient calculation (psi4 or terachem)
-        args.client = key_dict['client']
+        args.qce_engine = input_opts.get('qce_program')
+        args.client = input_opts.get('client')
         M, engine = geometric.neb.get_molecule_engine(args)
         M.align()
         tmpdir = args.input + ".tmp"
         os.mkdir(tmpdir)
-           
     else:
         NEB = False 
         Opt = True
@@ -239,7 +235,7 @@ def geometric_run_json(in_json_dict):
         temp_method = qcschema['model']['method'].split('-')
         if temp_method[0].upper() == 'TS':
             TS = True
-            input_opts['qcschema']['model']['method'] = temp_method[-1]
+            input_opts['qcschema']['model']['method'] = '-'.join(temp_method[1:])
         M, engine = geometric.optimize.get_molecule_engine(**input_opts)
 
     # Get initial coordinates in bohr
@@ -257,6 +253,7 @@ def geometric_run_json(in_json_dict):
 
     # set up the internal coordinate system
     coordsys = input_opts.get('coordsys', 'tric')
+    print('coordsys', coordsys)
     CoordSysDict = {
         'cart': (geometric.internal.CartesianCoordinates, False, False),
         'prim': (geometric.internal.PrimitiveInternalCoordinates, True, False),
@@ -288,7 +285,6 @@ def geometric_run_json(in_json_dict):
     else:
         params = geometric.optimize.OptParams(**input_opts)
         params.transition = TS
-        print(params.transition)
 
     try:
         # Run the optimization
@@ -296,7 +292,7 @@ def geometric_run_json(in_json_dict):
             # Run a standard geometry optimization
             geometric.optimize.Optimize(coords, M, IC, engine, None, params)
         elif NEB: 
-            # Run an NEB chain optimization
+            # Run the NEB method
             print ("Running an NEB calculation through QCAI.")
             geometric.neb.OptimizeChain(chain, engine, params)
         else:

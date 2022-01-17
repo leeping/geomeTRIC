@@ -197,7 +197,6 @@ class Structure(object):
             result = self.engine.read_qcf(res)
         else:    
             result = self.engine.calc(self.cartesians, self.tmpdir)
-        print("Compute EG done")
         self.energy = result['energy'] 
         self.grad_cartesian = result['gradient'] 
         self.grad_internal = self.IC.calcGrad(self.cartesians, self.grad_cartesian)
@@ -240,20 +239,20 @@ class Structure(object):
             self.IC = CoordinateSystem(self.M, self.coordtype)
 
         if self.qcfserver == False:  
-            print("No QCFractal server")
+            print("No QCFractal server, it will be carried locally.")
             optCoords = Optimize(self.cartesians, self.M, self.IC, self.engine, self.tmpdir, opt_params)#, xyzout=os.path.join(self.tmpdir,'optimize.xyz')) 
-            print("Optimize done", optCoords)
             self.cartesian = np.array(optCoords[-1].xyzs).flatten()*ang2bohr
         else:
             """
             Optimization procedure through QCAI
             """
             import time
-            print("QCAI optimiztion starts")
+            print("QCAI optimization started.")
             new_schema = deepcopy(self.engine.schema)
             new_schema['molecule']['geometry'] = self.cartesians.reshape(-1,3)
             qcel_mol = new_schema['molecule']
             model = new_schema['model']
+            #1/10/2022 HP: Passing other keywords such as coordsys will be added later.
             opt_qcschema = { 
                     "keywords": None,
                     "qc_spec": {
@@ -263,7 +262,8 @@ class Structure(object):
                         "program": self.engine.program
                             }
                         }
-            r=self.engine.client.add_procedure("optimization", "geometric",opt_qcschema, [qcel_mol])
+            r=self.engine.client.add_procedure("optimization", "geometric",opt_qcschema, [qcel_mol]) #ComputeResponse
+            print('Procedure added')
             proc_id = r.ids
             loop = 0 
             while True:
@@ -279,10 +279,9 @@ class Structure(object):
                     loop += 1
                 elif status == "COMPLETE":
                     optCoords = proc.get_final_molecule().geometry     
-                    print("QCAI Optimization is done.")
+                    print("QCAI optimization is done.")
                     break
             self.cartesian = np.array(optCoords).flatten()
-            print(self.cartesian)
         # Rebuild the internal coordinate system
         self.IC = CoordinateSystem(self.M, self.coordtype)
         self.CalcInternals()
@@ -899,8 +898,8 @@ class ElasticBand(Chain):
             raise RuntimeError("Please set the component argument to potential, spring, or total")
         if projection not in ["plain", "projected", "working"]:
             raise RuntimeError("Please set the projection argument to plain, projected, or working")
-        if projection is "working":
-            if component is "potential":
+        if projection == "working":
+            if component == "potential":
                 # Plain = 0: Projected potential force, projected spring force
                 # Plain = 1: Projected potential force, full spring force
                 # Plain = 2: Full potential force, full spring force
@@ -908,19 +907,19 @@ class ElasticBand(Chain):
                     return self.get_grad(i, component, "projected")
                 else:
                     return self.get_grad(i, component, "plain")
-            elif component is "spring":
+            elif component == "spring":
                 if self.plain < 1:
                     return self.get_grad(i, component, "projected")
                 else:
                     return self.get_grad(i, component, "plain")
-            elif component is "total":
+            elif component == "total":
                 if self.plain == 2:
                     return self.get_grad(i, "potential", "plain") + self.get_grad(i, "spring", "plain")
                 elif self.plain == 1:
                     return self.get_grad(i, "potential", "projected") + self.get_grad(i, "spring", "plain")
                 elif self.plain == 0:
                     return self.get_grad(i, "potential", "projected") + self.get_grad(i, "spring", "projected")
-        elif component is "total":
+        elif component == "total":
             return self.get_grad(i, "potential", projection) + self.get_grad(i, "spring", projection)
         if (component, projection) not in self._grads or self._grads[(component, projection)][i] is None:
             raise RuntimeError("Gradient has not been set")
@@ -933,8 +932,8 @@ class ElasticBand(Chain):
             raise RuntimeError("Please set the component argument to potential, spring, or total")
         if projection not in ["plain", "projected", "working"]:
             raise RuntimeError("Please set the projection argument to plain, projected, or working")
-        if projection is "working":
-            if component is "potential":
+        if projection == "working":
+            if component == "potential":
                 # Plain = 0: Projected potential force, projected spring force
                 # Plain = 1: Projected potential force, full spring force
                 # Plain = 2: Full potential force, full spring force
@@ -942,19 +941,19 @@ class ElasticBand(Chain):
                     return self.get_global_grad(component, "projected")
                 else:
                     return self.get_global_grad(component, "plain")
-            elif component is "spring":
+            elif component == "spring":
                 if self.plain < 1:
                     return self.get_global_grad(component, "projected")
                 else:
                     return self.get_global_grad(component, "plain")
-            elif component is "total":
+            elif component == "total":
                 if self.plain == 2:
                     return self.get_global_grad("potential", "plain") + self.get_global_grad("spring", "plain")
                 elif self.plain == 1:
                     return self.get_global_grad("potential", "projected") + self.get_global_grad("spring", "plain")
                 elif self.plain == 0:
                     return self.get_global_grad("potential", "projected") + self.get_global_grad("spring", "projected")
-        elif component is "total":
+        elif component == "total":
             return self.get_global_grad("potential", projection) + self.get_global_grad("spring", projection)
         if (component, projection) not in self._global_grads or self._global_grads[(component, projection)] is None:
             raise RuntimeError("Gradient has not been set")
@@ -1123,7 +1122,9 @@ class ElasticBand(Chain):
             M.comms[i] = "Climbing Image - Chain %i Image %i Energy % 16.10f (%+.3f kcal/mol) RMSGrad %.3f eV/Ang" % (cycle, n, enes[n], eneKcal[n], grms)
 
         if self.params.prefix == None:
-            M.write("chains.tsClimb.xyz")
+            #M.write("chains.tsClimb.xyz")
+            M.write('.'.join(self.tmpdir.split('.')[:-1]) + ".tsClimb.xyz")
+            print('.'.join(self.tmpdir.split('.')[:-1]) + ".tsClimb.xyz")
         else:
             M.write(self.params.prefix+".tsClimb.xyz")
     
@@ -1406,20 +1407,16 @@ class ElasticBand(Chain):
                 #HP_ew 
                 E_i = energies[n]
                 E_ref = min(energies[0], energies[-1]) # Reference energy can be either reactant or product. Lower energy is picked here.
-                print("reference E", E_ref)
                 E_max = max(energies)
-                print("maxE", E_max)
                 k_max = self.k*2
                 k_min = self.k/2
                 a = (E_max - energies[n])/(E_max - E_ref)
-                print("weigh", a)
                 if E_i > E_ref:
                     k_new = (1-a)*k_max + a*k_min
                 else:
                     k_new = k_min 
             else:
                 k_new = self.k
-            print ("force constant", k_new)
             if self.ic_displace:
                 self.SprBandEnergy += fplus*k_new*np.dot(drplus, drplus)
                 self.SprBandEnergy += fminus*k_new*np.dot(drminus, drminus)
@@ -1497,20 +1494,16 @@ class ElasticBand(Chain):
                 #HP_ew 
                 E_i = energies[n]
                 E_ref = min(energies[0], energies[-1]) # Reference energy can be either reactant or product. Lower energy is picked here.
-                print("reference E", E_ref)
                 E_max = max(energies)
-                print("maxE", E_max)
                 k_max = self.k*2
                 k_min = self.k/2
                 a = (E_max - energies[n])/(E_max - E_ref)
-                print("weigh", a)
                 if E_i > E_ref:
                     k_new = (1-a)*k_max + a*k_min
                 else:
                     k_new = k_min 
             else:
                 k_new = self.k
-            print ("force constant", k_new)
             force_s_Plus  = fplus*k_new*drplus
             force_s_Minus = fminus*k_new*drminus
             factor = 1.0 + 16*(1.0-straight[n])**2
@@ -1580,20 +1573,16 @@ class ElasticBand(Chain):
                 #HP_ew 
                 E_i = energies[n]
                 E_ref = min(energies[0], energies[-1]) # Reference energy can be either reactant or product. Lower energy is picked here.
-                print("reference E", E_ref)
                 E_max = max(energies)
-                print("maxE", E_max)
                 k_max = self.k*2
                 k_min = self.k/2
                 a = (E_max - energies[n])/(E_max - E_ref)
-                print("weigh", a)
                 if E_i > E_ref:
                     k_new = (1-a)*k_max + a*k_min
                 else:
                     k_new = k_min 
             else:
                 k_new = self.k
-            print ("force constant", k_new)
 
             force_s = k_new*(cc_prev + cc_next - 2*cc_curr)
             force_s_para = np.dot(force_s,tau)*tau
@@ -2224,9 +2213,9 @@ def OptimizeChain(chain, engine, params):
     # Threshold below which chains should not be rejected
     ThreRJ = 0.001
     # Optimize the endpoints of the chain
-    print("First, optimizing endpoints images")
+    print("First, optimizing endpoint images.")
     chain.OptimizeEndpoints(params.maxg)
-    print("Now optimizing the chain")
+    print("Now optimizing the chain.")
     chain.respace(0.01)
     chain.delete_insert(1.0)
     if params.align: chain.align()
