@@ -497,7 +497,6 @@ def get_delta_prime_rs_p_rfo(alpha, X, G, H, IC, verbose=0):
     # verbose = 2
     if verbose >= 4:
         logger.info("        === RS-P-RFO method with alpha = %.5f ===\n" % alpha)
-
     # Sorted eigenvalues and corresponding eigenvectors of the Hessian
     Hvals, Hvecs = sorted_eigh(H, asc=True)
 

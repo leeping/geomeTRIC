@@ -1124,7 +1124,6 @@ class ElasticBand(Chain):
         if self.params.prefix == None:
             #M.write("chains.tsClimb.xyz")
             M.write('.'.join(self.tmpdir.split('.')[:-1]) + ".tsClimb.xyz")
-            print('.'.join(self.tmpdir.split('.')[:-1]) + ".tsClimb.xyz")
         else:
             M.write(self.params.prefix+".tsClimb.xyz")
     
@@ -1385,7 +1384,6 @@ class ElasticBand(Chain):
         self.TotBandEnergy = 0.0
         xyz = self.get_cartesian_all(endpts=True)
         energies = np.array([self.Structures[n].energy for n in range(len(self))])
-        print ("energies", energies)
 
         for n in range(1, len(self)-1):
             if self.ic_displace:
@@ -1944,7 +1942,7 @@ def get_molecule_engine(args):
             Engine = Psi4(M[0])
             psi4_in = "%s_2.in" %args.input.split(".")[0]
             if os.path.exists(psi4_in):
-                os.remove(psit_in)
+                os.remove(psi4_in)
             with open(psi4_in, 'a') as file_obj:
                 file_obj.write("molecule {\n")
                 file_obj.write("%i %i\n" %(M.charge, M.mult))
@@ -2306,7 +2304,6 @@ def OptimizeChain(chain, engine, params):
         if params.sepdir: chain.UpdateTempDir(optCycle)
         print("Time since last ComputeChain: %.3f s" % (time.time() - t0))
         chain.ComputeChain(cyc=optCycle)
-        print ("ComputeChain Done.")
         t0 = time.time()
         Y1 = Y + dy
         Y = chain.get_internal_all()

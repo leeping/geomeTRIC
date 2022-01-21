@@ -202,9 +202,10 @@ class Optimizer(object):
             logger.info("Requesting %i samples from Wigner distribution.\n" % self.params.wigner)
         prefix = self.params.xyzout.replace("_optim.xyz", "").replace(".xyz", "")
         # Call the frequency analysis function with an input Hessian, with most arguments populated from self.params
-        frequency_analysis(self.X, hessian, self.molecule.elem, energy=self.E, temperature=self.params.temperature, pressure=self.params.pressure, verbose=self.params.verbose, 
+        freqs_wavenumber, normal_modes_cart, G_tot_au=frequency_analysis(self.X, hessian, self.molecule.elem, energy=self.E, temperature=self.params.temperature, pressure=self.params.pressure, verbose=self.params.verbose, 
                            outfnm='%s.vdata_%s' % (prefix, suffix), note='Iteration %i Energy % .8f%s' % (self.Iteration, self.E, ' (Optimized Structure)' if afterOpt else ''),
                            wigner=((self.params.wigner, os.path.join(self.dirname, 'wigner')) if do_wigner else None))
+        return freqs_wavenumber, normal_modes_cart, G_tot_au
 
 
     def calcEnergyForce(self):
@@ -220,6 +221,7 @@ class Optimizer(object):
         spcalc = self.engine.calc(self.X, self.dirname, read_data=(self.Iteration==0))
         self.E = spcalc['energy']
         self.gradx = spcalc['gradient']
+
         # Calculate Hessian at the first step, or at each step if desired
         if self.params.hessian == 'each':
             # Hx is assumed to be the Cartesian Hessian at the current step.
