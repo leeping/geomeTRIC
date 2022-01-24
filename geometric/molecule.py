@@ -1008,7 +1008,7 @@ def AtomContact(xyz, pairs, box=None, displace=False):
     Returns
     -------
     np.ndarray
-        N_pairs*N_frames (2D) array of minimum image convention distances
+        N_frames*N_pairs (2D) array of minimum image convention distances
     np.ndarray (optional)
         if displace=True, N_frames*N_pairs*3 array of displacement vectors
     """
@@ -2272,6 +2272,17 @@ class Molecule(object):
         else:
             drij, dxij = AtomContact(np.array(self.xyzs), AtomIterator, box=None, displace=True)
         return AtomIterator, list(drij), list(dxij)
+
+    def get_closest_atom(self, i, pbc=True):
+        """ Obtain the closest atom index to atom i. """
+        atom_pairs = [(i, j) for j in range(self.na)]
+        if pbc:
+            boxes = np.array([[self.boxes[i].a, self.boxes[i].b, self.boxes[i].c] for i in range(len(self))])
+            drij = AtomContact(np.array(self.xyzs), atom_pairs, box=boxes)
+        else:
+            drij = AtomContact(np.array(self.xyzs), atom_pairs, box=None)
+        drij[:, i] = 1e10
+        return np.argmin(drij, axis=1)
 
     def rotate_bond(self, frame, aj, ak, increment=15):
         """ 

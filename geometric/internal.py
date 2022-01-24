@@ -2079,6 +2079,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
 
     def makePrimitives(self, molecule, connect, addcart):
         molecule.build_topology()
+        connect_isolated = True
         if 'resid' in molecule.Data.keys():
             frags = []
             residues = []
@@ -2096,7 +2097,19 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                 for sub_mol in residue_select.molecules:
                     frags.append([res[i] for i in sub_mol])
         else:
-            frags = [m.nodes() for m in molecule.molecules]
+            frags = [list(m.nodes()) for m in molecule.molecules]
+            if connect_isolated:
+                isolates = [list(m.nodes())[0] for m in molecule.molecules if len(m.nodes()) == 1]
+                for i in isolates:
+                    j = molecule.get_closest_atom(i, pbc=False)[0]
+                    logger.info("Creating artifical bond to isolated atom: %i-%i\n" % (i+1, j+1))
+                    molecule.bonds.append((i, j))
+                old_read_bonds = molecule.top_settings['read_bonds']
+                molecule.top_settings['read_bonds'] = True
+                molecule.build_topology(force_bonds=False)
+                molecule.top_settings['read_bonds'] = old_read_bonds
+                frags = [list(m.nodes()) for m in molecule.molecules]
+            
         # coordinates in Angstrom
         coords = molecule.xyzs[0].flatten()
         # Make a distance matrix mapping atom pairs to interatomic distances

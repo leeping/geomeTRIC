@@ -456,9 +456,7 @@ class Optimizer(object):
         if params.transition:
             if Quality > 0.8 and Quality < 1.2: step_state = StepState.Good
             elif Quality > 0.5 and Quality < 1.5: step_state = StepState.Okay
-            elif Quality > 0.0 and Quality < 2.0: 
-                step_state = StepState.Poor
-                # self.recalcHess = True
+            elif Quality > 0.0 and Quality < 2.0: step_state = StepState.Poor
             else:
                 colors['energy'] = "\x1b[92m" if Converged_energy else "\x1b[91m"
                 colors['quality'] = "\x1b[91m"
@@ -550,14 +548,17 @@ class Optimizer(object):
                 # The "1.2" prevents rejecting / repeating the step and then accepting the step based on trust <= params.thre_rj
                 logger.info("\x1b[93mNot rejecting step - RMS displacement below %.3e\x1b[0m\n" % (1.2*params.thre_rj))
             # elif (not params.transition) and self.E < self.Eprev:
-            elif self.E < self.Eprev:
+            elif self.E < self.Eprev and not params.transition:
                 logger.info("\x1b[93mNot rejecting step - energy decreases during minimization\x1b[0m\n")
             elif Converged_energy:
                 logger.info("\x1b[93mNot rejecting step - energy change meets convergence criteria\x1b[0m\n")
             elif self.farConstraints:
                 logger.info("\x1b[93mNot rejecting step - far from constraint satisfaction\x1b[0m\n")
             else:
-                logger.info("\x1b[93mRejecting step - quality is lower than -1.0\x1b[0m\n")
+                if params.transition:
+                    logger.info("\x1b[93mRejecting step - quality is outside the range (0.0, 2.0)\x1b[0m\n")
+                else:
+                    logger.info("\x1b[93mRejecting step - quality is lower than -1.0\x1b[0m\n")
                 self.trustprint = "\x1b[1;91mx\x1b[0m"
                 self.Y = self.Yprev.copy()
                 self.X = self.Xprev.copy()

@@ -62,9 +62,9 @@ class OptParams(object):
         self.verbose = kwargs.get('verbose', False)
         # Starting value of the trust radius
         # Because TS optimization is experimental, use conservative trust radii
-        self.trust = kwargs.get('trust', 0.01 if self.transition else 0.1)
+        self.trust = kwargs.get('trust', 0.02 if self.transition else 0.1)
         # Maximum value of trust radius
-        self.tmax = kwargs.get('tmax', 0.03 if self.transition else 0.3)
+        self.tmax = kwargs.get('tmax', 0.06 if self.transition else 0.3)
         # Minimum value of the trust radius
         self.tmin = kwargs.get('tmin', min(1e-4 if (self.transition or self.meci) else 1.2e-3, self.Convergence_drms))
         # Use maximum component instead of RMS displacement when applying trust radius.
