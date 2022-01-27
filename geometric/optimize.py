@@ -428,6 +428,7 @@ class Optimizer(object):
         # print("Actual dy:", dy)
         self.Y += dy
         self.expect = flat(0.5*multi_dot([row(dy),self.H,col(dy)]))[0] + np.dot(dy,self.G)
+        self.expectG = np.dot(self.H, col(dy).flatten())
         self.state = OPT_STATE.NEEDS_EVALUATION
 
     def evaluateStep(self):
@@ -444,6 +445,26 @@ class Optimizer(object):
         rms_displacement_noalign, max_displacement_noalign = calc_drms_dmax(self.X, self.Xprev, align=False)
         # The ratio of the actual energy change to the expected change
         Quality = (self.E-self.Eprev)/self.expect
+        # self.G = self.IC.calcGrad(self.X, self.gradx).flatten()
+        # The difference between the expected and actual force at this step
+        # dG = self.G-self.Gprev-self.expectG
+        # The percent agreement between the expected and actual force
+        # QualityG = 1.0 - np.linalg.norm(dG)/np.linalg.norm(self.expectG)
+        # The alignment between the actual and predicted Delta(G) force vectors
+        # QualityG = np.dot(self.G-self.Gprev, self.expectG) / (np.linalg.norm(self.G-self.Gprev)*np.linalg.norm(self.expectG))
+        if params.transition:
+            if Quality > 1.0:
+                Quality = 2.0 - Quality
+        #     logger.info("%sQualityE: % .3f, %sQualityG: % .3f\n" % ('>' if Quality > QualityG else ' ', Quality, '>' if QualityG > Quality else ' ', QualityG))
+        #     if QualityG > Quality:
+        #         Quality = QualityG
+        #         qsuf = '(G)'
+        #     else:
+        #         qsuf = '(E)'
+        # else:
+        #     qsuf = ''
+        qsuf=''
+        # print("QualityG:", QualityG)
         # 2020-03-10: Step quality thresholds are hard-coded here.
         # Check convergence criteria
         Converged_energy = np.abs(self.E-self.Eprev) < params.Convergence_energy
@@ -453,23 +474,13 @@ class Optimizer(object):
         Converged_dmax = max_displacement < params.Convergence_dmax
         # Set step state and log colors
         colors = {}
-        if params.transition:
-            if Quality > 0.8 and Quality < 1.2: step_state = StepState.Good
-            elif Quality > 0.5 and Quality < 1.5: step_state = StepState.Okay
-            elif Quality > 0.0 and Quality < 2.0: step_state = StepState.Poor
-            else:
-                colors['energy'] = "\x1b[92m" if Converged_energy else "\x1b[91m"
-                colors['quality'] = "\x1b[91m"
-                step_state = StepState.Reject
-                # self.recalcHess = True
+        if Quality > 0.75: step_state = StepState.Good
+        elif Quality > (0.5 if params.transition else 0.25): step_state = StepState.Okay
+        elif Quality > 0.0: step_state = StepState.Poor
         else:
-            if Quality > 0.75: step_state = StepState.Good
-            elif Quality > 0.25: step_state = StepState.Okay
-            elif Quality > 0.0: step_state = StepState.Poor
-            else:
-                colors['energy'] = "\x1b[92m" if Converged_energy else "\x1b[91m"
-                colors['quality'] = "\x1b[91m"
-                step_state = StepState.Poor if Quality > -1.0 else StepState.Reject
+            colors['energy'] = "\x1b[92m" if Converged_energy else "\x1b[91m"
+            colors['quality'] = "\x1b[91m"
+            step_state = StepState.Reject if (Quality < -1.0 or params.transition) else StepState.Poor
         if 'energy' not in colors: colors['energy'] = "\x1b[92m" if Converged_energy else "\x1b[0m"
         if 'quality' not in colors: colors['quality'] = "\x1b[0m"
         colors['grms'] = "\x1b[92m" if Converged_grms else "\x1b[0m"
@@ -525,6 +536,8 @@ class Optimizer(object):
         #             (rms_displacement, rms_displacement_noalign, rms_displacement_noalign / rms_displacement))
         if step_state in (StepState.Poor, StepState.Reject):
             new_trust = max(params.tmin, min(self.trust, self.cnorm)/2)
+            # if (Converged_grms or Converged_gmax) or (params.molcnv and Converged_molpro_gmax):
+            #     new_trust = max(new_trust, self.params.Convergence_dmax if self.params.usedmax else self.params.Convergence_drms)
             self.trustprint = "\x1b[91m-\x1b[0m" if new_trust < self.trust else "="
             self.trust = new_trust
             # A poor quality step that is dominated by overall translation/rotation
@@ -542,11 +555,14 @@ class Optimizer(object):
             self.trustprint = "="
 
         if step_state == StepState.Reject:
-            if prev_trust <= params.thre_rj:
-                logger.info("\x1b[93mNot rejecting step - trust below %.3e\x1b[0m\n" % params.thre_rj)
-            elif rms_displacement <= 1.2*params.thre_rj:
-                # The "1.2" prevents rejecting / repeating the step and then accepting the step based on trust <= params.thre_rj
-                logger.info("\x1b[93mNot rejecting step - RMS displacement below %.3e\x1b[0m\n" % (1.2*params.thre_rj))
+            if prev_trust <= params.tmin:
+                logger.info("\x1b[93mNot rejecting step - trust below tmin = %.3e\x1b[0m\n" % params.tmin)
+            elif rms_displacement <= 1.2*params.tmin:
+                # Prevents rejecting / repeating the step and then accepting the step based on trust <= params.tmin
+                # Suppose a step is taken whose length is close to tmin but trust is actually above tmin. Without this rule, the step would be rejected.
+                # Then trust would be decreased, eventually to tmin, then the exact same step would be accepted.
+                # The "1.2" is because the actual step can be larger than the trust radius by a small amount.
+                logger.info("\x1b[93mNot rejecting step - RMS displacement close to tmin = %.3e\x1b[0m\n" % (params.tmin))
             # elif (not params.transition) and self.E < self.Eprev:
             elif self.E < self.Eprev and not params.transition:
                 logger.info("\x1b[93mNot rejecting step - energy decreases during minimization\x1b[0m\n")
@@ -555,10 +571,7 @@ class Optimizer(object):
             elif self.farConstraints:
                 logger.info("\x1b[93mNot rejecting step - far from constraint satisfaction\x1b[0m\n")
             else:
-                if params.transition:
-                    logger.info("\x1b[93mRejecting step - quality is outside the range (0.0, 2.0)\x1b[0m\n")
-                else:
-                    logger.info("\x1b[93mRejecting step - quality is lower than -1.0\x1b[0m\n")
+                logger.info("\x1b[93mRejecting step - quality is lower than %.1f\x1b[0m\n" % (0.0 if params.transition else -1.0))
                 self.trustprint = "\x1b[1;91mx\x1b[0m"
                 self.Y = self.Yprev.copy()
                 self.X = self.Xprev.copy()
@@ -813,7 +826,7 @@ def run_optimizer(**kwargs):
     
     # Get the Molecule and engine objects needed for optimization
     M, engine = get_molecule_engine(**kwargs)
-
+    
     # Create Work Queue object
     if kwargs.get('port', 0):
         logger.info("Creating Work Queue object for distributed Hessian calculation\n")
