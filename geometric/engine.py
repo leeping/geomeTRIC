@@ -1119,7 +1119,14 @@ class QChem(Engine): # pragma: no cover
                 gradmode = 0
             elif gradmode:
                 s = line.split()
-                gradient.append([float(i) for i in s])
+                gline = []
+                for i in s:
+                    try:
+                        gline.append(float(i))
+                    except ValueError:
+                        # Rare unreadable cases like 0.25025553271156-108
+                        gline.append(0.0)
+                gradient.append(gline)
         gradient = np.array(gradient).flatten()
         # Assume that the last occurence of "S^2" is what we want.
         s2 = 0.0
