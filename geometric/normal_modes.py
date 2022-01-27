@@ -533,12 +533,14 @@ def free_energy_harmonic(coords, mass, freqs_wavenumber, energy, temperature, pr
     nimag = 0
     if verbose >= 1:
         logger.info("\nMode   Freq(1/cm)     Zero-point  +  Thermal = Evib(kcal/mol) Svib(cal/mol/K) DG(ZPE+Thermal-TS)\n\n")
+    imaginary_freqs = []
     for ifreq, freq in enumerate(freqs_wavenumber):
         if ifreq < ignore:
             e_vib1 = 0.0
             s_vib1 = 0.0
             zpve1 = 0.0
         elif freq < 0:
+            imaginary_freqs.append(freq)
             nimag += 1
             e_vib1 = 0.0
             s_vib1 = 0.0
@@ -578,7 +580,10 @@ def free_energy_harmonic(coords, mass, freqs_wavenumber, energy, temperature, pr
     if ignore > 0:
         out_lines.append("Note: Free energy ignores contributions from %i lowest force constants\n" % ignore)
     if nimag > 0:
-        out_lines.append("Note: Free energy does not include contribution from %i imaginary mode(s)\n" % nimag)
+        out_lines.append("%i Imaginary Frequencies (cm^-1): %s\n" % (nimag, ' '.join(["%.3fi" % (-1*freq) for freq in imaginary_freqs])))
+        out_lines.append("Note: Free energy does not include contribution from imaginary mode(s)\n")
+    else:
+        out_lines.append("No Imaginary Frequencies\n")
     out_lines.append("\n")
     out_lines.append("Free energy contributions calculated at @ %.2f K:\n" % T)
     out_lines.append("Zero-point vibrational energy:                              %12.4f kcal/mol \n" % ZPVE)
