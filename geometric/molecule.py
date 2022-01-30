@@ -2199,7 +2199,7 @@ class Molecule(object):
         self.Data['bonds'] = sorted(list(set(bondlist)))
         self.built_bonds = True
 
-    def build_topology(self, force_bonds=True, **kwargs):
+    def build_topology(self, force_bonds=True, bond_order=0.0, **kwargs):
         """
 
         Create self.topology and self.molecules; these are graph
@@ -2214,9 +2214,14 @@ class Molecule(object):
             default behavior.  If creating a Molecule object using
             __init__, do not force the building of bonds by default
             (only build bonds if not read from file.)
+        bond_order : float
+            If set to a nonzero number, do not use distance criteria and 
+            build the bonds from QM bond orders using the provided threshold, 
+            if the qm_bondorder data attribute exists.
         topframe : int, optional
-            Provide the frame number used for reading the bonds.  If
-            not provided, this will be taken from the top_settings
+            Provide the frame number used for reading the bonds
+            (and the bond orders if use_bondorder = True).
+            If not provided, this will be taken from the top_settings
             field.  If provided, this will take priority and write
             the value into top_settings.
         """
@@ -2224,8 +2229,15 @@ class Molecule(object):
         self.top_settings['topframe'] = sn
         if self.na > 100000:
             logger.warning("Warning: Large number of atoms (%i), topology building may take a long time" % self.na)
-        # Build bonds from connectivity graph if not read from file.
-        if (not self.top_settings['read_bonds']) or force_bonds:
+        if bond_order > 0.0:
+            bondlist = []
+            for i in range(self.na):
+                for j in range(i+1, self.na):
+                    if self.qm_bondorder[sn][i, j] > bond_order:
+                        bondlist.append((i, j))
+                        self.Data['bonds'] = sorted(list(set(bondlist)))
+        # Build bonds from connectivity graph.
+        elif (not self.top_settings['read_bonds']) or force_bonds:
             self.build_bonds()
         # Create a NetworkX graph object to hold the bonds.
         G = MyG()
@@ -4042,7 +4054,7 @@ class Molecule(object):
             Answer['qm_grads'] = Mats['gradient_scf']['All']
         # Mayer bond order matrix from SCF_FINAL_PRINT=1
         if len(Mats['mayer']['All']) > 0:
-            Answer['qm_bondorder'] = Mats['mayer']['All'][-1]
+            Answer['qm_bondorder'] = Mats['mayer']['All']
         if len(Mats['hessian_scf']['All']) > 0:
             Answer['qm_hessians'] = Mats['hessian_scf']['All']
         #else:

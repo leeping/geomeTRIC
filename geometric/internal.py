@@ -2078,7 +2078,9 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         self.reorderPrimitives()
 
     def makePrimitives(self, molecule, connect, addcart):
-        molecule.build_topology()
+        # force_bonds=False is set because we don't want to override
+        # bond order-based bonds that may have been obtained earlier.
+        molecule.build_topology(force_bonds=False)
         connect_isolated = True
         if 'resid' in molecule.Data.keys():
             frags = []
@@ -2093,7 +2095,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
             # A single residue is not always guaranteed to be contiguous
             for res in residues:
                 residue_select = molecule.atom_select(res)
-                residue_select.build_topology()
+                residue_select.build_topology(force_bonds=False)
                 for sub_mol in residue_select.molecules:
                     frags.append([res[i] for i in sub_mol])
         else:

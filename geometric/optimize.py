@@ -428,7 +428,7 @@ class Optimizer(object):
         # print("Actual dy:", dy)
         self.Y += dy
         self.expect = flat(0.5*multi_dot([row(dy),self.H,col(dy)]))[0] + np.dot(dy,self.G)
-        self.expectG = np.dot(self.H, col(dy).flatten())
+        # self.expectdG = np.dot(self.H, col(dy).flatten())
         self.state = OPT_STATE.NEEDS_EVALUATION
 
     def evaluateStep(self):
@@ -445,27 +445,11 @@ class Optimizer(object):
         rms_displacement_noalign, max_displacement_noalign = calc_drms_dmax(self.X, self.Xprev, align=False)
         # The ratio of the actual energy change to the expected change
         Quality = (self.E-self.Eprev)/self.expect
-        # self.G = self.IC.calcGrad(self.X, self.gradx).flatten()
-        # The difference between the expected and actual force at this step
-        # dG = self.G-self.Gprev-self.expectG
-        # The percent agreement between the expected and actual force
-        # QualityG = 1.0 - np.linalg.norm(dG)/np.linalg.norm(self.expectG)
-        # The alignment between the actual and predicted Delta(G) force vectors
-        # QualityG = np.dot(self.G-self.Gprev, self.expectG) / (np.linalg.norm(self.G-self.Gprev)*np.linalg.norm(self.expectG))
-        if params.transition:
-            if Quality > 1.0:
-                Quality = 2.0 - Quality
-        #     logger.info("%sQualityE: % .3f, %sQualityG: % .3f\n" % ('>' if Quality > QualityG else ' ', Quality, '>' if QualityG > Quality else ' ', QualityG))
-        #     if QualityG > Quality:
-        #         Quality = QualityG
-        #         qsuf = '(G)'
-        #     else:
-        #         qsuf = '(E)'
-        # else:
-        #     qsuf = ''
-        qsuf=''
-        # print("QualityG:", QualityG)
-        # 2020-03-10: Step quality thresholds are hard-coded here.
+        # The internal coordinate gradient (actually not really used in this function)
+        self.G = self.IC.calcGrad(self.X, self.gradx).flatten()
+        # For transition states, the quality factor decreases in both directions
+        if params.transition and Quality > 1.0:
+            Quality = 2.0 - Quality
         # Check convergence criteria
         Converged_energy = np.abs(self.E-self.Eprev) < params.Convergence_energy
         Converged_grms = rms_gradient < params.Convergence_grms
@@ -473,6 +457,7 @@ class Optimizer(object):
         Converged_drms = rms_displacement < params.Convergence_drms
         Converged_dmax = max_displacement < params.Convergence_dmax
         # Set step state and log colors
+        # 2020-03-10: Step quality thresholds are hard-coded here.
         colors = {}
         if Quality > 0.75: step_state = StepState.Good
         elif Quality > (0.5 if params.transition else 0.25): step_state = StepState.Okay
@@ -605,7 +590,7 @@ class Optimizer(object):
             logger.info("Large rotations in linear molecules - refreshing Rotator reference points and DLC vectors\n")
             self.refreshCoordinates()
             UpdateHessian = False
-        self.G = self.IC.calcGrad(self.X, self.gradx).flatten()
+        # self.G = self.IC.calcGrad(self.X, self.gradx).flatten()
 
         ### Update the Hessian ###
         if UpdateHessian:
@@ -858,6 +843,26 @@ def run_optimizer(**kwargs):
                     'tric':(DelocalizedInternalCoordinates, False, False)}
     coordsys = kwargs.get('coordsys', 'tric')
     CoordClass, connect, addcart = CoordSysDict[coordsys.lower()]
+
+    # Perform an initial single-point QM calculation to determine bonding & fragments, if using TRIC
+    if hasattr(engine, 'calc_bondorder') and coordsys.lower() in ['hdlc', 'tric'] and params.bothre > 1e-3:
+        bothre = params.bothre
+        logger.info("Calculating QM bond order and forming bonds using criterion of %.2f\n" % bothre)
+        qm_bo = engine.calc_bondorder(coords, dirname)
+        M.qm_bondorder = [qm_bo]
+        M.build_topology(bond_order=bothre)
+        if len(M.molecules) == 1 and bothre < 0.75:
+            logger.info("Only one fragment found; increasing threshold\n")
+            # Increase the bond order threshold until there are at least 2 fragments of size >1
+            while bothre < 0.75 and len([m for m in M.molecules if len(m.e()) > 1]) == 1:
+                bothre += 0.01
+                M.build_topology(bond_order=bothre)
+            logger.info("Using threshold of %.2f, there are now %i molecules\n" % (bothre, len(M.molecules)))
+        M.top_settings['read_bonds'] = True
+        # Delete the QM bond order to avoid problems when more structures are added
+        del M.Data['qm_bondorder']
+    else:
+        logger.info("Bonds will be generated from interatomic distances less than %.2f times sum of covalent radii\n" % M.top_settings['Fac'])
 
     IC = CoordClass(M, build=True, connect=connect, addcart=addcart, constraints=Cons, cvals=CVals[0] if CVals is not None else None,
                     conmethod=params.conmethod)

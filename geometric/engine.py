@@ -1076,6 +1076,20 @@ class QChem(Engine): # pragma: no cover
             raise QChemEngineError
         return result
 
+    def calc_bondorder(self, coords, dirname):
+        # Make a copy of the 'unmodified' molecule object
+        M_bak = deepcopy(self.M)
+        # Set scf_final_print 1 to get the Mayer bond order
+        self.M.edit_qcrems({'scf_final_print':'1'})
+        # Actually run the Q-Chem calculation
+        self.calc_new(coords, dirname)
+        # Read the bond order from the Q-Chem output file
+        M_qcout = Molecule(os.path.join(dirname, 'run.out'), build_topology=False)
+        # Restore the 'old' molecule object
+        self.M = M_bak
+        # Return the Mayer bond order as a matrix
+        return M_qcout.qm_bondorder[-1]
+
     def calc_wq_new(self, coords, dirname):
         wq = getWorkQueue()
         if not os.path.exists(dirname): os.makedirs(dirname)
@@ -1099,13 +1113,13 @@ class QChem(Engine): # pragma: no cover
             read_xyz_success = False
             if os.path.exists('%s/run.out' % dirname): 
                 try:
-                    M1 = Molecule('%s/run.out' % dirname)
+                    M1 = Molecule('%s/run.out' % dirname, build_topology=False)
                     read_xyz = M1.xyzs[0].flatten() / bohr2ang
                     read_xyz_success = True
                 except: pass
             if not read_xyz_success or np.linalg.norm(check_coord - read_xyz) > 1e-8:
                 raise CheckCoordError
-        M1 = Molecule('%s/run.out' % dirname)
+        M1 = Molecule('%s/run.out' % dirname, build_topology=False)
         # In the case of multi-stage jobs, the last energy and gradient is what we want.
         energy = M1.qm_energies[-1]
         # gradient = M1.qm_grads[-1].flatten()
