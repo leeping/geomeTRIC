@@ -251,6 +251,13 @@ Elements = ["None",'H','He',
             'Lu','Hf','Ta','W','Re','Os','Ir','Pt','Au','Hg','Tl','Pb','Bi','Po','At','Rn',
             'Fr','Ra','Ac','Th','Pa','U','Np','Pu','Am','Cm','Bk','Cf','Es','Fm','Md','No','Lr','Rf','Db','Sg','Bh','Hs','Mt']
 
+# A list of transition and f-block metals (also some on the dividing line), used to adjust bond order thresholds
+TransitionMetals = ['Sc','Ti','V','Cr','Mn','Fe','Co','Ni','Cu','Zn','Sr','Y','Zr','Nb','Mo',
+                    'Tc','Ru','Rh','Pd','Ag','Cd','In','Sn','Sb','Te','La','Ce','Pr','Nd','Pm',
+                    'Sm','Eu','Gd','Tb','Dy','Ho','Er','Tm','Yb','Lu','Hf','Ta','W','Re','Os',
+                    'Ir','Pt','Au','Hg','Tl','Pb','Bi','Po','At','Ac','Th','Pa','U','Np','Pu',
+                    'Am','Cm','Bk','Cf','Es','Fm','Md','No','Lr','Rf','Db','Sg','Bh','Hs','Mt']
+
 # Dictionary of atomic masses ; also serves as the list of elements (periodic table)
 #
 # Atomic mass data was updated on 2020-05-07 from NIST:
@@ -2199,7 +2206,7 @@ class Molecule(object):
         self.Data['bonds'] = sorted(list(set(bondlist)))
         self.built_bonds = True
 
-    def build_topology(self, force_bonds=True, bond_order=0.0, **kwargs):
+    def build_topology(self, force_bonds=True, bond_order=0.0, metal_bo_factor=0.5, **kwargs):
         """
 
         Create self.topology and self.molecules; these are graph
@@ -2218,6 +2225,9 @@ class Molecule(object):
             If set to a nonzero number, do not use distance criteria and 
             build the bonds from QM bond orders using the provided threshold, 
             if the qm_bondorder data attribute exists.
+        metal_bo_factor : float
+            Transition metal complexes tend to have a lower bond order.
+            This multiplicative factor adjusts the bond order for metals.
         topframe : int, optional
             Provide the frame number used for reading the bonds
             (and the bond orders if use_bondorder = True).
@@ -2235,7 +2245,10 @@ class Molecule(object):
                 for j in range(i+1, self.na):
                     if self.qm_bondorder[sn][i, j] > bond_order:
                         bondlist.append((i, j))
-                        self.Data['bonds'] = sorted(list(set(bondlist)))
+                    elif ((self.elem[i] in TransitionMetals or self.elem[j] in TransitionMetals)
+                          and self.qm_bondorder[sn][i, j] > bond_order*metal_bo_factor):
+                        bondlist.append((i, j))
+            self.Data['bonds'] = sorted(list(set(bondlist)))
         # Build bonds from connectivity graph.
         elif (not self.top_settings['read_bonds']) or force_bonds:
             self.build_bonds()

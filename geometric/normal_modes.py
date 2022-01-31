@@ -69,31 +69,40 @@ def calc_cartesian_hessian(coords, molecule, engine, dirname, read_data=True, ve
     """
     nc = len(coords)
     # Attempt to read existing Hessian data if it exists.
+    # Read from files hessian.txt/coords.xyz, hessian_1.txt/coords_1.xyz, etc.
+    counter = 0
+    while read_data:
+        if counter > 0:
+            hesstxt = os.path.join(dirname, "hessian", "hessian_%i.txt" % counter)
+            hessxyz = os.path.join(dirname, "hessian", "coords_%i.xyz" % counter)
+        else:
+            hesstxt = os.path.join(dirname, "hessian", "hessian.txt")
+            hessxyz = os.path.join(dirname, "hessian", "coords.xyz")
+        if os.path.exists(hesstxt) and os.path.exists(hessxyz):
+            Hx = np.loadtxt(hesstxt)
+            if Hx.shape[0] == nc:
+                hess_mol = Molecule(hessxyz)
+                if np.allclose(coords.reshape(-1, 3)*bohr2ang, hess_mol.xyzs[0], atol=1e-6):
+                    logger.info("Using Hessian matrix read from file: %s\n" % hesstxt)
+                    return Hx
+        elif counter >= 1:
+            logger.info("Valid Hessian data not found, calculating from scratch.\n")
+            break
+        counter += 1
+
+    # Compute hessian from scratch.
     hesstxt = os.path.join(dirname, "hessian", "hessian.txt")
     hessxyz = os.path.join(dirname, "hessian", "coords.xyz")
-    if read_data and os.path.exists(hesstxt) and os.path.exists(hessxyz):
-        Hx = np.loadtxt(hesstxt)
-        if Hx.shape[0] == nc:
-            hess_mol = Molecule(hessxyz)
-            if np.allclose(coords.reshape(-1, 3)*bohr2ang, hess_mol.xyzs[0], atol=1e-6):
-                logger.info("Using Hessian matrix read from file\n")
-                return Hx
-            else:
-                logger.info("Coordinates for Hessian don't match current coordinates, recalculating.\n")
-                bak('hessian.txt', cwd=os.path.join(dirname, "hessian"), start=0)
-                bak('coords.xyz', cwd=os.path.join(dirname, "hessian"), start=0)
-                read_data=False
-        else:
-            logger.info("Hessian read from file doesn't have the right shape, recalculating.\n")
-            read_data=False
-    elif not os.path.exists(hessxyz):
-        logger.info("Coordinates for Hessian not found, recalculating.\n")
-        read_data = False
-    # Save Hessian to text file
+    # First back up any existing Hessian data in a way that a future calculation could read it.
+    if os.path.exists(hessxyz) and os.path.exists(hesstxt):
+        bak(hessxyz)
+        bak(hesstxt)
+
     oldxyz = molecule.xyzs[0].copy()
     molecule.xyzs[0] = coords.reshape(-1, 3)*bohr2ang
     if not os.path.exists(os.path.join(dirname, "hessian")):
         os.makedirs(os.path.join(dirname, "hessian"))
+        
     molecule[0].write(hessxyz)
     if not read_data: 
         if os.path.exists(os.path.join(dirname, "hessian", "displace")):

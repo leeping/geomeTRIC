@@ -862,6 +862,8 @@ def run_optimizer(**kwargs):
         # Delete the QM bond order to avoid problems when more structures are added
         del M.Data['qm_bondorder']
     else:
+        if coordsys.lower() in ['hdlc', 'tric'] and params.bothre > 1e-3:
+            logger.info("Requested bond order-based connectivity but it is not available in the current engine\n")
         logger.info("Bonds will be generated from interatomic distances less than %.2f times sum of covalent radii\n" % M.top_settings['Fac'])
 
     IC = CoordClass(M, build=True, connect=connect, addcart=addcart, constraints=Cons, cvals=CVals[0] if CVals is not None else None,

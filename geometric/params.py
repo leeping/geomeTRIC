@@ -98,8 +98,9 @@ class OptParams(object):
         # Name of the qdata.txt file to be written.
         # The CLI is designed so the user passes true/false instead of the file name.
         self.qdata = 'qdata.txt' if kwargs.get('qdata', False) else None
-        # Bond order threshold parameter, when using bond orders to build bonds
-        self.bothre = kwargs.get('bothre', 0.6)
+        # Bond order threshold parameter, when using bond orders to build bonds.
+        # Turned on by default for TS calculations; with sufficient testing could turn on for minimization.
+        self.bothre = kwargs.get('bothre', 0.6 if self.transition else 0.0)
         # Whether to calculate or read a Hessian matrix.
         self.hessian = kwargs.get('hessian', None)
         if self.hessian is None:
@@ -325,7 +326,7 @@ def parse_optimizer_args(*args):
     grp_modify.add_argument('--coords', type=str, help='Coordinate file to override the QM input file / PDB file. The LAST frame will be used.\n ')
     grp_modify.add_argument('--frag', type=str2bool, help='Provide "yes" to delete bonds between residues, producing\n'
                             'separate fragments in the internal coordinate system.')
-    grp_modify.add_argument('--bothre', type=float, help='Set the bond order threshold for building bonds in transition state calculations (Q-Chem only). Set 0.0 to disable.\n ')
+    grp_modify.add_argument('--bothre', type=float, help='Set the bond order threshold for building bonds in transition state calculations (Q-Chem, TeraChem only). Set 0.0 to disable.\n ')
     
     grp_output = parser.add_argument_group('output', 'Control the format and amount of the output')
     grp_output.add_argument('--prefix', type=str, help='Specify a prefix for log file and temporary directory.\n'

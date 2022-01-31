@@ -516,6 +516,16 @@ class TeraChem(Engine): # pragma: no cover
         result = self.read_result(dirname)
         return result
 
+    def calc_bondorder(self, coords, dirname):
+        self.tcin['bond_order_mat'] = 'yes'
+        self.calc_new(coords, dirname)
+        bo_mat = []
+        for ln, line in enumerate(open(os.path.join(dirname, self.scr, 'bond_order.mat')).readlines()):
+            if ln >= 2:
+                bo_mat.append([float(i) for i in line.split()[1:]])
+        del self.tcin['bond_order_mat']
+        return np.array(bo_mat)
+
     def calc_wq_new(self, coords, dirname):
         # Set up Work Queue object
         wq = getWorkQueue()
@@ -1065,9 +1075,9 @@ class QChem(Engine): # pragma: no cover
         try:
             # Run Q-Chem
             if self.qcdir:
-                subprocess.check_call('qchem%s -save run.in run.out run.d > run.log 2>&1' % self.nt(), cwd=dirname, shell=True)
+                subprocess.check_call('qchem%s run.in run.out run.d > run.log 2>&1' % self.nt(), cwd=dirname, shell=True)
             else:
-                subprocess.check_call('qchem%s -save run.in run.out run.d > run.log 2>&1' % self.nt(), cwd=dirname, shell=True)
+                subprocess.check_call('qchem%s run.in run.out run.d > run.log 2>&1' % self.nt(), cwd=dirname, shell=True)
                 # Assume reading the SCF guess is desirable
                 self.qcdir = True
                 self.M.edit_qcrems({'scf_guess':'read'})
@@ -1122,26 +1132,8 @@ class QChem(Engine): # pragma: no cover
         M1 = Molecule('%s/run.out' % dirname, build_topology=False)
         # In the case of multi-stage jobs, the last energy and gradient is what we want.
         energy = M1.qm_energies[-1]
-        # gradient = M1.qm_grads[-1].flatten()
-        # Parse gradient from GRAD file for improved precision.
-        gradient = []
-        gradmode = 0
-        for line in open('%s/run.d/GRAD' % dirname).readlines():
-            if line.strip().startswith('$gradient'):
-                gradmode = 1
-            elif line.startswith('$'):
-                gradmode = 0
-            elif gradmode:
-                s = line.split()
-                gline = []
-                for i in s:
-                    try:
-                        gline.append(float(i))
-                    except ValueError:
-                        # Rare unreadable cases like 0.25025553271156-108
-                        gline.append(0.0)
-                gradient.append(gline)
-        gradient = np.array(gradient).flatten()
+        # Parse gradient from Q-Chem binary file. (Written by default without -save)
+        gradient = np.fromfile('%s/run.d/131.0')
         # Assume that the last occurence of "S^2" is what we want.
         s2 = 0.0
         for line in open('%s/run.out' % dirname):
