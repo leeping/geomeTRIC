@@ -3576,7 +3576,8 @@ class Molecule(object):
         ghost                = [] # If the element in the $molecule section is preceded by an '@' sign, it's a ghost atom for counterpoise calculations.
         infsm                = False
 
-        for line in open(fnm).readlines():
+        # The 'iso-8859-1' prevents some strange errors that show up when reading the Archival summary line
+        for line in open(fnm, encoding='iso-8859-1').readlines():
             line = line.strip().expandtabs()
             sline = line.split()
             dline = line.split('!')[0].split()
@@ -3873,7 +3874,8 @@ class Molecule(object):
         pcmgradmode = False
         pcmgrads = []
         pcmgrad = []
-        for line in open(fnm):
+        # The 'iso-8859-1' prevents some strange errors that show up when reading the Archival summary line
+        for line in open(fnm, encoding='iso-8859-1'):
             line = line.strip().expandtabs()
             if 'Welcome to Q-Chem' in line:
                 Answer['qcerr'] = ''

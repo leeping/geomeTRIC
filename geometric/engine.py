@@ -1133,10 +1133,11 @@ class QChem(Engine): # pragma: no cover
         # In the case of multi-stage jobs, the last energy and gradient is what we want.
         energy = M1.qm_energies[-1]
         # Parse gradient from Q-Chem binary file. (Written by default without -save)
-        gradient = np.fromfile('%s/run.d/131.0')
+        gradient = np.fromfile('%s/run.d/131.0' % dirname)
         # Assume that the last occurence of "S^2" is what we want.
         s2 = 0.0
-        for line in open('%s/run.out' % dirname):
+        # The 'iso-8859-1' prevents some strange errors that show up when reading the Archival summary line
+        for line in open('%s/run.out' % dirname, encoding='iso-8859-1'):
             if "<S^2>" in line:
                 s2 = float(line.split()[-1])
         return {'energy':energy, 'gradient':gradient, 's2':s2}

@@ -540,7 +540,10 @@ class Optimizer(object):
             self.trustprint = "="
 
         if step_state == StepState.Reject:
-            if prev_trust <= params.tmin:
+            if hasattr(self, 'X_rj') and np.allclose(self.X_rj, self.X, atol=1e-6):
+                logger.info("\x1b[93mA previously rejected step was repeated; accepting to avoid infinite loop\x1b[0m\n")
+                delattr(self, 'X_rj')
+            elif prev_trust <= params.tmin:
                 logger.info("\x1b[93mNot rejecting step - trust below tmin = %.3e\x1b[0m\n" % params.tmin)
             elif rms_displacement <= 1.2*params.tmin:
                 # Prevents rejecting / repeating the step and then accepting the step based on trust <= params.tmin
@@ -558,6 +561,8 @@ class Optimizer(object):
             else:
                 logger.info("\x1b[93mRejecting step - quality is lower than %.1f\x1b[0m\n" % (0.0 if params.transition else -1.0))
                 self.trustprint = "\x1b[1;91mx\x1b[0m"
+                # Store the rejected step.  In case the next step is identical to the rejected one, the next step should be accepted to avoid infinite loops.
+                self.X_rj = self.X.copy()
                 self.Y = self.Yprev.copy()
                 self.X = self.Xprev.copy()
                 self.gradx = self.Gxprev.copy()
