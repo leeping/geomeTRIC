@@ -541,7 +541,7 @@ class Rotator(object):
             ymean = np.mean(ysel,axis=0)
             if not self.linear and is_linear(xsel, ysel):
                 # print "Setting linear flag for", self
-                self.linear = True
+                self.linear = False
             if self.linear:
                 # Handle linear molecules.
                 vx = xsel[-1]-xsel[0]
@@ -600,7 +600,7 @@ class Rotator(object):
             ymean = np.mean(ysel,axis=0)
             if not self.linear and is_linear(xsel, ysel):
                 # print "Setting linear flag for", self
-                self.linear = True
+                self.linear = False
             if self.linear:
                 vx = xsel[-1]-xsel[0]
                 vy = ysel[-1]-ysel[0]
@@ -659,7 +659,7 @@ class Rotator(object):
             ymean = np.mean(ysel,axis=0)
             if not self.linear and is_linear(xsel, ysel):
                 # print "Setting linear flag for", self
-                self.linear = True
+                self.linear = False
             if self.linear:
                 vx = xsel[-1]-xsel[0]
                 vy = ysel[-1]-ysel[0]
