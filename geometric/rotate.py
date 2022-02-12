@@ -81,7 +81,7 @@ def build_correlation(x, y):
     ymat = y.T
     return np.dot(xmat, ymat.T)
 
-def build_F(x, y):
+def build_F(x, y, reg=1e-4):
     """
     Build the 4x4 F-matrix used in constructing the rotation quaternion
     given by Equation 10 of Reference 1
@@ -105,6 +105,7 @@ def build_F(x, y):
     R32 = R[2,1]
     R33 = R[2,2]
     F[0,0] = R11 + R22 + R33
+    F[0,0] += reg
     F[0,1] = R23 - R32
     F[0,2] = R31 - R13
     F[0,3] = R12 - R21
@@ -528,9 +529,12 @@ def get_q_der(x, y, second=False, fdcheck=False, use_loops=False):
                 x[u, w] -= 2*h
                 QMinus = get_quat(x, y)
                 x[u, w] += h
+                if np.linalg.norm(QPlus-QMinus) > np.linalg.norm(QPlus+QMinus):
+                    QMinus *= -1
                 FDiffQ[u, w] = (QPlus-QMinus)/(2*h)
                 maxerr = np.max(np.abs(dq[u, w]-FDiffQ[u, w]))
-                logger.info("atom %3i %s : maxerr = %.3e %s\n" % (u, 'xyz'[w], maxerr, 'X' if maxerr > 1e-6 else ''))
+                maxelem = np.max(np.abs(FDiffQ[u, w]))
+                logger.info("atom %3i %s : maxelem(FD) = %.3e maxerr = %.3e %s\n" % (u, 'xyz'[w], maxelem, maxerr, 'X' if maxerr > 1e-6 else ''))
         dq = FDiffQ
         if second:
             h = 1.0e-3

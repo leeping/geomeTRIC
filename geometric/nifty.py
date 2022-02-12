@@ -607,6 +607,7 @@ def invert_svd(X,thresh=1e-12):
     v      = np.transpose(vh)
     si     = s.copy()
     for i in range(s.shape[0]):
+        # print("SVD : %i -> %.3e" % (i, s[i]))
         if abs(s[i]) > thresh:
             si[i] = 1./s[i]
         else:
