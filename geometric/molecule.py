@@ -483,13 +483,8 @@ try:
     class MyG(nx.Graph):
         def __init__(self):
             super(MyG,self).__init__()
-            self.Alive = True
         def __eq__(self, other):
             # This defines whether two MyG objects are "equal" to one another.
-            if not self.Alive:
-                return False
-            if not other.Alive:
-                return False
             return nx.is_isomorphic(self,other,node_match=nodematch)
         def __hash__(self):
             """ The hash function is something we can use to discard two things that are obviously not equal.  Here we neglect the hash. """
@@ -1372,7 +1367,7 @@ class Molecule(object):
         New.top_settings = copy.deepcopy(self.top_settings)
 
         for key in self.Data:
-            if key in ['xyzs', 'qm_grads', 'qm_hessians', 'qm_espxyzs', 'qm_espvals', 'qm_extchgs', 'qm_mulliken_charges', 'qm_mulliken_spins', 'molecules', 'qm_bondorder']:
+            if key in ['xyzs', 'qm_grads', 'qm_hessians', 'qm_espxyzs', 'qm_espvals', 'qm_extchgs', 'qm_mulliken_charges', 'qm_mulliken_spins', 'qm_bondorder']:
                 # These variables are lists of NumPy arrays, NetworkX graph objects, or others with
                 # explicitly defined copy() methods.
                 New.Data[key] = []
@@ -1381,6 +1376,10 @@ class Molecule(object):
             elif key in ['topology']:
                 # These are NetworkX graph objects or other variables with explicitly defined copy() methods.
                 New.Data[key] = self.Data[key].copy()
+            elif key in ['molecules']:
+                New.Data[key] = []
+                for i in range(len(self.Data[key])):
+                    New.Data[key].append(self.Data[key][i].copy())
             elif key in ['boxes', 'qcrems']:
                 # We'll use the default deepcopy method for these:
                 # boxes is a list of named tuples.
@@ -1592,6 +1591,8 @@ class Molecule(object):
         for key in self.FrameKeys:
             if key in ['xyzs', 'qm_grads', 'qm_mulliken_charges', 'qm_mulliken_spins']:
                 NewData[key] = list([self.Data[key][i][unmangled] for i in range(len(self))])
+            elif key in ['qm_hessians', 'qm_bondorder']:
+                NewData[key] = list([self.Data[key][i][unmangled, unmangled] for i in range(len(self))])
         for key in NewData:
             setattr(self, key, copy.deepcopy(NewData[key]))
 
@@ -1922,9 +1923,12 @@ class Molecule(object):
         for key in self.FrameKeys:
            if key in ['xyzs', 'qm_grads', 'qm_mulliken_charges', 'qm_mulliken_spins']:
                New.Data[key] = [self.Data[key][i][atomslice] for i in range(len(self))]
+           elif key in ['qm_hessians', 'qm_bondorder']:
+               New.Data[key] = [self.Data[key][i][atomslice,atomslice] for i in range(len(self))]
         if 'bonds' in self.Data:
             New.Data['bonds'] = [(list(atomslice).index(b[0]), list(atomslice).index(b[1])) for b in self.bonds if (b[0] in atomslice and b[1] in atomslice)]
-        New.top_settings = self.top_settings
+        New.top_settings = copy.deepcopy(self.top_settings)
+        
         if build_topology:
             New.build_topology(force_bonds=False)
         return New
@@ -1943,8 +1947,19 @@ class Molecule(object):
         def FrameStack(k):
             if k in self.Data and k in other.Data:
                 New.Data[k] = [np.vstack((s, o)) for s, o in zip(self.Data[k], other.Data[k])]
-        for i in ['xyzs', 'qm_grads', 'qm_hessians', 'qm_espxyzs', 'qm_espvals', 'qm_extchgs', 'qm_mulliken_charges', 'qm_mulliken_spins']:
+                
+        def FrameStack2D(k):
+            if k in self.Data and k in other.Data:
+                new_data = [np.zeros((self.na+other.na, self.na+other.na), dtype=float) for i in range(len(self))]
+                for i in range(len(self)):
+                    new_data[i][:self.na, :self.na] = self.Data[k][i].copy()
+                    new_data[i][self.na:, self.na:] = other.Data[k][i].copy()
+                New.Data[k] = new_data[i].copy()
+                
+        for i in ['xyzs', 'qm_grads', 'qm_espxyzs', 'qm_espvals', 'qm_extchgs', 'qm_mulliken_charges', 'qm_mulliken_spins']:
             FrameStack(i)
+        for i in ['qm_hessians', 'qm_bondorder']:
+            FrameStack2D(i)
 
         # Now build the new atom keys.
         for key in self.AtomKeys:
@@ -2240,6 +2255,9 @@ class Molecule(object):
         if self.na > 100000:
             logger.warning("Warning: Large number of atoms (%i), topology building may take a long time" % self.na)
         if bond_order > 0.0:
+            if not hasattr(self, 'qm_bondorder'):
+                raise RuntimeError('Molecule does not contain QM bond order info.')
+            print("Using QM bond order with a threshold of %.2f" % bond_order)
             bondlist = []
             for i in range(self.na):
                 for j in range(i+1, self.na):
@@ -4160,7 +4178,9 @@ class Molecule(object):
                 Answer['qm_mulliken_spins'].insert(i, np.array([0.0 for i in mkspn[-1]]))
             Answer['qm_mulliken_spins'] = Answer['qm_mulliken_spins'][:len(Answer['qm_energies'])]
 
-        Answer['Irc'] = IRCData
+        if any([Answer['qcrems'][i]['jobtype'].lower() == 'rpath' for i in range(len(Answer['qcrems']))]):
+            Answer['Irc'] = IRCData
+            
         if len(modes) > 0:
             unnorm = [np.array(i) for i in modes]
             Answer['freqs'] = np.array(frqs)
