@@ -92,6 +92,7 @@ class Optimizer(object):
         self.progress.qm_energies = []
         self.progress.qm_grads = []
         self.progress.comms = []
+        self.viz_rotations = True
         # Cartesian coordinates
         self.X = self.coords.copy()
         # Loop of optimization
@@ -272,6 +273,14 @@ class Optimizer(object):
                     raise IOError('hess_data passed in via OptParams does not have the right shape')
             # self.Hx = self.Hx0.copy()
         # Add new Cartesian coordinates, energies, and gradients to history
+        if self.viz_rotations:
+            if hasattr(self, 'progress_with_r'):
+                tmpMol = self.IC.visualizeRotations(self.X)
+                tmpMol.comms = ['Iteration %i Energy % .8f' % (self.Iteration, self.E)]
+                self.progress_with_r += tmpMol
+            else:
+                self.progress_with_r = self.IC.visualizeRotations(self.X)
+                self.progress_with_r.comms = ['Iteration %i Energy % .8f' % (self.Iteration, self.E)]
         self.progress.xyzs.append(self.X.reshape(-1,3) * bohr2ang)
         self.progress.qm_energies.append(self.E)
         self.progress.qm_grads.append(self.gradx.copy())
@@ -437,7 +446,10 @@ class Optimizer(object):
         # Shorthand for self.params
         params = self.params
         # Write current optimization trajectory to file
-        if self.params.xyzout is not None: self.progress.write(self.params.xyzout)
+        if self.params.xyzout is not None: 
+            self.progress.write(self.params.xyzout)
+            if self.viz_rotations:
+                self.progress_with_r.write(os.path.splitext(self.params.xyzout)[0]+"_with_r.xyz")
         if self.params.qdata is not None: self.progress.write(self.params.qdata, ftype='qdata')
         # Project out the degrees of freedom that are constrained
         rms_gradient, max_gradient = self.calcGradNorm()
@@ -577,6 +589,10 @@ class Optimizer(object):
         self.Gx_hist.append(self.gradx)
         self.engine.save_guess_files(self.dirname)
 
+        # Save the regularization quaternions, used to lift rotation degeneracies for linear molecules.
+        # This function also repositions "e0" for linear angles.
+        self.IC.setRegularization(self.X)
+
         ### Rebuild Coordinate System if Necessary ###
         UpdateHessian = (not self.params.hessian == 'each')
         if self.IC.bork:
@@ -590,12 +606,6 @@ class Optimizer(object):
             self.CoordCounter += 1
         # Check for large rotations (debugging purposes)
         if self.params.verbose >= 1: self.IC.largeRots()
-        # Check for large rotations in linear molecules
-        if self.IC.linearRotCheck():
-            logger.info("Large rotations in linear molecules - refreshing Rotator reference points and DLC vectors\n")
-            self.refreshCoordinates()
-            UpdateHessian = False
-        # self.G = self.IC.calcGrad(self.X, self.gradx).flatten()
 
         ### Update the Hessian ###
         if UpdateHessian:
