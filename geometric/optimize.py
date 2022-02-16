@@ -92,7 +92,7 @@ class Optimizer(object):
         self.progress.qm_energies = []
         self.progress.qm_grads = []
         self.progress.comms = []
-        self.viz_rotations = True
+        self.viz_rotations = False
         # Cartesian coordinates
         self.X = self.coords.copy()
         # Loop of optimization
@@ -277,7 +277,11 @@ class Optimizer(object):
             if hasattr(self, 'progress_with_r'):
                 tmpMol = self.IC.visualizeRotations(self.X)
                 tmpMol.comms = ['Iteration %i Energy % .8f' % (self.Iteration, self.E)]
-                self.progress_with_r += tmpMol
+                try:
+                    self.progress_with_r += tmpMol
+                except RuntimeError:
+                    bak(os.path.splitext(self.params.xyzout)[0]+"_with_r.xyz")
+                    self.progress_with_r = tmpMol
             else:
                 self.progress_with_r = self.IC.visualizeRotations(self.X)
                 self.progress_with_r.comms = ['Iteration %i Energy % .8f' % (self.Iteration, self.E)]
