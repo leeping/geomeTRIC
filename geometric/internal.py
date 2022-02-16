@@ -518,18 +518,18 @@ class Rotator(object):
         if L[0]/L[1] < thre_lo and self.rmode in (-1, 0):
             self.rnorm = 1e-1*L[0]
             self.rmode = 1
-            logger.info("L[0] = %.3f, L[0]/L[1] = %.3f (linear), turning regularization on.\n" % (L[0], L[0]/L[1]))
+            logger.info(" >>> %-18s L[0] = %.3f, L[0]/L[1] = %.3f (linear), turning regularization on.\n" % (str(self), L[0], L[0]/L[1]))
         elif L[0]/L[1] > thre_hi and self.rmode in (1, 0):
             self.rnorm = 0.0
             self.rmode = -1
-            logger.info("L[0] = %.3f, L[0]/L[1] = %.3f (nonlin), turning regularization off.\n" % (L[0], L[0]/L[1]))
+            logger.info(" >>> %s L[0] = %.3f, L[0]/L[1] = %.3f (nonlin), turning regularization off.\n" % (str(self), L[0], L[0]/L[1]))
         elif self.rmode == 0:
             if L[0]/L[1] < thre_mid:
-                logger.info("L[0] = %.3f, L[0]/L[1] = %.3f (linear), turning regularization on.\n" % (L[0], L[0]/L[1]))
+                logger.info(" >>> %s L[0] = %.3f, L[0]/L[1] = %.3f (linear), turning regularization on.\n" % (str(self), L[0], L[0]/L[1]))
                 self.rnorm = 1e-1*L[0]
                 self.rmode = 1
             else:
-                logger.info("L[0] = %.3f, L[0]/L[1] = %.3f (nonlin), turning regularization off.\n" % (L[0], L[0]/L[1]))
+                logger.info(" >>> %s L[0] = %.3f, L[0]/L[1] = %.3f (nonlin), turning regularization off.\n" % (str(self), L[0], L[0]/L[1]))
                 self.rnorm = 0.0
                 self.rmode = -1
 
@@ -2169,7 +2169,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                         nnc += (min(b, c), max(b, c)) in noncov
                         # if nnc >= 2: continue
                         # logger.info("LPW: cosine of angle", a, b, c, "is", np.abs(np.cos(Ang.value(coords))))
-                        print(a, b, c, "% .3f" % (Ang.value(coords)*180/np.pi), "% .3f" % np.cos(Ang.value(coords)), np.abs(np.cos(Ang.value(coords))) > LinThre)
+                        logger.info(" >>> Linear angle check: %3i %3i %3i % .3f % .3f %s\n" % (a, b, c, Ang.value(coords)*180/np.pi, np.cos(Ang.value(coords)), str(np.abs(np.cos(Ang.value(coords))) > LinThre)))
                         if np.abs(np.cos(Ang.value(coords))) < LinThre:
                             self.add(Angle(a, b, c))
                             AngDict[b].append(Ang)
@@ -2490,8 +2490,6 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         for Internal in self.Internals:
             if type(Internal) is RotationA:
                 Internal.Rotator.set_regularization(xyz)
-            elif type(Internal) is RotatingLinearAngle:
-                Internal.orthogonalize_e1_e2(xyz)
             elif type(Internal) is LinearAngle:
                 Internal.reposition_e0(xyz)
 
@@ -2605,7 +2603,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         newPrims = []
         for cPrim in self.cPrims:
             newPrims.append(cPrim)
-        for typ in [Distance, Angle, LinearAngle, RotatingLinearAngle, MultiAngle, OutOfPlane, Dihedral, MultiDihedral, CartesianX, CartesianY, CartesianZ, TranslationX, TranslationY, TranslationZ, RotationA, RotationB, RotationC]:
+        for typ in [Distance, Angle, LinearAngle, MultiAngle, OutOfPlane, Dihedral, MultiDihedral, CartesianX, CartesianY, CartesianZ, TranslationX, TranslationY, TranslationZ, RotationA, RotationB, RotationC]:
             for p in self.Internals:
                 if type(p) is typ and p not in self.cPrims:
                     newPrims.append(p)
@@ -2698,7 +2696,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                 rxyz.append(ic.Rotator.visualize(xyz))
                 ridx.append(ic.Rotator.a[-1]+1)
                 relem.append(np.array(['X', 'X'], dtype=object))
-            elif type(ic) in [RotatingLinearAngle, LinearAngle] and ic.axis == 0:
+            elif type(ic) is LinearAngle and ic.axis == 0:
                 rxyz.append(ic.visualize(xyz))
                 ridx.append(ic.c+1)
                 relem.append(np.array(['Z', 'Z', 'Z'], dtype=object))
@@ -2758,8 +2756,8 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                     Hdiag.append(A/(r-B)**3)
                 else:
                     Hdiag.append(0.1)
-            elif type(ic) in [Angle, LinearAngle, RotatingLinearAngle, MultiAngle]:
-                if type(ic) in [Angle, LinearAngle, RotatingLinearAngle]:
+            elif type(ic) in [Angle, LinearAngle, MultiAngle]:
+                if type(ic) in [Angle, LinearAngle]:
                     a = ic.a
                     c = ic.c
                 else:
