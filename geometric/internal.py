@@ -513,7 +513,7 @@ class Rotator(object):
         thre_mid = 1.03
         thre_hi = 1.1
         regularization_changed = False
-        if L[0]/L[1] < thre_lo and self.rmode in (-1, 0):
+        if L[0]/L[1] < thre_lo and L[0]/L[1] > 0.0 and self.rmode in (-1, 0):
             self.rnorm = 1e-2*L[0]
             self.rmode = 1
             logger.info(" >>> %-18s L[0] = %.3f, L[0]/L[1] = %.3f (linear), turning regularization on.\n" % (str(self), L[0], L[0]/L[1]))
@@ -524,7 +524,7 @@ class Rotator(object):
             logger.info(" >>> %s L[0] = %.3f, L[0]/L[1] = %.3f (nonlin), turning regularization off.\n" % (str(self), L[0], L[0]/L[1]))
             regularization_changed = True
         elif self.rmode == 0:
-            if L[0]/L[1] < thre_mid:
+            if L[0]/L[1] < thre_mid and L[0]/L[1] > 0.0:
                 logger.info(" >>> %s L[0] = %.3f, L[0]/L[1] = %.3f (linear), turning regularization on.\n" % (str(self), L[0], L[0]/L[1]))
                 self.rnorm = 1e-2*L[0]
                 self.rmode = 1
