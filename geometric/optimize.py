@@ -202,13 +202,13 @@ class Optimizer(object):
         if hasattr(self, 'Hxprev'):
             logger.info("Rebuilding Hessian from the previous step's Cartesian Hessian\n")
             self.H = self.IC.calcHess(self.Xprev, self.Gxprev, self.Hxprev)
-            SortedEigenvalues(self.H, label="Rebuilt Hessian")
-            if np.min(np.linalg.eigh(self.H)[0]) < self.params.epsilon and self.params.reset:
+            self.SortedEigenvalues(self.H)
+            if not self.params.transition and np.min(np.linalg.eigh(self.H)[0]) < self.params.epsilon and self.params.reset:
                 logger.info("Eigenvalues below %.4e (%.4e) - returning guess\n" % (self.params.epsilon, np.min(np.linalg.eigh(self.H)[0])))
                 self.H = self.H0.copy()
         else:
             self.H = rebuild_hessian(self.IC, self.H0, self.X_hist, self.Gx_hist, self.params)
-            SortedEigenvalues(self.H, label="Rebuilt Hessian")
+            self.SortedEigenvalues(self.H)
 
     def frequency_analysis(self, hessian, suffix, afterOpt):
         do_wigner = False
@@ -268,7 +268,8 @@ class Optimizer(object):
         elif self.Iteration == 0:
             if self.params.hessian in ['first', 'stop', 'first+last']:
                 self.Hx0 = calc_cartesian_hessian(self.X, self.molecule, self.engine, self.dirname, read_data=True, verbose=self.params.verbose)
-                self.SortedEigenvalues(self.Hx0, label="Initial Cartesian Hessian")
+                logger.info(">> Initial Cartesian Hessian Eigenvalues\n")
+                self.SortedEigenvalues(self.Hx0)
                 if self.params.frequency:
                     self.frequency_analysis(self.Hx0, 'first', False)
                 if self.params.hessian == 'stop':
@@ -278,7 +279,8 @@ class Optimizer(object):
                     # sys.exit(0)
             elif hasattr(self.params, 'hess_data') and self.Iteration == 0:
                 self.Hx0 = self.params.hess_data.copy()
-                self.SortedEigenvalues(self.Hx0, label="Initial Cartesian Hessian")
+                logger.info(">> Initial Cartesian Hessian Eigenvalues\n")
+                self.SortedEigenvalues(self.Hx0)
                 if self.params.frequency:
                     self.frequency_analysis(self.Hx0, 'first', False)
                 if self.Hx0.shape != (self.X.shape[0], self.X.shape[0]):
@@ -329,17 +331,17 @@ class Optimizer(object):
             self.H0 = self.IC.guess_hessian(self.coords)
         self.H = self.H0.copy()
 
-    def SortedEigenvalues(self, H, label="Hessian"):
+    def SortedEigenvalues(self, H):
         Eig = sorted(np.linalg.eigh(H)[0])
         if self.params.transition and len(Eig) >= 12:
             # logger.info("Hessian Eigenvalues:  %.3e %.3e %.3e %.3e %.3e %.3e %.3e %.3e %.3e ... %.3e %.3e %.3e\n" %
             #             (Eig[0],Eig[1],Eig[2],Eig[3],Eig[4],Eig[5],Eig[6],Eig[7],Eig[8],Eig[-3],Eig[-2],Eig[-1]))
-            logger.info("%s Eigenvalues:  % .3e % .3e % .3e % .3e % .3e % .3e % .3e\n" % (label, Eig[0],Eig[1],Eig[2],Eig[3],Eig[4],Eig[5],Eig[6])),
+            logger.info("Hessian Eigenvalues:  % .3e % .3e % .3e % .3e % .3e % .3e % .3e\n" % (Eig[0],Eig[1],Eig[2],Eig[3],Eig[4],Eig[5],Eig[6])),
             logger.info("% .3e % .3e % .3e % .3e % .3e    .....   % .3e % .3e % .3e\n" % (Eig[7],Eig[8],Eig[9],Eig[10],Eig[11],Eig[-3],Eig[-2],Eig[-1])),
         elif len(Eig) >= 6:
-            logger.info("%s Eigenvalues: %.5e %.5e %.5e ... %.5e %.5e %.5e\n" % (label, Eig[0],Eig[1],Eig[2],Eig[-3],Eig[-2],Eig[-1]))
+            logger.info("Hessian Eigenvalues: %.5e %.5e %.5e ... %.5e %.5e %.5e\n" % (Eig[0],Eig[1],Eig[2],Eig[-3],Eig[-2],Eig[-1]))
         else:
-            logger.info("%s Eigenvalues: " % label + ' '.join("%.5e" % i for i in Eig) + '\n')
+            logger.info("Hessian Eigenvalues: " + ' '.join("%.5e" % i for i in Eig) + '\n')
         return Eig
         
     def step(self):
@@ -446,8 +448,10 @@ class Optimizer(object):
         ### Compute the Cartesian Hessian for the previous step, used to rebuild the IC Hessian
         if hasattr(self, 'Hx0'):
             self.Hxprev = self.IC.calcHessCart(self.X, self.G, self.H)
-        self.SortedEigenvalues(self.Hxprev, label="Hxprev computed from IC Hessian")
-        self.SortedEigenvalues(self.IC.calcHess(self.X, self.gradx, self.Hxprev), label="IC Hessian computed from Hxprev")
+        # logger.info(">> Hxprev computed from IC Hessian\n")
+        # self.SortedEigenvalues(self.Hxprev)
+        # logger.info(">> IC Hessian computed from Hxprev\n")
+        # self.SortedEigenvalues(self.IC.calcHess(self.X, self.gradx, self.Hxprev))
         ### Update the Internal Coordinates ###
         X0 = self.X.copy()
         self.newCartesian(dy)
@@ -462,6 +466,11 @@ class Optimizer(object):
         self.state = OPT_STATE.NEEDS_EVALUATION
 
     def evaluateStep(self):
+        print("Top of evaluateStep:")
+        print("X     ", ' '.join(['% 8.5f' % i for i in self.X]))
+        print("Xprev ", ' '.join(['% 8.5f' % i for i in self.Xprev]))
+        print("Gx    ", ' '.join(['% 8.5f' % i for i in self.gradx]))
+        print("Gxprev", ' '.join(['% 8.5f' % i for i in self.Gxprev]))
         ### At this point, the state should be NEEDS_EVALUATION
         assert self.state == OPT_STATE.NEEDS_EVALUATION
         # Shorthand for self.params
@@ -620,7 +629,8 @@ class Optimizer(object):
             self.Gprev = self.IC.calcGrad(self.Xprev, self.Gxprev).flatten()
             if hasattr(self, 'Hxprev'):
                 self.H = self.IC.calcHess(self.X, self.Gxprev, self.Hxprev)
-                SortedEigenvalues(self.H, label="Hessian computed from Hxprev")
+                logger.info(">> New IC Hessian computed from Hxprev\n")
+                SortedEigenvalues(self.H)
 
         ### Rebuild Coordinate System if Necessary ###
         UpdateHessian = (not self.params.hessian == 'each')
@@ -646,14 +656,20 @@ class Optimizer(object):
 
     def UpdateHessian(self):
         params = self.params
-
+        print("In UpdateHessian:")
+        print("X     ", ' '.join(['% 8.5f' % i for i in self.X]))
+        print("Xprev ", ' '.join(['% 8.5f' % i for i in self.Xprev]))
+        print("Gx    ", ' '.join(['% 8.5f' % i for i in self.gradx]))
+        print("Gxprev", ' '.join(['% 8.5f' % i for i in self.Gxprev]))
         if params.transition:
             ts_bfgs = False
             if ts_bfgs: # pragma: no cover
                 logger.info("TS-BFGS Hessian update\n")
                 # yk = Dg; dk = Dy
-                dk = col(self.Y - self.Yprev)
-                yk = col(self.G - self.Gprev)
+                # dk = col(self.Y - self.Yprev)
+                # yk = col(self.G - self.Gprev)
+                dk = col(self.IC.calcDiff(self.X, self.Xprev))
+                yk = col(self.IC.calcGrad(self.X, self.gradx) - self.IC.calcGrad(self.Xprev, self.Gxprev))
                 jk = yk - np.dot(self.H, dk)
                 B = force_positive_definite(self.H)
                 # Scalar 1: dk^T |Bk| dk
@@ -666,8 +682,10 @@ class Optimizer(object):
                 Ek = np.dot(jk, uk.T) + np.dot(uk, jk.T) + np.dot(jk.T, dk) * np.dot(uk, uk.T)
                 self.H += Ek
             else:
-                Dy   = col(self.Y - self.Yprev)
-                Dg   = col(self.G - self.Gprev)
+                # Dy   = col(self.Y - self.Yprev)
+                # Dg   = col(self.G - self.Gprev)
+                Dy = col(self.IC.calcDiff(self.X, self.Xprev))
+                Dg = col(self.IC.calcGrad(self.X, self.gradx) - self.IC.calcGrad(self.Xprev, self.Gxprev))
                 # Murtagh-Sargent-Powell update
                 Xi = Dg - np.dot(self.H,Dy)
                 # ndy2 = np.dot(Dy.T,Dy)
@@ -675,13 +693,16 @@ class Optimizer(object):
                 dH_P = np.dot(Xi, Dy.T) + np.dot(Dy, Xi.T) - np.dot(Dy, Dy.T)*np.dot(Xi.T, Dy)/np.dot(Dy.T, Dy)
                 dH_P /= np.dot(Dy.T, Dy)
                 phi = 1.0 - np.dot(Dy.T,Xi)**2/(np.dot(Dy.T,Dy)*np.dot(Xi.T,Xi))
+                print("dot(Dy.T, Xi) = %.4e dot(Dy.T, Dy) = %.4e" % (np.dot(Dy.T, Xi), np.dot(Dy.T, Dy)))
                 # phi = 1.0
                 self.H += (1.0-phi)*dH_MS + phi*dH_P
                 if params.verbose:
                     logger.info("Hessian update: %.5f Powell + %.5f Murtagh-Sargent\n" % (phi, 1.0-phi))
         else:
-            Dy   = col(self.Y - self.Yprev)
-            Dg   = col(self.G - self.Gprev)
+            # Dy   = col(self.Y - self.Yprev)
+            # Dg   = col(self.G - self.Gprev)
+            Dy = col(self.IC.calcDiff(self.X, self.Xprev))
+            Dg = col(self.IC.calcGrad(self.X, self.gradx) - self.IC.calcGrad(self.Xprev, self.Gxprev))
             # Catch some abnormal cases of extremely small changes.
             if np.linalg.norm(Dg) < 1e-6: return
             if np.linalg.norm(Dy) < 1e-6: return

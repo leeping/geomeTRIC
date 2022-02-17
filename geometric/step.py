@@ -323,7 +323,7 @@ def rebuild_hessian(IC, H0, coord_seq, grad_seq, params):
         Mat2 = np.dot(np.dot(H,Dy),np.dot(H,Dy).T)/multi_dot([Dy.T,H,Dy])[0,0]
         Hstor = H.copy()
         H += Mat1-Mat2
-    if np.min(np.linalg.eigh(H)[0]) < params.epsilon and params.reset:
+    if not params.transition and np.min(np.linalg.eigh(H)[0]) < params.epsilon and params.reset:
         logger.info("Eigenvalues below %.4e (%.4e) - returning guess\n" % (params.epsilon, np.min(np.linalg.eigh(H)[0])))
         return H0.copy()
     return H
