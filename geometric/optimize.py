@@ -198,7 +198,17 @@ class Optimizer(object):
         return rms_gradient, max_gradient
 
     def rebuild_hessian(self):
-        self.H = rebuild_hessian(self.IC, self.H0, self.X_hist, self.Gx_hist, self.params)
+        # No need to rebuild Hessian from guess if we have the (approximate) Cartesian Hessian from the previous step.
+        if hasattr(self, 'Hxprev'):
+            logger.info("Rebuilding Hessian from the previous step's Cartesian Hessian\n")
+            self.H = self.IC.calcHess(self.Xprev, self.Gxprev, self.Hxprev)
+            SortedEigenvalues(self.H, label="Rebuilt Hessian")
+            if np.min(np.linalg.eigh(self.H)[0]) < self.params.epsilon and self.params.reset:
+                logger.info("Eigenvalues below %.4e (%.4e) - returning guess\n" % (self.params.epsilon, np.min(np.linalg.eigh(self.H)[0])))
+                self.H = self.H0.copy()
+        else:
+            self.H = rebuild_hessian(self.IC, self.H0, self.X_hist, self.Gx_hist, self.params)
+            SortedEigenvalues(self.H, label="Rebuilt Hessian")
 
     def frequency_analysis(self, hessian, suffix, afterOpt):
         do_wigner = False
@@ -258,6 +268,7 @@ class Optimizer(object):
         elif self.Iteration == 0:
             if self.params.hessian in ['first', 'stop', 'first+last']:
                 self.Hx0 = calc_cartesian_hessian(self.X, self.molecule, self.engine, self.dirname, read_data=True, verbose=self.params.verbose)
+                self.SortedEigenvalues(self.Hx0, label="Initial Cartesian Hessian")
                 if self.params.frequency:
                     self.frequency_analysis(self.Hx0, 'first', False)
                 if self.params.hessian == 'stop':
@@ -267,6 +278,7 @@ class Optimizer(object):
                     # sys.exit(0)
             elif hasattr(self.params, 'hess_data') and self.Iteration == 0:
                 self.Hx0 = self.params.hess_data.copy()
+                self.SortedEigenvalues(self.Hx0, label="Initial Cartesian Hessian")
                 if self.params.frequency:
                     self.frequency_analysis(self.Hx0, 'first', False)
                 if self.Hx0.shape != (self.X.shape[0], self.X.shape[0]):
@@ -317,17 +329,17 @@ class Optimizer(object):
             self.H0 = self.IC.guess_hessian(self.coords)
         self.H = self.H0.copy()
 
-    def SortedEigenvalues(self):
-        Eig = sorted(np.linalg.eigh(self.H)[0])
+    def SortedEigenvalues(self, H, label="Hessian"):
+        Eig = sorted(np.linalg.eigh(H)[0])
         if self.params.transition and len(Eig) >= 12:
             # logger.info("Hessian Eigenvalues:  %.3e %.3e %.3e %.3e %.3e %.3e %.3e %.3e %.3e ... %.3e %.3e %.3e\n" %
             #             (Eig[0],Eig[1],Eig[2],Eig[3],Eig[4],Eig[5],Eig[6],Eig[7],Eig[8],Eig[-3],Eig[-2],Eig[-1]))
-            logger.info("Hessian Eigenvalues:  % .3e % .3e % .3e % .3e % .3e % .3e % .3e\n" % (Eig[0],Eig[1],Eig[2],Eig[3],Eig[4],Eig[5],Eig[6])),
+            logger.info("%s Eigenvalues:  % .3e % .3e % .3e % .3e % .3e % .3e % .3e\n" % (label, Eig[0],Eig[1],Eig[2],Eig[3],Eig[4],Eig[5],Eig[6])),
             logger.info("% .3e % .3e % .3e % .3e % .3e    .....   % .3e % .3e % .3e\n" % (Eig[7],Eig[8],Eig[9],Eig[10],Eig[11],Eig[-3],Eig[-2],Eig[-1])),
         elif len(Eig) >= 6:
-            logger.info("Hessian Eigenvalues: %.5e %.5e %.5e ... %.5e %.5e %.5e\n" % (Eig[0],Eig[1],Eig[2],Eig[-3],Eig[-2],Eig[-1]))
+            logger.info("%s Eigenvalues: %.5e %.5e %.5e ... %.5e %.5e %.5e\n" % (label, Eig[0],Eig[1],Eig[2],Eig[-3],Eig[-2],Eig[-1]))
         else:
-            logger.info("Hessian Eigenvalues: " + ' '.join("%.5e" % i for i in Eig) + '\n')
+            logger.info("%s Eigenvalues: " % label + ' '.join("%.5e" % i for i in Eig) + '\n')
         return Eig
         
     def step(self):
@@ -347,7 +359,7 @@ class Optimizer(object):
         # At the start of the loop, the optimization variables, function value, gradient and Hessian are known.
         # (i.e. self.Y, self.E, self.G, self.H)
         if params.verbose: self.IC.printRotations(self.X)
-        Eig = self.SortedEigenvalues()
+        Eig = self.SortedEigenvalues(self.H)
         Emin = Eig[0].real
         if params.transition:
             v0 = 1.0
@@ -431,6 +443,11 @@ class Optimizer(object):
         self.Gxprev = self.gradx.copy()
         self.Gprev = self.G.copy()
         self.Eprev = self.E
+        ### Compute the Cartesian Hessian for the previous step, used to rebuild the IC Hessian
+        if hasattr(self, 'Hx0'):
+            self.Hxprev = self.IC.calcHessCart(self.X, self.G, self.H)
+        self.SortedEigenvalues(self.Hxprev, label="Hxprev computed from IC Hessian")
+        self.SortedEigenvalues(self.IC.calcHess(self.X, self.gradx, self.Hxprev), label="IC Hessian computed from Hxprev")
         ### Update the Internal Coordinates ###
         X0 = self.X.copy()
         self.newCartesian(dy)
@@ -506,25 +523,25 @@ class Optimizer(object):
 
         ### Check convergence criteria ###
         if Converged_energy and Converged_grms and Converged_drms and Converged_gmax and Converged_dmax and self.conSatisfied:
-            self.SortedEigenvalues()
+            self.SortedEigenvalues(self.H)
             logger.info("Converged! =D\n")
             self.state = OPT_STATE.CONVERGED
             return
 
         if self.Iteration > params.maxiter:
-            self.SortedEigenvalues()
+            self.SortedEigenvalues(self.H)
             logger.info("Maximum iterations reached (%i); increase --maxiter for more\n" % params.maxiter)
             self.state = OPT_STATE.FAILED
             return
 
         if params.qccnv and Converged_grms and (Converged_drms or Converged_energy) and self.conSatisfied:
-            self.SortedEigenvalues()
+            self.SortedEigenvalues(self.H)
             logger.info("Converged! (Q-Chem style criteria requires grms and either drms or energy)\n")
             self.state = OPT_STATE.CONVERGED
             return
 
         if params.molcnv and Converged_molpro_gmax and (Converged_molpro_dmax or Converged_energy) and self.conSatisfied:
-            self.SortedEigenvalues()
+            self.SortedEigenvalues(self.H)
             logger.info("Converged! (Molpro style criteria requires gmax and either dmax or energy)\nThis is approximate since convergence checks are done in cartesian coordinates.\n")
             self.state = OPT_STATE.CONVERGED
             return
@@ -593,9 +610,17 @@ class Optimizer(object):
         self.Gx_hist.append(self.gradx)
         self.engine.save_guess_files(self.dirname)
 
-        # Save the regularization quaternions, used to lift rotation degeneracies for linear molecules.
-        # This function also repositions "e0" for linear angles.
-        self.IC.setRegularization(self.X)
+        ## Save the regularization quaternions, used to lift rotation degeneracies for linear molecules.
+        ## This function also repositions "e0" for linear angles.
+        if self.IC.setRegularization(self.X):
+            logger.info("Regularization has changed - recomputing Y/Yprev, G/Gprev\n")
+            self.Y = self.IC.calculate(self.X)
+            self.G = self.IC.calcGrad(self.X, self.gradx).flatten()
+            self.Yprev = self.IC.calculate(self.Xprev)
+            self.Gprev = self.IC.calcGrad(self.Xprev, self.Gxprev).flatten()
+            if hasattr(self, 'Hxprev'):
+                self.H = self.IC.calcHess(self.X, self.Gxprev, self.Hxprev)
+                SortedEigenvalues(self.H, label="Hessian computed from Hxprev")
 
         ### Rebuild Coordinate System if Necessary ###
         UpdateHessian = (not self.params.hessian == 'each')

@@ -462,37 +462,33 @@ class Rotator(object):
         self.a = list(tuple(sorted(a)))
         x0 = x0.reshape(-1, 3)
         self.x0 = x0.copy()
-        self.stored_valxyz = np.zeros_like(x0)
-        self.stored_value = None
-        # A second set of xyz coordinates used only when computing
-        # differences in rotation coordinates
-        self.stored_valxyz2 = np.zeros_like(x0)
-        self.stored_value2 = None
-        self.stored_derxyz = np.zeros_like(x0)
-        self.stored_deriv = None
-        self.stored_deriv2xyz = np.zeros_like(x0)
-        self.stored_deriv2 = None
-        self.stored_norm = 0.0
         # Information about the regularization quaternion
         self.rquat = np.array([1.0, 0.0, 0.0, 0.0])
         self.rmode = 0
         self.set_regularization(x0)
+        self.clear_cache(x0)
+
+    def clear_cache(self, xyz):
+        xyz = xyz.reshape(-1, 3)
+        self.stored_valxyz = np.zeros_like(xyz)
+        self.stored_value = None
+        # A second set of xyz coordinates used only when computing
+        # differences in rotation coordinates
+        self.stored_valxyz2 = np.zeros_like(xyz)
+        self.stored_value2 = None
+        self.stored_derxyz = np.zeros_like(xyz)
+        self.stored_deriv = None
+        self.stored_deriv2xyz = np.zeros_like(xyz)
+        self.stored_deriv2 = None
+        self.stored_norm = 0.0
 
     def reset(self, x0):
         x0 = x0.reshape(-1, 3)
         self.x0 = x0.copy()
-        self.stored_valxyz = np.zeros_like(x0)
-        self.stored_value = None
-        self.stored_valxyz2 = np.zeros_like(x0)
-        self.stored_value2 = None
-        self.stored_derxyz = np.zeros_like(x0)
-        self.stored_deriv = None
-        self.stored_deriv2xyz = np.zeros_like(x0)
-        self.stored_deriv2 = None
-        self.stored_norm = 0.0
         self.rquat = np.array([1.0, 0.0, 0.0, 0.0])
         self.rmode = 0
         self.set_regularization(x0)
+        self.clear_cache(x0)
 
     def __eq__(self, other):
         if type(self) is not type(other): return False
@@ -508,6 +504,7 @@ class Rotator(object):
         return not self.__eq__(other)
 
     def set_regularization(self, xyz):
+        self.clear_cache(xyz)
         x = xyz.reshape(-1, 3)[self.a, :].copy()
         x = x - np.mean(x,axis=0)
         L, Q = sorted_eigh(build_F(x, x))
@@ -515,23 +512,28 @@ class Rotator(object):
         thre_lo = 1.01
         thre_mid = 1.03
         thre_hi = 1.1
+        regularization_changed = False
         if L[0]/L[1] < thre_lo and self.rmode in (-1, 0):
-            self.rnorm = 1e-1*L[0]
+            self.rnorm = 1e-2*L[0]
             self.rmode = 1
             logger.info(" >>> %-18s L[0] = %.3f, L[0]/L[1] = %.3f (linear), turning regularization on.\n" % (str(self), L[0], L[0]/L[1]))
+            regularization_changed = True
         elif L[0]/L[1] > thre_hi and self.rmode in (1, 0):
             self.rnorm = 0.0
             self.rmode = -1
             logger.info(" >>> %s L[0] = %.3f, L[0]/L[1] = %.3f (nonlin), turning regularization off.\n" % (str(self), L[0], L[0]/L[1]))
+            regularization_changed = True
         elif self.rmode == 0:
             if L[0]/L[1] < thre_mid:
                 logger.info(" >>> %s L[0] = %.3f, L[0]/L[1] = %.3f (linear), turning regularization on.\n" % (str(self), L[0], L[0]/L[1]))
-                self.rnorm = 1e-1*L[0]
+                self.rnorm = 1e-2*L[0]
                 self.rmode = 1
+                regularization_changed = True
             else:
                 logger.info(" >>> %s L[0] = %.3f, L[0]/L[1] = %.3f (nonlin), turning regularization off.\n" % (str(self), L[0], L[0]/L[1]))
                 self.rnorm = 0.0
                 self.rmode = -1
+                regularization_changed = True
 
         if self.rmode > 0:
             y = self.x0[self.a, :].copy()
@@ -543,6 +545,7 @@ class Rotator(object):
                 logger.info("%s angle %.3f\n" % (str(self), ang))
                 # logger.info("setting regularization quaternion to %s\n", str(q))
                 # self.rquat = q.copy()
+        return regularization_changed
         # else:
         #     self.rquat = np.array([1.0, 0.0, 0.0, 0.0])
 
@@ -1895,17 +1898,13 @@ class InternalCoordinates(object):
         Compute the Cartesian Hessian given internal coordinate gradient and Hessian. 
         Returns the answer in a.u.
         """
-        # xyz = xyz.flatten()
-        # q0 = self.calculate(xyz)
-        # Ginv = self.GInverse(xyz)
+        xyz = xyz.flatten()
         Bmat = self.wilsonB(xyz)
+        deriv2 = self.second_derivatives(xyz)
+        Bmatp = deriv2.reshape(deriv2.shape[0], xyz.shape[0], xyz.shape[0])
+        BptGq = np.einsum('pmn,p->mn',Bmatp,gradq)
         Hx = np.einsum('ai,ab,bj->ij', Bmat, hessq, Bmat, optimize=True)
-        Hx += np.einsum('ji,j->i', Bmat, gradq, optimize=True)
-        # Gq = self.calcGrad(xyz, gradx)
-        # deriv2 = self.second_derivatives(xyz)
-        # Bmatp = deriv2.reshape(deriv2.shape[0], xyz.shape[0], xyz.shape[0])
-        # Hx_BptGq = hessx - np.einsum('pmn,p->mn',Bmatp,Gq)
-        # Hq = np.einsum('ps,sm,mn,nr,rq', Ginv, Bmat, Hx_BptGq, Bmat.T, Ginv, optimize=True)
+        Hx += BptGq
         return Hx
     
     def readCache(self, xyz, dQ):
@@ -2487,11 +2486,14 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         return False
 
     def setRegularization(self, xyz):
+        regularization_changed = False
         for Internal in self.Internals:
             if type(Internal) is RotationA:
-                Internal.Rotator.set_regularization(xyz)
+                if Internal.Rotator.set_regularization(xyz):
+                    regularization_changed = True
             elif type(Internal) is LinearAngle:
                 Internal.reposition_e0(xyz)
+        return regularization_changed
 
     def largeRots(self):
         for Internal in self.Internals:
@@ -3405,7 +3407,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         return self.Prims.linearRotCheck()
 
     def setRegularization(self, xyz):
-        self.Prims.setRegularization(xyz)
+        return self.Prims.setRegularization(xyz)
 
     def largeRots(self):
         """ Determine whether a molecule has rotated by an amount larger than some threshold (hardcoded in Prims.largeRots()). """
