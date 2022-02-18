@@ -345,8 +345,8 @@ def update_hessian(IC, H0, xyz_seq, gradx_seq, params, trust_limit=False, max_up
         # Compute IC coordinate and gradient differences
         # Essential to compute Dy this way due to periodic behavior of some ICs;
         # Dg is double-calculating some values but kept here for convenience.
-        Dy = IC.calcDiff(X, Xprev)
-        Dg = IC.calcGrad(X, Gx) - IC.calcGrad(Xprev, Gxprev)
+        Dy = col(IC.calcDiff(X, Xprev))
+        Dg = col(IC.calcGrad(X, Gx) - IC.calcGrad(Xprev, Gxprev))
         # Catch some abnormal cases of extremely small changes.
         if np.linalg.norm(Dg) < 1e-6: continue
         if np.linalg.norm(Dy) < 1e-6: continue

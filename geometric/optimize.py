@@ -625,7 +625,7 @@ class Optimizer(object):
         return
 
     def UpdateHessian(self):
-        new_H = update_hessian(self.IC, self.H, [self.X, self.Xprev], [self.gradx, self.Gxprev], self.params, trust_limit=False, max_updates=1)
+        self.H = update_hessian(self.IC, self.H, [self.X, self.Xprev], [self.gradx, self.Gxprev], self.params, trust_limit=False, max_updates=1)
         
     def optimizeGeometry(self):
         """
