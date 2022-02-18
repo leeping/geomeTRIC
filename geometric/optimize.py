@@ -202,13 +202,13 @@ class Optimizer(object):
         if hasattr(self, 'Hxprev'):
             logger.info("Rebuilding Hessian from the previous step's Cartesian Hessian\n")
             self.H = self.IC.calcHess(self.Xprev, self.Gxprev, self.Hxprev)
-            self.SortedEigenvalues(self.H)
+            # self.SortedEigenvalues(self.H)
             if not self.params.transition and np.min(np.linalg.eigh(self.H)[0]) < self.params.epsilon and self.params.reset:
                 logger.info("Eigenvalues below %.4e (%.4e) - returning guess\n" % (self.params.epsilon, np.min(np.linalg.eigh(self.H)[0])))
                 self.H = self.H0.copy()
         else:
             self.H = rebuild_hessian(self.IC, self.H0, self.X_hist, self.Gx_hist, self.params)
-            self.SortedEigenvalues(self.H)
+            # self.SortedEigenvalues(self.H)
 
     def frequency_analysis(self, hessian, suffix, afterOpt):
         do_wigner = False
@@ -466,11 +466,6 @@ class Optimizer(object):
         self.state = OPT_STATE.NEEDS_EVALUATION
 
     def evaluateStep(self):
-        print("Top of evaluateStep:")
-        print("X     ", ' '.join(['% 8.5f' % i for i in self.X]))
-        print("Xprev ", ' '.join(['% 8.5f' % i for i in self.Xprev]))
-        print("Gx    ", ' '.join(['% 8.5f' % i for i in self.gradx]))
-        print("Gxprev", ' '.join(['% 8.5f' % i for i in self.Gxprev]))
         ### At this point, the state should be NEEDS_EVALUATION
         assert self.state == OPT_STATE.NEEDS_EVALUATION
         # Shorthand for self.params
@@ -622,15 +617,11 @@ class Optimizer(object):
         ## Save the regularization quaternions, used to lift rotation degeneracies for linear molecules.
         ## This function also repositions "e0" for linear angles.
         if self.IC.setRegularization(self.X):
-            logger.info("Regularization has changed - recomputing Y/Yprev, G/Gprev\n")
-            self.Y = self.IC.calculate(self.X)
-            self.G = self.IC.calcGrad(self.X, self.gradx).flatten()
-            self.Yprev = self.IC.calculate(self.Xprev)
-            self.Gprev = self.IC.calcGrad(self.Xprev, self.Gxprev).flatten()
-            if hasattr(self, 'Hxprev'):
-                self.H = self.IC.calcHess(self.X, self.Gxprev, self.Hxprev)
-                logger.info(">> New IC Hessian computed from Hxprev\n")
-                SortedEigenvalues(self.H)
+            self.rebuild_hessian()
+            # if hasattr(self, 'Hxprev'):
+            #     self.H = self.IC.calcHess(self.X, self.Gxprev, self.Hxprev)
+            #     logger.info(">> New IC Hessian computed from Hxprev\n")
+            #     SortedEigenvalues(self.H)
 
         ### Rebuild Coordinate System if Necessary ###
         UpdateHessian = (not self.params.hessian == 'each')
@@ -656,11 +647,6 @@ class Optimizer(object):
 
     def UpdateHessian(self):
         params = self.params
-        print("In UpdateHessian:")
-        print("X     ", ' '.join(['% 8.5f' % i for i in self.X]))
-        print("Xprev ", ' '.join(['% 8.5f' % i for i in self.Xprev]))
-        print("Gx    ", ' '.join(['% 8.5f' % i for i in self.gradx]))
-        print("Gxprev", ' '.join(['% 8.5f' % i for i in self.Gxprev]))
         if params.transition:
             ts_bfgs = False
             if ts_bfgs: # pragma: no cover
