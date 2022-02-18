@@ -50,7 +50,7 @@ from .info import print_logo, print_citation
 from .internal import CartesianCoordinates, PrimitiveInternalCoordinates, DelocalizedInternalCoordinates
 from .ic_tools import check_internal_grad, check_internal_hess, write_displacements
 from .normal_modes import calc_cartesian_hessian, frequency_analysis
-from .step import brent_wiki, Froot, calc_drms_dmax, get_cartesian_norm, rebuild_hessian, get_delta_prime, trust_step, force_positive_definite
+from .step import brent_wiki, Froot, calc_drms_dmax, get_cartesian_norm, get_delta_prime, trust_step, force_positive_definite, update_hessian
 from .prepare import get_molecule_engine, parse_constraints
 from .params import OptParams, parse_optimizer_args
 from .nifty import row, col, flat, bohr2ang, ang2bohr, logger, bak, createWorkQueue
@@ -141,7 +141,6 @@ class Optimizer(object):
         if isinstance(self.IC, DelocalizedInternalCoordinates):
             self.IC.build_dlc(self.X)
         # With redefined internal coordinates, the Hessian needs to be rebuilt
-        self.H0 = self.IC.guess_hessian(self.coords)
         self.rebuild_hessian()
         # Current values of internal coordinates and IC gradient are recalculated
         self.Y = self.IC.calculate(self.X)
@@ -198,17 +197,8 @@ class Optimizer(object):
         return rms_gradient, max_gradient
 
     def rebuild_hessian(self):
-        # No need to rebuild Hessian from guess if we have the (approximate) Cartesian Hessian from the previous step.
-        if hasattr(self, 'Hxprev'):
-            logger.info("Rebuilding Hessian from the previous step's Cartesian Hessian\n")
-            self.H = self.IC.calcHess(self.Xprev, self.Gxprev, self.Hxprev)
-            # self.SortedEigenvalues(self.H)
-            if not self.params.transition and np.min(np.linalg.eigh(self.H)[0]) < self.params.epsilon and self.params.reset:
-                logger.info("Eigenvalues below %.4e (%.4e) - returning guess\n" % (self.params.epsilon, np.min(np.linalg.eigh(self.H)[0])))
-                self.H = self.H0.copy()
-        else:
-            self.H = rebuild_hessian(self.IC, self.H0, self.X_hist, self.Gx_hist, self.params)
-            # self.SortedEigenvalues(self.H)
+        self.H0 = self.IC.guess_hessian(self.coords)
+        self.H = update_hessian(self.IC, self.H0, self.X_hist, self.Gx_hist, self.params, trust_limit=True, max_updates=100)
 
     def frequency_analysis(self, hessian, suffix, afterOpt):
         do_wigner = False
@@ -445,13 +435,6 @@ class Optimizer(object):
         self.Gxprev = self.gradx.copy()
         self.Gprev = self.G.copy()
         self.Eprev = self.E
-        ### Compute the Cartesian Hessian for the previous step, used to rebuild the IC Hessian
-        if hasattr(self, 'Hx0'):
-            self.Hxprev = self.IC.calcHessCart(self.X, self.G, self.H)
-        # logger.info(">> Hxprev computed from IC Hessian\n")
-        # self.SortedEigenvalues(self.Hxprev)
-        # logger.info(">> IC Hessian computed from Hxprev\n")
-        # self.SortedEigenvalues(self.IC.calcHess(self.X, self.gradx, self.Hxprev))
         ### Update the Internal Coordinates ###
         X0 = self.X.copy()
         self.newCartesian(dy)
@@ -618,10 +601,6 @@ class Optimizer(object):
         ## This function also repositions "e0" for linear angles.
         if self.IC.setRegularization(self.X):
             self.rebuild_hessian()
-            # if hasattr(self, 'Hxprev'):
-            #     self.H = self.IC.calcHess(self.X, self.Gxprev, self.Hxprev)
-            #     logger.info(">> New IC Hessian computed from Hxprev\n")
-            #     SortedEigenvalues(self.H)
 
         ### Rebuild Coordinate System if Necessary ###
         UpdateHessian = (not self.params.hessian == 'each')
@@ -646,74 +625,8 @@ class Optimizer(object):
         return
 
     def UpdateHessian(self):
-        params = self.params
-        if params.transition:
-            ts_bfgs = False
-            if ts_bfgs: # pragma: no cover
-                logger.info("TS-BFGS Hessian update\n")
-                # yk = Dg; dk = Dy
-                # dk = col(self.Y - self.Yprev)
-                # yk = col(self.G - self.Gprev)
-                dk = col(self.IC.calcDiff(self.X, self.Xprev))
-                yk = col(self.IC.calcGrad(self.X, self.gradx) - self.IC.calcGrad(self.Xprev, self.Gxprev))
-                jk = yk - np.dot(self.H, dk)
-                B = force_positive_definite(self.H)
-                # Scalar 1: dk^T |Bk| dk
-                s1 = multi_dot([dk.T, B, dk])
-                # Scalar 2: (yk^T dk)^2 + (dk^T |Bk| dk)^2
-                s2 = np.dot(yk.T, dk)**2 + s1**2
-                # Vector quantities
-                v2 = np.dot(yk.T, dk)*yk + s1*np.dot(B, dk)
-                uk = v2/s2
-                Ek = np.dot(jk, uk.T) + np.dot(uk, jk.T) + np.dot(jk.T, dk) * np.dot(uk, uk.T)
-                self.H += Ek
-            else:
-                # Dy   = col(self.Y - self.Yprev)
-                # Dg   = col(self.G - self.Gprev)
-                Dy = col(self.IC.calcDiff(self.X, self.Xprev))
-                Dg = col(self.IC.calcGrad(self.X, self.gradx) - self.IC.calcGrad(self.Xprev, self.Gxprev))
-                # Murtagh-Sargent-Powell update
-                Xi = Dg - np.dot(self.H,Dy)
-                # ndy2 = np.dot(Dy.T,Dy)
-                dH_MS = np.dot(Xi, Xi.T)/np.dot(Dy.T, Xi)
-                dH_P = np.dot(Xi, Dy.T) + np.dot(Dy, Xi.T) - np.dot(Dy, Dy.T)*np.dot(Xi.T, Dy)/np.dot(Dy.T, Dy)
-                dH_P /= np.dot(Dy.T, Dy)
-                phi = 1.0 - np.dot(Dy.T,Xi)**2/(np.dot(Dy.T,Dy)*np.dot(Xi.T,Xi))
-                print("dot(Dy.T, Xi) = %.4e dot(Dy.T, Dy) = %.4e" % (np.dot(Dy.T, Xi), np.dot(Dy.T, Dy)))
-                # phi = 1.0
-                self.H += (1.0-phi)*dH_MS + phi*dH_P
-                if params.verbose:
-                    logger.info("Hessian update: %.5f Powell + %.5f Murtagh-Sargent\n" % (phi, 1.0-phi))
-        else:
-            # Dy   = col(self.Y - self.Yprev)
-            # Dg   = col(self.G - self.Gprev)
-            Dy = col(self.IC.calcDiff(self.X, self.Xprev))
-            Dg = col(self.IC.calcGrad(self.X, self.gradx) - self.IC.calcGrad(self.Xprev, self.Gxprev))
-            # Catch some abnormal cases of extremely small changes.
-            if np.linalg.norm(Dg) < 1e-6: return
-            if np.linalg.norm(Dy) < 1e-6: return
-            # BFGS Hessian update
-            Mat1 = np.dot(Dg,Dg.T)/np.dot(Dg.T,Dy)[0,0]
-            Mat2 = np.dot(np.dot(self.H,Dy), np.dot(self.H,Dy).T)/multi_dot([Dy.T,self.H,Dy])[0,0]
-            Eig = np.linalg.eigh(self.H)[0]
-            Eig.sort()
-            ndy = np.array(Dy).flatten()/np.linalg.norm(np.array(Dy))
-            ndg = np.array(Dg).flatten()/np.linalg.norm(np.array(Dg))
-            nhdy = np.dot(self.H,Dy).flatten()/np.linalg.norm(np.dot(self.H,Dy))
-            if params.verbose:
-                msg = "Denoms: %.3e %.3e" % (np.dot(Dg.T,Dy)[0,0], multi_dot((Dy.T,self.H,Dy))[0,0])
-                msg +=" Dots: %.3e %.3e" % (np.dot(ndg, ndy), np.dot(ndy, nhdy))
-            #H1 = H.copy()
-            self.H += Mat1-Mat2
-            Eig1 = np.linalg.eigh(self.H)[0]
-            Eig1.sort()
-            if params.verbose:
-                msg += " Eig-ratios: %.5e ... %.5e" % (np.min(Eig1)/np.min(Eig), np.max(Eig1)/np.max(Eig))
-                logger.info(msg+'\n')
-            if np.min(Eig1) <= params.epsilon and params.reset:
-                logger.info("Eigenvalues below %.4e (%.4e) - returning guess\n" % (params.epsilon, np.min(Eig1)))
-                self.H = self.IC.guess_hessian(self.coords)
-
+        new_H = update_hessian(self.IC, self.H, [self.X, self.Xprev], [self.gradx, self.Gxprev], self.params, trust_limit=False, max_updates=1)
+        
     def optimizeGeometry(self):
         """
         High-level optimization loop.

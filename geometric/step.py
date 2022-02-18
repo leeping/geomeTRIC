@@ -270,62 +270,117 @@ def get_cartesian_norm(X, dy, IC, enforce=0.0, verbose=0, usedmax=0):
     rmsd, maxd = calc_drms_dmax(Xnew, X)
     return maxd if usedmax else rmsd
 
-def rebuild_hessian(IC, H0, coord_seq, grad_seq, params):
-    """
-    Rebuild the Hessian after making a change to the internal coordinate system.
+def get_hessian_update_tsbfgs(Dy, Dg, H):
+    logger.info("TS-BFGS Hessian update\n")
+    # yk = Dg; dk = Dy
+    # dk = col(self.Y - self.Yprev)
+    # yk = col(self.G - self.Gprev)
+    yk = Dg
+    dk = Dy
+    jk = yk - np.dot(self.H, dk)
+    B = force_positive_definite(self.H)
+    # Scalar 1: dk^T |Bk| dk
+    s1 = multi_dot([dk.T, B, dk])
+    # Scalar 2: (yk^T dk)^2 + (dk^T |Bk| dk)^2
+    s2 = np.dot(yk.T, dk)**2 + s1**2
+    # Vector quantities
+    v2 = np.dot(yk.T, dk)*yk + s1*np.dot(B, dk)
+    uk = v2/s2
+    Hup = np.dot(jk, uk.T) + np.dot(uk, jk.T) + np.dot(jk.T, dk) * np.dot(uk, uk.T)
+    return Hup
 
-    Parameters
-    ----------
-    IC : InternalCoordinates
-        Object describing the internal coordinate system
-    H0 : np.ndarray
-        N_ic x N_ic square matrix containing the guess Hessian
-    coord_seq : list
-        List of N_atom x 3 Cartesian coordinates in atomic units
-    grad_seq : list
-        List of N_atom x 3 Cartesian gradients in atomic units
-    params : OptParams object
-        Uses trust, epsilon, and reset
-        trust : Only recover using previous geometries within the trust radius
-        epsilon : Small eigenvalue threshold
-        reset : Revert to the guess Hessian if eigenvalues smaller than threshold
+def get_hessian_update_msp(Dy, Dg, H):
+    # Murtagh-Sargent-Powell update
+    Xi = Dg - np.dot(H,Dy)
+    dH_MS = np.dot(Xi, Xi.T)/np.dot(Dy.T, Xi)
+    dH_P = np.dot(Xi, Dy.T) + np.dot(Dy, Xi.T) - np.dot(Dy, Dy.T)*np.dot(Xi.T, Dy)/np.dot(Dy.T, Dy)
+    dH_P /= np.dot(Dy.T, Dy)
+    phi = 1.0 - np.dot(Dy.T,Xi)**2/(np.dot(Dy.T,Dy)*np.dot(Xi.T,Xi))
+    # phi = 1.0
+    Hup = (1.0-phi)*dH_MS + phi*dH_P
+    if params.verbose:
+        logger.info("dot(Dy.T, Xi) = %.4e dot(Dy.T, Dy) = %.4e\n" % (np.dot(Dy.T, Xi), np.dot(Dy.T, Dy)))
+        logger.info("Hessian update: %.5f Powell + %.5f Murtagh-Sargent\n" % (phi, 1.0-phi))
+    return Hup
 
-    Returns
-    -------
-    np.ndarray
-        Internal coordinate Hessian updated with series of internal coordinate gradients
-    """
-    Na = len(coord_seq[0])/3
-    history = 0
-    for i in range(2, len(coord_seq)+1):
-        disp = bohr2ang*(coord_seq[-i]-coord_seq[-1])
-        rmsd = np.sqrt(np.sum(disp**2)/Na)
-        if rmsd > params.trust: break
-        history += 1
-    if history < 1:
-        return H0.copy()
-    logger.info("Rebuilding Hessian using %i gradients\n" % history)
-    y_seq = [IC.calculate(i) for i in coord_seq[-history-1:]]
-    g_seq = [IC.calcGrad(i, j) for i, j in zip(coord_seq[-history-1:],grad_seq[-history-1:])]
-    Yprev = y_seq[0]
-    Gprev = g_seq[0]
+def get_hessian_update_bfgs(Dy, Dg, H):
+    Mat1 = np.dot(Dg,Dg.T)/np.dot(Dg.T,Dy)[0,0]
+    Mat2 = np.dot(np.dot(H,Dy), np.dot(H,Dy).T)/multi_dot([Dy.T,H,Dy])[0,0]
+    Hup = Mat1-Mat2
+    return Hup
+
+def update_hessian(IC, H0, xyz_seq, gradx_seq, params, trust_limit=False, max_updates=1):
+    if len(xyz_seq) < 2:
+        raise ValueError("Must pass xyz_seq with at least two sets of coordinates")
+    if len(xyz_seq) != len(gradx_seq):
+        raise ValueError("Must pass gradx_seq and xyz_seq of the same length")
+
+    # Create new Hessian from copy of input Hessian
     H = H0.copy()
-    for i in range(1, len(y_seq)):
-        Y = y_seq[i]
-        G = g_seq[i]
-        Yprev = y_seq[i-1]
-        Gprev = g_seq[i-1]
-        Dy   = col(Y - Yprev)
-        Dg   = col(G - Gprev)
-        # Mat1 = (Dg*Dg.T)/(Dg.T*Dy)[0,0]
-        # Mat2 = ((H*Dy)*(H*Dy).T)/(Dy.T*H*Dy)[0,0]
-        Mat1 = np.dot(Dg,Dg.T)/np.dot(Dg.T,Dy)[0,0]
-        Mat2 = np.dot(np.dot(H,Dy),np.dot(H,Dy).T)/multi_dot([Dy.T,H,Dy])[0,0]
-        Hstor = H.copy()
-        H += Mat1-Mat2
-    if not params.transition and np.min(np.linalg.eigh(H)[0]) < params.epsilon and params.reset:
-        logger.info("Eigenvalues below %.4e (%.4e) - returning guess\n" % (params.epsilon, np.min(np.linalg.eigh(H)[0])))
-        return H0.copy()
+
+    # Calculate how many updates to include based on
+    # RMSD of previous frames to the current frame.
+    history = 0
+    n_atom = len(xyz_seq[0])/3
+    for i in range(2, len(xyz_seq)+1):
+        disp = bohr2ang*(xyz_seq[-i]-xyz_seq[-1])
+        rmsd = np.sqrt(np.sum(disp**2)/n_atom)
+        if trust_limit and rmsd > params.trust: break
+        if history == max_updates: break
+        history += 1
+
+    if history > 1 or trust_limit:
+        logger.info("Updating Hessian using %i steps from history\n" % history)
+
+    # If history=2, thisFrame and prevFrame should be (-3, -2) and (-2, -1)
+    for i in range(history):
+        thisFrame = -history+i
+        prevFrame = -history-1+i
+        # Current and previous values of Cartesian coordinates
+        X = xyz_seq[thisFrame]
+        Xprev = xyz_seq[prevFrame]
+        # Current and previous values of Cartesian gradients
+        Gx = gradx_seq[thisFrame]
+        Gxprev = gradx_seq[prevFrame]
+        # Compute IC coordinate and gradient differences
+        # Essential to compute Dy this way due to periodic behavior of some ICs;
+        # Dg is double-calculating some values but kept here for convenience.
+        Dy = IC.calcDiff(X, Xprev)
+        Dg = IC.calcGrad(X, Gx) - IC.calcGrad(Xprev, Gxprev)
+        # Catch some abnormal cases of extremely small changes.
+        if np.linalg.norm(Dg) < 1e-6: continue
+        if np.linalg.norm(Dy) < 1e-6: continue
+        if params.transition:
+            ts_bfgs = False
+            if ts_bfgs: # pragma: no cover
+                Hup = get_hessian_update_tsbfgs(Dy, Dg, H)
+            else:
+                Hup = get_hessian_update_msp(Dy, Dg, H)
+        else:
+            Hup = get_hessian_update_bfgs(Dy, Dg, H)
+        # Compute some diagnostics.
+        if params.verbose:
+            Eig = sorted_eigh(H, asc=True)[0]
+            ndy = np.array(Dy).flatten()/np.linalg.norm(np.array(Dy))
+            ndg = np.array(Dg).flatten()/np.linalg.norm(np.array(Dg))
+            nhdy = np.dot(H,Dy).flatten()/np.linalg.norm(np.dot(H,Dy))
+            msg = "Denoms: %.3e %.3e" % (np.dot(Dg.T,Dy)[0,0], multi_dot((Dy.T,H,Dy))[0,0])
+            msg +=" Dots: %.3e %.3e" % (np.dot(ndg, ndy), np.dot(ndy, nhdy))
+        # Add the Hessian update to the Hessian.
+        H += Hup
+        # Compute and print diagonistics.
+        if params.verbose:
+            Eig1 = sorted_eigh(H, asc=True)[0]
+            msg += " Eig-ratios: %.5e ... %.5e" % (np.min(Eig1)/np.min(Eig), np.max(Eig1)/np.max(Eig))
+            logger.info(msg+'\n')
+            
+    # Return the guess Hessian if performing energy minimization and eigenvalues become negative.
+    if not params.transition:
+        Eig = sorted_eigh(H, asc=True)[0]
+        if np.min(Eig) <= params.epsilon and params.reset:
+            logger.info("Eigenvalues below %.4e (%.4e) - returning guess\n" % (params.epsilon, np.min(Eig)))
+            H = IC.guess_hessian(xyz_seq[-1])
+        
     return H
 
 def image_gradient_hessian(G, H, indices):
