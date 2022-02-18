@@ -208,6 +208,7 @@ def geometric_run_json(in_json_dict):
     qcschema = input_opts.get('qcschema') 
     print ("Input Detail:", input_opts)
     if 'images' in input_opts:
+        IRC = False
         NEB = True
         Opt = False 
         ew = False
@@ -228,7 +229,9 @@ def geometric_run_json(in_json_dict):
         M.align()
         tmpdir = args.input + ".tmp"
         os.mkdir(tmpdir)
+            
     else:
+        IRC = False
         NEB = False 
         Opt = True
         TS = False
@@ -236,8 +239,14 @@ def geometric_run_json(in_json_dict):
         if temp_method[0].upper() == 'TS':
             TS = True
             input_opts['qcschema']['model']['method'] = '-'.join(temp_method[1:])
-        M, engine = geometric.optimize.get_molecule_engine(**input_opts)
 
+        elif 'irc' in input_opts:
+            if input_opts.get('irc'):
+                Opt=False
+                IRC=True
+            if input_opts.get('trust') >=0.3:
+                input_opts['tmax'] = input_opts.get('trust')*1.01
+        M, engine = geometric.optimize.get_molecule_engine(**input_opts)
     # Get initial coordinates in bohr
     coords = M.xyzs[0].flatten() * geometric.nifty.ang2bohr
 
@@ -253,7 +262,6 @@ def geometric_run_json(in_json_dict):
 
     # set up the internal coordinate system
     coordsys = input_opts.get('coordsys', 'tric')
-    print('coordsys', coordsys)
     CoordSysDict = {
         'cart': (geometric.internal.CartesianCoordinates, False, False),
         'prim': (geometric.internal.PrimitiveInternalCoordinates, True, False),
@@ -282,10 +290,10 @@ def geometric_run_json(in_json_dict):
     if NEB:
         params = geometric.neb.ChainOptParams(**vars(args))
         chain = geometric.neb.ElasticBand(M, engine=engine, tmpdir=tmpdir, coordtype=args.coordsys, params=params, plain=args.plain, ic_displace=args.icdisp)
+        
     else:
         params = geometric.optimize.OptParams(**input_opts)
         params.transition = TS
-
     try:
         # Run the optimization
         if Cons is None and Opt:
@@ -295,6 +303,25 @@ def geometric_run_json(in_json_dict):
             # Run the NEB method
             print ("Running an NEB calculation through QCAI.")
             geometric.neb.OptimizeChain(chain, engine, params)
+        elif IRC:
+            print ("The IRC method will be performed.")
+
+            params.tmax = params.trust*1.01
+            params.xyzout = "IRC_tmp.xyz"
+            dirname = 'IRC.tmp'
+            if not os.path.exists(dirname):
+                os.mkdir(dirname)
+
+            fwd, disp= geometric.irc.irc(M, engine, coords, IC, dirname, params, direction = -1)
+            print('Forward IRC is done')
+            fwd.write('forward.xyz')
+            bwd,disp= geometric.irc.irc(M, engine, coords, IC, dirname, params, initial_disp=disp, direction = 1)
+            print('\nBackward IRC is done')
+            bwd.write('backward.xyz')
+            final = bwd[::-1] + fwd[1:]
+            final.write('IRC_%.2f.xyz' %params.trust)
+            print('\n IRC calculations are done. \'IRC_%.2f.xyz\' was generated.' %params.trust)
+
         else:
             # Run a constrained geometry optimization
             if isinstance(IC, (geometric.internal.CartesianCoordinates,

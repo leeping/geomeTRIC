@@ -263,7 +263,6 @@ class Structure(object):
                             }
                         }
             r=self.engine.client.add_procedure("optimization", "geometric",opt_qcschema, [qcel_mol]) #ComputeResponse
-            print('Procedure added')
             proc_id = r.ids
             loop = 0 
             while True:
@@ -281,6 +280,9 @@ class Structure(object):
                     optCoords = proc.get_final_molecule().geometry     
                     print("QCAI optimization is done.")
                     break
+        
+                if loop > 100:
+                    raise QCEngineAPIEngineError("Stuck in endpoint optimization procedure in NEB.")
             self.cartesian = np.array(optCoords).flatten()
         # Rebuild the internal coordinate system
         self.IC = CoordinateSystem(self.M, self.coordtype)

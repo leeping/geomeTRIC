@@ -52,6 +52,7 @@ from .ic_tools import check_internal_grad, check_internal_hess, write_displaceme
 from .normal_modes import calc_cartesian_hessian, frequency_analysis
 from .step import brent_wiki, Froot, calc_drms_dmax, get_cartesian_norm, rebuild_hessian, get_delta_prime, trust_step, force_positive_definite
 from .prepare import get_molecule_engine, parse_constraints
+from .molecule import PeriodicTable
 from .params import OptParams, parse_optimizer_args
 from .nifty import row, col, flat, bohr2ang, ang2bohr, logger, bak, createWorkQueue
 from .errors import InputError, HessianExit, EngineError, GeomOptNotConvergedError, GeomOptStructureError, LinearTorsionError
@@ -84,6 +85,7 @@ class Optimizer(object):
         self.engine = engine
         self.dirname = dirname
         self.params = params
+        self.mass = np.repeat(np.array([PeriodicTable[i] for i in self.molecule.elem]), 3) 
         # Set initial value of the trust radius.
         self.trust = self.params.trust
         # Copies of molecule object for preserving the optimization trajectory and the last frame
@@ -115,7 +117,10 @@ class Optimizer(object):
         # This method can be called at a different verbose level than the master
         # because it can occur inside a nested loop
         if not verbose: verbose = self.params.verbose
-        return get_delta_prime(v0, self.X, self.G, self.H, self.IC, self.params.transition, verbose)
+        if self.params.irc:
+            return get_delta_prime(v0, self.X*np.sqrt(self.mass), self.G, self.H, self.IC, self.params.transition, verbose)
+        else:
+            return get_delta_prime(v0, self.X, self.G, self.H, self.IC, self.params.transition, verbose)
 
     def createFroot(self, v0):
         return Froot(self.trust, v0, self.X, self.G, self.H, self.IC, self.params)
@@ -178,7 +183,10 @@ class Optimizer(object):
         if self.IC.haveConstraints() and self.params.enforce:
             self.X = self.IC.newCartesian_withConstraint(self.X, dy, thre=self.params.enforce, verbose=self.params.verbose)
         else:
-            self.X = self.IC.newCartesian(self.X, dy, self.params.verbose)
+            if self.params.irc:
+                self.X = self.IC.newCartesian(self.X*np.sqrt(self.mass), dy, self.params.verbose)/np.sqrt(self.mass)
+            else: 
+                self.X = self.IC.newCartesian(self.X, dy, self.params.verbose)
 
     def calcGradNorm(self):
         gradxc = self.IC.calcGradProj(self.X, self.gradx) if self.IC.haveConstraints() else self.gradx.copy()
@@ -220,7 +228,12 @@ class Optimizer(object):
         # output file may be read in.
         spcalc = self.engine.calc(self.X, self.dirname, read_data=(self.Iteration==0))
         self.E = spcalc['energy']
-        self.gradx = spcalc['gradient']
+        if self.params.irc:
+            M = self.molecule
+            mwgrad = spcalc['gradient']/np.sqrt(self.mass)   
+            self.gradx = mwgrad
+        else:
+            self.gradx = spcalc['gradient']
 
         # Calculate Hessian at the first step, or at each step if desired
         if self.params.hessian == 'each':
@@ -231,6 +244,7 @@ class Optimizer(object):
                 self.frequency_analysis(self.Hx, 'iter%03i' % self.Iteration, False)
         elif self.Iteration == 0:
             if self.params.hessian in ['first', 'stop', 'first+last']:
+                print('calculating Hx0')
                 self.Hx0 = calc_cartesian_hessian(self.X, self.molecule, self.engine, self.dirname, read_data=True, verbose=self.params.verbose)
                 if self.params.frequency:
                     self.frequency_analysis(self.Hx0, 'first', False)
@@ -259,7 +273,10 @@ class Optimizer(object):
         """
         # Initial internal coordinates (optimization variables) and internal gradient
         self.Y = self.IC.calculate(self.coords)
-        self.G = self.IC.calcGrad(self.X, self.gradx).flatten()
+        if self.params.irc:
+            self.G = self.IC.calcGrad(self.X*np.sqrt(self.mass), self.gradx).flatten()
+        else:
+            self.G = self.IC.calcGrad(self.X, self.gradx).flatten()
         # Print initial iteration
         rms_gradient, max_gradient = self.calcGradNorm()
         msg = "Step %4i :" % self.Iteration
@@ -297,6 +314,8 @@ class Optimizer(object):
         Perform one step of the optimization.
         """
         params = self.params
+        if params.irc:
+            self.trust /= 2
         if np.isnan(self.G).any():
             raise RuntimeError("Gradient contains nan - check output and temp-files for possible errors")
         if np.isnan(self.H).any():

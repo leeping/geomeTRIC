@@ -245,7 +245,7 @@ def get_molecule_engine(**kwargs):
             program = kwargs.get('qce_program', False)
             if program is False:
                 raise RuntimeError("QCEngineAPI option requires a qce_program option")
-            engine = QCEngineAPI(schema, program)
+            engine = QCEngineAPI(schema, program, client)
             M = engine.M
         else:
             raise RuntimeError("Failed to create an engine object, this might be a bug in get_molecule_engine")
@@ -263,7 +263,6 @@ def get_molecule_engine(**kwargs):
         M1 = Molecule(arg_coords)
         M1 = M1[-1]
         M.xyzs = M1.xyzs
-
     # Perform some sanity checks on arguments
     if not using_qchem and qcdir:
         raise EngineError("qcdir keyword argument passed to get_molecule_engine but Q-Chem engine is not being used")

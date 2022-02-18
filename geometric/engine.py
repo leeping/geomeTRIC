@@ -1342,30 +1342,29 @@ class QCEngineAPI(Engine):
             complete = 0
             incomplete = 0
             error = 0
-            if cycle > 1000:
+            if cycle > 5000:
                 raise RuntimeError("Stuck in a while loop. Iterated %i times" %cycle)
             if resubmit > 50 or complete > subs:
                 raise QCEngineAPIEngineError("SCF convergence failure or wait_qcf function error")
             for i in ids:
-                record = self.client.query_results(id = i)[0]
+                record = self.client.query_results(id=i)[0]
                 status = record.status.split(".")[-1] 
                 if status == "COMPLETE":
                     complete += 1
+
                 elif status == "INCOMPLETE":
                     incomplete += 1
 
                 elif status == "ERROR":
-                    err = self.client.query_tasks(id = i)
                     if error == 0:
                         print("Error detected")
-                    res = self.client.modify_tasks('restart', err.base_result)
+                    res = self.client.modify_tasks('restart', base_result=i)
                     error += 1
                     resubmit += 1
                 else:
                     incomplete += 1
 
             if complete == subs:
-                print ("All the calculations in qcfractal server are completed!")
                 break
             else:
                 cycle += 1 
@@ -1376,7 +1375,7 @@ class QCEngineAPI(Engine):
         """
         This function will get energy and gradient.
         -----------------
-        ids : str
+        ids : int
             id for a submitted (completed) job 
         """
         record = self.client.query_results(id = ids)[0]
@@ -1387,7 +1386,12 @@ class QCEngineAPI(Engine):
     def calc(self, coords, dirname, **kwargs):
         # overwrites the calc method of base class to skip caching and creating folders
         # **kwargs: for throwing away other arguments such as read_data and copyfiles.
-        result = self.calc_new(coords, dirname)
+        if not self.client:
+            result = self.calc_new(coords, dirname)
+        else:
+            res = self.calc_qcf(coords)
+            self.wait_qcf([res])
+            result = self.read_qcf(res)
         return result
 
 class ConicalIntersection(Engine):
