@@ -610,7 +610,7 @@ class Optimizer(object):
             UpdateHessian = False
         elif self.CoordCounter == (params.check - 1):
             logger.info("Checking coordinate system as requested every %i cycles\n" % params.check)
-            if self.checkCoordinateSystem(): UpdateHessian = False
+            if self.checkCoordinateSystem(recover=True): UpdateHessian = False
         else:
             self.CoordCounter += 1
         # Check for large rotations (debugging purposes)
