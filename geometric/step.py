@@ -311,7 +311,9 @@ def get_hessian_update_bfgs(Dy, Dg, H):
 
 def update_hessian(IC, H0, xyz_seq, gradx_seq, params, trust_limit=False, max_updates=1):
     if len(xyz_seq) < 2:
-        raise ValueError("Must pass xyz_seq with at least two sets of coordinates")
+        logger.info("In update_hessian : xyz_seq contains only one element, nothing to do.\n")
+        return H0
+        # raise ValueError("Must pass xyz_seq with at least two sets of coordinates")
     if len(xyz_seq) != len(gradx_seq):
         raise ValueError("Must pass gradx_seq and xyz_seq of the same length")
 
@@ -321,15 +323,14 @@ def update_hessian(IC, H0, xyz_seq, gradx_seq, params, trust_limit=False, max_up
     # Calculate how many updates to include based on
     # RMSD of previous frames to the current frame.
     history = 0
-    n_atom = len(xyz_seq[0])/3
     for i in range(2, len(xyz_seq)+1):
-        disp = bohr2ang*(xyz_seq[-i]-xyz_seq[-1])
-        rmsd = np.sqrt(np.sum(disp**2)/n_atom)
-        if trust_limit and rmsd > params.trust: break
+        rmsd, _ = calc_drms_dmax(xyz_seq[-i], xyz_seq[-1])
+        # The extra "10%" is because steps often exceed the trust radius by up to 10%.
+        if trust_limit and rmsd > 1.1*params.tmax: break
         if history == max_updates: break
         history += 1
 
-    if history > 1 or trust_limit:
+    if (trust_limit and history >= 1) or history > 1:
         logger.info("Updating Hessian using %i steps from history\n" % history)
 
     # If history=2, thisFrame and prevFrame should be (-3, -2) and (-2, -1)
