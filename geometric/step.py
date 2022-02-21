@@ -289,7 +289,7 @@ def get_hessian_update_tsbfgs(Dy, Dg, H):
     Hup = np.dot(jk, uk.T) + np.dot(uk, jk.T) + np.dot(jk.T, dk) * np.dot(uk, uk.T)
     return Hup
 
-def get_hessian_update_msp(Dy, Dg, H):
+def get_hessian_update_msp(Dy, Dg, H, verbose=False):
     # Murtagh-Sargent-Powell update
     Xi = Dg - np.dot(H,Dy)
     dH_MS = np.dot(Xi, Xi.T)/np.dot(Dy.T, Xi)
@@ -298,7 +298,7 @@ def get_hessian_update_msp(Dy, Dg, H):
     phi = 1.0 - np.dot(Dy.T,Xi)**2/(np.dot(Dy.T,Dy)*np.dot(Xi.T,Xi))
     # phi = 1.0
     Hup = (1.0-phi)*dH_MS + phi*dH_P
-    if params.verbose:
+    if verbose:
         logger.info("dot(Dy.T, Xi) = %.4e dot(Dy.T, Dy) = %.4e\n" % (np.dot(Dy.T, Xi), np.dot(Dy.T, Dy)))
         logger.info("Hessian update: %.5f Powell + %.5f Murtagh-Sargent\n" % (phi, 1.0-phi))
     return Hup
@@ -355,7 +355,7 @@ def update_hessian(IC, H0, xyz_seq, gradx_seq, params, trust_limit=False, max_up
             if ts_bfgs: # pragma: no cover
                 Hup = get_hessian_update_tsbfgs(Dy, Dg, H)
             else:
-                Hup = get_hessian_update_msp(Dy, Dg, H)
+                Hup = get_hessian_update_msp(Dy, Dg, H, verbose=params.verbose)
         else:
             Hup = get_hessian_update_bfgs(Dy, Dg, H)
         # Compute some diagnostics.
