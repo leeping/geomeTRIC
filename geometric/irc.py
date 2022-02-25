@@ -1,6 +1,5 @@
 import os, sys, copy
 import numpy as np
-from .step import get_delta_prime
 from .params import OptParams, parse_optimizer_args
 from .internal import unit_vector, CartesianCoordinates, PrimitiveInternalCoordinates, DelocalizedInternalCoordinates
 from .optimize import Optimizer
@@ -11,7 +10,7 @@ from .molecule import Molecule, PeriodicTable
 
 
 
-def irc(M, engine, coords, IC, dirname, params, initial_disp=[] ,direction=1):
+def irc(M, engine, coords, IC, dirname, params, initial_disp=[], direction=1):
     if direction not in [-1, 1]:
         raise RuntimeError('direction for IRC should be either 1 or -1')
     

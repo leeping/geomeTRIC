@@ -1,14 +1,18 @@
 from __future__ import print_function
 from __future__ import division
 
-import os, sys, re, shutil, time
 import argparse
+import os
+import shutil
+import time
+
 import itertools
 import numpy as np
 # from guppy import hpy
 from scipy.linalg import sqrtm
+from .prepare import get_molecule_engine
 from .optimize import Optimize
-from .params import OptParams
+from .params import OptParams, parse_optimizer_args
 from .step import get_delta_prime_trm, brent_wiki, trust_step, calc_drms_dmax
 from .engine import set_tcenv, load_tcin, TeraChem, Psi4, QChem, QCEngineAPI, Gromacs, Blank
 from .internal import *
@@ -189,12 +193,14 @@ class Structure(object):
         if xyz is None: xyz = self.cartesians
         return self.IC.calcGrad(self.cartesians, gradx)
         
-    def ComputeEnergyGradient(self):
+    def ComputeEnergyGradient(self, result=None):
         """ Compute energies and Cartesian gradients for the current structure. """
         if self.qcfserver == True:
             res = self.engine.calc_qcf(self.cartesians)
             self.engine.wait_qcf([res])
             result = self.engine.read_qcf(res)
+        elif result != None:
+            pass
         else:    
             result = self.engine.calc(self.cartesians, self.tmpdir)
         self.energy = result['energy'] 
@@ -246,7 +252,6 @@ class Structure(object):
             """
             Optimization procedure through QCAI
             """
-            import time
             print("QCAI optimization started.")
             new_schema = deepcopy(self.engine.schema)
             new_schema['molecule']['geometry'] = self.cartesians.reshape(-1,3)
@@ -355,13 +360,16 @@ class Chain(object):
         """ Return the length of the chain. """
         return len(self.M)
 
-    def ComputeEnergyGradient(self, cyc=None):
+    def ComputeEnergyGradient(self, cyc=None, result=None):
         """ Compute energies and gradients for each structure. """
         # This is the parallel point.
         wq = getWorkQueue()
         if wq is None and self.qcfserver==False: #If work queue and qcfractal aren't available, just run calculations locally.
             for i in range(len(self)):
-                self.Structures[i].ComputeEnergyGradient()
+                if result == None:
+                    self.Structures[i].ComputeEnergyGradient()
+                else:
+                    self.Structures[i].ComputeEnergyGradient(result=result[i])
         elif self.qcfserver==True: #Else if client is known, submit jobs to qcfractal server.
             ids=[]
             for i in range(len(self)):
@@ -370,6 +378,9 @@ class Chain(object):
             self.engine.wait_qcf(ids)
             for i, value in enumerate(ids):
                 self.Structures[i].GetQCEnergyGradient(value)
+       # elif result != None:
+       #     for i in range(len(self)):
+       #         self.Structure[i].ComputeEnergyGradient(result[i])
         else: #If work queue is available, handle jobs with the work queue.
             for i in range(len(self)):
                 self.Structures[i].QueueEnergyGradient()
@@ -720,7 +731,7 @@ class Chain(object):
                 break
             nloop += 1
             if nloop > len(self):
-                raise RuntimeError("Stuck in a loop, bug likely!")
+                raise RuntimeError("Stuck in a loop, bug likely! Try again with more number of images.")
         if respaced:
             self.clearCalcs(clearEngine=False)
             print("Image Number          :", ' '.join(["  %3i  " % i for i in range(len(self))]))
@@ -1403,7 +1414,7 @@ class ElasticBand(Chain):
             # doubled for non-end springs
             fplus = 0.5 if n == (len(self)-2) else 0.25
             fminus = 0.5 if n == 1 else 0.25
-            if self.params.ew:
+            if self.params.nebew:
                 #HP_ew 
                 E_i = energies[n]
                 E_ref = min(energies[0], energies[-1]) # Reference energy can be either reactant or product. Lower energy is picked here.
@@ -1490,7 +1501,7 @@ class ElasticBand(Chain):
             fminus = 1.0 if n == 1 else 0.5
             drplus = self.GlobalIC.calcDisplacement(xyz, n+1, n)
             drminus = self.GlobalIC.calcDisplacement(xyz, n-1, n)
-            if self.params.ew:
+            if self.params.nebew:
                 #HP_ew 
                 E_i = energies[n]
                 E_ref = min(energies[0], energies[-1]) # Reference energy can be either reactant or product. Lower energy is picked here.
@@ -1569,7 +1580,7 @@ class ElasticBand(Chain):
             ndrminus = np.linalg.norm(cc_curr - cc_prev)
             # Plain elastic band force
 
-            if self.params.ew:
+            if self.params.nebew:
                 #HP_ew 
                 E_i = energies[n]
                 E_ref = min(energies[0], energies[-1]) # Reference energy can be either reactant or product. Lower energy is picked here.
@@ -1844,10 +1855,10 @@ class ElasticBand(Chain):
         print("Metric completed in %.3f seconds, maxerr = %.3e" % (time.time() - t0, max(errs)))
         self.haveMetric = True
 
-    def ComputeChain(self, order=1, cyc=None):
+    def ComputeChain(self, order=1, cyc=None, result=None):
         if order >= 1:
             self.ComputeMetric()
-        self.ComputeEnergyGradient(cyc=cyc)
+        self.ComputeEnergyGradient(cyc=cyc, result=result)
         if order >= 1:
             self.ComputeTangent()
             self.ComputeProjectedGrad()
@@ -1867,136 +1878,106 @@ class ElasticBand(Chain):
         # The Structures are what store the individual Cartesian coordinates for each frame.
         self.Structures = [Structure(self.M[i], self.engine, os.path.join(self.tmpdir, "struct_%%0%ii" % len(str(len(self))) % i), self.coordtype) for i in range(len(self))]
 
-def get_molecule_engine(args):
-    # Read radii from the command line.
-    if (len(args.radii) % 2) != 0:
-        raise RuntimeError("Must have an even number of arguments for radii")
-    nrad = int(len(args.radii)/2)
-    radii = {}
-    for i in range(nrad):
-        radii[args.radii[2*i].capitalize()] = float(args.radii[2*i+1])
-    # Create the Molecule object. The correct file to pass in depends on which engine is used,
-    # so the command line interface could be improved at some point in the future
-    if args.engine.lower() not in ['tera', 'psi4', 'qcengine', 'none', 'blank']:
-        M = Molecule(args.input, radii=radii)
-    elif args.coords is not None:
-        M = Molecule(args.coords, radii=radii)[0]
-    else:
-        raise RuntimeError("With TeraChem/Psi4 engine, providing --coords is required.")
-    # Read in the coordinates from the "--coords" command line option
-    if args.coords is not None:
-        Mxyz = Molecule(args.coords)
-        if args.engine.lower() not in ['tera', 'psi4', 'qcengine', 'none', 'blank'] and M.elem != Mxyz.elem:
-            raise RuntimeError("Atoms don't match for input file and coordinates file. Please add a single structure into the input")
-        M.xyzs = Mxyz.xyzs
-        M.comms = Mxyz.comms
-        M.elem = Mxyz.elem
-    # Select from the list of available engines
-    if args.engine.lower() == 'qchem':
-        Engine = QChem(M[0])
-        Engine.set_nt(args.nt)
-    elif args.engine.lower() == 'leps':
-        if M.na != 3:
-            raise RuntimeError("LEPS potential assumes three atoms")
-        Engine = LEPS(M[0])
-    elif args.engine.lower() == 'qcengine':
-        Engine = QCEngineAPI(args.qcschema, args.qce_engine, args.client)   
-    elif args.engine.lower() in ['none', 'blank']:
-        Engine = Blank(M[0])
-    else:
-        # The Psi4 interface actually uses TeraChem input
-        # LPW: This should be changed to match what Yudong has in optimize.py
-        if args.engine.lower() == 'psi4':
-            Psi4exe = shutil.which('psi4')
-            if len(Psi4exe) == 0: raise RuntimeError("Please make sure psi4 executable is in your PATH")
-        elif 'tera' in args.engine.lower():
-            set_tcenv()
-        else:
-            raise RuntimeError('Engine not recognized or not specified (choose qchem, leps, terachem, psi4, reaxff)')
-        tcin = load_tcin(args.input)
-        M.charge = tcin['charge']
-        M.mult = tcin['spinmult']
-        if 'guess' in tcin:
-            for f in tcin['guess'].split():
-                if not os.path.exists(f):
-                    raise RuntimeError("TeraChem input file specifies guess %s but it does not exist\nPlease include this file in the same folder as your input" % f)
-        if len(args.tcguess) != 0:
-            unrestricted = False
-            if tcin['method'][0].lower() == 'u':
-                unrestricted = True
-            if unrestricted:
-                if len(args.tcguess)%2 != 0:
-                    raise RuntimeError("For unrestricted calcs, number of guess files must be an even number")
-                guessfnms = list(itertools.chain(*[['ca%i' % (i+1), 'cb%i' % (i+1)] for i in range(len(args.tcguess)//2)]))
-                if set(args.tcguess) != set(guessfnms):
-                    raise RuntimeError("Please provide unrestricted guess files in pairs as ca1, cb1, ca2, cb2...")
-            else:
-                guessfnms = list(itertools.chain(*[['c%i' % (i+1)] for i in range(len(args.tcguess))]))
-                if set(args.tcguess) != set(guessfnms):
-                    raise RuntimeError("Please provide restricted guess files as c1, c2...")
-            for f in guessfnms:
-                if not os.path.exists(f):
-                    raise RuntimeError("Please ensure alternative guess file %s exists in the current folder" % f)
-            print("Running multiple SCF calculations using the following provided guess files: %s" % str(args.tcguess))
-        else:
-            guessfnms = []
-        if args.engine.lower() == 'psi4':
-            Engine = Psi4(M[0])
-            psi4_in = "%s_2.in" %args.input.split(".")[0]
-            if os.path.exists(psi4_in):
-                os.remove(psi4_in)
-            with open(psi4_in, 'a') as file_obj:
-                file_obj.write("molecule {\n")
-                file_obj.write("%i %i\n" %(M.charge, M.mult))
-                coords = M.xyzs[0]
-                for i, element in enumerate(M[0].elem):
-                    if i == len(M[0].elem)-1:
-                        file_obj.write("%-5s % 15.10f % 15.10f % 15.10f\n}\n" % (element, coords[i][0], coords[i][1], coords[i][2]))
-                    else:
-                        file_obj.write("%-5s % 15.10f % 15.10f % 15.10f\n" % (element, coords[i][0], coords[i][1], coords[i][2]))
-                file_obj.write("\nset basis %s\n" %tcin['basis']) 
-                file_obj.write("\ngradient(\'%s\')" %tcin['method'])
-            
-            Engine.load_psi4_input("%s_2.in" %args.input.split(".")[0])
-        else:
-            Engine = TeraChem(M[0], tcin)
-            if args.nt != 1:
-                raise RuntimeError("For TeraChem jobs, do not specify the number of threads; workers will decide which GPUs to run on, using CUDA_VISIBLE_DEVICES.")
-    print("Input coordinates have %i frames. The following will be used to initialize NEB images:" % len(M))
-    print(', '.join(["%i" % (int(round(i))) for i in np.linspace(0, len(M)-1, args.images)]))
-    Msel = M[np.array([int(round(i)) for i in np.linspace(0, len(M)-1, args.images)])]
-    return Msel, Engine
+#def get_molecule_engine(args):
+#    # Read radii from the command line.
+#    if (len(args.radii) % 2) != 0:
+#        raise RuntimeError("Must have an even number of arguments for radii")
+#    nrad = int(len(args.radii)/2)
+#    radii = {}
+#    for i in range(nrad):
+#        radii[args.radii[2*i].capitalize()] = float(args.radii[2*i+1])
+#    # Create the Molecule object. The correct file to pass in depends on which engine is used,
+#    # so the command line interface could be improved at some point in the future
+#    if args.engine.lower() not in ['tera', 'psi4', 'qcengine', 'none', 'blank']:
+#        M = Molecule(args.input, radii=radii)
+#    elif args.coords is not None:
+#        M = Molecule(args.coords, radii=radii)[0]
+#    else:
+#        raise RuntimeError("With TeraChem/Psi4 engine, providing --coords is required.")
+#    # Read in the coordinates from the "--coords" command line option
+#    if args.coords is not None:
+#        Mxyz = Molecule(args.coords)
+#        if args.engine.lower() not in ['tera', 'psi4', 'qcengine', 'none', 'blank'] and M.elem != Mxyz.elem:
+#            raise RuntimeError("Atoms don't match for input file and coordinates file. Please add a single structure into the input")
+#        M.xyzs = Mxyz.xyzs
+#        M.comms = Mxyz.comms
+#        M.elem = Mxyz.elem
+#    # Select from the list of available engines
+#    if args.engine.lower() == 'qchem':
+#        Engine = QChem(M[0])
+#        Engine.set_nt(args.nt)
+#    elif args.engine.lower() == 'leps':
+#        if M.na != 3:
+#            raise RuntimeError("LEPS potential assumes three atoms")
+#        Engine = LEPS(M[0])
+#    elif args.engine.lower() == 'qcengine':
+#        Engine = QCEngineAPI(args.qcschema, args.qce_engine, args.client)   
+#    elif args.engine.lower() in ['none', 'blank']:
+#        Engine = Blank(M[0])
+#    else:
+#        # The Psi4 interface actually uses TeraChem input
+#        # LPW: This should be changed to match what Yudong has in optimize.py
+#        if args.engine.lower() == 'psi4':
+#            Psi4exe = shutil.which('psi4')
+#            if len(Psi4exe) == 0: raise RuntimeError("Please make sure psi4 executable is in your PATH")
+#        elif 'tera' in args.engine.lower():
+#            set_tcenv()
+#        else:
+#            raise RuntimeError('Engine not recognized or not specified (choose qchem, leps, terachem, psi4, reaxff)')
+#        tcin = load_tcin(args.input)
+#        M.charge = tcin['charge']
+#        M.mult = tcin['spinmult']
+#        if 'guess' in tcin:
+#            for f in tcin['guess'].split():
+#                if not os.path.exists(f):
+#                    raise RuntimeError("TeraChem input file specifies guess %s but it does not exist\nPlease include this file in the same folder as your input" % f)
+#        if len(args.tcguess) != 0:
+#            unrestricted = False
+#            if tcin['method'][0].lower() == 'u':
+#                unrestricted = True
+#            if unrestricted:
+#                if len(args.tcguess)%2 != 0:
+#                    raise RuntimeError("For unrestricted calcs, number of guess files must be an even number")
+#                guessfnms = list(itertools.chain(*[['ca%i' % (i+1), 'cb%i' % (i+1)] for i in range(len(args.tcguess)//2)]))
+#                if set(args.tcguess) != set(guessfnms):
+#                    raise RuntimeError("Please provide unrestricted guess files in pairs as ca1, cb1, ca2, cb2...")
+#            else:
+#                guessfnms = list(itertools.chain(*[['c%i' % (i+1)] for i in range(len(args.tcguess))]))
+#                if set(args.tcguess) != set(guessfnms):
+#                    raise RuntimeError("Please provide restricted guess files as c1, c2...")
+#            for f in guessfnms:
+#                if not os.path.exists(f):
+#                    raise RuntimeError("Please ensure alternative guess file %s exists in the current folder" % f)
+#            print("Running multiple SCF calculations using the following provided guess files: %s" % str(args.tcguess))
+#        else:
+#            guessfnms = []
+#        if args.engine.lower() == 'psi4':
+#            Engine = Psi4(M[0])
+#            psi4_in = "%s_2.in" %args.input.split(".")[0]
+#            if os.path.exists(psi4_in):
+#                os.remove(psi4_in)
+#            with open(psi4_in, 'a') as file_obj:
+#                file_obj.write("molecule {\n")
+#                file_obj.write("%i %i\n" %(M.charge, M.mult))
+#                coords = M.xyzs[0]
+#                for i, element in enumerate(M[0].elem):
+#                    if i == len(M[0].elem)-1:
+#                        file_obj.write("%-5s % 15.10f % 15.10f % 15.10f\n}\n" % (element, coords[i][0], coords[i][1], coords[i][2]))
+#                    else:
+#                        file_obj.write("%-5s % 15.10f % 15.10f % 15.10f\n" % (element, coords[i][0], coords[i][1], coords[i][2]))
+#                file_obj.write("\nset basis %s\n" %tcin['basis']) 
+#                file_obj.write("\ngradient(\'%s\')" %tcin['method'])
+#            
+#            Engine.load_psi4_input("%s_2.in" %args.input.split(".")[0])
+#        else:
+#            Engine = TeraChem(M[0], tcin)
+#            if args.nt != 1:
+#                raise RuntimeError("For TeraChem jobs, do not specify the number of threads; workers will decide which GPUs to run on, using CUDA_VISIBLE_DEVICES.")
+#    print("Input coordinates have %i frames. The following will be used to initialize NEB images:" % len(M))
+#    print(', '.join(["%i" % (int(round(i))) for i in np.linspace(0, len(M)-1, args.images)]))
+#    Msel = M[np.array([int(round(i)) for i in np.linspace(0, len(M)-1, args.images)])]
+#    return Msel, Engine
 
-class ChainOptParams(object):
-    """
-    Container for optimization parameters.  
-    The parameters used to be contained in the command-line "args", 
-    but this was dropped in order to call Optimize() from another script.
-    """
-    def __init__(self, **kwargs):
-        self.epsilon = kwargs.get('epsilon', 1e-5)
-        self.check = kwargs.get('check', 0)
-        self.verbose = kwargs.get('verbose', False)
-        self.reset = kwargs.get('reset', False)
-        self.trust = kwargs.get('trust', 0.1)
-        self.tmax = kwargs.get('tmax', 0.3)
-        self.maxg = kwargs.get('maxg', 0.05)
-        self.avgg = kwargs.get('avgg', 0.025)
-        self.align = kwargs.get('align', False)
-        self.sepdir = kwargs.get('sepdir', False)
-        self.ew = kwargs.get('ew', False)
-        self.climb = kwargs.get('climb', 0.5)
-        self.ncimg = kwargs.get('ncimg', 1)
-        self.history = kwargs.get('history', 1)
-        self.maxcyc = kwargs.get('maxcyc', 100)
-        self.nebk = kwargs.get('nebk', 0.1)
-        # Experimental feature that avoids resetting the Hessian
-        self.skip = kwargs.get('skip', False)
-        self.noopt = kwargs.get('noopt', False)
-        # Experimental features (remind self later)
-        self.guessk = kwargs.get('guessk', 0.05)
-        self.guessw = kwargs.get('guessw', 0.1)
-        self.prefix = kwargs.get('prefix', 'none')
 
 def ChainRMSD(chain1, chain2):
     rmsds = []
@@ -2218,8 +2199,9 @@ def OptimizeChain(chain, engine, params):
     print("Now optimizing the chain.")
     chain.respace(0.01)
     chain.delete_insert(1.0)
-    if params.align: chain.align()
-    if params.ew: print("Energy weighted NEB calculation.")
+    #if params.align: chain.align()
+    #chain.align()
+    if params.nebew: print("Energy weighted NEB calculation.")
     chain.ComputeMetric()
     chain.ComputeChain(cyc=0)
     t0 = time.time()
@@ -2232,7 +2214,7 @@ def OptimizeChain(chain, engine, params):
     print("-= Chain Properties =-")
     print("@%13s %13s %13s %13s %11s %13s %13s" % ("GAvg(eV/Ang)", "GMax(eV/Ang)", "Length(Ang)", "DeltaE(kcal)", "RMSD(Ang)", "TrustRad(Ang)", "Step Quality"))
     print("@%13s %13s %13s" % ("% 8.4f  " % chain.avgg, "% 8.4f  " % chain.maxg, "% 8.4f  " % sum(chain.calc_spacings())))
-    chain.SaveToDisk(fout='chain.xyz' if params.sepdir else 'chain_%04i.xyz' % 0)
+    chain.SaveToDisk(fout = 'chain_%04i.xyz' % 0)
     Y = chain.get_internal_all()
     GW = chain.get_global_grad("total", "working")
     GP = chain.get_global_grad("total", "plain")
@@ -2302,8 +2284,9 @@ def OptimizeChain(chain, engine, params):
         # Obtain a new chain with the step applied
         chain = chain.TakeStep(dy, printStep=False)
         respaced = chain.delete_insert(1.5)
-        if params.align: chain.align()
-        if params.sepdir: chain.UpdateTempDir(optCycle)
+        #if params.align: chain.align()
+        #chain.align()
+        #if params.sepdir: chain.UpdateTempDir(optCycle)
         print("Time since last ComputeChain: %.3f s" % (time.time() - t0))
         chain.ComputeChain(cyc=optCycle)
         t0 = time.time()
@@ -2321,7 +2304,7 @@ def OptimizeChain(chain, engine, params):
             HW = chain.guess_hessian_working.copy()
             HP = chain.guess_hessian_plain.copy()
             c_hist = [chain]
-            chain.SaveToDisk(fout='chain.xyz' if params.sepdir else 'chain_%04i.xyz' % optCycle)
+            chain.SaveToDisk(fout='chain_%04i.xyz' % optCycle)
             continue
         dE = chain.TotBandEnergy - c_hist[-1].TotBandEnergy
         dE = chain.TotBandEnergy - c_hist[-1].TotBandEnergy
@@ -2340,7 +2323,7 @@ def OptimizeChain(chain, engine, params):
         print(" %13s %13s %13s %13s %11s %14s %13s" % ("GAvg(eV/Ang)", "GMax(eV/Ang)", "Length(Ang)", "DeltaE(kcal)", "RMSD(Ang)", "TrustRad(Ang)", "Step Quality"))
         print("@%13s %13s %13s %13s %11s  %8.4f (%s)  %13s" % ("% 8.4f  " % chain.avgg, "% 8.4f  " % chain.maxg, "% 8.4f  " % sum(chain.calc_spacings()), "% 8.4f  " % (au2kcal*dE/len(chain)), 
                                                                "% 8.4f  " % (ChainRMSD(chain, c_hist[-1])), trust, trustprint, "% 6.2f (%s)" % (Quality, Describe)))
-        chain.SaveToDisk(fout='chain.xyz' if params.sepdir else 'chain_%04i.xyz' % optCycle)
+        chain.SaveToDisk(fout= 'chain_%04i.xyz' % optCycle)
         #=======================================#
         #|    Check convergence criteria       |#
         #=======================================#
@@ -2427,71 +2410,119 @@ def plot_matrix(mat):
     fig.subplots_adjust(left=0.15, right=0.95, bottom=0.1, top=0.9)
     fig.savefig('plot.png')
 
-def build_args():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--coordsys', type=str, default='cart', help='Coordinate system: "cart" for Cartesian, "prim" for Primitive (a.k.a redundant), '
-                   '"dlc" for Delocalized Internal Coordinates, "hdlc" for Hybrid Delocalized Internal Coordinates, "tric" for Translation-Rotation'
-                   'Internal Coordinates (default). Currently only cart and prim are supported.')
-    parser.add_argument('--engine', type=str, default='none', help='Choose how to calculate the energy (qchem, leps, reaxff).')
-    parser.add_argument('--prefix', type=str, default=None, help='Specify a prefix for output file and temporary directory.')
-    parser.add_argument('--port', type=int, default=0, help='Specify a port for Work Queue when running in parallel.')
-    parser.add_argument('--maxg', type=float, default=0.05, help='Converge when maximum RMS-gradient for any image falls below this threshold.')
-    parser.add_argument('--avgg', type=float, default=0.025, help='Converge when average RMS-gradient falls below this threshold.')
-    parser.add_argument('--epsilon', type=float, default=1e-5, help='Small eigenvalue threshold.')
-    parser.add_argument('--guessk', type=float, default=0.05, help='Guess Hessian eigenvalue for displacements.')
-    parser.add_argument('--guessw', type=float, default=0.1, help='Guess weight for chain coordinates.')
-    parser.add_argument('--tcguess', type=str, default=[], nargs="+", help='Provide MO guess files for TC as c0, c1, .. or ca0, cb0, ca1, cb1 ..')
-    parser.add_argument('--nogenguess', action='store_true', help='When MO guess files are provided, skip calculation that generates the guess')
-    parser.add_argument('--verbose', action='store_true', help='Write out extra information.')
-    parser.add_argument('--reset', action='store_true', help='Reset Hessian when eigenvalues are under epsilon.')
-    parser.add_argument('--align', action='store_true', help='Align images (experimental).')
-    parser.add_argument('--fdcheckg', action='store_true', help='Finite-difference gradient test (do not optimize).')
-    parser.add_argument('--trust', type=float, default=0.1, help='Starting trust radius.')
-    parser.add_argument('--tmax', type=float, default=0.3, help='Maximum trust radius.')
-    parser.add_argument('--radii', type=str, nargs="+", default=["Na","0.0"], help='List of atomic radii for coordinate system.')
-    parser.add_argument('--coords', type=str, help='Provide coordinates (overwrites what you have in quantum chemistry input files).')
-    parser.add_argument('--images', type=int, default=11, help='Number of NEB images to use.')
-    parser.add_argument('--icdisp', action='store_true', help='Compute displacements using internal coordinates.')
-    parser.add_argument('--sepdir', action='store_true', help='Store each chain in a separate folder.')
-    parser.add_argument('--skip', action='store_true', help='Skip Hessian updates that would introduce negative eigenvalues.')
-    parser.add_argument('--plain', type=int, default=0, help='1: Use plain elastic band for spring force. 2: Use plain elastic band for spring AND potential.')
-    parser.add_argument('--nebk', type=float, default=1, help='NEB spring constant in units of kcal/mol/Ang^2.')
-    parser.add_argument('--ew', action='store_true', help='Energy weighted NEB calculation (k range is nebk - nebk/10)')
-    parser.add_argument('--history', type=int, default=1, help='Chain history to keep in memory; note chains are very memory intensive, >1 GB each')
-    parser.add_argument('--maxcyc', type=int, default=100, help='Maximum number of chain optimization cycles to perform')
-    parser.add_argument('--climb', type=float, default=0.5, help='Activate climbing image for max-energy points when max gradient falls below this threshold.')
-    parser.add_argument('--ncimg', type=int, default=1, help='Number of climbing images to expect.')
-    parser.add_argument('--nt', type=int, default=1, help='Specify number of threads for running in parallel (for TeraChem this should be number of GPUs)')
-    parser.add_argument('--input', type=str, help='TeraChem or Q-Chem input file')
 
-    return parser
+
+class nullengine(object):
+    def __init__(self, elems, coords):
+        self.elems = elems
+        self.coords = np.array(coords).flatten()
+        self.na = len(elems)
+        self.nm = int(self.coords.size/(3*self.na))
+        self.M1 = Molecule()    
+        self.result = OrderedDict()
+
+        for i in range(self.nm):
+            interval = 3*self.na
+            start = interval*i
+            M2 = Molecule()
+            M2.elem = self.elems
+            M2.xyzs = [self.coords[start: start+self.na*3].reshape(-1,3)]
+            if i == 0:
+                self.M1 = M2
+            else:
+                self.M1 += M2 
+        self.M = self.M1[np.array([int(round(i)) for i in np.linspace(0, self.nm-1, 11)])]
+        
+    
+        
+
+def nextchain(elems, coords, grads, energies, params):
+    """
+    Generate a next chain
+
+    parameters
+    ----------
+    elems: list
+        a list of elements
+    
+    coords: list
+        a list of Cartesian coordinates
+
+    grads: list
+        a list of gradients
+
+    energies: list
+        a list of energies
+
+    params : OptParams object
+        contains neb parameters        
+
+    Return
+    ------
+    newcoords: [numpy array]
+        Updated Cartesian coordinates
+
+    chain_M: Molecule object
+        geometric molecule object of an updated chain
+    """
+    assert params.neb == True
+    params.customengine = nullengine(elems, coords)
+
+    result = []
+    for i in range(len(energies)):
+        result.append({'energy':energies[i],'gradient':grads[i]})
+    
+    M, engine = get_molecule_engine(**{'neb': True, 'customengine':params.customengine})
+    tmpdir = 'NEB.tmp'
+    chain = ElasticBand(M, engine=engine, tmpdir=tmpdir, coordtype='cart', params=params, plain=params.plain)
+    chain.respace(0.01)
+    chain.delete_insert(1.0)
+    chain.ComputeMetric()
+    chain.ComputeChain(order=1, result=result)
+    chain.ComputeGuessHessian(full=False, blank=False)
+    chain.PrintStatus()
+
+    if chain.maxg < params.maxg and chain.avgg < params.avgg: #if both maximum gradients and average gradients fall under the criteria, return None. 
+        return None
+
+    HW = chain.guess_hessian_working.copy()
+    HP = chain.guess_hessian_plain.copy()
+
+    dy, expect, expectG, ForceRebuild = chain.CalcInternalStep(params.trust, HW, HP) 
+
+    newchain = chain.TakeStep(dy, printStep=False)    
+    newcoords = [] 
+    chain_M = Molecule()
+    for i in range(len(newchain)):
+        M_obj = newchain.Structures[i].M
+        coord = M_obj.xyzs[0]
+        newcoords.append(coord)
+        if i == 0:
+            chain_M = M_obj
+        else:
+            chain_M += M_obj
+   
+    return newcoords, chain_M
 
 def main():
-    parser = build_args() 
 
-    print(' '.join(sys.argv))
+    args = parse_optimizer_args(sys.argv[1:])
+    args['neb'] = True
+    params = OptParams(**args)
 
-    args = parser.parse_args(sys.argv[1:])
-
-    M, engine = get_molecule_engine(args)
+    M, engine = get_molecule_engine(**args)
     M.align()
 
-    if args.port != 0:
-        createWorkQueue(args.port, debug=args.verbose)
-    if args.prefix is None:
-        tmpdir = os.path.splitext(args.input)[0]+".tmp"
+    if params.port != 0:
+        createWorkQueue(params.port, debug=params.verbose)
+
+    if params.prefix is None:
+        tmpdir = os.path.splitext(args['input'])[0]+".tmp"
     else:
-        tmpdir = args.prefix+".tmp"
+        tmpdir = params.prefix+".tmp"
     # Make the initial chain
-    if args.sepdir:
-        tmpdir = os.path.join(tmpdir, 'chain_%04i' % 0)
-    params = ChainOptParams(**vars(args))
-    chain = ElasticBand(M, engine=engine, tmpdir=tmpdir, coordtype=args.coordsys, params=params, plain=args.plain, ic_displace=args.icdisp)
-    if args.fdcheckg:
-        chain.FiniteDifferenceTest()
-        chain.SaveToDisk()
-    else:
-        OptimizeChain(chain, engine, params)
+    chain = ElasticBand(M, engine=engine, tmpdir=tmpdir, coordtype=params.coordsys, params=params, plain=params.plain)
+    OptimizeChain(chain, engine, params)
     
 if __name__ == "__main__":
     main()

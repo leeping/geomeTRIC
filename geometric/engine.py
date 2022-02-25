@@ -878,6 +878,10 @@ class Psi4(Engine):
                     # parse the xyz format
                     elems.append(ls[0])
                     coords.append(ls[1:4])
+                elif len(ls) == 2:
+                    charge = int(ls[0]) 
+                    mult = int(ls[-1])
+                    psi4_temp.append(line)
                 elif '--' in line:
                     fragn.append(len(elems))
                 elif 'symmetry' in line:
@@ -910,6 +914,8 @@ class Psi4(Engine):
         self.M = Molecule()
         self.M.elem = elems
         self.M.xyzs = [np.array(coords, dtype=np.float64)]
+        self.M.charge = charge
+        self.M.mult = mult
         self.psi4_temp = psi4_temp
         self.fragn = fragn
 

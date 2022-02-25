@@ -207,46 +207,46 @@ def geometric_run_json(in_json_dict):
     input_opts = parse_input_json_dict(in_json_dict)
     qcschema = input_opts.get('qcschema') 
     print ("Input Detail:", input_opts)
-    if 'images' in input_opts:
-        IRC = False
-        NEB = True
-        Opt = False 
-        ew = False
-        parser = geometric.neb.build_args() 
-        if 'ew' in input_opts:
-            ew = True
-            del input_opts['ew']
-        args_list = parse_key(input_opts) 
-        if ew:
-            args_list.extend(['--ew'])
-        
-        args, unkonwn = parser.parse_known_args(args_list)
-            
-        args.qcschema = qcschema
-        args.qce_engine = input_opts.get('qce_program')
-        args.client = input_opts.get('client')
-        M, engine = geometric.neb.get_molecule_engine(args)
-        M.align()
-        tmpdir = args.input + ".tmp"
-        os.mkdir(tmpdir)
-            
-    else:
-        IRC = False
-        NEB = False 
-        Opt = True
-        TS = False
-        temp_method = qcschema['model']['method'].split('-')
-        if temp_method[0].upper() == 'TS':
-            TS = True
-            input_opts['qcschema']['model']['method'] = '-'.join(temp_method[1:])
+   # if 'images' in input_opts:
+   #     IRC = False
+   #     NEB = True
+   #     Opt = False 
+   #     ew = False
+   #     parser = geometric.neb.build_args() 
+   #     if 'ew' in input_opts:
+   #         ew = True
+   #         del input_opts['ew']
+   #     args_list = parse_key(input_opts) 
+   #     if ew:
+   #         args_list.extend(['--ew'])
+   #     
+   #     args, unkonwn = parser.parse_known_args(args_list)
+   #         
+   #     args.qcschema = qcschema
+   #     args.qce_engine = input_opts.get('qce_program')
+   #     args.client = input_opts.get('client')
+   #     M, engine = geometric.neb.get_molecule_engine(args)
+   #     M.align()
+   #     tmpdir = args.input + ".tmp"
+   #     os.mkdir(tmpdir)
+   #         
+   # else:
+   #     IRC = False
+   #     NEB = False 
+   #     Opt = True
+   #     TS = False
 
-        elif 'irc' in input_opts:
-            if input_opts.get('irc'):
-                Opt=False
-                IRC=True
-            if input_opts.get('trust') >=0.3:
-                input_opts['tmax'] = input_opts.get('trust')*1.01
-        M, engine = geometric.optimize.get_molecule_engine(**input_opts)
+    temp_method = qcschema['model']['method'].split('-')
+    if temp_method[0].upper() == 'TS':
+        TS = True
+        input_opts['qcschema']['model']['method'] = '-'.join(temp_method[1:])
+
+    elif input_opts.get('irc', False):
+        IRC=True
+        if input_opts.get('trust') >=0.3:
+            input_opts['tmax'] = input_opts.get('trust')*1.01
+         
+    M, engine = geometric.optimize.get_molecule_engine(**input_opts)
     # Get initial coordinates in bohr
     coords = M.xyzs[0].flatten() * geometric.nifty.ang2bohr
 
@@ -287,28 +287,37 @@ def geometric_run_json(in_json_dict):
     logger.info(IC)
     logger.info("\n")
     
-    if NEB:
-        params = geometric.neb.ChainOptParams(**vars(args))
-        chain = geometric.neb.ElasticBand(M, engine=engine, tmpdir=tmpdir, coordtype=args.coordsys, params=params, plain=args.plain, ic_displace=args.icdisp)
-        
-    else:
-        params = geometric.optimize.OptParams(**input_opts)
-        params.transition = TS
+   # if NEB:
+   #     params = geometric.neb.ChainOptParams(**vars(args))
+   #     chain = geometric.neb.ElasticBand(M, engine=engine, tmpdir=tmpdir, coordtype=args.coordsys, params=params, plain=args.plain, ic_displace=args.icdisp)
+   #     
+   # else:
+
+    params = geometric.optimize.OptParams(**input_opts)
+    params.transition = TS
     try:
         # Run the optimization
-        if Cons is None and Opt:
+        if Cons is None:
             # Run a standard geometry optimization
             geometric.optimize.Optimize(coords, M, IC, engine, None, params)
-        elif NEB: 
+        elif input_opts.get('neb', False): 
             # Run the NEB method
             print ("Running an NEB calculation through QCAI.")
+            M.align()
+            
+            if params.prefix is None:
+                tmpdir = "qcai_neb.tmp"
+            else:
+                tmpdir = params.prefix+".tmp"
+            # Make the initial chain
+            chain = geometric.neb.ElasticBand(M, engine=engine, tmpdir=tmpdir, coordtype=coordsys, params=params, plain=params.plain)
             geometric.neb.OptimizeChain(chain, engine, params)
         elif IRC:
             print ("The IRC method will be performed.")
 
-            params.tmax = params.trust*1.01
-            params.xyzout = "IRC_tmp.xyz"
-            dirname = 'IRC.tmp'
+            #params.tmax = params.trust*1.01
+            params.xyzout = "qcai_IRC_tmp.xyz"
+            dirname = 'qcai_IRC.tmp'
             if not os.path.exists(dirname):
                 os.mkdir(dirname)
 

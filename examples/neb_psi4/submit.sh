@@ -8,5 +8,5 @@
 #SBATCH --no-requeue
 #--mem=16000
 
-geometric-neb --guessw 0.5 --guessk 0.01 --skip --images 21 --coordsys cart --engine psi4 --plain 0 --ew --coords initial.xyz --maxcyc 200 --avgg 0.025 --maxg 0.05 --input tera.in
+geometric-neb psi4.in --images 21 --coordsys cart --engine psi4 --coords initial.xyz
 
