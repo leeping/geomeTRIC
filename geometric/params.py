@@ -83,7 +83,7 @@ class OptParams(object):
         self.write_cart_hess = kwargs.get('write_cart_hess', None)
         # Output .xyz file name may be set separately in
         # run_optimizer() prior to calling Optimize().
-        self.xyzout = kwargs.get('xyzout', None)
+        self.xyzout = kwargs.get('xyzout', 'default.xyz')
         # Name of the qdata.txt file to be written.
         # The CLI is designed so the user passes true/false instead of the file name.
         self.qdata = 'qdata.txt' if kwargs.get('qdata', False) else None
