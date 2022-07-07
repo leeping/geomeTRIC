@@ -597,11 +597,6 @@ class Optimizer(object):
         self.Gx_hist.append(self.gradx)
         self.engine.save_guess_files(self.dirname)
 
-        ## Save the regularization quaternions, used to lift rotation degeneracies for linear molecules.
-        ## This function also repositions "e0" for linear angles.
-        if self.IC.setRegularization(self.X):
-            self.rebuild_hessian()
-
         ### Rebuild Coordinate System if Necessary ###
         UpdateHessian = (not self.params.hessian == 'each')
         if self.IC.bork:
@@ -610,9 +605,16 @@ class Optimizer(object):
             UpdateHessian = False
         elif self.CoordCounter == (params.check - 1):
             logger.info("Checking coordinate system as requested every %i cycles\n" % params.check)
-            if self.checkCoordinateSystem(recover=True): UpdateHessian = False
+            if self.checkCoordinateSystem(recover=False): UpdateHessian = False
         else:
             self.CoordCounter += 1
+
+        ## Save the regularization quaternions, used to lift rotation degeneracies for linear molecules.
+        ## This function also repositions "e0" for linear angles.
+        if self.IC.setRegularization(self.X) and UpdateHessian:
+            self.rebuild_hessian()
+            UpdateHessian = False
+
         # Check for large rotations (debugging purposes)
         if self.params.verbose >= 1: self.IC.largeRots()
 

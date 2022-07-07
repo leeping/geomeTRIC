@@ -2152,11 +2152,8 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         for (a, b) in molecule.topology.edges():
             self.add(Distance(a, b))
 
-        # Add an internal coordinate for all angles
-        # LinThre = 0.99619469809174555
-        # LinThre = 0.999
-        # This number works best for the iron complex
-        LinThre = 0.95
+        # Linear angle threshold - corresponds to about 162 degrees.
+        LinThre   = 0.95
         AngDict = defaultdict(list)
         for b in molecule.topology.nodes():
             for a in molecule.topology.neighbors(b):
@@ -2473,17 +2470,6 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                 elif bcd > thre:
                     linear_torsion_angles[(b, c, d)] = bcd
         return linear_torsion_angles
-
-    def linearRotCheck(self):
-        # Check if certain problems might be happening due to rotations of linear molecules.
-        # LPW 2022-02-15: This should not return True if setRegularization() is called after each accepted step.
-        for Internal in self.Internals:
-            if type(Internal) is LinearAngle:
-                # print(Internal, "stored_dot2 = %.5f" % Internal.stored_dot2)
-                if Internal.stored_dot2 > 0.75:
-                    # Linear angle is almost parallel to reference axis
-                    return True
-        return False
 
     def setRegularization(self, xyz):
         regularization_changed = False
@@ -3402,10 +3388,6 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         """ Check if certain problems might be happening due to three consecutive atoms in a torsion angle becoming linear. """
         return self.Prims.torsionConstraintLinearAngles(coords, thre)
     
-    def linearRotCheck(self):
-        """ Check if certain problems might be happening due to rotations of linear molecules. """
-        return self.Prims.linearRotCheck()
-
     def setRegularization(self, xyz):
         return self.Prims.setRegularization(xyz)
 
