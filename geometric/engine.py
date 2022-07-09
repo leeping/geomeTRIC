@@ -629,16 +629,16 @@ class OpenMM(Engine):
         except ImportError:
             raise ImportError("OpenMM computation object requires the 'simtk' package. Please pip or conda install 'openmm' from omnia channel.")
         pdb = app.PDBFile(pdb)
+        modeller = app.Modeller(pdb.topology, pdb.positions)
         xmlSystem = False
         self.combination = None
+        self.n_virtual_sites = 0
         if os.path.exists(xml):
             xmlStr = open(xml).read()
             # check if we have opls combination rules if the xml is present
             try:
                 self.combination = ET.fromstring(xmlStr).find('NonbondedForce').attrib['combination']
-            except AttributeError:
-                pass
-            except KeyError:
+            except (AttributeError, KeyError):
                 pass
             try:
                 # If the user has provided an OpenMM system, we can use it directly
@@ -654,13 +654,18 @@ class OpenMM(Engine):
                 forcefield = app.ForceField(xml)
             except ValueError:
                 raise OpenMMEngineError('Provided input file is not an installed force field XML file')
-            system = forcefield.createSystem(pdb.topology, nonbondedMethod=app.NoCutoff, constraints=None, rigidWater=False)
+            try:
+                system = forcefield.createSystem(modeller.topology, nonbondedMethod=app.NoCutoff, constraints=None, rigidWater=False)
+            except ValueError:
+                modeller.addExtraParticles(forcefield)
+                system = forcefield.createSystem(modeller.topology, nonbondedMethod=app.NoCutoff, constraints=None, rigidWater=False)
         # apply opls combination rule if we are using it
         if self.combination == 'opls':
             logger.info("\nUsing geometric combination rules\n")
             system = self.opls(system)
         integrator = mm.VerletIntegrator(1.0*u.femtoseconds)
         platform = mm.Platform.getPlatformByName('Reference')
+        self.n_virtual_sites = sum([system.isVirtualSite(particle) for particle in range(system.getNumParticles())])
         self.simulation = app.Simulation(pdb.topology, system, integrator, platform)
         super(OpenMM, self).__init__(molecule)
 
@@ -669,14 +674,20 @@ class OpenMM(Engine):
         import simtk.unit as u
         try:
             self.M.xyzs[0] = coords.reshape(-1, 3) * bohr2ang
-            pos = [Vec3(self.M.xyzs[0][i,0]/10, self.M.xyzs[0][i,1]/10, self.M.xyzs[0][i,2]/10) for i in range(self.M.na)]*u.nanometer
+            pos = [Vec3(self.M.xyzs[0][i, 0]/10, self.M.xyzs[0][i, 1]/10, self.M.xyzs[0][i, 2]/10) for i in range(self.M.na)]*u.nanometer
+            for _ in range(self.n_virtual_sites):
+                pos.extend([Vec3(0, 0, 0)]*u.nanometer)
             self.simulation.context.setPositions(pos)
+            if self.n_virtual_sites:
+                self.simulation.context.computeVirtualSites()
             state = self.simulation.context.getState(getEnergy=True, getForces=True)
             energy = state.getPotentialEnergy().value_in_unit(u.kilojoule_per_mole) / eqcgmx
             gradient = state.getForces(asNumpy=True).flatten() / fqcgmx
+            if self.n_virtual_sites:
+                gradient = gradient[:-self.n_virtual_sites*3]
         except:
             raise OpenMMEngineError
-        return {'energy':energy, 'gradient':gradient}
+        return {'energy': energy, 'gradient': gradient}
 
     @staticmethod
     def opls(system):

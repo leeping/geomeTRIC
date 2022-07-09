@@ -41,6 +41,7 @@ import time
 import traceback
 import pkg_resources
 from copy import deepcopy
+from datetime import datetime
 
 import numpy as np
 from numpy.linalg import multi_dot
@@ -807,7 +808,10 @@ def run_optimizer(**kwargs):
     logger.info('geometric-optimize called with the following command line:\n')
     logger.info(' '.join(sys.argv)+'\n')
     print_logo(logger)
-    logger.info('-=# \x1b[1;94m geomeTRIC started. Version: %s \x1b[0m #=-\n' % geometric.__version__)
+    now = datetime.now()
+    logger.info('-=# \x1b[1;94m geomeTRIC started. Version: %s \x1b[0m #=-\n' % (geometric.__version__))
+    logger.info('Current date and time: %s\n' % now.strftime("%Y-%m-%d %H:%M:%S"))
+    
     if backed_up:
         logger.info('Backed up existing log file: %s -> %s\n' % (logfilename, os.path.basename(backed_up)))
 

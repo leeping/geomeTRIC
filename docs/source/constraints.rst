@@ -6,7 +6,7 @@ Constrained optimization
 geomeTRIC supports constrained optimizations in which the value of various geometric variables may be constrained.
 
 To use this feature, create a text file to specify the constraint and pass it to ``geometric-optimize`` after the input file.
-As noted in :ref:`Usage <usage>`, this file may also contain other command line options and arguments before the constraint specifications.
+As noted in :ref:`Options <options>`, this file may also contain other command line options and arguments before the constraint specifications.
 
 Basic considerations
 --------------------
