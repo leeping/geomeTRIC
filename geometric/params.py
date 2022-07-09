@@ -62,9 +62,9 @@ class OptParams(object):
         self.verbose = kwargs.get('verbose', False)
         # Starting value of the trust radius
         # Because TS optimization is experimental, use conservative trust radii
-        self.trust = kwargs.get('trust', 0.02 if self.transition else 0.1)
+        self.trust = kwargs.get('trust', 0.01 if self.transition else 0.1)
         # Maximum value of trust radius
-        self.tmax = kwargs.get('tmax', 0.06 if self.transition else 0.3)
+        self.tmax = kwargs.get('tmax', 0.03 if self.transition else 0.3)
         # Minimum value of the trust radius
         # Also sets the maximum step size that can be rejected
         # LPW: Add to documentation later:
@@ -183,6 +183,8 @@ class OptParams(object):
         # Convergence criteria that are only used if molconv is set to True
         self.Convergence_molpro_gmax = kwargs.get('convergence_molpro_gmax', 3e-4)
         self.Convergence_molpro_dmax = kwargs.get('convergence_molpro_dmax', 1.2e-3)
+        # Convergence criteria for constraint violation
+        self.Convergence_cmax = kwargs.get('convergence_cmax', 1.0e-2)
 
     def printInfo(self):
         if self.subfrctor == 2:

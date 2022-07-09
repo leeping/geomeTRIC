@@ -1,1 +1,0 @@
-Here we run an optimization with an implicit solvent.

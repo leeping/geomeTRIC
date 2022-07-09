@@ -1,0 +1,16 @@
+coordinates start.xyz
+run gradient
+basis 3-21g
+method upbe0
+charge 1
+spinmult 1
+precision mixed
+convthre 1.0e-6
+threall 1.0e-16
+mixguess 0.0
+scf diis+a
+maxit 50
+threspdp 1e-8
+dftgrid 1
+dispersion yes
+pcm cosmo

@@ -57,7 +57,7 @@ from .nifty import row, col, flat, bohr2ang, ang2bohr, logger, bak, createWorkQu
 from .errors import InputError, HessianExit, EngineError, GeomOptNotConvergedError, GeomOptStructureError, LinearTorsionError
 
 class Optimizer(object):
-    def __init__(self, coords, molecule, IC, engine, dirname, params):
+    def __init__(self, coords, molecule, IC, engine, dirname, params, print_info=True):
         """
         Object representing the geometry optimization of a molecular system.
 
@@ -76,6 +76,8 @@ class Optimizer(object):
         params : OptParams object
             Contains optimization parameters (really just a struct)
             Includes xyzout and qdata output file names (written if not None)
+        print_info : bool
+            Print information about the optimization at end of constructor call
         """
         # Copies of data passed into constructor
         self.coords = coords
@@ -116,6 +118,52 @@ class Optimizer(object):
         self.lowq_tr_limit = 1
         # Recalculate the Hessian after a trigger - for example if the energy changes by a lot during TS optimization.
         self.recalcHess = False
+        if print_info:
+            self.print_info()
+        
+    def print_info(self):
+        params = self.params
+        logger.info("> ===== Optimization Info: ====\n")
+        logger.info("> Maximum number of optimization cycles: %i\n" % params.maxiter)
+        logger.info("> Initial / maximum trust radius (Angstrom): %.3f / %.3f\n" % (params.trust, params.tmax))
+        logger.info("> Convergence Criteria:\n")
+        if params.qccnv:
+            logger.info("> Q-Chem style convergence criteria requested.\n")
+            logger.info("> Will converge when 2 out of 3 criteria are reached:\n")
+            logger.info(">  |Delta-E| < %.2e\n" % params.Convergence_energy)
+            if self.IC.haveConstraints():
+                logger.info(">  RMS-Ortho-Grad < %.2e\n" % params.Convergence_grms)
+            else:
+                logger.info(">  RMS-Grad  < %.2e\n" % params.Convergence_grms)
+            logger.info(">  RMS-Disp  < %.2e\n" % params.Convergence_drms)
+        else:
+            logger.info("> Will converge when all 5 criteria are reached:\n")
+            logger.info(">  |Delta-E| < %.2e\n" % params.Convergence_energy)
+            if self.IC.haveConstraints():
+                logger.info(">  RMS-Ortho-Grad < %.2e\n" % params.Convergence_grms)
+                logger.info(">  Max-Ortho-Grad < %.2e\n" % params.Convergence_gmax)
+            else:
+                logger.info(">  RMS-Grad  < %.2e\n" % params.Convergence_grms)
+                logger.info(">  Max-Grad  < %.2e\n" % params.Convergence_gmax)
+            logger.info(">  RMS-Disp  < %.2e\n" % params.Convergence_drms)
+            logger.info(">  Max-Disp  < %.2e\n" % params.Convergence_dmax)
+
+        if params.molcnv:
+            logger.info("> \n")
+            logger.info("> Molpro style convergence criteria requested.\n")
+            logger.info("> Will also converge when both of the following are satisfied:\n")
+            if self.IC.haveConstraints():
+                logger.info(">  Max-Ortho-Grad < %.2e\n" % params.Convergence_molpro_gmax)
+            else:
+                logger.info(">  Max-Grad < %.2e\n" % params.Convergence_molpro_gmax)
+            logger.info(">  Max-Disp < %.2e -OR- |Delta-E| < %.2e\n" % (params.Convergence_molpro_dmax, params.Convergence_energy))
+            
+        if self.IC.haveConstraints():
+            logger.info("> \n")
+            logger.info("> Constraints are requested. The following criterion is added:\n")
+            logger.info(">  Max Constraint Violation (in Angstroms/degrees) < %.2e \n" % self.params.Convergence_cmax)
+
+        logger.info("> === End Optimization Info ===\n")
         
     def get_cartesian_norm(self, dy, verbose=None):
         if not verbose: verbose = self.params.verbose
@@ -495,7 +543,7 @@ class Optimizer(object):
         # Molpro defaults for convergence
         Converged_molpro_gmax = max_gradient < params.Convergence_molpro_gmax
         Converged_molpro_dmax = max_displacement < params.Convergence_molpro_dmax
-        self.conSatisfied = not self.IC.haveConstraints() or self.IC.maxConstraintViolation(self.X) < 1e-2
+        self.conSatisfied = not self.IC.haveConstraints() or self.IC.maxConstraintViolation(self.X) < params.Convergence_cmax
         # Print status
         msg = "Step %4i :" % self.Iteration
         msg += " Displace = %s%.3e\x1b[0m/%s%.3e\x1b[0m (rms/max)" % (colors['drms'], rms_displacement, colors['dmax'], max_displacement)
@@ -692,7 +740,7 @@ class StepState(object):
     Okay    = 2 # Okay step; do not change the trust radius.
     Good    = 3 # Good step; increase the trust radius up to the limit.
     
-def Optimize(coords, molecule, IC, engine, dirname, params):
+def Optimize(coords, molecule, IC, engine, dirname, params, print_info=True):
     """
     Optimize the geometry of a molecule. This function used to contain the whole
     optimization loop, which has since been moved to the Optimizer() class;
@@ -720,7 +768,7 @@ def Optimize(coords, molecule, IC, engine, dirname, params):
     progress: Molecule
         A molecule object for opt trajectory and energies
     """
-    optimizer = Optimizer(coords, molecule, IC, engine, dirname, params)
+    optimizer = Optimizer(coords, molecule, IC, engine, dirname, params, print_info)
     return optimizer.optimizeGeometry()
 
 def run_optimizer(**kwargs):
@@ -883,7 +931,7 @@ def run_optimizer(**kwargs):
             if ic == 0:
                 progress = Optimize(coords, M, IC, engine, dirname, params)
             else:
-                progress += Optimize(coords, M, IC, engine, dirname, params)
+                progress += Optimize(coords, M, IC, engine, dirname, params, print_info=False)
             # update the structure for next optimization in SCAN (by CNH)
             M.xyzs[0] = progress.xyzs[-1]
             coords = progress.xyzs[-1].flatten() * ang2bohr

@@ -1,0 +1,5 @@
+This test calculation shows how it is possible to drive the rotation of a molecule beyond 180 degrees.
+One water molecule is rotated along the z axis by 720 degrees in 10 degree increments while
+the other molecule's orientation is held constant.
+The xy coordinates of both water oxygens are held fixed so it is not possible for the molecules to move
+perpendicular to the rotation axis.

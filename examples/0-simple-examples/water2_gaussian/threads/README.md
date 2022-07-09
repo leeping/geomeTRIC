@@ -1,1 +1,0 @@
-An example optimization using gaussian where the threads are set by the command line.
