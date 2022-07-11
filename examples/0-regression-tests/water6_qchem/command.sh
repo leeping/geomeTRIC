@@ -1,1 +1,1 @@
-geometric-optimize --engine qchem water6.qcin
+geometric-optimize --engine qchem run.qcin
