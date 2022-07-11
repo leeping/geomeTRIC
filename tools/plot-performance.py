@@ -24,7 +24,7 @@ if not fig_title:
 labels = input('Enter optional legend labels separated by space (%i required) --> ' % len(logfnms)).split()
 if len(labels) != len(logfnms):
     print("Did not provide valid labels - using log filenames.")
-    labels = [i.replace('.log', '') for i in logfnms]
+    labels = logfnms
 
 df_energy = pd.DataFrame(dict([(label, []) for label in labels]))
 df_grms = pd.DataFrame(dict([(label, []) for label in labels]))
