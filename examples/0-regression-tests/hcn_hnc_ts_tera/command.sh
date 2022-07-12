@@ -1,1 +1,1 @@
-geometric-optimize --transition --hessian first+last --engine tera run.in
+geometric-optimize --transition yes --hessian first+last --engine tera run.in

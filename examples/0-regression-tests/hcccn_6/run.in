@@ -1,0 +1,4 @@
+method rb3lyp
+basis 3-21g
+charge 0
+coordinates start.xyz
