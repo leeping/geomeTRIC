@@ -264,16 +264,15 @@ def get_molecule_engine(**kwargs):
             images = kwargs.get('images', 11)
             charge = M.charge
             mult = M.mult
+            M2 = M1
             print("Input coordinates have %i frames. The following will be used to initialize NEB images:" % len(M1))
             print(', '.join(["%i" % (int(round(i))) for i in np.linspace(0, len(M1)-1, images)]))
             for i in range(len(M1)):
-                M2 = M1
                 M2[i].charge = charge
                 M2[i].mult = mult
             M = M2[np.array([int(round(i)) for i in np.linspace(0, len(M2)-1, images)])]
         else:
-            M1 = M1[-1]
-            M.xyzs = M1.xyzs
+            M = M1[-1]
     # Perform some sanity checks on arguments
     if not using_qchem and qcdir:
         raise EngineError("qcdir keyword argument passed to get_molecule_engine but Q-Chem engine is not being used")

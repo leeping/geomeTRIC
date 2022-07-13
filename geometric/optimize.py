@@ -117,10 +117,10 @@ class Optimizer(object):
         # This method can be called at a different verbose level than the master
         # because it can occur inside a nested loop
         if not verbose: verbose = self.params.verbose
-        if self.params.irc:
-            return get_delta_prime(v0, self.X*np.sqrt(self.mass), self.G, self.H, self.IC, self.params.transition, verbose)
-        else:
-            return get_delta_prime(v0, self.X, self.G, self.H, self.IC, self.params.transition, verbose)
+        #if self.params.irc:
+        #    return get_delta_prime(v0, self.X*np.sqrt(self.mass), self.G, self.H, self.IC, self.params.transition, verbose)
+        #else:
+        return get_delta_prime(v0, self.X, self.G, self.H, self.IC, self.params.transition, verbose)
 
     def createFroot(self, v0):
         return Froot(self.trust, v0, self.X, self.G, self.H, self.IC, self.params)
@@ -183,10 +183,7 @@ class Optimizer(object):
         if self.IC.haveConstraints() and self.params.enforce:
             self.X = self.IC.newCartesian_withConstraint(self.X, dy, thre=self.params.enforce, verbose=self.params.verbose)
         else:
-            if self.params.irc:
-                self.X = self.IC.newCartesian(self.X*np.sqrt(self.mass), dy, self.params.verbose)/np.sqrt(self.mass)
-            else: 
-                self.X = self.IC.newCartesian(self.X, dy, self.params.verbose)
+            self.X = self.IC.newCartesian(self.X, dy, self.params.verbose)
 
     def calcGradNorm(self):
         gradxc = self.IC.calcGradProj(self.X, self.gradx) if self.IC.haveConstraints() else self.gradx.copy()
@@ -228,12 +225,7 @@ class Optimizer(object):
         # output file may be read in.
         spcalc = self.engine.calc(self.X, self.dirname, read_data=(self.Iteration==0))
         self.E = spcalc['energy']
-        if self.params.irc:
-            M = self.molecule
-            mwgrad = spcalc['gradient']/np.sqrt(self.mass)   
-            self.gradx = mwgrad
-        else:
-            self.gradx = spcalc['gradient']
+        self.gradx = spcalc['gradient']
 
         # Calculate Hessian at the first step, or at each step if desired
         if self.params.hessian == 'each':
@@ -244,7 +236,6 @@ class Optimizer(object):
                 self.frequency_analysis(self.Hx, 'iter%03i' % self.Iteration, False)
         elif self.Iteration == 0:
             if self.params.hessian in ['first', 'stop', 'first+last']:
-                print('calculating Hx0')
                 self.Hx0 = calc_cartesian_hessian(self.X, self.molecule, self.engine, self.dirname, read_data=True, verbose=self.params.verbose)
                 if self.params.frequency:
                     self.frequency_analysis(self.Hx0, 'first', False)
@@ -273,10 +264,10 @@ class Optimizer(object):
         """
         # Initial internal coordinates (optimization variables) and internal gradient
         self.Y = self.IC.calculate(self.coords)
-        if self.params.irc:
-            self.G = self.IC.calcGrad(self.X*np.sqrt(self.mass), self.gradx).flatten()
-        else:
-            self.G = self.IC.calcGrad(self.X, self.gradx).flatten()
+        #if self.params.irc:
+        #    self.G = self.IC.calcGrad(self.X*np.sqrt(self.mass), self.gradx).flatten()
+        #else:
+        self.G = self.IC.calcGrad(self.X, self.gradx).flatten()
         # Print initial iteration
         rms_gradient, max_gradient = self.calcGradNorm()
         msg = "Step %4i :" % self.Iteration
@@ -314,8 +305,8 @@ class Optimizer(object):
         Perform one step of the optimization.
         """
         params = self.params
-        if params.irc:
-            self.trust /= 2
+        #if params.irc:
+        #    self.trust /= 2
         if np.isnan(self.G).any():
             raise RuntimeError("Gradient contains nan - check output and temp-files for possible errors")
         if np.isnan(self.H).any():
@@ -571,6 +562,7 @@ class Optimizer(object):
         if hasattr(self, 'Hx'):
             self.H = self.IC.calcHess(self.X, self.gradx, self.Hx)
         # Then it's on to the next loop iteration!
+
         return
 
     def UpdateHessian(self):

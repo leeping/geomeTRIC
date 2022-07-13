@@ -206,50 +206,22 @@ def geometric_run_json(in_json_dict):
 
     input_opts = parse_input_json_dict(in_json_dict)
     qcschema = input_opts.get('qcschema') 
-    print ("Input Detail:", input_opts)
-   # if 'images' in input_opts:
-   #     IRC = False
-   #     NEB = True
-   #     Opt = False 
-   #     ew = False
-   #     parser = geometric.neb.build_args() 
-   #     if 'ew' in input_opts:
-   #         ew = True
-   #         del input_opts['ew']
-   #     args_list = parse_key(input_opts) 
-   #     if ew:
-   #         args_list.extend(['--ew'])
-   #     
-   #     args, unkonwn = parser.parse_known_args(args_list)
-   #         
-   #     args.qcschema = qcschema
-   #     args.qce_engine = input_opts.get('qce_program')
-   #     args.client = input_opts.get('client')
-   #     M, engine = geometric.neb.get_molecule_engine(args)
-   #     M.align()
-   #     tmpdir = args.input + ".tmp"
-   #     os.mkdir(tmpdir)
-   #         
-   # else:
-   #     IRC = False
-   #     NEB = False 
-   #     Opt = True
-   #     TS = False
+    #Opt = True
+    #NEB = False
+    #IRC = False
 
-    temp_method = qcschema['model']['method'].split('-')
-    if temp_method[0].upper() == 'TS':
-        TS = True
-        input_opts['qcschema']['model']['method'] = '-'.join(temp_method[1:])
+    #elif input_opts.get('irc', False):
+    #    IRC=True
+    #    Opt=False
+    #    if input_opts.get('trust') >=0.3:
+    #        input_opts['tmax'] = input_opts.get('trust')*1.01
+    #elif input_opts.get('neb', False):
+    #    NEB=True
+    #    Opt=False
 
-    elif input_opts.get('irc', False):
-        IRC=True
-        if input_opts.get('trust') >=0.3:
-            input_opts['tmax'] = input_opts.get('trust')*1.01
-         
     M, engine = geometric.optimize.get_molecule_engine(**input_opts)
     # Get initial coordinates in bohr
     coords = M.xyzs[0].flatten() * geometric.nifty.ang2bohr
-
     # Read in the constraints
     constraints_dict = input_opts.get('constraints', {})
     if "scan" in constraints_dict:
@@ -287,49 +259,51 @@ def geometric_run_json(in_json_dict):
     logger.info(IC)
     logger.info("\n")
     
-   # if NEB:
-   #     params = geometric.neb.ChainOptParams(**vars(args))
-   #     chain = geometric.neb.ElasticBand(M, engine=engine, tmpdir=tmpdir, coordtype=args.coordsys, params=params, plain=args.plain, ic_displace=args.icdisp)
-   #     
-   # else:
-
     params = geometric.optimize.OptParams(**input_opts)
-    params.transition = TS
+    params.xyzout = "_optim.xyz"
     try:
         # Run the optimization
         if Cons is None:
             # Run a standard geometry optimization
             geometric.optimize.Optimize(coords, M, IC, engine, None, params)
-        elif input_opts.get('neb', False): 
-            # Run the NEB method
-            print ("Running an NEB calculation through QCAI.")
-            M.align()
-            
-            if params.prefix is None:
-                tmpdir = "qcai_neb.tmp"
-            else:
-                tmpdir = params.prefix+".tmp"
-            # Make the initial chain
-            chain = geometric.neb.ElasticBand(M, engine=engine, tmpdir=tmpdir, coordtype=coordsys, params=params, plain=params.plain)
-            geometric.neb.OptimizeChain(chain, engine, params)
-        elif IRC:
-            print ("The IRC method will be performed.")
+        #elif NEB:
+        #    # Run the NEB method
+        #    print ("Running an NEB calculation through QCAI.")
+        #    M.align()
+        #
+        #    if params.prefix is None:
+        #        tmpdir = "qcai_neb.tmp"
+        #    else:
+        #        tmpdir = params.prefix
+        #
+        #    if not os.path.exists(tmpdir):
+        #        os.mkdir(tmpdir)
+        #    # Make the initial chain
+        #    chain = geometric.neb.ElasticBand(M, engine=engine, tmpdir=tmpdir, coordtype=coordsys, params=params, plain=params.plain)
+        #    geometric.neb.OptimizeChain(chain, engine, params)
+        #elif IRC:
+        #    print ("The IRC method will be performed.")
 
-            #params.tmax = params.trust*1.01
-            params.xyzout = "qcai_IRC_tmp.xyz"
-            dirname = 'qcai_IRC.tmp'
-            if not os.path.exists(dirname):
-                os.mkdir(dirname)
-
-            fwd, disp= geometric.irc.irc(M, engine, coords, IC, dirname, params, direction = -1)
-            print('Forward IRC is done')
-            fwd.write('forward.xyz')
-            bwd,disp= geometric.irc.irc(M, engine, coords, IC, dirname, params, initial_disp=disp, direction = 1)
-            print('\nBackward IRC is done')
-            bwd.write('backward.xyz')
-            final = bwd[::-1] + fwd[1:]
-            final.write('IRC_%.2f.xyz' %params.trust)
-            print('\n IRC calculations are done. \'IRC_%.2f.xyz\' was generated.' %params.trust)
+        #    #params.tmax = params.trust*1.01
+        #    params.xyzout = "qcai_IRC_tmp.xyz"
+        #   # dirname = 'qcai_IRC.tmp'
+        #   # if not os.path.exists(dirname):
+        #   #     os.mkdir(dirname)
+        #    if params.prefix is None:
+        #        tmpdir = "qcai_irc.tmp"
+        #    else:
+        #        tmpdir = params.prefix
+        #    if not os.path.exists(tmpdir):
+        #        os.mkdir(tmpdir)
+        #    fwd, disp= geometric.irc.irc(M, engine, coords, IC, tmpdir, params, direction = -1)
+        #    print('Forward IRC is done')
+        #    fwd.write(os.path.join(tmpdir,'forward.xyz'))
+        #    bwd, disp= geometric.irc.irc(M, engine, coords, IC, tmpdir, params, initial_disp=disp, direction = 1)
+        #    print('\nBackward IRC is done')
+        #    bwd.write(os.path.join(tmpdir,'backward.xyz'))
+        #    final = bwd[::-1] + fwd[1:]
+        #    final.write(os.path.join(tmpdir,'IRC_%.2f.xyz' %params.trust))
+        #    print('\n IRC calculations are done. \'IRC_%.2f.xyz\' was generated.' %params.trust)
 
         else:
             # Run a constrained geometry optimization

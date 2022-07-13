@@ -17,7 +17,6 @@ setup(
     entry_points={'console_scripts': [
         'geometric-optimize = geometric.optimize:main',
         'geometric-neb = geometric.neb:main',
-        'geometric-irc = geometric.irc:main', 
     ]},
     install_requires=[
         'numpy>=1.11',

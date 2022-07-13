@@ -3804,7 +3804,7 @@ class ChainCoordinates(PrimitiveInternalCoordinates):
         guessw = kwargs.get('guessw', 0.1)
         # kwargs['cartesian'] = True
         if kwargs.get('cartesian', True):
-            print("cartesian, w =", guessw)
+            #print("cartesian, w =", guessw)
             for i, imageIC in self.ICIter():
                 self.Internals.append(RMSDisplacement(imageIC, self.na, i-1, i, head=molecule.xyzs[0]*ang2bohr, tail=molecule.xyzs[-1]*ang2bohr, w=guessw))
             self.Internals.append(RMSDisplacement(imageIC, self.na, i+1, i, head=molecule.xyzs[0]*ang2bohr, tail=molecule.xyzs[-1]*ang2bohr, w=guessw))

@@ -1291,6 +1291,8 @@ class QCEngineAPI(Engine):
 
         self.M = Molecule()
         self.M.elem = list(schema["molecule"]["symbols"])
+        self.M.charge = schema["molecule"]["molecular_charge"]
+        self.M.mult = schema["molecule"]["molecular_multiplicity"]
 
         # Geometry in (-1, 3) array in angstroms
         geom = np.array(schema["molecule"]["geometry"], dtype=np.float64).reshape(-1, 3) * bohr2ang
@@ -1321,7 +1323,8 @@ class QCEngineAPI(Engine):
         # Unpack the energy and gradient
         energy = ret["properties"]["return_energy"]
         gradient = np.array(ret["return_result"])
-        return {'energy':energy, 'gradient':gradient}
+        hessian = None
+        return {'energy':energy, 'gradient':gradient, 'hessian':gradient}
 
     def calc_qcf(self, coords):
         """
@@ -1330,7 +1333,8 @@ class QCEngineAPI(Engine):
         new_schema = deepcopy(self.schema)
         new_schema["molecule"]["geometry"] = coords.tolist()
         new_schema.pop("program", None)
-        response = self.client.add_compute(program = self.program, method = new_schema['model']['method'], basis = new_schema['model']['basis'], driver = 'gradient', molecule = new_schema['molecule'])
+        driver = new_schema['driver']
+        response = self.client.add_compute(program = self.program, method = new_schema['model']['method'], basis = new_schema['model']['basis'], driver = driver, molecule = new_schema['molecule'])
         return response.ids[0]
 
     def wait_qcf(self, ids):
@@ -1387,7 +1391,8 @@ class QCEngineAPI(Engine):
         record = self.client.query_results(id = ids)[0]
         energy = record.properties.return_energy
         gradient = np.array(record.return_result, dtype=np.float64).ravel()
-        return {'energy':energy, 'gradient':gradient}
+        Hessian = None 
+        return {'energy':energy, 'gradient':gradient, 'Hessian': gradient}
 
     def calc(self, coords, dirname, **kwargs):
         # overwrites the calc method of base class to skip caching and creating folders

@@ -133,6 +133,8 @@ kb          = 0.008314462618       # Previous value: 0.0083144100163
 kb_si       = 1.380649e-23
 
 # Conversion factors
+ev2au        = 0.036749308136649
+au2ev        = 1/ev2au
 bohr2ang     = 0.529177210903      # Previous value: 0.529177210
 ang2bohr     = 1.0 / bohr2ang
 au2kcal      = 627.5094740630558   # Previous value: 627.5096080306

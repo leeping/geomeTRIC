@@ -106,6 +106,7 @@ def calc_cartesian_hessian(coords, molecule, engine, dirname, read_data=True, ve
     wq = getWorkQueue()
     Hx = np.zeros((nc, nc), dtype=float)
     logger.info("Calculating Cartesian Hessian using finite difference on Cartesian gradients\n")
+
     if wq:
         for i in range(nc):
             if verbose >= 2: logger.info(" Submitting gradient calculation for coordinate %i/%i\n" % (i+1, nc))
@@ -127,6 +128,12 @@ def calc_cartesian_hessian(coords, molecule, engine, dirname, read_data=True, ve
             gbak = engine.read_wq(coords, dirname_d)['gradient']
             coords[i] += h
             Hx[i] = (gfwd-gbak)/(2*h)
+
+    elif type(engine).__name__ == "QCEngineAPI" and engine.client:
+        engine.schema["driver"] = "hessian"
+        Hx = engine.calc(coords, dirname)["Hessian"].reshape(nc, nc)
+        engine.schema["driver"] = "gradient"
+    
     else:
         # First calculate a gradient at the central point, for linking scratch files.
         engine.calc(coords, dirname, read_data=read_data)

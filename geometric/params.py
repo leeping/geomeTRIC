@@ -50,26 +50,24 @@ class OptParams(object):
         # Whether we are optimizing for a transition state. This changes a number of default parameters.
         self.transition = kwargs.get('transition', False)
         # IRC method
-        self.irc = kwargs.get('irc', False)
         # NEB method parameters
-        self.neb = kwargs.get('neb', False)
-        if self.neb:
-            print('NEB calculation will be performed')
+        if kwargs.get('neb', False):
             self.coordsys = kwargs.get('coordsys', 'cart')
             self.port = kwargs.get('port', 0)
             self.prefix = kwargs.get('prefix', None)
-            self.images = kwargs.get('images', 21)
+            self.images = kwargs.get('images', 11)
             self.plain = kwargs.get('plain', 0)
             self.maxg = kwargs.get('maxg', 0.05)
             self.avgg = kwargs.get('avgg', 0.025)
             self.guessk = kwargs.get('guessk', 0.05)
             self.guessw = kwargs.get('guessw', 0.1)
-            self.nebk = kwargs.get('nebk', 1) 
+            self.nebk = kwargs.get('nebk', 1.0)
             self.nebew = kwargs.get('nebew', False)
             self.history = kwargs.get('neb_history', 1)
             self.maxcyc = kwargs.get('maxcyc', 100)
             self.climb = kwargs.get('climb', 0.5)
             self.ncimg = kwargs.get('ncimg', 1)
+        self.prefix = kwargs.get('prefix', None)
         # CI optimizations sometimes require tiny steps
         self.meci = kwargs.get('meci', False)
         # Handle convergence criteria; this edits the kwargs
@@ -97,6 +95,7 @@ class OptParams(object):
         # The trust radius should not be outside (tmin, tmax)
         self.trust = min(self.tmax, self.trust)
         self.trust = max(self.tmin, self.trust)
+
         # Maximum number of optimization cycles
         self.maxiter = kwargs.get('maxiter', 300)
         # Use updated constraint algorithm implemented 2019-03-20
@@ -182,8 +181,6 @@ class OptParams(object):
     def printInfo(self):
         if self.transition:
             logger.info(' Transition state optimization requested.\n')
-        if self.irc:
-            logger.info(' IRC calculations requested.\n')
         if self.hessian == 'first':
             logger.info(' Hessian will be computed on the first step.\n')
         elif self.hessian == 'each':
@@ -270,7 +267,7 @@ def parse_optimizer_args(*args):
     
     grp_jobtype = parser.add_argument_group('jobtype', 'Control the type of optimization job')
     grp_jobtype.add_argument('--transition', type=str2bool, help='Provide "yes" to Search for a first order saddle point / transition state.\n ')
-    grp_jobtype.add_argument('--neb', type=str2bool, help='Provide "yes" to perform the NEB method to locate a first-order saddle point.\n')
+    grp_jobtype.add_argument('--neb', type=str2bool, help=argparse.SUPPRESS)
     grp_jobtype.add_argument('--meci', type=str, help='Provide second input file and search for minimum-energy conical\n '
                              'intersection or crossing point between two SCF solutions (TeraChem and Q-Chem supported).\n'
                              'Or, provide "engine" if the engine directly provides the MECI objective function and gradient.')
@@ -280,11 +277,11 @@ def parse_optimizer_args(*args):
                              'Not used if the engine computes the MECI objective function directly.')
 
     grp_nebparam = parser.add_argument_group('nebparam', 'Control the NEB calculation')
-    grp_nebparam.add_argument('--maxg', type=float, help='Converge when maximum RMS-gradient for any image falls below this threshold (default 0.05).')
-    grp_nebparam.add_argument('--avgg', type=float, help='Converge when average RMS-gradient falls below this threshold (default 0.025).')
+    grp_nebparam.add_argument('--maxg', type=float, help='Converge when maximum RMS-gradient for any image falls below this threshold (default 0.05 ev/Ang).')
+    grp_nebparam.add_argument('--avgg', type=float, help='Converge when average RMS-gradient falls below this threshold (default 0.025 ev/Ang).')
     grp_nebparam.add_argument('--guessk', type=float, help='Guess Hessian eigenvalue for displacements (default 0.05).')
     grp_nebparam.add_argument('--guessw', type=float, help='Guess weight for chain coordinates (default 0.1).')
-    grp_nebparam.add_argument('--nebk', type=float, help='NEB spring constant in units of kcal/mol/Ang^2 (default 1).')
+    grp_nebparam.add_argument('--nebk', type=float, help='NEB spring constant in units of kcal/mol/Ang^2 (default 1.0).')
     grp_nebparam.add_argument('--nebew', type=str2bool, help='Provide "yes" to perform weighted NEB calculation (k range is nebk - nebk/10)')
     grp_nebparam.add_argument('--neb_history', type=int, help='Chain history to keep in memory; note chains are very memory intensive, >1 GB each (default 1).')
     grp_nebparam.add_argument('--maxcyc', type=int, help='Maximum number of chain optimization cycles to perform (default 100).')
