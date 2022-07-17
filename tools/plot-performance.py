@@ -25,6 +25,13 @@ labels = input('Enter optional legend labels separated by space (%i required) --
 if len(labels) != len(logfnms):
     print("Did not provide valid labels - using log filenames.")
     labels = logfnms
+    # Trim off common prefix and suffix from labels
+    for i in range(min([len(l) for l in labels])):
+        if len(set([l[i] for l in labels])) != 1: break
+    labels = [l[i:][::-1] for l in labels]
+    for i in range(min([len(l) for l in labels])):
+        if len(set([l[i] for l in labels])) != 1: break
+    labels = [l[i:][::-1] for l in labels]
 
 df_energy = pd.DataFrame(dict([(label, []) for label in labels]))
 df_grms = pd.DataFrame(dict([(label, []) for label in labels]))
