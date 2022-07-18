@@ -195,12 +195,7 @@ class Structure(object):
         
     def ComputeEnergyGradient(self, result=None):
         """ Compute energies and Cartesian gradients for the current structure. """
-        #if self.qcfserver:
-        #    res = self.engine.calc_qcf(self.cartesians)
-        #    self.engine.wait_qcf([res])
-        #    result = self.engine.read_qcf(res)
-        #elif result:
-        #    pass
+        # If the result (energy and gradient in a dictionary) is provided, skip calculations
         if result is None:
             result = self.engine.calc(self.cartesians, self.tmpdir)
         self.energy = result['energy']
@@ -216,16 +211,6 @@ class Structure(object):
         self.grad_cartesian = result['gradient']
         self.grad_internal = self.IC.calcGrad(self.cartesians, self.grad_cartesian)
 
-    #def QCPortalEnergyGradient(self):
-    #    resp_id = self.engine.calc_qcf(self.cartesians)
-    #    return resp_id
-
-    #def GetQCEnergyGradient(self, cal_id):
-    #    result = self.engine.read_qcf(cal_id)
-    #    self.energy = result['energy']
-    #    self.grad_cartesian = result['gradient']
-    #    self.grad_internal = self.IC.calcGrad(self.cartesians, self.grad_cartesian)
-
     def OptimizeGeometry(self, gtol=None):
         """ Optimize the geometry of this Structure. """
         opt_params = OptParams()
@@ -238,51 +223,9 @@ class Structure(object):
         else:
             self.IC = CoordinateSystem(self.M, self.coordtype)
 
-        #if self.qcfserver == False:
         optProg = Optimize(self.cartesians, self.M, self.IC, self.engine, self.tmpdir, opt_params)#, xyzout=os.path.join(self.tmpdir,'optimize.xyz'))
         self.cartesian = np.array(optProg[-1].xyzs).flatten()
         self.M = optProg[-1]
-        #else:
-        #    """
-        #    Optimization procedure through QCAI
-        #    """
-        #    new_schema = deepcopy(self.engine.schema)
-        #    new_schema['molecule']['geometry'] = self.cartesians.reshape(-1,3)
-        #    qcel_mol = new_schema['molecule']
-        #    model = new_schema['model']
-        #    #1/10/2022 HP: Passing other keywords such as coordsys will be added later.
-        #    opt_qcschema = {
-        #            "keywords": None,
-        #            "qc_spec": {
-        #                "driver": "gradient",
-        #                "method": model["method"],
-        #                "basis": model["basis"],
-        #                "program": self.engine.program
-        #                    }
-        #                }
-        #    r=self.engine.client.add_procedure("optimization", "geometric",opt_qcschema, [qcel_mol]) #ComputeResponse
-        #    proc_id = r.ids
-        #    loop = 0
-        #    while True:
-        #        proc = self.engine.client.query_procedures(id=proc_id)[0] #OptimizationRecord
-        #        status = proc.status.split('.')[-1].upper().strip()
-        #        if status == "INCOMPLETE":
-        #            time.sleep(50)
-        #            loop += 1
-        #        elif status == "ERROR":
-        #            print("Error detected")
-        #            res = self.engine.client.modify_tasks("restart",proc.id)
-        #            print(res.n_updated,"ERROR status optimization resubmitted")
-        #            loop += 1
-        #        elif status == "COMPLETE":
-        #            optCoords = proc.get_final_molecule().geometry
-        #            print("QCAI optimization is done.")
-        #            break
-        #
-        #        if loop > 100:
-        #            raise QCEngineAPIEngineError("Stuck in endpoint optimization procedure in NEB.")
-        #    self.cartesian = np.array(optCoords).flatten()
-        # Rebuild the internal coordinate system
         self.IC = CoordinateSystem(self.M, self.coordtype)
         self.CalcInternals()
         self.ComputeEnergyGradient()
@@ -334,14 +277,10 @@ class Chain(object):
         ### Test ###
         # print("Starting Test")
         self.GlobalIC = CoordinateSystem(self.M, self.coordtype, chain=True, ic_displace=self.ic_displace, guessw=self.params.guessw)
-        # xyz = np.array(self.M.xyzs)*ang2bohr
         # print xyz.shape
         # self.GlobalIC.checkFiniteDifference(self.get_cartesian_all(endpts=True))
         self.nvars = len(self.GlobalIC.Internals)
         # raw_input()
-        self.qcfserver = False
-        if type(self.engine).__name__ == "QCEngineAPI" and self.engine.client != False:
-            self.qcfserver = True
 
     def UpdateTempDir(self, iteration):
         self.tmpdir = os.path.join(os.path.split(self.tmpdir)[0], 'chain_%04i' % iteration)
@@ -357,15 +296,12 @@ class Chain(object):
         """ Compute energies and gradients for each structure. """
         # This is the parallel point.
         wq = getWorkQueue()
-        if wq is None and self.qcfserver==False: #If work queue and qcfractal aren't available, just run calculations locally.
+        if wq is None:
             for i in range(len(self)):
                 if result:
                     self.Structures[i].ComputeEnergyGradient(result=result[i])
                 else:
                     self.Structures[i].ComputeEnergyGradient()
-       # elif result != None:
-       #     for i in range(len(self)):
-       #         self.Structure[i].ComputeEnergyGradient(result[i])
         else: #If work queue is available, handle jobs with the work queue.
             for i in range(len(self)):
                 self.Structures[i].QueueEnergyGradient()
@@ -1115,9 +1051,11 @@ class ElasticBand(Chain):
         if new_scheme:
             newLocks = [True] + [False for n in range(1, len(self)-1)] + [True] #self.locks[:]
             for n in range(1, len(self)):
+                #HP: Locking images considers maxg as well.
                 if rmsGrad[n] < self.params.avgg and maxGrad[n] < self.params.maxg:
                     newLocks[n] = True
             if False not in newLocks:
+                #HP: In case all of the images are locked before NEB converges, unlock a few.
                 print('All the images got locked, unlocking some images with tighter average gradient value.')
                 factor = 1.0
                 while False not in newLocks:
@@ -1211,7 +1149,7 @@ class ElasticBand(Chain):
             fplus = 0.5 if n == (len(self)-2) else 0.25
             fminus = 0.5 if n == 1 else 0.25
             if self.params.nebew:
-                #HP_ew
+                #HP: Energy weighted NEB
                 E_i = energies[n]
                 E_ref = min(energies[0], energies[-1]) # Reference energy can be either reactant or product. Lower energy is picked here.
                 E_max = max(energies)
@@ -1256,7 +1194,7 @@ class ElasticBand(Chain):
             drplus = self.GlobalIC.calcDisplacement(xyz, n+1, n)
             drminus = self.GlobalIC.calcDisplacement(xyz, n-1, n)
             if self.params.nebew:
-                #HP_ew 
+                #HP: Energy weighted NEB
                 E_i = energies[n]
                 E_ref = min(energies[0], energies[-1]) # Reference energy can be either reactant or product. Lower energy is picked here.
                 E_max = max(energies)
@@ -1335,7 +1273,7 @@ class ElasticBand(Chain):
             # Plain elastic band force
 
             if self.params.nebew:
-                #HP_ew 
+                #HP: Energy weighted NEB
                 E_i = energies[n]
                 E_ref = min(energies[0], energies[-1]) # Reference energy can be either reactant or product. Lower energy is picked here.
                 E_max = max(energies)
@@ -1771,6 +1709,9 @@ def BFGSUpdate(Y, Yprev, G, Gprev, H, params):
 
 
 def updatehessian(chain, old_chain, HP, HW, Y, Y_prev, GW, GW_prev, GP, GP_prev, LastForce, params, result):
+    """
+    This function was part of the 'while' loop in OptimizeChain(). It updates hessian.
+    """
     HP_bak = HP.copy()
     HW_bak = HW.copy()
     BFGSUpdate(Y, Y_prev, GP, GP_prev, HP, params)
@@ -1794,6 +1735,9 @@ def updatehessian(chain, old_chain, HP, HW, Y, Y_prev, GW, GW_prev, GP, GP_prev,
     return chain, Y, GW, GP, HP, HW, Y_prev, GP_prev, GW_prev
 
 def qualitycheck(trust, new_chain, old_chain, Quality, ThreLQ, ThreRJ, ThreHQ, Y, GW, GP, Y_prev, GW_prev, GP_prev, params_tmax):
+    """
+    This function was part of the 'while' loop in OptimizeChain(). This function checks quality of the step.
+    """
     rejectOk = (trust > ThreRJ and new_chain.TotBandEnergy - old_chain.TotBandEnergy)
     if Quality <= ThreLQ:
         # For bad steps, the trust radius is reduced
@@ -1827,6 +1771,9 @@ def qualitycheck(trust, new_chain, old_chain, Quality, ThreLQ, ThreRJ, ThreHQ, Y
 
 
 def compare(old_chain, new_chain, ThreHQ, ThreLQ, GW_prev, HW, HP, respaced, optCycle, expect, expectG, trust, trustprint, params_avgg, Quality_old=None):
+    """
+    This function was part of the 'while' loop in OptimizeChain(). Two chain objects are being compared.
+    """
     Y = new_chain.get_internal_all()
     GW = new_chain.get_global_grad("total", "working")
     GP = new_chain.get_global_grad("total", "plain")
@@ -1838,12 +1785,12 @@ def compare(old_chain, new_chain, ThreHQ, ThreLQ, GW_prev, HW, HP, respaced, opt
     except:
         pass # When the NEB ran by QCFractal, it can't (does not need to) save the climbing images in disk.
     if respaced:
-        print("Respaced images - resetting Hessian and skipping trust radius update")
+        print("Respaced images - skipping trust radius update")
         print("@%13s %13s %13s %13s %11s %13s %13s" % (
         "GAvg(eV/Ang)", "GMax(eV/Ang)", "Length(Ang)", "DeltaE(kcal)", "RMSD(Ang)", "TrustRad(Ang)", "Step Quality"))
         print("@%13s %13s %13s" % (
         "% 8.4f  " % new_chain.avgg, "% 8.4f  " % new_chain.maxg, "% 8.4f  " % sum(new_chain.calc_spacings())))
-        HW = new_chain.guess_hessian_working.copy()
+        HW = new_chain.guess_hessian_working.copy()#TODO: Comment this out to keep the hessian
         HP = new_chain.guess_hessian_plain.copy()
         c_hist = [new_chain]
         return new_chain, Y, GW, GP, np.array(HW), np.array(HP), c_hist, respaced, Quality_old
@@ -1870,6 +1817,9 @@ def compare(old_chain, new_chain, ThreHQ, ThreLQ, GW_prev, HW, HP, respaced, opt
     return new_chain, Y, GW, GP, np.array(HW), np.array(HP), [old_chain], respaced, Quality
 
 def converged(chain_maxg, chain_avgg, params_maxg, params_avgg, optCycle, params_maxcyc):
+    """
+    This function was part of the 'while' loop in OptimizeChain(). Checking to see whether the chain is converged.
+    """
     if chain_maxg < params_maxg and chain_avgg < params_avgg:
         print("--== Optimization Converged. ==--")
         return True
@@ -1879,6 +1829,9 @@ def converged(chain_maxg, chain_avgg, params_maxg, params_avgg, optCycle, params
     return False
 
 def takestep(chain, optCycle, LastForce, ForceRebuild, trust, Y, GW, GP, HW, HP, result):
+    """
+    This function was part of the 'while' loop in OptimizeChain(). Take step to move the chain.
+    """
     LastForce += ForceRebuild
     dy, expect, expectG, ForceRebuild = chain.CalcInternalStep(trust, HW, HP)
     # If ForceRebuild is True, the internal coordinate system
@@ -2012,6 +1965,9 @@ def OptimizeChain(chain, engine, params):
                                                                         GW_prev, GP, GP_prev, LastForce, params, None)
 
 class nullengine(object):
+    """
+    Fake engine for QCFractal.
+    """
     def __init__(self, charge, mult, elems, coords):
         self.elems = elems
         self.coords = np.array(coords).flatten()
@@ -2032,18 +1988,45 @@ class nullengine(object):
             else:
                 M1 += M2
         self.M = M1
-        #self.M = M1[np.array([int(round(i)) for i in np.linspace(0, len(M1)-1, images)])]
 
+def chaintocoords(chain, ang=False):
+    """
+    Extracts Cartesian coordinates from an ElasticBand object.
+    Parameters
+    ----------
+    chain: ElasticBand object
+    ang: Bool
+        True will return Cartesian coordinates in Ang (False in Bohr).
 
-def chaintocoords(chain):
+    Returns
+    -------
+    newcoords: list
+        Cartesian coordinates in list. It is not numpy array because neb record socket in QCF can't process nparray.
+    """
     newcoords = []
+    if ang:
+        factor = 1
+    else:
+        factor = bohr2ang
     for i in range(len(chain)):
         M_obj = chain.Structures[i].M
-        coord = M_obj.xyzs[0] / bohr2ang
+        coord = M_obj.xyzs[0] / factor
         newcoords.append(coord.tolist())
     return newcoords
 
 def arrange(qcel_mols):
+    """
+    This function will align and respace a chain.
+    Parameters
+    ----------
+    qcel_mols: [QCElemental Molecule object]
+        QCElemental Molecule objects in a list that needs to be aligned.
+
+    Returns
+    -------
+    aligned_chain: [QCElemental Molecule object]
+        Aligned molecule objects
+    """
     aligned_chain = []
     sym = qcel_mols[0].symbols.tolist()
     chg = qcel_mols[0].molecular_charge
@@ -2070,6 +2053,9 @@ def arrange(qcel_mols):
     return aligned_chain
 
 def prepare(prev):
+    """
+    This function is for QCFractal. Takes a dictionary with parameters and prepare for the NEB calculation loops.
+    """
 
     print("\n------------------NEB Iteration:0------------------")
 
@@ -2083,7 +2069,6 @@ def prepare(prev):
 
     params = {
         'neb' : True,
-        #'images':args_dict.get('images'),
         'nebew': args_dict.get('energy_weighted'),
         'nebk': args_dict.get('spring_constant'),
         'coordsys': 'cart'}
@@ -2101,8 +2086,6 @@ def prepare(prev):
     chain = ElasticBand(M, engine=engine, tmpdir=tmpdir, coordtype='cart', params=opt_param, plain=opt_param.plain)
 
     trust = opt_param.trust
-    #chain.respace(0.01)
-    #chain.delete_insert(1.0) #TODO: In case it gets deleted and respaced, we need to calculate energies again..
     chain.ComputeMetric()
     chain.ComputeChain(result=result)
     chain.ComputeGuessHessian(full=False, blank=isinstance(engine, Blank))
@@ -2124,6 +2107,8 @@ def prepare(prev):
             'GP': GP.tolist(),
             'HW': HW.tolist(),
             'HP': HP.tolist(),
+            'HP_guess': HP.tolist(),
+            'HW_guess': HW.tolist(),
             'new_attrs': new_attrs,
             'old_attrs': old_attrs,
             'trust': trust,
@@ -2139,6 +2124,9 @@ def prepare(prev):
     return newcoords, prev
 
 def switch(array, numpy=False):
+    """
+    Switches between numpy and list.
+    """
     new = []
     if not numpy:
         for i in array:
@@ -2155,6 +2143,9 @@ def switch(array, numpy=False):
     return new
 
 def add_attr(chain, attrs):
+    """
+    Add chain attributes to a given chain.
+    """
     chain.TotBandEnergy = attrs.get('TotBandEnergy')
     if attrs.get('haveMetric', False):
         chain.haveMetric = True
@@ -2169,6 +2160,9 @@ def add_attr(chain, attrs):
     return chain
 
 def check_attr(chain):
+    """
+    Check a chain's attributes and extract them.
+    """
     attrs = {}
     if chain.haveMetric:
         attrs['haveMetric'] = True
@@ -2187,15 +2181,7 @@ def check_attr(chain):
 
 def nextchain(prev):
     """
-    Generate a next chain
-
-    parameters
-    ----------
-    Return
-    ------
-    newcoords: [numpy array]
-        Updated Cartesian coordinates
-
+    Generate a next chain's Cartesian coordinate for QCFractal.
     """
     coords_bohr = prev.pop('geometry')
     coords_ang = np.array(coords_bohr)*bohr2ang
@@ -2257,8 +2243,8 @@ def nextchain(prev):
     chain = add_attr(chain, prev.get('new_attrs'))
     old_chain = add_attr(old_chain, prev.get('old_attrs'))
 
-    chain.guess_hessian_working = HW
-    chain.guess_hessian_plain = HP
+    chain.guess_hessian_working = prev.get('HW_guess')
+    chain.guess_hessian_plain = prev.get('HP_guess')
 
     chain.ComputeChain(result=result)
 
@@ -2309,23 +2295,18 @@ def nextchain(prev):
         old_attrs = check_attr(old_chain)
         newcoords = chaintocoords(chain)
         temp = {'Y': Y,
-                #'Y_prev': Y_prev.tolist(),
+                'Y_prev': Y_prev,
                 'GW': GW,
-                #'GW_prev': GW_prev.tolist(),
+                'GW_prev': GW_prev,
                 'GP': GP,
-                #'GP_prev': GP_prev.tolist(),
-                #'HW': HW.tolist(),
-                #'HP': HP.tolist(),
+                'GP_prev': GP_prev,
                 'new_attrs': new_attrs,
                 'old_attrs': old_attrs,
-                #'newchainE': chain.TotBandEnergy,
-                #'oldchainE': old_chain.TotBandEnergy,
-                #'trust': trust,
+                'trust': trust,
                 'expect': expect,
                 'expectG': expectG.tolist(),
                 'quality': Quality,
                 'respaced': respaced,
-                #'trustprint': trustprint,
                 'old_coord': coords_ang.tolist(),
                 'climbset': chain.climbSet,
                 'result':result}
@@ -2350,8 +2331,6 @@ def nextchain(prev):
             'HP': HP.tolist(),
             'new_attrs': new_attrs,
             'old_attrs': old_attrs,
-            #'newchainE': chain.TotBandEnergy,
-            #'oldchainE': old_chain.TotBandEnergy,
             'trust': trust,
             'trustprint': trustprint,
             'expect': expect,
@@ -2375,7 +2354,6 @@ def main():
 
     M, engine = get_molecule_engine(**args)
     M.align()
-
     if params.port != 0:
         createWorkQueue(params.port, debug=params.verbose)
 
