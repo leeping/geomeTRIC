@@ -205,20 +205,6 @@ def geometric_run_json(in_json_dict):
     logger.addHandler(log_stream)
 
     input_opts = parse_input_json_dict(in_json_dict)
-    qcschema = input_opts.get('qcschema') 
-    #Opt = True
-    #NEB = False
-    #IRC = False
-
-    #elif input_opts.get('irc', False):
-    #    IRC=True
-    #    Opt=False
-    #    if input_opts.get('trust') >=0.3:
-    #        input_opts['tmax'] = input_opts.get('trust')*1.01
-    #elif input_opts.get('neb', False):
-    #    NEB=True
-    #    Opt=False
-
     M, engine = geometric.optimize.get_molecule_engine(**input_opts)
     # Get initial coordinates in bohr
     coords = M.xyzs[0].flatten() * geometric.nifty.ang2bohr
@@ -258,7 +244,6 @@ def geometric_run_json(in_json_dict):
         logger.info("%i internal coordinates being used (instead of %i Cartesians)\n" % (len(IC.Internals), 3 * M.na))
     logger.info(IC)
     logger.info("\n")
-    
     params = geometric.optimize.OptParams(**input_opts)
     params.xyzout = "_optim.xyz"
     try:

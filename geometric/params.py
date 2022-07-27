@@ -67,6 +67,7 @@ class OptParams(object):
             self.maxcyc = kwargs.get('maxcyc', 100)
             self.climb = kwargs.get('climb', 0.5)
             self.ncimg = kwargs.get('ncimg', 1)
+            self.align = kwargs.get('align', False)
         self.prefix = kwargs.get('prefix', None)
         # CI optimizations sometimes require tiny steps
         self.meci = kwargs.get('meci', False)
@@ -289,14 +290,13 @@ def parse_optimizer_args(*args):
     grp_nebparam.add_argument('--ncimg', type=int, help='Number of climbing images to expect (default 1).')
     grp_nebparam.add_argument('--images', type=int, help='Number of NEB images to use (default 11).')
     grp_nebparam.add_argument('--plain', type=int, help='1: Use plain elastic band for spring force. 2: Use plain elastic band for spring AND potential (default 0).')
-
+    grp_nebparam.add_argument('--align', action='store_true', help='Align images (experimental).')
    # grp_nebparam.add_argument('--nogenguess', action='store_true', help='When MO guess files are provided, skip calculation that generates the guess')
    # grp_nebparam.add_argument('--fdcheckg', action='store_true', help='Finite-difference gradient test (do not optimize).')
    # grp_nebparam.add_argument('--icdisp', action='store_true', help='Compute displacements using internal coordinates.')
    # grp_nebparam.add_argument('--sepdir', action='store_true', help='Store each chain in a separate folder.')
    # grp_nebparam.add_argument('--skip', action='store_true', help='Skip Hessian updates that would introduce negative eigenvalues.')
    # grp_nebparam.add_argument('--tcguess', type=str, default=[], nargs="+", help='Provide MO guess files for TC as c0, c1, .. or ca0, cb0, ca1, cb1 ..')
-   # grp_nebparam.add_argument('--align', action='store_true', help='Align images (experimental).')
 
     grp_hessian = parser.add_argument_group('hessian', 'Control the calculation of Hessian (force constant) matrices and derived quantities')
     grp_hessian.add_argument('--hessian', type=str, help='Specify when to calculate Cartesian Hessian using finite difference of gradient.\n'
@@ -332,7 +332,7 @@ def parse_optimizer_args(*args):
     grp_modify.add_argument('--radii', type=str, nargs="+", help='List of atomic radii for construction of coordinate system.\n '
                             'Provide pairs of symbol/radius values such as Na 0.0 Fe 1.5\n ')
     grp_modify.add_argument('--pdb', type=str, help='PDB file name with coordinates and resids. TRIC will add T+R coordinates for each residue.\n ')
-    grp_modify.add_argument('--coords', type=str, help='Coordinate file to override the QM input file / PDB file. The LAST frame will be used.\n ')
+    grp_modify.add_argument('--coords', type=str, help='Coordinate file to override the QM input file / PDB file. The LAST frame will be used for optimizations. All the frames will be used for NEB calculations.\n ')
     grp_modify.add_argument('--frag', type=str2bool, help='Provide "yes" to delete bonds between residues, producing\n'
                             'separate fragments in the internal coordinate system.')
     

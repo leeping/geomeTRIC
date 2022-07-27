@@ -91,7 +91,7 @@ class Structure(object):
             self.M.xyzs[0] = coords.reshape(-1,3)*bohr2ang
             self.M.build_topology()
         # Set initial Cartesian coordinates
-        self.cartesians = self.M.xyzs[0].flatten()*ang2bohr
+        self.cartesians = np.round(self.M.xyzs[0].flatten()*ang2bohr, 8)
         # The default engine used to calculate energies
         self.engine = engine
         # Temporary folder for running calculations
@@ -224,12 +224,12 @@ class Structure(object):
             self.IC = CoordinateSystem(self.M, self.coordtype)
 
         optProg = Optimize(self.cartesians, self.M, self.IC, self.engine, self.tmpdir, opt_params)#, xyzout=os.path.join(self.tmpdir,'optimize.xyz'))
-        self.cartesian = np.array(optProg[-1].xyzs).flatten()
+
+        self.cartesians = np.array(optProg[-1].xyzs).flatten()
         self.M = optProg[-1]
         self.IC = CoordinateSystem(self.M, self.coordtype)
         self.CalcInternals()
-        self.ComputeEnergyGradient()
-       
+
 class Chain(object):
     """ Class representing a chain of states. """
     def __init__(self, molecule, engine, tmpdir, coordtype, params, coords=None, ic_displace=False):
@@ -446,10 +446,11 @@ class Chain(object):
         expectG = flat(np.dot(np.array(H),col(dy))) + G
         return dy, expect, expectG, ForceRebuild
 
-    def align(self):
+    def align(self, qcf=False):
         self.M.align() 
         self.Structures = [Structure(self.M[i], self.engine, os.path.join(self.tmpdir, "struct_%%0%ii" % len(str(len(self))) % i), self.coordtype) for i in range(len(self))]
-        self.clearCalcs()
+        if not qcf:
+            self.clearCalcs()
     
     def TakeStep(self, dy, verbose=False, printStep=False):
         """
@@ -978,6 +979,10 @@ class ElasticBand(Chain):
         maxg = np.max([rms_gradient(totGrad[n]) for n in range(1, len(totGrad)-1)])*au2evang
         print("Gradients (eV/Ang)    :", end=' ') # % avgg
         print(' '.join(["%7.3f" % (rms_gradient(totGrad[n])*au2evang) for n in range(len(totGrad))]))
+        #print("Potential Gradient    :", end=' ')
+        #print(' '.join(["%7.3f" % (rms_gradient(vGrad[n]) * au2evang) for n in range(len(vGrad))]))
+        #print("Spring Gradient       :", end=' ')
+        #print(' '.join(["%7.3f" % (rms_gradient(spGrad[n]) * au2evang) for n in range(len(spGrad))]))
         print("Straightness          :", end=' ') # % avgg
         print(' '.join(["%7.3f" % (straight[n]) for n in range(len(totGrad))]))
         self.avgg = avgg
@@ -1315,7 +1320,6 @@ class ElasticBand(Chain):
         grad_s_i = self.GlobalIC.calcGrad(xyz, -force_s_c.flatten())
         grad_v_p_i = self.GlobalIC.calcGrad(xyz, grad_v_p_c.flatten())
         grad_s_p_i = self.GlobalIC.calcGrad(xyz, -force_s_p_c.flatten())
-
         self.set_global_grad(grad_v_i, "potential", "plain")
         self.set_global_grad(grad_v_p_i, "potential", "projected")
         self.set_global_grad(grad_s_i, "spring", "plain")
@@ -1884,8 +1888,9 @@ def OptimizeChain(chain, engine, params):
     print("Now optimizing the chain.")
     chain.respace(0.01)
     chain.delete_insert(1.0)
-    #if params.align: chain.align()
-    #chain.align()
+    if params.align:
+        print('Aligning Chain')
+        chain.align()
     if params.nebew: print("Energy weighted NEB calculation.")
     chain.ComputeMetric()
     chain.ComputeChain(cyc=0)
@@ -2014,13 +2019,16 @@ def chaintocoords(chain, ang=False):
         newcoords.append(coord.tolist())
     return newcoords
 
-def arrange(qcel_mols):
+def arrange(qcel_mols, align):
     """
     This function will align and respace a chain.
     Parameters
     ----------
     qcel_mols: [QCElemental Molecule object]
         QCElemental Molecule objects in a list that needs to be aligned.
+
+    align: bool
+        True will align the chain
 
     Returns
     -------
@@ -2041,11 +2049,15 @@ def arrange(qcel_mols):
             M = M1
         else:
             M += M1
-    M.align()
+
     opt_param = OptParams(**{'neb':True})
     chain = ElasticBand(M, engine=None, tmpdir='tmp', coordtype='cart', params=opt_param, plain=0)
+
     chain.respace(0.01)
     chain.delete_insert(1.0)
+    if align:
+        print('Aligning chain')
+        chain.align(qcf=True)
     newcoords = chaintocoords(chain)
     for coords in newcoords:
         aligned_chain.append(qcmol(symbols=sym, geometry=coords, molecular_charge=chg, molecular_multiplicity=mult))
@@ -2090,6 +2102,13 @@ def prepare(prev):
     chain.ComputeChain(result=result)
     chain.ComputeGuessHessian(full=False, blank=isinstance(engine, Blank))
     chain.PrintStatus()
+
+    print("-= Chain Properties =-")
+    print("@%13s %13s %13s %13s %11s %13s %13s" % (
+    "GAvg(eV/Ang)", "GMax(eV/Ang)", "Length(Ang)", "DeltaE(kcal)", "RMSD(Ang)", "TrustRad(Ang)", "Step Quality"))
+    print(
+        "@%13s %13s %13s" % ("% 8.4f  " % chain.avgg, "% 8.4f  " % chain.maxg, "% 8.4f  " % sum(chain.calc_spacings())))
+
     Y = chain.get_internal_all()
     GW = chain.get_global_grad("total", "working")
     GP = chain.get_global_grad("total", "plain")

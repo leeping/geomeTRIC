@@ -930,7 +930,7 @@ class Psi4(Engine):
                     for i, (e, c) in enumerate(zip(self.M.elem, self.M.xyzs[0])):
                         if i in self.fragn:
                             outfile.write('--\n')
-                        outfile.write("%-7s %13.7f %13.7f %13.7f\n" % (e, c[0], c[1], c[2]))
+                        outfile.write("%-7s %13.8f %13.8f %13.8f\n" % (e, c[0], c[1], c[2]))
                 else:
                     outfile.write(line)
         try:

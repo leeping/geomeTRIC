@@ -41,6 +41,8 @@ import numpy as np
 import shutil
 
 import os
+
+from .errors import EngineError
 from .internal import Distance, Angle, Dihedral, CartesianX, CartesianY, CartesianZ, TranslationX, TranslationY, TranslationZ, RotationA, RotationB, RotationC
 from .engine import set_tcenv, load_tcin, TeraChem, ConicalIntersection, Psi4, QChem, Gromacs, Molpro, OpenMM, QCEngineAPI, Gaussian
 from .rotate import calc_fac_dfac
@@ -165,7 +167,7 @@ def get_molecule_engine(**kwargs):
             M.mult = tcin.get('spinmult',1)
             # The TeraChem engine needs to write rst7 files before calling TC
             # and also make sure the prmtop and qmindices.txt files are present.
-            engine = TeraChem(M, tcin, dirname=dirname)
+            engine = TeraChem(M[-1], tcin, dirname=dirname)
         elif engine_str == 'qchem':
             logger.info("Q-Chem engine selected. Expecting Q-Chem input for gradient calculation.\n")
             # The file from which we make the Molecule object
