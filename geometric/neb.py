@@ -9,7 +9,6 @@ import time
 import itertools
 import numpy as np
 from scipy.linalg import sqrtm
-from qcelemental.models import Molecule as qcmol
 from .prepare import get_molecule_engine
 from .optimize import Optimize
 from .params import OptParams, parse_optimizer_args
@@ -1900,6 +1899,7 @@ def OptimizeChain(chain, engine, params):
     chain.ComputeGuessHessian(full=False, blank=isinstance(engine, Blank))
     # Print the status of the zeroth iteration
     print("-=# Chain optimization cycle 0 #=-")
+    print('Spring Force: %.2f kcal/mol/Ang^2' % params.nebk)
     chain.PrintStatus()
     print("-= Chain Properties =-")
     print("@%13s %13s %13s %13s %11s %13s %13s" % ("GAvg(eV/Ang)", "GMax(eV/Ang)", "Length(Ang)", "DeltaE(kcal)", "RMSD(Ang)", "TrustRad(Ang)", "Step Quality"))
@@ -2035,6 +2035,7 @@ def arrange(qcel_mols, align):
     aligned_chain: [QCElemental Molecule object]
         Aligned molecule objects
     """
+    from qcelemental.models import Molecule as qcmol
     aligned_chain = []
     sym = qcel_mols[0].symbols.tolist()
     chg = qcel_mols[0].molecular_charge
@@ -2084,7 +2085,7 @@ def prepare(prev):
         'nebew': args_dict.get('energy_weighted'),
         'nebk': args_dict.get('spring_constant'),
         'coordsys': 'cart'}
-
+    print('Spring Force: %.2f kcal/mol/Ang^2' %params.get('nebk'))
     opt_param = OptParams(**params)
     opt_param.customengine = nullengine(charge, mult, elems, coords_ang)
 

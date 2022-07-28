@@ -1,0 +1,30 @@
+$molecule
+-1 1
+C     -0.3689809208  -1.4576547337  -1.3858823885
+C     -0.1536196599  -0.5941379365  -0.5627748973
+H      0.0498937407   0.2058682492   0.1931202396
+H     -0.5557150000  -2.2230003291  -2.1042277552
+C      0.4068909425   1.6172446306   1.5286738889
+N      0.6215308973   2.4516801195   2.3310909123
+$end
+
+$rem
+method                b3lyp
+basis                 6-31g(d)
+unrestricted          true
+symmetry              off
+sym_ignore            true
+incdft                false
+incfock               0
+scf_convergence       8
+thresh                14
+jobtype               opt
+scf_guess             core
+scf_algorithm         diis
+max_scf_cycles        100
+geom_opt_tol_gradient 600
+geom_opt_tol_displacement 2400
+geom_opt_tol_energy   200
+geom_opt_max_cycles   100
+$end
+
