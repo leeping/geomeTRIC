@@ -90,7 +90,7 @@ class Structure(object):
             self.M.xyzs[0] = coords.reshape(-1,3)*bohr2ang
             self.M.build_topology()
         # Set initial Cartesian coordinates
-        self.cartesians = np.round(self.M.xyzs[0].flatten()*ang2bohr, 8)
+        self.cartesians = self.M.xyzs[0].flatten()*ang2bohr
         # The default engine used to calculate energies
         self.engine = engine
         # Temporary folder for running calculations
@@ -1276,13 +1276,13 @@ class ElasticBand(Chain):
             ndrminus = np.linalg.norm(cc_curr - cc_prev)
             # Plain elastic band force
 
-            if self.params.nebew:
+            if self.params.nebew is not None:
                 #HP: Energy weighted NEB
                 E_i = energies[n]
                 E_ref = min(energies[0], energies[-1]) # Reference energy can be either reactant or product. Lower energy is picked here.
                 E_max = max(energies)
                 k_max = self.k
-                k_min = self.k/2
+                k_min = self.k/self.params.nebew
                 a = (E_max - energies[n])/(E_max - E_ref)
                 if E_i > E_ref:
                     k_new = (1-a)*k_max + a*k_min
@@ -1882,15 +1882,16 @@ def OptimizeChain(chain, engine, params):
     # Threshold below which chains should not be rejected
     ThreRJ = 0.001
     # Optimize the endpoints of the chain
-    print("First, optimizing endpoint images.")
-    chain.OptimizeEndpoints(params.maxg)
-    print("Now optimizing the chain.")
+    if params.optep:
+        print("First, optimizing endpoint images.")
+        chain.OptimizeEndpoints(params.maxg)
+    print("Optimizing the chain.")
     chain.respace(0.01)
     chain.delete_insert(1.0)
     if params.align:
         print('Aligning Chain')
         chain.align()
-    if params.nebew: print("Energy weighted NEB calculation.")
+    if params.nebew is not None: print("Energy weighted NEB will be performed.")
     chain.ComputeMetric()
     chain.ComputeChain(cyc=0)
     t0 = time.time()
@@ -2015,7 +2016,7 @@ def chaintocoords(chain, ang=False):
         factor = bohr2ang
     for i in range(len(chain)):
         M_obj = chain.Structures[i].M
-        coord = M_obj.xyzs[0] / factor
+        coord = np.round(M_obj.xyzs[0] / factor,8)
         newcoords.append(coord.tolist())
     return newcoords
 
@@ -2043,7 +2044,7 @@ def arrange(qcel_mols, align):
     M = Molecule()
     for i, mol in enumerate(qcel_mols):
         M1 = Molecule()
-        xyzs = mol.geometry*bohr2ang
+        xyzs = np.round(mol.geometry*bohr2ang, 8)
         M1.elem = sym
         M1.xyzs = [xyzs]
         if i == 0:
@@ -2070,7 +2071,7 @@ def prepare(prev):
     This function is for QCFractal. Takes a dictionary with parameters and prepare for the NEB calculation loops.
     """
 
-    print("\n------------------NEB Iteration:0------------------")
+    print("\n-=# Chain optimization cycle 0 #=-")
 
     coords_ang = np.array(prev.pop('geometry'))*bohr2ang
     args_dict = prev.get('params')
@@ -2082,10 +2083,16 @@ def prepare(prev):
 
     params = {
         'neb' : True,
+        'images': args_dict.get('images'),
+        'maxg': args_dict.get('maximum_force'),
+        'avgg': args_dict.get('average_force'),
         'nebew': args_dict.get('energy_weighted'),
         'nebk': args_dict.get('spring_constant'),
+        'maxcyc': args_dict.get('maximum_cycle'),
         'coordsys': 'cart'}
+
     print('Spring Force: %.2f kcal/mol/Ang^2' %params.get('nebk'))
+    if params.get('nebew') is not None: print('Energey weighted NEB will be performed.')
     opt_param = OptParams(**params)
     opt_param.customengine = nullengine(charge, mult, elems, coords_ang)
 
@@ -2221,13 +2228,16 @@ def nextchain(prev):
     ThreHQ = 0.5
     ThreRJ = 0.001
 
-    print("\n------------------NEB Iteration:%s------------------" %iteration)
+    print("\n-=# Chain optimization cycle %i #=-" %iteration)
 
     params_dict = {
         'neb' : True,
-        'images':args_dict.get('images'),
+        'images': args_dict.get('images'),
+        'maxg': args_dict.get('maximum_force'),
+        'avgg': args_dict.get('average_force'),
         'nebew': args_dict.get('energy_weighted'),
         'nebk': args_dict.get('spring_constant'),
+        'maxcyc': args_dict.get('maximum_cycle'),
         'coordsys': 'cart'}
 
     params = OptParams(**params_dict)

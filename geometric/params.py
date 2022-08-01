@@ -62,12 +62,13 @@ class OptParams(object):
             self.guessk = kwargs.get('guessk', 0.05)
             self.guessw = kwargs.get('guessw', 0.1)
             self.nebk = kwargs.get('nebk', 1.0)
-            self.nebew = kwargs.get('nebew', False)
+            self.nebew = kwargs.get('nebew', None)
             self.history = kwargs.get('neb_history', 1)
             self.maxcyc = kwargs.get('maxcyc', 100)
             self.climb = kwargs.get('climb', 0.5)
             self.ncimg = kwargs.get('ncimg', 1)
             self.align = kwargs.get('align', False)
+            self.optep = kwargs.get('optep', False)
         self.prefix = kwargs.get('prefix', None)
         # CI optimizations sometimes require tiny steps
         self.meci = kwargs.get('meci', False)
@@ -268,29 +269,32 @@ def parse_optimizer_args(*args):
     
     grp_jobtype = parser.add_argument_group('jobtype', 'Control the type of optimization job')
     grp_jobtype.add_argument('--transition', type=str2bool, help='Provide "yes" to Search for a first order saddle point / transition state.\n ')
-    grp_jobtype.add_argument('--neb', type=str2bool, help=argparse.SUPPRESS)
+    #grp_jobtype.add_argument('--neb', type=str2bool, help=argparse.SUPPRESS)
     grp_jobtype.add_argument('--meci', type=str, help='Provide second input file and search for minimum-energy conical\n '
                              'intersection or crossing point between two SCF solutions (TeraChem and Q-Chem supported).\n'
-                             'Or, provide "engine" if the engine directly provides the MECI objective function and gradient.')
+                             'Or, provide "engine" if the engine directly provides the MECI objective function and gradient.\n')
     grp_jobtype.add_argument('--meci_sigma', type=float, help='Sigma parameter for MECI penalty function (default 3.5).\n'
                             'Not used if the engine computes the MECI objective function directly.\n ')
     grp_jobtype.add_argument('--meci_alpha', type=float, help='Alpha parameter for MECI penalty function (default 0.025).\n'
-                             'Not used if the engine computes the MECI objective function directly.')
+                             'Not used if the engine computes the MECI objective function directly.\n ')
 
     grp_nebparam = parser.add_argument_group('nebparam', 'Control the NEB calculation')
-    grp_nebparam.add_argument('--maxg', type=float, help='Converge when maximum RMS-gradient for any image falls below this threshold (default 0.05 ev/Ang).')
-    grp_nebparam.add_argument('--avgg', type=float, help='Converge when average RMS-gradient falls below this threshold (default 0.025 ev/Ang).')
-    grp_nebparam.add_argument('--guessk', type=float, help='Guess Hessian eigenvalue for displacements (default 0.05).')
-    grp_nebparam.add_argument('--guessw', type=float, help='Guess weight for chain coordinates (default 0.1).')
-    grp_nebparam.add_argument('--nebk', type=float, help='NEB spring constant in units of kcal/mol/Ang^2 (default 1.0).')
-    grp_nebparam.add_argument('--nebew', type=str2bool, help='Provide "yes" to perform weighted NEB calculation (k range is nebk - nebk/10)')
-    grp_nebparam.add_argument('--neb_history', type=int, help='Chain history to keep in memory; note chains are very memory intensive, >1 GB each (default 1).')
-    grp_nebparam.add_argument('--maxcyc', type=int, help='Maximum number of chain optimization cycles to perform (default 100).')
-    grp_nebparam.add_argument('--climb', type=float, help='Activate climbing image for max-energy points when max gradient falls below this threshold (default 0.5).')
-    grp_nebparam.add_argument('--ncimg', type=int, help='Number of climbing images to expect (default 1).')
-    grp_nebparam.add_argument('--images', type=int, help='Number of NEB images to use (default 11).')
-    grp_nebparam.add_argument('--plain', type=int, help='1: Use plain elastic band for spring force. 2: Use plain elastic band for spring AND potential (default 0).')
-    grp_nebparam.add_argument('--align', action='store_true', help='Align images (experimental).')
+    grp_nebparam.add_argument('--maxg', type=float, help='Converge when maximum RMS-gradient for any image falls below this threshold (default 0.05 ev/Ang).\n ')
+    grp_nebparam.add_argument('--avgg', type=float, help='Converge when average RMS-gradient falls below this threshold (default 0.025 ev/Ang).\n ')
+    grp_nebparam.add_argument('--guessk', type=float, help='Guess Hessian eigenvalue for displacements (default 0.05).\n ')
+    grp_nebparam.add_argument('--guessw', type=float, help='Guess weight for chain coordinates (default 0.1).\n ')
+    grp_nebparam.add_argument('--nebk', type=float, help='NEB spring constant in units of kcal/mol/Ang^2 (default 1.0).\n ')
+    grp_nebparam.add_argument('--nebew', type=int, help='Provide an integer value to vary spring forces based on image\'s energy (energy weighted NEB).\n' 
+                                                        'The range of spring force will be nebk/nebew - nebk \n ')
+    grp_nebparam.add_argument('--neb_history', type=int, help='Chain history to keep in memory; note chains are very memory intensive, >1 GB each (default 1).\n ')
+    grp_nebparam.add_argument('--maxcyc', type=int, help='Maximum number of chain optimization cycles to perform (default 100).\n ')
+    grp_nebparam.add_argument('--climb', type=float, help='Activate climbing image for max-energy points when max gradient falls below this threshold (default 0.5).\n ')
+    grp_nebparam.add_argument('--ncimg', type=int, help='Number of climbing images to expect (default 1).\n ')
+    grp_nebparam.add_argument('--images', type=int, help='Number of NEB images to use (default 11).\n ')
+    grp_nebparam.add_argument('--plain', type=int, help='1: Use plain elastic band for spring force. 2: Use plain elastic band for spring AND potential (default 0).\n ')
+    grp_nebparam.add_argument('--align', type=str2bool, help='Align images based on the first frame (experimental).\n ')
+    grp_nebparam.add_argument('--optep', type=str2bool, help='Provide "yes" to optimize two end points of the initial input chain.\n ')
+
    # grp_nebparam.add_argument('--nogenguess', action='store_true', help='When MO guess files are provided, skip calculation that generates the guess')
    # grp_nebparam.add_argument('--fdcheckg', action='store_true', help='Finite-difference gradient test (do not optimize).')
    # grp_nebparam.add_argument('--icdisp', action='store_true', help='Compute displacements using internal coordinates.')
@@ -326,7 +330,7 @@ def parse_optimizer_args(*args):
     grp_optparam.add_argument('--reset', type=str2bool, help='Reset approximate Hessian to guess when eigenvalues are under epsilon.\n '
                               'Defaults to True for minimization and False for transition states.\n ')
     grp_optparam.add_argument('--epsilon', type=float, help='Small eigenvalue threshold for resetting Hessian, default 1e-5.\n ')
-    grp_optparam.add_argument('--check', type=int, help='Check coordinates every <N> steps and rebuild coordinate system, disabled by default.')
+    grp_optparam.add_argument('--check', type=int, help='Check coordinates every <N> steps and rebuild coordinate system, disabled by default.\n ')
 
     grp_modify = parser.add_argument_group('structure', 'Modify the starting molecular structure or connectivity')
     grp_modify.add_argument('--radii', type=str, nargs="+", help='List of atomic radii for construction of coordinate system.\n '
@@ -334,7 +338,7 @@ def parse_optimizer_args(*args):
     grp_modify.add_argument('--pdb', type=str, help='PDB file name with coordinates and resids. TRIC will add T+R coordinates for each residue.\n ')
     grp_modify.add_argument('--coords', type=str, help='Coordinate file to override the QM input file / PDB file. The LAST frame will be used for optimizations. All the frames will be used for NEB calculations.\n ')
     grp_modify.add_argument('--frag', type=str2bool, help='Provide "yes" to delete bonds between residues, producing\n'
-                            'separate fragments in the internal coordinate system.')
+                            'separate fragments in the internal coordinate system.\n ')
     
     grp_output = parser.add_argument_group('output', 'Control the format and amount of the output')
     grp_output.add_argument('--prefix', type=str, help='Specify a prefix for log file and temporary directory.\n'
@@ -344,7 +348,7 @@ def parse_optimizer_args(*args):
                             '2 = Include microiterations. 3 = Lots of printout from low-level functions.\n ')
     grp_output.add_argument('--qdata', type=str2bool, help='Provide "yes" to write qdata.txt containing coordinates, energies, gradients for each structure.\n ')
     grp_output.add_argument('--logINI',  type=str, dest='logIni', help='.ini file for customizing logging output.\n ')
-    grp_output.add_argument('--write_cart_hess', type=str, help='Write approximate cartesian Hessian at optimized geometry to specified file.')
+    grp_output.add_argument('--write_cart_hess', type=str, help='Write approximate cartesian Hessian at optimized geometry to specified file.\n ')
 
     grp_software = parser.add_argument_group('molpro', 'Options specific for certain software packages')
     grp_software.add_argument('--molproexe', type=str, help='Specify absolute path of Molpro executable.\n ')
@@ -354,7 +358,7 @@ def parse_optimizer_args(*args):
 
     grp_debug = parser.add_argument_group('debug', 'Relevant for development and debugging')
     grp_debug.add_argument('--displace', type=str2bool, help='Provide "yes" to write out displacements of the internal coordinates.\n ')
-    grp_debug.add_argument('--fdcheck', type=str2bool, help='Provide "yes" to check internal coordinate gradients using finite difference.')
+    grp_debug.add_argument('--fdcheck', type=str2bool, help='Provide "yes" to check internal coordinate gradients using finite difference.\n ')
 
     grp_help = parser.add_argument_group('help', 'Get help')
     grp_help.add_argument('-h', '--help', action='help', help='Show this help message and exit')
