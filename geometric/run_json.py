@@ -251,21 +251,6 @@ def geometric_run_json(in_json_dict):
         if Cons is None:
             # Run a standard geometry optimization
             geometric.optimize.Optimize(coords, M, IC, engine, None, params)
-        #elif NEB:
-        #    # Run the NEB method
-        #    print ("Running an NEB calculation through QCAI.")
-        #    M.align()
-        #
-        #    if params.prefix is None:
-        #        tmpdir = "qcai_neb.tmp"
-        #    else:
-        #        tmpdir = params.prefix
-        #
-        #    if not os.path.exists(tmpdir):
-        #        os.mkdir(tmpdir)
-        #    # Make the initial chain
-        #    chain = geometric.neb.ElasticBand(M, engine=engine, tmpdir=tmpdir, coordtype=coordsys, params=params, plain=params.plain)
-        #    geometric.neb.OptimizeChain(chain, engine, params)
         #elif IRC:
         #    print ("The IRC method will be performed.")
 
