@@ -165,6 +165,8 @@ def get_molecule_engine(**kwargs):
                 M = Molecule(tcin['coordinates'], radii=radii, fragment=frag)
             M.charge = tcin['charge']
             M.mult = tcin.get('spinmult',1)
+            if kwargs.get('neb', False) and len(kwargs.get('tcguess', [])) != 0:
+                tcin['nebtcguess'] = kwargs.get('tcguess')
             # The TeraChem engine needs to write rst7 files before calling TC
             # and also make sure the prmtop and qmindices.txt files are present.
             engine = TeraChem(M[-1], tcin, dirname=dirname)

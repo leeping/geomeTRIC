@@ -1831,7 +1831,7 @@ def converged(chain_maxg, chain_avgg, params_maxg, params_avgg, optCycle, params
         return True
     return False
 
-def takestep(chain, optCycle, LastForce, ForceRebuild, trust, Y, GW, GP, HW, HP, result):
+def takestep(chain, c_hist, params, optCycle, LastForce, ForceRebuild, trust, Y, GW, GP, HW, HP, result):
     """
     This function was part of the 'while' loop in OptimizeChain(). Take step to move the chain.
     """
@@ -1940,7 +1940,7 @@ def OptimizeChain(chain, engine, params):
         #=======================================#
         print("Time since last ComputeChain: %.3f s" % (time.time() - t0))
         chain, old_chain, expect, expectG, ForceRebuild, LastForce, Y_prev, GW_prev, GP_prev, respaced, optCycle = takestep(chain,
-                                                     optCycle, LastForce, ForceRebuild, trust, Y, GW, GP, HW, HP, None)
+                                             c_hist, params, optCycle, LastForce, ForceRebuild, trust, Y, GW, GP, HW, HP, None)
         chain.ComputeChain(cyc=optCycle)
         t0 = time.time()
         #----------------------------------------------------------
@@ -2284,7 +2284,7 @@ def nextchain(prev):
                                                                   trust, trustprint, params.avgg, Quality)
     if respaced:
         chain, old_chain, expect, expectG, ForceRebuild, LastForce, Y_prev, GW_prev, GP_prev, respaced, _ = takestep(chain,
-                iteration, LastForce, ForceBuild, trust, Y, GW, GP, HW, HP, prev.get('result', result))
+                old_chain, params, iteration, LastForce, ForceBuild, trust, Y, GW, GP, HW, HP, prev.get('result', result))
         new_attrs = check_attr(chain)
         old_attrs = check_attr(old_chain)
         newcoords = chaintocoords(chain)
@@ -2318,7 +2318,7 @@ def nextchain(prev):
     if not good:
         chain.ComputeChain(result=prev.get('result'))
         chain, old_chain, expect, expectG, ForceRebuild, LastForce, Y_prev, GW_prev, GP_prev, respaced, _ = takestep(chain,
-                                                                iteration, LastForce, ForceBuild, trust, Y, GW, GP,
+                                                    old_chain, params, iteration, LastForce, ForceBuild, trust, Y, GW, GP,
                                                                     HW, HP, prev.get('result', result))
 
         new_attrs = check_attr(chain)
@@ -2347,7 +2347,7 @@ def nextchain(prev):
                                                                        GW_prev, GP, GP_prev,
                                                                        LastForce, params, prev.get('result', result))
     chain, old_chain, expect, expectG, ForceRebuild, LastForce, Y_prev, GW_prev, GP_prev, respaced, _ = takestep(chain,
-                                                    iteration, LastForce, ForceBuild,
+                                                    old_chain, params, iteration, LastForce, ForceBuild,
                                                     trust, Y, GW, GP, HW, HP, prev.get('result', result))
     new_attrs = check_attr(chain)
     old_attrs = check_attr(old_chain)

@@ -383,6 +383,10 @@ class TeraChem(Engine): # pragma: no cover
         else:
             self.initguess_mode = 'none'
             self.initguess_files = []
+
+        if 'nebtcguess' in self.tcin: #HP: Will this be a problem with self.initguess_files list from 'guess'?
+            self.initguess_mode = 'nebtcguess'
+            self.initguess_files = self.tcin.pop('nebtcguess')
         # Check that all starting guess files exist
         for f in self.initguess_files:
             if not os.path.exists(f):

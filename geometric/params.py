@@ -69,6 +69,8 @@ class OptParams(object):
             self.ncimg = kwargs.get('ncimg', 1)
             self.align = kwargs.get('align', False)
             self.optep = kwargs.get('optep', False)
+            self.skip = kwargs.get('skip', False)
+            self.tcguess = kwargs.get('tcguess', [])
         self.prefix = kwargs.get('prefix', None)
         # CI optimizations sometimes require tiny steps
         self.meci = kwargs.get('meci', False)
@@ -294,13 +296,12 @@ def parse_optimizer_args(*args):
     grp_nebparam.add_argument('--plain', type=int, help='1: Use plain elastic band for spring force. 2: Use plain elastic band for spring AND potential (default 0).\n ')
     grp_nebparam.add_argument('--align', type=str2bool, help='Align images based on the first frame (experimental).\n ')
     grp_nebparam.add_argument('--optep', type=str2bool, help='Provide "yes" to optimize two end points of the initial input chain.\n ')
-
-   # grp_nebparam.add_argument('--nogenguess', action='store_true', help='When MO guess files are provided, skip calculation that generates the guess')
+    grp_nebparam.add_argument('--tcguess', type=str, default=[], nargs="+", help='Provide MO guess files for TC as c0, c1, .. or ca0, cb0, ca1, cb1 ..')
+    # grp_nebparam.add_argument('--nogenguess', action='store_true', help='When MO guess files are provided, skip calculation that generates the guess')
    # grp_nebparam.add_argument('--fdcheckg', action='store_true', help='Finite-difference gradient test (do not optimize).')
    # grp_nebparam.add_argument('--icdisp', action='store_true', help='Compute displacements using internal coordinates.')
    # grp_nebparam.add_argument('--sepdir', action='store_true', help='Store each chain in a separate folder.')
    # grp_nebparam.add_argument('--skip', action='store_true', help='Skip Hessian updates that would introduce negative eigenvalues.')
-   # grp_nebparam.add_argument('--tcguess', type=str, default=[], nargs="+", help='Provide MO guess files for TC as c0, c1, .. or ca0, cb0, ca1, cb1 ..')
 
     grp_hessian = parser.add_argument_group('hessian', 'Control the calculation of Hessian (force constant) matrices and derived quantities')
     grp_hessian.add_argument('--hessian', type=str, help='Specify when to calculate Cartesian Hessian using finite difference of gradient.\n'
@@ -329,6 +330,7 @@ def parse_optimizer_args(*args):
     grp_optparam.add_argument('--conmethod', type=int, help='Set to 1 to enable updated constraint algorithm (default 0).\n ')
     grp_optparam.add_argument('--reset', type=str2bool, help='Reset approximate Hessian to guess when eigenvalues are under epsilon.\n '
                               'Defaults to True for minimization and False for transition states.\n ')
+    grp_optparam.add_argument('--skip', action='store_true', help='Skip Hessian updates that would introduce negative eigenvalues.')
     grp_optparam.add_argument('--epsilon', type=float, help='Small eigenvalue threshold for resetting Hessian, default 1e-5.\n ')
     grp_optparam.add_argument('--check', type=int, help='Check coordinates every <N> steps and rebuild coordinate system, disabled by default.\n ')
 
