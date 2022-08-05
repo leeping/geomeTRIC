@@ -383,14 +383,27 @@ class TeraChem(Engine): # pragma: no cover
         else:
             self.initguess_mode = 'none'
             self.initguess_files = []
-
-        if 'nebtcguess' in self.tcin: #HP: Will this be a problem with self.initguess_files list from 'guess'?
+    
+        self.nebtcguess = False
+        if 'nebtcguess' in self.tcin: #HP: Trying to make nebtcguess work
+            import itertools
+            self.nebtcguess = True
             self.initguess_mode = 'nebtcguess'
-            self.initguess_files = self.tcin.pop('nebtcguess')
+            tcguess_names= self.tcin.pop('nebtcguess')
+            if self.unrestricted:
+                self.initnebguess_files = [['ca%i' %(i+1), 'cb%i' %(i+1)] for i in range(len(tcguess_names)//2)]
+            else:
+                self.initnebguess_files = ['c%i' %(i+1) for i in range(len(tcguess_names))]
+
+            for f in itertools.chain.from_iterable(self.initnebguess_files):
+                if not os.path.exists(f):
+                     raise TeraChemEngineError('%s guess file is missing' % f)
+
         # Check that all starting guess files exist
         for f in self.initguess_files:
             if not os.path.exists(f):
                 raise TeraChemEngineError('%s guess file is missing' % f)
+
         # Management of QM/MM: Read qmindices and 
         # store locations of prmtop and qmindices files,
         self.qmmm = 'qmindices' in tcin
@@ -459,13 +472,18 @@ class TeraChem(Engine): # pragma: no cover
             # If scratch files from previous calc do not exist, then copy initial guess files
             for f in self.initguess_files:
                 if os.path.exists(f):
+                    if not os.path.exists(dirname):
+                        os.makedirs(dirname)
                     shutil.copy2(f, os.path.join(dirname, f))
                 else:
                     raise TeraChemEngineError("%s guess file is missing and this code shouldn't be called" % f)
             if self.initguess_mode == 'file':
                 self.tcin['casguess' if self.casscf else 'guess'] = ' '.join(self.initguess_files)
             elif self.initguess_mode != 'none':
-                self.tcin['guess'] = ' '.join([self.initguess_mode] + self.initguess_files)
+                if self.nebtcguess:
+                    self.tcin['guess'] = ' '.join(self.initguess_files)
+                else:
+                    self.tcin['guess'] = ' '.join([self.initguess_mode] + self.initguess_files)
             copied_files = self.initguess_files[:]
         return copied_files
 
@@ -492,6 +510,44 @@ class TeraChem(Engine): # pragma: no cover
             self.M_full[0].write(os.path.join(dirname, start_xyz), ftype='inpcrd')
         else:
             self.M[0].write(os.path.join(dirname, start_xyz))
+        # Run TeraChem
+        subprocess.check_call('terachem run.in > run.out', cwd=dirname, shell=True)
+        # Extract energy and gradient
+        result = self.read_result(dirname)
+
+        if self.nebtcguess:
+            shutil.move(dirname, dirname+".guess0")
+            results = []
+            energies = [result['energy']]
+            for i, MOs in enumerate(self.initnebguess_files):
+                nebdir = dirname+".guess%i" %(i+1) 
+                self.initguess_files = MOs
+                self.copy_guess_files(nebdir)
+                edit_tcin(fout="%s/run.in" % nebdir, options=self.tcin)
+                if self.qmmm:
+                    # Copy QMMM files to the correct locations and set positions in inpcrd/rst7 file
+                    shutil.copy2(self.qmindices_name, nebdir)
+                    shutil.copy2(self.prmtop_name, nebdir)
+                    self.M_full.xyzs[0][self.qmindices, :] = self.M.xyzs[0]
+                    self.M_full[0].write(os.path.join(nebdir, start_xyz), ftype='inpcrd')
+                else:
+                    self.M[0].write(os.path.join(nebdir, start_xyz))
+                subprocess.check_call('terachem run.in > run.out', cwd=nebdir, shell=True)
+                temp_result = self.read_result(nebdir)
+                results.append(temp_result)
+                energies.append(temp_result['energy'])
+            min_e = np.argmin(np.array(energies))
+            shutil.copytree(dirname+".guess%i"%min_e, dirname)
+            result = results[min_e]   
+
+        return result
+
+    def calc_wq_new(self, coords, dirname):
+        # Set up Work Queue object
+        wq = getWorkQueue()
+        scrdir = os.path.join(dirname, self.scr)
+        if not os.path.exists(dirname): os.makedirs(dirname)
+        if not os.path.exists(scrdir): os.makedirs(scrdir)
         # Run TeraChem
         subprocess.check_call('terachem run.in > run.out', cwd=dirname, shell=True)
         # Extract energy and gradient
@@ -1448,15 +1504,3 @@ class ConicalIntersection(Engine):
         GDif = GDict[I]-GDict[J]
         GAng = np.dot(GDict[I], GDict[J])/(np.linalg.norm(GDict[I])*np.linalg.norm(GDict[J]))
         # Compute penalty function
-        Penalty = EDif**2 / (EDif + self.alpha)
-        # Compute objective function and gradient
-        Obj = EAvg + self.sigma * Penalty
-        ObjGrad = GAvg + self.sigma * (EDif**2 + 2*self.alpha*EDif)/(EDif+self.alpha)**2 * GDif
-        logger.info("EI= % .8f EJ= % .8f S2I= %.4f S2J= %.4f CosGrad= % .4f <E>= % .8f Gap= %.8f Pen= %.8f Obj= % .8f\n"
-                    % (EDict[I], EDict[J], SDict[I], SDict[J], GAng, EAvg, EDif, Penalty, Obj))
-        return {'energy':Obj, 'gradient':ObjGrad}
-
-    def number_output(self, dirname, calcNum):
-        for istate in [1, 2]:
-            state_dnm = os.path.join(dirname, 'state_%i' % istate)
-            self.engines[istate].number_output(state_dnm, calcNum)
