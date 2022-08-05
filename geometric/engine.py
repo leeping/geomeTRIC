@@ -517,7 +517,7 @@ class TeraChem(Engine): # pragma: no cover
 
         if self.nebtcguess:
             shutil.move(dirname, dirname+".guess0")
-            results = []
+            results = [result]
             energies = [result['energy']]
             for i, MOs in enumerate(self.initnebguess_files):
                 nebdir = dirname+".guess%i" %(i+1) 
