@@ -1,0 +1,28 @@
+.. Color profiles for Sphinx.
+
+.. role:: block 
+.. role:: bold 
+.. role:: black 
+.. role:: red 
+.. role:: green 
+.. role:: yellow 
+.. role:: blue 
+.. role:: magenta 
+.. role:: cyan 
+.. role:: white 
+.. role:: black.bold 
+.. role:: red.bold 
+.. role:: green-bold 
+.. role:: yellow.bold 
+.. role:: blue.bold 
+.. role:: magenta.bold 
+.. role:: cyan.bold 
+.. role:: white.bold 
+.. role:: bg_black 
+.. role:: bg_red 
+.. role:: bg_green 
+.. role:: bg_yellow 
+.. role:: bg_blue 
+.. role:: bg_magenta 
+.. role:: bg_cyan 
+.. role:: bg_white 

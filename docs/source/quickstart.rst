@@ -38,12 +38,12 @@ With this file saved as ``water2.psi4in``, an energy minimization is carried out
 When running, geomeTRIC will write output to the terminal, and also to ``water2.log``, showing progress of the optimization.
 The calculation will finish when all of the convergence criteria are reached (individually met criteria shown in green):
 
-.. ansi-block::
-    Step   16 : Displace = [0m2.827e-03[0m/[0m4.521e-03[0m (rms/max) Trust = 3.000e-01 (=) Grad = [32m7.995e-05[0m/[32m1.114e-04[0m (rms/max) E (change) = -149.9414045323 ([0m-1.387e-06[0m) Quality = [0m1.449[0m
+.. parsed-literal::
+    Step   16 : Displace = 2.827e-03/4.521e-03 (rms/max) Trust = 3.000e-01 (=) Grad = :green-bold:`7.995e-05`/:green-bold:`1.114e-04` (rms/max) E (change) = -149.9414045323 (-1.387e-06) Quality = 1.449
     Hessian Eigenvalues: 1.25260e-03 7.20014e-03 2.64588e-02 ... 5.65827e-01 5.84730e-01 7.21463e-01
-    Step   17 : Displace = [0m4.522e-03[0m/[0m6.044e-03[0m (rms/max) Trust = 3.000e-01 (=) Grad = [32m3.165e-05[0m/[32m4.256e-05[0m (rms/max) E (change) = -149.9414053051 ([32m-7.728e-07[0m) Quality = [0m1.136[0m
+    Step   17 : Displace = 4.522e-03/6.044e-03 (rms/max) Trust = 3.000e-01 (=) Grad = 3.165e-05/4.256e-05 (rms/max) E (change) = -149.9414053051 (-7.728e-07) Quality = 1.136
     Hessian Eigenvalues: 1.23141e-03 7.53885e-03 2.40697e-02 ... 5.65379e-01 5.84679e-01 7.15469e-01
-    Step   18 : Displace = [32m7.794e-04[0m/[32m1.128e-03[0m (rms/max) Trust = 3.000e-01 (=) Grad = [32m7.100e-06[0m/[32m8.910e-06[0m (rms/max) E (change) = -149.9414053470 ([32m-4.191e-08[0m) Quality = [0m1.137[0m
+    Step   18 : Displace = 7.794e-04/1.128e-03 (rms/max) Trust = 3.000e-01 (=) Grad = 7.100e-06/8.910e-06 (rms/max) E (change) = -149.9414053470 (-4.191e-08) Quality = 1.137
     Hessian Eigenvalues: 1.23141e-03 7.53885e-03 2.40697e-02 ... 5.65379e-01 5.84679e-01 7.15469e-01
     Converged! =D
 
