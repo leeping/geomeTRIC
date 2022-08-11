@@ -1,0 +1,2 @@
+This calculation scans over an improper torsion angle of a sulfonamide with three other dihedral angles constrained.
+The performance is enhanced by enforcing exact constraint satisfaction with a threshold of 0.1.

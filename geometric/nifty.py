@@ -141,6 +141,8 @@ au2kj        = 2625.4996394798254  # Previous value: 2625.5002
 kj2au        = 1.0 / au2kj
 grad_au2gmx  = 49614.75258920567   # Previous value: 49614.75960959161
 grad_gmx2au  = 1.0 / grad_au2gmx
+au2ev        = 27.211386245988
+ev2au        = 1.0 / au2ev
 au2evang     = 51.422067476325886  # Previous value: 51.42209166566339
 evang2au     = 1.0 / au2evang
 c_lightspeed = 299792458.
@@ -605,6 +607,7 @@ def invert_svd(X,thresh=1e-12):
     v      = np.transpose(vh)
     si     = s.copy()
     for i in range(s.shape[0]):
+        # print("SVD : %i -> %.3e" % (i, s[i]))
         if abs(s[i]) > thresh:
             si[i] = 1./s[i]
         else:
@@ -1053,7 +1056,7 @@ def splitall(path):
     return allparts
 
 # Back up a file.
-def bak(path, dest=None, cwd=None, start=1):
+def bak(path, dest=None, cwd=None, basename=None, start=1):
     oldf = path
     newf = None
     if cwd != None:
@@ -1065,6 +1068,7 @@ def bak(path, dest=None, cwd=None, start=1):
         dnm, fnm = os.path.split(path)
         if dnm == '' : dnm = '.'
         base, ext = os.path.splitext(fnm)
+        if basename: base = basename
         if dest is None:
             dest = dnm
         if not os.path.isdir(dest): os.makedirs(dest)

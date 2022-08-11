@@ -41,6 +41,7 @@ import time
 import traceback
 import pkg_resources
 from copy import deepcopy
+from datetime import datetime
 
 import numpy as np
 from numpy.linalg import multi_dot
@@ -50,14 +51,14 @@ from .info import print_logo, print_citation
 from .internal import CartesianCoordinates, PrimitiveInternalCoordinates, DelocalizedInternalCoordinates
 from .ic_tools import check_internal_grad, check_internal_hess, write_displacements
 from .normal_modes import calc_cartesian_hessian, frequency_analysis
-from .step import brent_wiki, Froot, calc_drms_dmax, get_cartesian_norm, rebuild_hessian, get_delta_prime, trust_step, force_positive_definite
+from .step import brent_wiki, Froot, calc_drms_dmax, get_cartesian_norm, get_delta_prime, trust_step, force_positive_definite, update_hessian
 from .prepare import get_molecule_engine, parse_constraints
 from .params import OptParams, parse_optimizer_args
 from .nifty import row, col, flat, bohr2ang, ang2bohr, logger, bak, createWorkQueue
 from .errors import InputError, HessianExit, EngineError, GeomOptNotConvergedError, GeomOptStructureError, LinearTorsionError
 
 class Optimizer(object):
-    def __init__(self, coords, molecule, IC, engine, dirname, params):
+    def __init__(self, coords, molecule, IC, engine, dirname, params, print_info=True):
         """
         Object representing the geometry optimization of a molecular system.
 
@@ -76,6 +77,8 @@ class Optimizer(object):
         params : OptParams object
             Contains optimization parameters (really just a struct)
             Includes xyzout and qdata output file names (written if not None)
+        print_info : bool
+            Print information about the optimization at end of constructor call
         """
         # Copies of data passed into constructor
         self.coords = coords
@@ -92,6 +95,7 @@ class Optimizer(object):
         self.progress.qm_energies = []
         self.progress.qm_grads = []
         self.progress.comms = []
+        self.viz_rotations = False
         # Cartesian coordinates
         self.X = self.coords.copy()
         # Loop of optimization
@@ -106,10 +110,65 @@ class Optimizer(object):
         # Sanity check - if there's only one atom, it will probably crash
         if self.molecule.na < 2:
             raise InputError("Geometry optimizer assumes there are at least two atoms in the system")
+        # Detect poor quality steps dominated by net translation and rotation.
+        # Minimum ratio of (total displacement / aligned displacement), hard-coded parameter.
+        self.lowq_tr_thre  = 5.0
+        # Counter of poor quality steps dominated by net translation/rotation.
+        self.lowq_tr_count = 0
+        # Number of poor quality steps before starting to project out net force/torque, hard-coded parameter.
+        self.lowq_tr_limit = 1
+        # Recalculate the Hessian after a trigger - for example if the energy changes by a lot during TS optimization.
+        self.recalcHess = False
+        if print_info:
+            self.print_info()
+        
+    def print_info(self):
+        params = self.params
+        logger.info("> ===== Optimization Info: ====\n")
+        logger.info("> Maximum number of optimization cycles: %i\n" % params.maxiter)
+        logger.info("> Initial / maximum trust radius (Angstrom): %.3f / %.3f\n" % (params.trust, params.tmax))
+        logger.info("> Convergence Criteria:\n")
+        if params.qccnv:
+            logger.info("> Q-Chem style convergence criteria requested.\n")
+            logger.info("> Will converge when 2 out of 3 criteria are reached:\n")
+            logger.info(">  |Delta-E| < %.2e\n" % params.Convergence_energy)
+            if self.IC.haveConstraints():
+                logger.info(">  RMS-Ortho-Grad < %.2e\n" % params.Convergence_grms)
+            else:
+                logger.info(">  RMS-Grad  < %.2e\n" % params.Convergence_grms)
+            logger.info(">  RMS-Disp  < %.2e\n" % params.Convergence_drms)
+        else:
+            logger.info("> Will converge when all 5 criteria are reached:\n")
+            logger.info(">  |Delta-E| < %.2e\n" % params.Convergence_energy)
+            if self.IC.haveConstraints():
+                logger.info(">  RMS-Ortho-Grad < %.2e\n" % params.Convergence_grms)
+                logger.info(">  Max-Ortho-Grad < %.2e\n" % params.Convergence_gmax)
+            else:
+                logger.info(">  RMS-Grad  < %.2e\n" % params.Convergence_grms)
+                logger.info(">  Max-Grad  < %.2e\n" % params.Convergence_gmax)
+            logger.info(">  RMS-Disp  < %.2e\n" % params.Convergence_drms)
+            logger.info(">  Max-Disp  < %.2e\n" % params.Convergence_dmax)
 
+        if params.molcnv:
+            logger.info("> \n")
+            logger.info("> Molpro style convergence criteria requested.\n")
+            logger.info("> Will also converge when both of the following are satisfied:\n")
+            if self.IC.haveConstraints():
+                logger.info(">  Max-Ortho-Grad < %.2e\n" % params.Convergence_molpro_gmax)
+            else:
+                logger.info(">  Max-Grad < %.2e\n" % params.Convergence_molpro_gmax)
+            logger.info(">  Max-Disp < %.2e -OR- |Delta-E| < %.2e\n" % (params.Convergence_molpro_dmax, params.Convergence_energy))
+            
+        if self.IC.haveConstraints():
+            logger.info("> \n")
+            logger.info("> Constraints are requested. The following criterion is added:\n")
+            logger.info(">  Max Constraint Violation (in Angstroms/degrees) < %.2e \n" % self.params.Convergence_cmax)
+
+        logger.info("> === End Optimization Info ===\n")
+        
     def get_cartesian_norm(self, dy, verbose=None):
         if not verbose: verbose = self.params.verbose
-        return get_cartesian_norm(self.X, dy, self.IC, self.params.enforce, self.params.verbose)
+        return get_cartesian_norm(self.X, dy, self.IC, self.params.enforce, self.params.verbose, self.params.usedmax)
 
     def get_delta_prime(self, v0, verbose=None):
         # This method can be called at a different verbose level than the master
@@ -131,7 +190,6 @@ class Optimizer(object):
         if isinstance(self.IC, DelocalizedInternalCoordinates):
             self.IC.build_dlc(self.X)
         # With redefined internal coordinates, the Hessian needs to be rebuilt
-        self.H0 = self.IC.guess_hessian(self.coords)
         self.rebuild_hessian()
         # Current values of internal coordinates and IC gradient are recalculated
         self.Y = self.IC.calculate(self.X)
@@ -188,7 +246,8 @@ class Optimizer(object):
         return rms_gradient, max_gradient
 
     def rebuild_hessian(self):
-        self.H = rebuild_hessian(self.IC, self.H0, self.X_hist, self.Gx_hist, self.params)
+        self.H0 = self.IC.guess_hessian(self.coords)
+        self.H = update_hessian(self.IC, self.H0, self.X_hist, self.Gx_hist, self.params, trust_limit=True, max_updates=100)
 
     def frequency_analysis(self, hessian, suffix, afterOpt):
         do_wigner = False
@@ -204,8 +263,7 @@ class Optimizer(object):
         # Call the frequency analysis function with an input Hessian, with most arguments populated from self.params
         frequency_analysis(self.X, hessian, self.molecule.elem, energy=self.E, temperature=self.params.temperature, pressure=self.params.pressure, verbose=self.params.verbose, 
                            outfnm='%s.vdata_%s' % (prefix, suffix), note='Iteration %i Energy % .8f%s' % (self.Iteration, self.E, ' (Optimized Structure)' if afterOpt else ''),
-                           wigner=((self.params.wigner, os.path.join(self.dirname, 'wigner')) if do_wigner else None))
-
+                           wigner=((self.params.wigner, os.path.join(self.dirname, 'wigner')) if do_wigner else None), ignore=self.params.ignore_modes)
 
     def calcEnergyForce(self):
         """
@@ -218,18 +276,39 @@ class Optimizer(object):
         # For frequency calculations and multi-step jobs, the gradient from an existing
         # output file may be read in.
         spcalc = self.engine.calc(self.X, self.dirname, read_data=(self.Iteration==0))
+        if self.params.subfrctor == 2 or (self.params.subfrctor == 1 and (self.lowq_tr_count >= self.lowq_tr_limit)):
+            # Subtract out the overall translational and rotational components of the force
+            netfrc_torque_mol = deepcopy(self.molecule)
+            netfrc_torque_mol.xyzs = [self.X.reshape(-1, 3)*bohr2ang]
+            netfrc_torque_mol.qm_grads = [spcalc['gradient'].reshape(-1,3)]
+            qm_grads_proj = netfrc_torque_mol.remove_netforce_torque(mass=True)[0].flatten()
+            ## Currently unclear whether mass weighting makes a different when projecting out the torques.
+            # print("Net force/torque before projection:", netfrc_torque_mol.calc_netforce_torque())
+            # netfrc_torque_mol.qm_grads = [qm_grads_proj.reshape(-1,3)]
+            # print("Net force/torque after  projection:", netfrc_torque_mol.calc_netforce_torque(mass=False))
+            # print("Force difference: %.3e" % np.linalg.norm(spcalc['gradient'] - qm_grads_proj))
+            spcalc['gradient'] = qm_grads_proj
         self.E = spcalc['energy']
         self.gradx = spcalc['gradient']
         # Calculate Hessian at the first step, or at each step if desired
-        if self.params.hessian == 'each':
+        if self.params.hessian == 'each' or self.recalcHess:
             # Hx is assumed to be the Cartesian Hessian at the current step.
             # Otherwise we use the variable name Hx0 to avoid almost certain confusion.
             self.Hx = calc_cartesian_hessian(self.X, self.molecule, self.engine, self.dirname, read_data=True, verbose=self.params.verbose)
             if self.params.frequency:
                 self.frequency_analysis(self.Hx, 'iter%03i' % self.Iteration, False)
+            if self.recalcHess:
+                logger.info(">>> Recomputed the Hessian from scratch <<<\n")
+                self.H0 = self.IC.calcHess(self.X, self.gradx, self.Hx)
+                self.H = self.H0.copy()
+                if self.params.hessian != 'each':
+                    delattr(self, 'Hx')
+                self.recalcHess = False
         elif self.Iteration == 0:
             if self.params.hessian in ['first', 'stop', 'first+last']:
                 self.Hx0 = calc_cartesian_hessian(self.X, self.molecule, self.engine, self.dirname, read_data=True, verbose=self.params.verbose)
+                logger.info(">> Initial Cartesian Hessian Eigenvalues\n")
+                self.SortedEigenvalues(self.Hx0)
                 if self.params.frequency:
                     self.frequency_analysis(self.Hx0, 'first', False)
                 if self.params.hessian == 'stop':
@@ -239,12 +318,26 @@ class Optimizer(object):
                     # sys.exit(0)
             elif hasattr(self.params, 'hess_data') and self.Iteration == 0:
                 self.Hx0 = self.params.hess_data.copy()
+                logger.info(">> Initial Cartesian Hessian Eigenvalues\n")
+                self.SortedEigenvalues(self.Hx0)
                 if self.params.frequency:
                     self.frequency_analysis(self.Hx0, 'first', False)
                 if self.Hx0.shape != (self.X.shape[0], self.X.shape[0]):
                     raise IOError('hess_data passed in via OptParams does not have the right shape')
             # self.Hx = self.Hx0.copy()
         # Add new Cartesian coordinates, energies, and gradients to history
+        if self.viz_rotations:
+            if hasattr(self, 'progress_with_r'):
+                tmpMol = self.IC.visualizeRotations(self.X)
+                tmpMol.comms = ['Iteration %i Energy % .8f' % (self.Iteration, self.E)]
+                try:
+                    self.progress_with_r += tmpMol
+                except RuntimeError:
+                    bak(os.path.splitext(self.params.xyzout)[0]+"_with_r.xyz")
+                    self.progress_with_r = tmpMol
+            else:
+                self.progress_with_r = self.IC.visualizeRotations(self.X)
+                self.progress_with_r.comms = ['Iteration %i Energy % .8f' % (self.Iteration, self.E)]
         self.progress.xyzs.append(self.X.reshape(-1,3) * bohr2ang)
         self.progress.qm_energies.append(self.E)
         self.progress.qm_grads.append(self.gradx.copy())
@@ -277,8 +370,8 @@ class Optimizer(object):
             self.H0 = self.IC.guess_hessian(self.coords)
         self.H = self.H0.copy()
 
-    def SortedEigenvalues(self):
-        Eig = sorted(np.linalg.eigh(self.H)[0])
+    def SortedEigenvalues(self, H):
+        Eig = sorted(np.linalg.eigh(H)[0])
         if self.params.transition and len(Eig) >= 12:
             # logger.info("Hessian Eigenvalues:  %.3e %.3e %.3e %.3e %.3e %.3e %.3e %.3e %.3e ... %.3e %.3e %.3e\n" %
             #             (Eig[0],Eig[1],Eig[2],Eig[3],Eig[4],Eig[5],Eig[6],Eig[7],Eig[8],Eig[-3],Eig[-2],Eig[-1]))
@@ -307,7 +400,7 @@ class Optimizer(object):
         # At the start of the loop, the optimization variables, function value, gradient and Hessian are known.
         # (i.e. self.Y, self.E, self.G, self.H)
         if params.verbose: self.IC.printRotations(self.X)
-        Eig = self.SortedEigenvalues()
+        Eig = self.SortedEigenvalues(self.H)
         Emin = Eig[0].real
         if params.transition:
             v0 = 1.0
@@ -401,6 +494,7 @@ class Optimizer(object):
         # print("Actual dy:", dy)
         self.Y += dy
         self.expect = flat(0.5*multi_dot([row(dy),self.H,col(dy)]))[0] + np.dot(dy,self.G)
+        # self.expectdG = np.dot(self.H, col(dy).flatten())
         self.state = OPT_STATE.NEEDS_EVALUATION
 
     def evaluateStep(self):
@@ -409,40 +503,40 @@ class Optimizer(object):
         # Shorthand for self.params
         params = self.params
         # Write current optimization trajectory to file
-        if self.params.xyzout is not None: self.progress.write(self.params.xyzout)
+        if self.params.xyzout is not None: 
+            self.progress.write(self.params.xyzout)
+            if self.viz_rotations:
+                self.progress_with_r.write(os.path.splitext(self.params.xyzout)[0]+"_with_r.xyz")
         if self.params.qdata is not None: self.progress.write(self.params.qdata, ftype='qdata')
         # Project out the degrees of freedom that are constrained
         rms_gradient, max_gradient = self.calcGradNorm()
         rms_displacement, max_displacement = calc_drms_dmax(self.X, self.Xprev)
+        rms_displacement_noalign, max_displacement_noalign = calc_drms_dmax(self.X, self.Xprev, align=False)
         # The ratio of the actual energy change to the expected change
         Quality = (self.E-self.Eprev)/self.expect
-        colors = {}
-        colors['quality'] = "\x1b[0m"
-        # 2020-03-10: Step quality thresholds are hard-coded here.
-        # At the moment, no need to set them as variables.
-        if params.transition:
-            if Quality > 0.8 and Quality < 1.2: step_state = StepState.Good
-            elif Quality > 0.5 and Quality < 1.5: step_state = StepState.Okay
-            elif Quality > 0.0 and Quality < 2.0: step_state = StepState.Poor
-            else:
-                colors['energy'] = "\x1b[91m"
-                colors['quality'] = "\x1b[91m"
-                step_state = StepState.Reject
-        else:
-            if Quality > 0.75: step_state = StepState.Good
-            elif Quality > 0.25: step_state = StepState.Okay
-            elif Quality > 0.0: step_state = StepState.Poor
-            else:
-                colors['energy'] = "\x1b[91m"
-                colors['quality'] = "\x1b[91m"
-                step_state = StepState.Poor if Quality > -1.0 else StepState.Reject
+        # The internal coordinate gradient (actually not really used in this function)
+        self.G = self.IC.calcGrad(self.X, self.gradx).flatten()
+        # For transition states, the quality factor decreases in both directions
+        if params.transition and Quality > 1.0:
+            Quality = 2.0 - Quality
         # Check convergence criteria
         Converged_energy = np.abs(self.E-self.Eprev) < params.Convergence_energy
         Converged_grms = rms_gradient < params.Convergence_grms
         Converged_gmax = max_gradient < params.Convergence_gmax
         Converged_drms = rms_displacement < params.Convergence_drms
         Converged_dmax = max_displacement < params.Convergence_dmax
+        # Set step state and log colors
+        # 2020-03-10: Step quality thresholds are hard-coded here.
+        colors = {}
+        if Quality > 0.75: step_state = StepState.Good
+        elif Quality > (0.5 if params.transition else 0.25): step_state = StepState.Okay
+        elif Quality > 0.0: step_state = StepState.Poor
+        else:
+            colors['energy'] = "\x1b[92m" if Converged_energy else "\x1b[91m"
+            colors['quality'] = "\x1b[91m"
+            step_state = StepState.Reject if (Quality < -1.0 or params.transition) else StepState.Poor
         if 'energy' not in colors: colors['energy'] = "\x1b[92m" if Converged_energy else "\x1b[0m"
+        if 'quality' not in colors: colors['quality'] = "\x1b[0m"
         colors['grms'] = "\x1b[92m" if Converged_grms else "\x1b[0m"
         colors['gmax'] = "\x1b[92m" if Converged_gmax else "\x1b[0m"
         colors['drms'] = "\x1b[92m" if Converged_drms else "\x1b[0m"
@@ -450,7 +544,7 @@ class Optimizer(object):
         # Molpro defaults for convergence
         Converged_molpro_gmax = max_gradient < params.Convergence_molpro_gmax
         Converged_molpro_dmax = max_displacement < params.Convergence_molpro_dmax
-        self.conSatisfied = not self.IC.haveConstraints() or self.IC.maxConstraintViolation(self.X) < 1e-2
+        self.conSatisfied = not self.IC.haveConstraints() or self.IC.maxConstraintViolation(self.X) < params.Convergence_cmax
         # Print status
         msg = "Step %4i :" % self.Iteration
         msg += " Displace = %s%.3e\x1b[0m/%s%.3e\x1b[0m (rms/max)" % (colors['drms'], rms_displacement, colors['dmax'], max_displacement)
@@ -465,25 +559,25 @@ class Optimizer(object):
 
         ### Check convergence criteria ###
         if Converged_energy and Converged_grms and Converged_drms and Converged_gmax and Converged_dmax and self.conSatisfied:
-            self.SortedEigenvalues()
+            self.SortedEigenvalues(self.H)
             logger.info("Converged! =D\n")
             self.state = OPT_STATE.CONVERGED
             return
 
         if self.Iteration > params.maxiter:
-            self.SortedEigenvalues()
+            self.SortedEigenvalues(self.H)
             logger.info("Maximum iterations reached (%i); increase --maxiter for more\n" % params.maxiter)
             self.state = OPT_STATE.FAILED
             return
 
         if params.qccnv and Converged_grms and (Converged_drms or Converged_energy) and self.conSatisfied:
-            self.SortedEigenvalues()
+            self.SortedEigenvalues(self.H)
             logger.info("Converged! (Q-Chem style criteria requires grms and either drms or energy)\n")
             self.state = OPT_STATE.CONVERGED
             return
 
         if params.molcnv and Converged_molpro_gmax and (Converged_molpro_dmax or Converged_energy) and self.conSatisfied:
-            self.SortedEigenvalues()
+            self.SortedEigenvalues(self.H)
             logger.info("Converged! (Molpro style criteria requires gmax and either dmax or energy)\nThis is approximate since convergence checks are done in cartesian coordinates.\n")
             self.state = OPT_STATE.CONVERGED
             return
@@ -492,10 +586,21 @@ class Optimizer(object):
         
         ### Adjust Trust Radius and/or Reject Step ###
         prev_trust = self.trust
+        # logger.info(" Check force/torque: rmsd = %.5f rmsd_noalign = %.5f ratio = %.5f\n" %
+        #             (rms_displacement, rms_displacement_noalign, rms_displacement_noalign / rms_displacement))
         if step_state in (StepState.Poor, StepState.Reject):
             new_trust = max(params.tmin, min(self.trust, self.cnorm)/2)
+            # if (Converged_grms or Converged_gmax) or (params.molcnv and Converged_molpro_gmax):
+            #     new_trust = max(new_trust, self.params.Convergence_dmax if self.params.usedmax else self.params.Convergence_drms)
             self.trustprint = "\x1b[91m-\x1b[0m" if new_trust < self.trust else "="
             self.trust = new_trust
+            # A poor quality step that is dominated by overall translation/rotation
+            # is a sign that projecting out the net force and torque may be needed
+            if self.params.subfrctor == 1 and ((rms_displacement_noalign / rms_displacement) > self.lowq_tr_thre):
+                self.lowq_tr_count += 1
+                if self.lowq_tr_count == self.lowq_tr_limit :
+                    logger.info("Poor-quality step dominated by net translation/rotation detected; ")
+                    logger.info("will project out net forces and torques past this point.\n")
         elif step_state == StepState.Good:
             new_trust = min(params.tmax, np.sqrt(2)*self.trust)
             self.trustprint = "\x1b[92m+\x1b[0m" if new_trust > self.trust else "="
@@ -504,25 +609,42 @@ class Optimizer(object):
             self.trustprint = "="
 
         if step_state == StepState.Reject:
-            if prev_trust <= params.thre_rj:
-                logger.info("\x1b[93mNot rejecting step - trust below %.3e\x1b[0m\n" % params.thre_rj)
-            elif (not params.transition) and self.E < self.Eprev:
+            if hasattr(self, 'X_rj') and np.allclose(self.X_rj, self.X, atol=1e-6):
+                logger.info("\x1b[93mA previously rejected step was repeated; accepting to avoid infinite loop\x1b[0m\n")
+                delattr(self, 'X_rj')
+            elif prev_trust <= params.tmin:
+                logger.info("\x1b[93mNot rejecting step - trust below tmin = %.3e\x1b[0m\n" % params.tmin)
+            elif rms_displacement <= 1.2*params.tmin:
+                # Prevents rejecting / repeating the step and then accepting the step based on trust <= params.tmin
+                # Suppose a step is taken whose length is close to tmin but trust is actually above tmin. Without this rule, the step would be rejected.
+                # Then trust would be decreased, eventually to tmin, then the exact same step would be accepted.
+                # The "1.2" is because the actual step can be larger than the trust radius by a small amount.
+                logger.info("\x1b[93mNot rejecting step - RMS displacement close to tmin = %.3e\x1b[0m\n" % (params.tmin))
+            # elif (not params.transition) and self.E < self.Eprev:
+            elif self.E < self.Eprev and not params.transition:
                 logger.info("\x1b[93mNot rejecting step - energy decreases during minimization\x1b[0m\n")
+            elif Converged_energy:
+                logger.info("\x1b[93mNot rejecting step - energy change meets convergence criteria\x1b[0m\n")
             elif self.farConstraints:
                 logger.info("\x1b[93mNot rejecting step - far from constraint satisfaction\x1b[0m\n")
             else:
-                logger.info("\x1b[93mStep Is Rejected\x1b[0m\n")
+                logger.info("\x1b[93mRejecting step - quality is lower than %.1f\x1b[0m\n" % (0.0 if params.transition else -1.0))
                 self.trustprint = "\x1b[1;91mx\x1b[0m"
+                # Store the rejected step.  In case the next step is identical to the rejected one, the next step should be accepted to avoid infinite loops.
+                self.X_rj = self.X.copy()
                 self.Y = self.Yprev.copy()
                 self.X = self.Xprev.copy()
                 self.gradx = self.Gxprev.copy()
                 self.G = self.Gprev.copy()
                 self.E = self.Eprev
+                self.engine.load_guess_files(self.dirname)
+                self.recalcHess = False
                 return
 
         # Append steps to history (for rebuilding Hessian)
         self.X_hist.append(self.X)
         self.Gx_hist.append(self.gradx)
+        self.engine.save_guess_files(self.dirname)
 
         ### Rebuild Coordinate System if Necessary ###
         UpdateHessian = (not self.params.hessian == 'each')
@@ -532,17 +654,18 @@ class Optimizer(object):
             UpdateHessian = False
         elif self.CoordCounter == (params.check - 1):
             logger.info("Checking coordinate system as requested every %i cycles\n" % params.check)
-            if self.checkCoordinateSystem(): UpdateHessian = False
+            if self.checkCoordinateSystem(recover=False): UpdateHessian = False
         else:
             self.CoordCounter += 1
+
+        ## Save the regularization quaternions, used to lift rotation degeneracies for linear molecules.
+        ## This function also repositions "e0" for linear angles.
+        if self.IC.setRegularization(self.X) and UpdateHessian:
+            self.rebuild_hessian()
+            UpdateHessian = False
+
         # Check for large rotations (debugging purposes)
         if self.params.verbose >= 1: self.IC.largeRots()
-        # Check for large rotations in linear molecules
-        if self.IC.linearRotCheck():
-            logger.info("Large rotations in linear molecules - refreshing Rotator reference points and DLC vectors\n")
-            self.refreshCoordinates()
-            UpdateHessian = False
-        self.G = self.IC.calcGrad(self.X, self.gradx).flatten()
 
         ### Update the Hessian ###
         if UpdateHessian:
@@ -553,68 +676,8 @@ class Optimizer(object):
         return
 
     def UpdateHessian(self):
-        params = self.params
-
-        if params.transition:
-            ts_bfgs = False
-            if ts_bfgs: # pragma: no cover
-                logger.info("TS-BFGS Hessian update\n")
-                # yk = Dg; dk = Dy
-                dk = col(self.Y - self.Yprev)
-                yk = col(self.G - self.Gprev)
-                jk = yk - np.dot(self.H, dk)
-                B = force_positive_definite(self.H)
-                # Scalar 1: dk^T |Bk| dk
-                s1 = multi_dot([dk.T, B, dk])
-                # Scalar 2: (yk^T dk)^2 + (dk^T |Bk| dk)^2
-                s2 = np.dot(yk.T, dk)**2 + s1**2
-                # Vector quantities
-                v2 = np.dot(yk.T, dk)*yk + s1*np.dot(B, dk)
-                uk = v2/s2
-                Ek = np.dot(jk, uk.T) + np.dot(uk, jk.T) + np.dot(jk.T, dk) * np.dot(uk, uk.T)
-                self.H += Ek
-            else:
-                Dy   = col(self.Y - self.Yprev)
-                Dg   = col(self.G - self.Gprev)
-                # Murtagh-Sargent-Powell update
-                Xi = Dg - np.dot(self.H,Dy)
-                # ndy2 = np.dot(Dy.T,Dy)
-                dH_MS = np.dot(Xi, Xi.T)/np.dot(Dy.T, Xi)
-                dH_P = np.dot(Xi, Dy.T) + np.dot(Dy, Xi.T) - np.dot(Dy, Dy.T)*np.dot(Xi.T, Dy)/np.dot(Dy.T, Dy)
-                dH_P /= np.dot(Dy.T, Dy)
-                phi = 1.0 - np.dot(Dy.T,Xi)**2/(np.dot(Dy.T,Dy)*np.dot(Xi.T,Xi))
-                # phi = 1.0
-                self.H += (1.0-phi)*dH_MS + phi*dH_P
-                if params.verbose:
-                    logger.info("Hessian update: %.5f Powell + %.5f Murtagh-Sargent\n" % (phi, 1.0-phi))
-        else:
-            Dy   = col(self.Y - self.Yprev)
-            Dg   = col(self.G - self.Gprev)
-            # Catch some abnormal cases of extremely small changes.
-            if np.linalg.norm(Dg) < 1e-6: return
-            if np.linalg.norm(Dy) < 1e-6: return
-            # BFGS Hessian update
-            Mat1 = np.dot(Dg,Dg.T)/np.dot(Dg.T,Dy)[0,0]
-            Mat2 = np.dot(np.dot(self.H,Dy), np.dot(self.H,Dy).T)/multi_dot([Dy.T,self.H,Dy])[0,0]
-            Eig = np.linalg.eigh(self.H)[0]
-            Eig.sort()
-            ndy = np.array(Dy).flatten()/np.linalg.norm(np.array(Dy))
-            ndg = np.array(Dg).flatten()/np.linalg.norm(np.array(Dg))
-            nhdy = np.dot(self.H,Dy).flatten()/np.linalg.norm(np.dot(self.H,Dy))
-            if params.verbose:
-                msg = "Denoms: %.3e %.3e" % (np.dot(Dg.T,Dy)[0,0], multi_dot((Dy.T,self.H,Dy))[0,0])
-                msg +=" Dots: %.3e %.3e" % (np.dot(ndg, ndy), np.dot(ndy, nhdy))
-            #H1 = H.copy()
-            self.H += Mat1-Mat2
-            Eig1 = np.linalg.eigh(self.H)[0]
-            Eig1.sort()
-            if params.verbose:
-                msg += " Eig-ratios: %.5e ... %.5e" % (np.min(Eig1)/np.min(Eig), np.max(Eig1)/np.max(Eig))
-                logger.info(msg+'\n')
-            if np.min(Eig1) <= params.epsilon and params.reset:
-                logger.info("Eigenvalues below %.4e (%.4e) - returning guess\n" % (params.epsilon, np.min(Eig1)))
-                self.H = self.IC.guess_hessian(self.coords)
-
+        self.H = update_hessian(self.IC, self.H, [self.X, self.Xprev], [self.gradx, self.Gxprev], self.params, trust_limit=False, max_updates=1)
+        
     def optimizeGeometry(self):
         """
         High-level optimization loop.
@@ -627,6 +690,11 @@ class Optimizer(object):
             if self.state == OPT_STATE.NEEDS_EVALUATION:
                 self.calcEnergyForce()
                 self.evaluateStep()
+            if self.recalcHess:
+                # If a Hessian recalculation is needed at this point, we need to
+                # call calcEnergyForce() which will compute the cartesian Hessian,
+                # convert it to IC, and then store it.
+                self.calcEnergyForce()
         if self.state == OPT_STATE.FAILED:
             raise GeomOptNotConvergedError("Optimizer.optimizeGeometry() failed to converge.")
         # If we want to save the Hessian used by the optimizer (in Cartesian coordinates)
@@ -673,7 +741,7 @@ class StepState(object):
     Okay    = 2 # Okay step; do not change the trust radius.
     Good    = 3 # Good step; increase the trust radius up to the limit.
     
-def Optimize(coords, molecule, IC, engine, dirname, params):
+def Optimize(coords, molecule, IC, engine, dirname, params, print_info=True):
     """
     Optimize the geometry of a molecule. This function used to contain the whole
     optimization loop, which has since been moved to the Optimizer() class;
@@ -701,7 +769,7 @@ def Optimize(coords, molecule, IC, engine, dirname, params):
     progress: Molecule
         A molecule object for opt trajectory and energies
     """
-    optimizer = Optimizer(coords, molecule, IC, engine, dirname, params)
+    optimizer = Optimizer(coords, molecule, IC, engine, dirname, params, print_info)
     return optimizer.optimizeGeometry()
 
 def run_optimizer(**kwargs):
@@ -740,7 +808,10 @@ def run_optimizer(**kwargs):
     logger.info('geometric-optimize called with the following command line:\n')
     logger.info(' '.join(sys.argv)+'\n')
     print_logo(logger)
-    logger.info('-=# \x1b[1;94m geomeTRIC started. Version: %s \x1b[0m #=-\n' % geometric.__version__)
+    now = datetime.now()
+    logger.info('-=# \x1b[1;94m geomeTRIC started. Version: %s \x1b[0m #=-\n' % (geometric.__version__))
+    logger.info('Current date and time: %s\n' % now.strftime("%Y-%m-%d %H:%M:%S"))
+    
     if backed_up:
         logger.info('Backed up existing log file: %s -> %s\n' % (logfilename, os.path.basename(backed_up)))
 
@@ -758,7 +829,7 @@ def run_optimizer(**kwargs):
     
     # Get the Molecule and engine objects needed for optimization
     M, engine = get_molecule_engine(**kwargs)
-
+    
     # Create Work Queue object
     if kwargs.get('port', 0):
         logger.info("Creating Work Queue object for distributed Hessian calculation\n")
@@ -790,6 +861,28 @@ def run_optimizer(**kwargs):
                     'tric':(DelocalizedInternalCoordinates, False, False)}
     coordsys = kwargs.get('coordsys', 'tric')
     CoordClass, connect, addcart = CoordSysDict[coordsys.lower()]
+
+    # Perform an initial single-point QM calculation to determine bonding & fragments, if using TRIC
+    if hasattr(engine, 'calc_bondorder') and coordsys.lower() in ['hdlc', 'tric'] and params.bothre > 1e-3:
+        bothre = params.bothre
+        logger.info("Calculating QM bond order and forming bonds using criterion of %.2f\n" % bothre)
+        qm_bo = engine.calc_bondorder(coords, dirname)
+        M.qm_bondorder = [qm_bo]
+        M.build_topology(bond_order=bothre)
+        if len(M.molecules) == 1 and bothre < 0.75:
+            logger.info("Only one fragment found; increasing threshold\n")
+            # Increase the bond order threshold until there are at least 2 fragments of size >1
+            while bothre < 0.75 and len([m for m in M.molecules if len(m.e()) > 1]) == 1:
+                bothre += 0.01
+                M.build_topology(bond_order=bothre)
+            logger.info("Using threshold of %.2f, there are now %i molecules\n" % (bothre, len(M.molecules)))
+        M.top_settings['read_bonds'] = True
+        # Delete the QM bond order to avoid problems when more structures are added
+        del M.Data['qm_bondorder']
+    else:
+        if coordsys.lower() in ['hdlc', 'tric'] and params.bothre > 1e-3:
+            logger.info("Requested bond order-based connectivity but it is not available in the current engine\n")
+        logger.info("Bonds will be generated from interatomic distances less than %.2f times sum of covalent radii\n" % M.top_settings['Fac'])
 
     IC = CoordClass(M, build=True, connect=connect, addcart=addcart, constraints=Cons, cvals=CVals[0] if CVals is not None else None,
                     conmethod=params.conmethod)
@@ -842,7 +935,7 @@ def run_optimizer(**kwargs):
             if ic == 0:
                 progress = Optimize(coords, M, IC, engine, dirname, params)
             else:
-                progress += Optimize(coords, M, IC, engine, dirname, params)
+                progress += Optimize(coords, M, IC, engine, dirname, params, print_info=False)
             # update the structure for next optimization in SCAN (by CNH)
             M.xyzs[0] = progress.xyzs[-1]
             coords = progress.xyzs[-1].flatten() * ang2bohr

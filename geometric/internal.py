@@ -44,9 +44,9 @@ import networkx as nx
 import numpy as np
 from numpy.linalg import multi_dot
 
-from geometric.molecule import Elements, Radii
+from geometric.molecule import Molecule, Elements, Radii
 from geometric.nifty import click, commadash, ang2bohr, bohr2ang, logger, pvec1d, pmat2d
-from geometric.rotate import get_expmap, get_expmap_der, is_linear, calc_rot_vec_diff
+from geometric.rotate import get_expmap, get_expmap_der, calc_rot_vec_diff, get_quat, build_F, sorted_eigh
 
 ## Some vector calculus functions
 def unit_vector(a):
@@ -462,41 +462,33 @@ class Rotator(object):
         self.a = list(tuple(sorted(a)))
         x0 = x0.reshape(-1, 3)
         self.x0 = x0.copy()
-        self.stored_valxyz = np.zeros_like(x0)
+        # Information about the regularization quaternion
+        self.rquat = np.array([1.0, 0.0, 0.0, 0.0])
+        self.rmode = 0
+        self.set_regularization(x0)
+        self.clear_cache(x0)
+
+    def clear_cache(self, xyz):
+        xyz = xyz.reshape(-1, 3)
+        self.stored_valxyz = np.zeros_like(xyz)
         self.stored_value = None
         # A second set of xyz coordinates used only when computing
         # differences in rotation coordinates
-        self.stored_valxyz2 = np.zeros_like(x0)
+        self.stored_valxyz2 = np.zeros_like(xyz)
         self.stored_value2 = None
-        self.stored_derxyz = np.zeros_like(x0)
+        self.stored_derxyz = np.zeros_like(xyz)
         self.stored_deriv = None
-        self.stored_deriv2xyz = np.zeros_like(x0)
+        self.stored_deriv2xyz = np.zeros_like(xyz)
         self.stored_deriv2 = None
         self.stored_norm = 0.0
-        # Extra variables to account for the case of linear molecules
-        # The reference axis used for computing dummy atom position
-        self.e0 = None
-        # Dot-squared measures alignment of molecule long axis with reference axis.
-        # If molecule becomes parallel with reference axis, coordinates must be reset.
-        self.stored_dot2 = 0.0
-        # Flag that records linearity of molecule
-        self.linear = False
 
     def reset(self, x0):
         x0 = x0.reshape(-1, 3)
         self.x0 = x0.copy()
-        self.stored_valxyz = np.zeros_like(x0)
-        self.stored_value = None
-        self.stored_valxyz2 = np.zeros_like(x0)
-        self.stored_value2 = None
-        self.stored_derxyz = np.zeros_like(x0)
-        self.stored_deriv = None
-        self.stored_deriv2xyz = np.zeros_like(x0)
-        self.stored_deriv2 = None
-        self.stored_norm = 0.0
-        self.e0 = None
-        self.stored_dot2 = 0.0
-        self.linear = False
+        self.rquat = np.array([1.0, 0.0, 0.0, 0.0])
+        self.rmode = 0
+        self.set_regularization(x0)
+        self.clear_cache(x0)
 
     def __eq__(self, other):
         if type(self) is not type(other): return False
@@ -511,24 +503,53 @@ class Rotator(object):
     def __ne__(self, other):
         return not self.__eq__(other)
 
-    def calc_e0(self):
-        """
-        Compute the reference axis for adding dummy atoms. 
-        Only used in the case of linear molecules.
+    def set_regularization(self, xyz):
+        self.clear_cache(xyz)
+        x = xyz.reshape(-1, 3)[self.a, :].copy()
+        x = x - np.mean(x,axis=0)
+        L, Q = sorted_eigh(build_F(x, x))
+        # The switch for the regularization is 'sticky'.
+        thre_lo = 1.01
+        thre_mid = 1.03
+        thre_hi = 1.1
+        regularization_changed = False
+        if L[0]/L[1] < thre_lo and L[0]/L[1] > 0.0 and self.rmode in (-1, 0):
+            self.rnorm = 1e-1*L[0]
+            self.rmode = 1
+            # Uncomment the below four logging messages to check whether regularization is on or off
+            # logger.info(" >>> %-18s L[0] = %.3f, L[0]/L[1] = %.3f (linear), turning regularization on.\n" % (str(self), L[0], L[0]/L[1]))
+            regularization_changed = True
+        elif L[0]/L[1] > thre_hi and self.rmode in (1, 0):
+            self.rnorm = 0.0
+            self.rmode = -1
+            # logger.info(" >>> %s L[0] = %.3f, L[0]/L[1] = %.3f (nonlin), turning regularization off.\n" % (str(self), L[0], L[0]/L[1]))
+            regularization_changed = True
+        elif self.rmode == 0:
+            if L[0]/L[1] < thre_mid and L[0]/L[1] > 0.0:
+                # logger.info(" >>> %s L[0] = %.3f, L[0]/L[1] = %.3f (linear), turning regularization on.\n" % (str(self), L[0], L[0]/L[1]))
+                self.rnorm = 1e-1*L[0]
+                self.rmode = 1
+                regularization_changed = True
+            else:
+                # 
+                # logger.info(" >>> %s L[0] = %.3f, L[0]/L[1] = %.3f (nonlin), turning regularization off.\n" % (str(self), L[0], L[0]/L[1]))
+                self.rnorm = 0.0
+                self.rmode = -1
+                regularization_changed = True
 
-        We first find the Cartesian axis that is "most perpendicular" to the molecular axis.
-        Next we take the cross product with the molecular axis to create a perpendicular vector.
-        Finally, this perpendicular vector is normalized to make a unit vector.
-        """
-        ysel = self.x0[self.a, :]
-        vy = ysel[-1]-ysel[0]
-        ev = vy / np.linalg.norm(vy)
-        # Cartesian axes.
-        ex = np.array([1.0,0.0,0.0])
-        ey = np.array([0.0,1.0,0.0])
-        ez = np.array([0.0,0.0,1.0])
-        self.e0 = np.cross(vy, [ex, ey, ez][np.argmin([np.dot(i, ev)**2 for i in [ex, ey, ez]])])
-        self.e0 /= np.linalg.norm(self.e0)
+        if self.rmode > 0:
+            y = self.x0[self.a, :].copy()
+            y = y - np.mean(y,axis=0)
+            q = get_quat(x, y, r=self.rnorm*self.rquat)
+            ang = 2*np.arccos(np.dot(self.rquat, q))
+            # self.qsav = q.copy()
+            if ang > 0.9*np.pi:
+                logger.info("%s angle %.3f\n" % (str(self), ang))
+                # logger.info("setting regularization quaternion to %s\n", str(q))
+                # self.rquat = q.copy()
+        return regularization_changed
+        # else:
+        #     self.rquat = np.array([1.0, 0.0, 0.0, 0.0])
 
     def value(self, xyz, store=True):
         xyz = xyz.reshape(-1, 3)
@@ -537,35 +558,23 @@ class Rotator(object):
         else:
             xsel = xyz[self.a, :]
             ysel = self.x0[self.a, :]
-            xmean = np.mean(xsel,axis=0)
-            ymean = np.mean(ysel,axis=0)
-            if not self.linear and is_linear(xsel, ysel):
-                # print "Setting linear flag for", self
-                self.linear = True
-            if self.linear:
-                # Handle linear molecules.
-                vx = xsel[-1]-xsel[0]
-                vy = ysel[-1]-ysel[0]
-                # Calculate reference axis (if needed)
-                if self.e0 is None: self.calc_e0()
-                #log.debug(vx)
-                ev = vx / np.linalg.norm(vx)
-                # Measure alignment of molecular axis with reference axis
-                self.stored_dot2 = np.dot(ev, self.e0)**2
-                # Dummy atom is located one Bohr from the molecular center, direction
-                # given by cross-product of the molecular axis with the reference axis
-                xdum = np.cross(vx, self.e0)
-                ydum = np.cross(vy, self.e0)
-                exdum = xdum / np.linalg.norm(xdum)
-                eydum = ydum / np.linalg.norm(ydum)
-                xsel = np.vstack((xsel, exdum+xmean))
-                ysel = np.vstack((ysel, eydum+ymean))
-            answer = get_expmap(xsel, ysel)
+            answer = get_expmap(xsel, ysel, r=self.rnorm*self.rquat)
             if store:
                 self.stored_norm = np.linalg.norm(answer)
                 self.stored_valxyz = xyz.copy()
                 self.stored_value = answer.copy()
             return answer
+
+    def visualize(self, xyz):
+        xyz = xyz.reshape(-1, 3)
+        xsel = xyz[self.a, :]
+        ysel = self.x0[self.a, :]
+        xmean = np.mean(xsel,axis=0)
+        ymean = np.mean(ysel,axis=0)
+        answer = np.zeros((2, 3), dtype=float)
+        answer[0, :] = xmean
+        answer[1, :] = xmean + get_expmap(xsel, ysel, r=self.rnorm*self.rquat)*ang2bohr
+        return answer
 
     def calcDiff(self, xyz1, xyz2=None, val2=None):
         """
@@ -598,49 +607,7 @@ class Rotator(object):
             ysel = self.x0[self.a, :]
             xmean = np.mean(xsel,axis=0)
             ymean = np.mean(ysel,axis=0)
-            if not self.linear and is_linear(xsel, ysel):
-                # print "Setting linear flag for", self
-                self.linear = True
-            if self.linear:
-                vx = xsel[-1]-xsel[0]
-                vy = ysel[-1]-ysel[0]
-                if self.e0 is None: self.calc_e0()
-                xdum = np.cross(vx, self.e0)
-                ydum = np.cross(vy, self.e0)
-                exdum = xdum / np.linalg.norm(xdum)
-                eydum = ydum / np.linalg.norm(ydum)
-                xsel = np.vstack((xsel, exdum+xmean))
-                ysel = np.vstack((ysel, eydum+ymean))
-            deriv_raw = get_expmap_der(xsel, ysel)
-            if self.linear:
-                # Chain rule is applied to get terms from
-                # dummy atom derivatives
-                nxdum = np.linalg.norm(xdum)
-                dxdum = d_cross(vx, self.e0)
-                dnxdum = d_ncross(vx, self.e0)
-                # Derivative of dummy atom position w/r.t. molecular axis vector
-                dexdum = (dxdum*nxdum - np.outer(dnxdum,xdum))/nxdum**2
-                # Here we may compute finite difference derivatives to check
-                # h = 1e-6
-                # fdxdum = np.zeros((3, 3), dtype=float)
-                # for i in range(3):
-                #     vx[i] += h
-                #     dPlus = np.cross(vx, self.e0)
-                #     dPlus /= np.linalg.norm(dPlus)
-                #     vx[i] -= 2*h
-                #     dMinus = np.cross(vx, self.e0)
-                #     dMinus /= np.linalg.norm(dMinus)
-                #     vx[i] += h
-                #     fdxdum[i] = (dPlus-dMinus)/(2*h)
-                # if np.linalg.norm(dexdum - fdxdum) > 1e-6:
-                #     print dexdum - fdxdum
-                #     raise Exception()
-                # Apply terms from chain rule
-                deriv_raw[0]  -= np.dot(dexdum, deriv_raw[-1])
-                for i in range(len(self.a)):
-                    deriv_raw[i]  += np.dot(np.eye(3), deriv_raw[-1])/len(self.a)
-                deriv_raw[-2] += np.dot(dexdum, deriv_raw[-1])
-                deriv_raw = deriv_raw[:-1]
+            deriv_raw = get_expmap_der(xsel, ysel, r=self.rnorm*self.rquat)
             derivatives = np.zeros((xyz.shape[0], 3, 3), dtype=float)
             for i, a in enumerate(self.a):
                 derivatives[a, :, :] = deriv_raw[i, :, :]
@@ -657,76 +624,12 @@ class Rotator(object):
             ysel = self.x0[self.a, :]
             xmean = np.mean(xsel,axis=0)
             ymean = np.mean(ysel,axis=0)
-            if not self.linear and is_linear(xsel, ysel):
-                # print "Setting linear flag for", self
-                self.linear = True
-            if self.linear:
-                vx = xsel[-1]-xsel[0]
-                vy = ysel[-1]-ysel[0]
-                if self.e0 is None: self.calc_e0()
-                xdum = np.cross(vx, self.e0)
-                ydum = np.cross(vy, self.e0)
-                exdum = xdum / np.linalg.norm(xdum)
-                eydum = ydum / np.linalg.norm(ydum)
-                xsel = np.vstack((xsel, exdum+xmean))
-                ysel = np.vstack((ysel, eydum+ymean))
-            deriv_raw, deriv2_raw = get_expmap_der(xsel, ysel, second=True)
-            if self.linear:
-                # Chain rule is applied to get terms from dummy atom derivatives
-                def dexdum_(vx_):
-                    xdum_ = np.cross(vx_, self.e0)
-                    nxdum_ = np.linalg.norm(xdum_)
-                    dxdum_ = d_cross(vx_, self.e0)
-                    dnxdum_ = d_ncross(vx_, self.e0)
-                    dexdum_ = (dxdum_*nxdum_ - np.outer(dnxdum_,xdum_))/nxdum_**2
-                    return dexdum_.copy()
-                # First indices: elements of vx that are being differentiated w/r.t.
-                # Last index: elements of exdum itself
-                dexdum = dexdum_(vx)
-                dexdum2 = np.zeros((3, 3, 3), dtype=float)
-                h = 1.0e-3
-                for i in range(3):
-                    vx[i] += h
-                    dPlus = dexdum_(vx)
-                    vx[i] -= 2*h
-                    dMinus = dexdum_(vx)
-                    vx[i] += h
-                    dexdum2[i] = (dPlus-dMinus)/(2*h)
-                # Build arrays that contain derivative of dummy atom position
-                # w/r.t. real atom positions
-                ddum1 = np.zeros((len(self.a), 3, 3), dtype=float)
-                ddum1[0] = -dexdum
-                ddum1[-1] = dexdum
-                for i in range(len(self.a)):
-                    ddum1[i] += np.eye(3)/len(self.a)
-                ddum2 = np.zeros((len(self.a), 3, len(self.a), 3, 3), dtype=float)
-                ddum2[ 0, : , 0, :] =  dexdum2
-                ddum2[-1, : , 0, :] = -dexdum2
-                ddum2[ 0, :, -1, :] = -dexdum2
-                ddum2[-1, :, -1, :] =  dexdum2
-                # =====
-                # Do not delete - reference codes using loops for chain rule terms
-                # for j in range(len(self.a)): # Loop over atom 1
-                #     for m in range(3):       # Loop over xyz of atom 1
-                #         for k in range(len(self.a)): # Loop over atom 2
-                #             for n in range(3):       # Loop over xyz of atom 2
-                #                 for i in range(3):   # Loop over elements of exponential map
-                #                     for p in range(3): # Loop over xyz of dummy atom
-                #                         deriv2_raw[j, m, k, n, i] += deriv2_raw[j, m, -1, p, i] * ddum1[k, n, p]
-                #                         deriv2_raw[j, m, k, n, i] += deriv2_raw[-1, p, k, n, i] * ddum1[j, m, p]
-                #                         deriv2_raw[j, m, k, n, i] += deriv_raw[-1, p, i] * ddum2[j, m, k, n, p]
-                #                         for q in range(3):
-                #                             deriv2_raw[j, m, k, n, i] += deriv2_raw[-1, p, -1, q, i] * ddum1[j, m, p] * ddum1[k, n, q]
-                # =====
-                deriv2_raw[:-1, :, :-1, :] += np.einsum('jmpi,knp->jmkni', deriv2_raw[:-1, :, -1, :, :], ddum1, optimize=True)
-                deriv2_raw[:-1, :, :-1, :] += np.einsum('pkni,jmp->jmkni', deriv2_raw[-1, :, :-1, :, :], ddum1, optimize=True)
-                deriv2_raw[:-1, :, :-1, :] += np.einsum('pi,jmknp->jmkni', deriv_raw[-1, :, :], ddum2, optimize=True)
-                deriv2_raw[:-1, :, :-1, :] += np.einsum('pqi,jmp,knq->jmkni', deriv2_raw[-1, :, -1, :, :], ddum1, ddum1, optimize=True)
-                deriv2_raw = deriv2_raw[:-1, :, :-1, :, :]
+            deriv_raw, deriv2_raw = get_expmap_der(xsel, ysel, second=True, r=self.rnorm*self.rquat)
             second_derivatives = np.zeros((xyz.shape[0], 3, xyz.shape[0], 3, 3), dtype=float)
             for i, a in enumerate(self.a):
                 for j, b in enumerate(self.a):
                     second_derivatives[a, :, b, :, :] = deriv2_raw[i, :, j, :, :]
+            # derivatives, second_derivatives = get_expmap_der(xsel, ysel, second=True, r=self.rnorm*self.rquat)
             return second_derivatives
         
 class RotationA(PrimitiveCoordinate):
@@ -1080,6 +983,23 @@ class LinearAngle(PrimitiveCoordinate):
         self.e0 = [ex, ey, ez][np.argmin([np.dot(i, ev)**2 for i in [ex, ey, ez]])]
         self.stored_dot2 = 0.0
 
+    def reposition_e0(self, xyz):
+        """
+        Project out the component of e0 that is parallel to ev. 
+        This prevents linear angles from becoming parallel to e0, 
+        which requires resetting the coordinate system.
+        This function should be called at the end of each accepted step.
+        """
+        xyz = xyz.reshape(-1,3)
+        a = self.a
+        b = self.b
+        c = self.c
+        v = xyz[c] - xyz[a]
+        ev = v / np.linalg.norm(v)
+        dot = np.dot(ev, self.e0)
+        self.e0 -= dot*ev
+        self.e0 /= np.linalg.norm(self.e0)
+
     def __repr__(self):
         return "LinearAngle%s %i-%i-%i" % (["X","Y"][self.axis], self.a+1, self.b+1, self.c+1)
 
@@ -1129,6 +1049,31 @@ class LinearAngle(PrimitiveCoordinate):
             answer = np.dot(eba, e1) + np.dot(ebc, e1)
         else:
             answer = np.dot(eba, e2) + np.dot(ebc, e2)
+        return answer
+
+    def visualize(self, xyz):
+        xyz = xyz.reshape(-1,3)
+        xsel = xyz[[self.a, self.b, self.c], :]
+        xmean = np.mean(xsel,axis=0)
+        a = self.a
+        b = self.b
+        c = self.c
+        # Unit vector pointing from a to c.
+        v = xyz[c] - xyz[a]
+        ev = v / np.linalg.norm(v)
+        if self.e0 is None: self.reset(xyz)
+        e0 = self.e0
+        self.stored_dot2 = np.dot(ev, e0)**2
+        # Now make two unit vectors that are perpendicular to this one.
+        c1 = np.cross(ev, e0)
+        e1 = c1 / np.linalg.norm(c1)
+        c2 = np.cross(ev, e1)
+        e2 = c2 / np.linalg.norm(c2)
+        # Visualize the rotated unit vectors.
+        answer = np.zeros((3, 3), dtype=float)
+        answer[0, :] = xmean
+        answer[1, :] = xmean + e1*ang2bohr
+        answer[2, :] = xmean + e2*ang2bohr
         return answer
 
     def derivative(self, xyz):
@@ -1955,17 +1900,13 @@ class InternalCoordinates(object):
         Compute the Cartesian Hessian given internal coordinate gradient and Hessian. 
         Returns the answer in a.u.
         """
-        # xyz = xyz.flatten()
-        # q0 = self.calculate(xyz)
-        # Ginv = self.GInverse(xyz)
+        xyz = xyz.flatten()
         Bmat = self.wilsonB(xyz)
+        deriv2 = self.second_derivatives(xyz)
+        Bmatp = deriv2.reshape(deriv2.shape[0], xyz.shape[0], xyz.shape[0])
+        BptGq = np.einsum('pmn,p->mn',Bmatp,gradq)
         Hx = np.einsum('ai,ab,bj->ij', Bmat, hessq, Bmat, optimize=True)
-        Hx += np.einsum('ji,j->i', Bmat, gradq, optimize=True)
-        # Gq = self.calcGrad(xyz, gradx)
-        # deriv2 = self.second_derivatives(xyz)
-        # Bmatp = deriv2.reshape(deriv2.shape[0], xyz.shape[0], xyz.shape[0])
-        # Hx_BptGq = hessx - np.einsum('pmn,p->mn',Bmatp,Gq)
-        # Hq = np.einsum('ps,sm,mn,nr,rq', Ginv, Bmat, Hx_BptGq, Bmat.T, Ginv, optimize=True)
+        Hx += BptGq
         return Hx
     
     def readCache(self, xyz, dQ):
@@ -2078,18 +2019,40 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         self.reorderPrimitives()
 
     def makePrimitives(self, molecule, connect, addcart):
-        molecule.build_topology()
+        # force_bonds=False is set because we don't want to override
+        # bond order-based bonds that may have been obtained earlier.
+        molecule.build_topology(force_bonds=False)
+        connect_isolated = True
         if 'resid' in molecule.Data.keys():
             frags = []
+            residues = []
             current_resid = -1
             for i in range(molecule.na):
                 if molecule.resid[i] != current_resid:
-                    frags.append([i])
+                    residues.append([i])
                     current_resid = molecule.resid[i]
                 else:
-                    frags[-1].append(i)
+                    residues[-1].append(i)
+            # A single residue is not always guaranteed to be contiguous
+            for res in residues:
+                residue_select = molecule.atom_select(res)
+                residue_select.build_topology(force_bonds=False)
+                for sub_mol in residue_select.molecules:
+                    frags.append([res[i] for i in sub_mol])
         else:
-            frags = [m.nodes() for m in molecule.molecules]
+            frags = [list(m.nodes()) for m in molecule.molecules]
+            if connect_isolated:
+                isolates = [list(m.nodes())[0] for m in molecule.molecules if len(m.nodes()) == 1]
+                for i in isolates:
+                    j = molecule.get_closest_atom(i, pbc=False)[0]
+                    logger.info("Creating artifical bond to isolated atom: %i-%i\n" % (i+1, j+1))
+                    molecule.bonds.append((i, j))
+                old_read_bonds = molecule.top_settings['read_bonds']
+                molecule.top_settings['read_bonds'] = True
+                molecule.build_topology(force_bonds=False)
+                molecule.top_settings['read_bonds'] = old_read_bonds
+                frags = [list(m.nodes()) for m in molecule.molecules]
+            
         # coordinates in Angstrom
         coords = molecule.xyzs[0].flatten()
         # Make a distance matrix mapping atom pairs to interatomic distances
@@ -2191,11 +2154,8 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         for (a, b) in molecule.topology.edges():
             self.add(Distance(a, b))
 
-        # Add an internal coordinate for all angles
-        # LinThre = 0.99619469809174555
-        # LinThre = 0.999
-        # This number works best for the iron complex
-        LinThre = 0.95
+        # Linear angle threshold - corresponds to about 162 degrees.
+        LinThre   = 0.95
         AngDict = defaultdict(list)
         for b in molecule.topology.nodes():
             for a in molecule.topology.neighbors(b):
@@ -2206,7 +2166,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                         nnc = (min(a, b), max(a, b)) in noncov
                         nnc += (min(b, c), max(b, c)) in noncov
                         # if nnc >= 2: continue
-                        # logger.info("LPW: cosine of angle", a, b, c, "is", np.abs(np.cos(Ang.value(coords))))
+                        # logger.info(" >>> Linear angle check: %3i %3i %3i % .3f % .3f %s\n" % (a, b, c, Ang.value(coords)*180/np.pi, np.cos(Ang.value(coords)), str(np.abs(np.cos(Ang.value(coords))) > LinThre)))
                         if np.abs(np.cos(Ang.value(coords))) < LinThre:
                             self.add(Angle(a, b, c))
                             AngDict[b].append(Ang)
@@ -2217,6 +2177,8 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                             # but do not work well for "almost" linear angles in noncovalent systems (e.g. H2O6).
                             # Bringing back old code to use "translations" for the latter case, but should be investigated
                             # more deeply in the future.
+                            # LPW 2022-02-15: Linear angle ICs have been improved, and should no longer require resetting if the
+                            # atoms in the angle go through a large rotation. They are currently being used.
                             if nnc == 0:
                                 self.add(LinearAngle(a, b, c, 0))
                                 self.add(LinearAngle(a, b, c, 1))
@@ -2510,20 +2472,15 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                     linear_torsion_angles[(b, c, d)] = bcd
         return linear_torsion_angles
 
-    def linearRotCheck(self):
-        # Check if certain problems might be happening due to rotations of linear molecules.
+    def setRegularization(self, xyz):
+        regularization_changed = False
         for Internal in self.Internals:
-            if type(Internal) is LinearAngle:
-                if Internal.stored_dot2 > 0.75:
-                    # Linear angle is almost parallel to reference axis
-                    return True
-            if type(Internal) in [RotationA, RotationB, RotationC]:
-                if Internal in self.cPrims:
-                    continue
-                if Internal.Rotator.stored_dot2 > 0.9:
-                    # Linear molecule is almost parallel to reference axis
-                    return True
-        return False
+            if type(Internal) is RotationA:
+                if Internal.Rotator.set_regularization(xyz):
+                    regularization_changed = True
+            elif type(Internal) is LinearAngle:
+                Internal.reposition_e0(xyz)
+        return regularization_changed
 
     def largeRots(self):
         for Internal in self.Internals:
@@ -2717,6 +2674,41 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         if len(out_lines) > 0:
             logger.info(header + "\n")
             logger.info('\n'.join(out_lines) + "\n")
+
+    def visualizeRotations(self, xyz):
+        rxyz = []
+        relem = []
+        ridx = []
+        elem = np.array(self.elem, dtype=object)
+        for ic in self.Internals:
+            if type(ic) is RotationA:
+                rxyz.append(ic.Rotator.visualize(xyz))
+                ridx.append(ic.Rotator.a[-1]+1)
+                relem.append(np.array(['X', 'X'], dtype=object))
+            elif type(ic) is LinearAngle and ic.axis == 0:
+                rxyz.append(ic.visualize(xyz))
+                ridx.append(ic.c+1)
+                relem.append(np.array(['Z', 'Z', 'Z'], dtype=object))
+                # relem.append('He')
+                # relem.append('He')
+
+        rsort = np.argsort(ridx)
+        xyz_with_r = xyz.reshape(-1, 3).copy()
+        elem_with_r = elem.copy()
+        for i in range(len(ridx)):
+            j=len(ridx)-i-1
+            xyz_with_r = np.insert(xyz_with_r, ridx[rsort[j]], rxyz[rsort[j]], axis=0)
+            elem_with_r = np.insert(elem_with_r, ridx[rsort[j]], relem[rsort[j]])
+
+        # rxyz = np.array(rxyz)
+        # ridx = np.array(ridx)
+        # relem = np.array(relem)
+        # xyz_with_r = np.insert(xyz.copy().reshape(-1,3), ridx, rxyz)
+        # elem_with_r = np.insert(elem, ridx, relem)
+        M = Molecule()
+        M.xyzs = [xyz_with_r*bohr2ang]
+        M.elem = list(elem_with_r)
+        return M
             
     def guess_hessian(self, coords):
         """
@@ -2771,12 +2763,10 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                 else:
                     Hdiag.append(0.1)
             elif type(ic) in [Dihedral, MultiDihedral]:
-                r = np.linalg.norm(xyzs[ic.b]-xyzs[ic.c])
-                rcov = Radii[Elements.index(self.elem[ic.b])-1] + Radii[Elements.index(self.elem[ic.c])-1]
-                # Hdiag.append(0.1)
+                r = (np.linalg.norm(xyzs[ic.b]-xyzs[ic.c]))*ang2bohr
+                rcov = (Radii[Elements.index(self.elem[ic.b])-1] + Radii[Elements.index(self.elem[ic.c])-1])*ang2bohr
+                #Hdiag.append(min(0.023, 0.005 - 0.07*min(0.0, r-rcov)))
                 Hdiag.append(0.023)
-                # The value recommended in Schlegel's paper does not appear to improve performance for larger systems.
-                # Hdiag.append(max(0.0023, 0.0023-0.07*(r-rcov)))
             elif type(ic) is OutOfPlane:
                 r1 = xyzs[ic.b]-xyzs[ic.a]
                 r2 = xyzs[ic.c]-xyzs[ic.a]
@@ -2867,6 +2857,9 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
 
     def printConstraints(self, xyz, thre=1e-5):
         self.Prims.printConstraints(xyz, thre=thre)
+
+    def visualizeRotations(self, xyz):
+        return self.Prims.visualizeRotations(xyz)
     
     def augmentGH(self, xyz, G, H):
         """
@@ -3393,9 +3386,8 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         """ Check if certain problems might be happening due to three consecutive atoms in a torsion angle becoming linear. """
         return self.Prims.torsionConstraintLinearAngles(coords, thre)
     
-    def linearRotCheck(self):
-        """ Check if certain problems might be happening due to rotations of linear molecules. """
-        return self.Prims.linearRotCheck()
+    def setRegularization(self, xyz):
+        return self.Prims.setRegularization(xyz)
 
     def largeRots(self):
         """ Determine whether a molecule has rotated by an amount larger than some threshold (hardcoded in Prims.largeRots()). """

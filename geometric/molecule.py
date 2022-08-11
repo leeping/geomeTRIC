@@ -251,6 +251,13 @@ Elements = ["None",'H','He',
             'Lu','Hf','Ta','W','Re','Os','Ir','Pt','Au','Hg','Tl','Pb','Bi','Po','At','Rn',
             'Fr','Ra','Ac','Th','Pa','U','Np','Pu','Am','Cm','Bk','Cf','Es','Fm','Md','No','Lr','Rf','Db','Sg','Bh','Hs','Mt']
 
+# A list of transition and f-block metals (also some on the dividing line), used to adjust bond order thresholds
+TransitionMetals = ['Sc','Ti','V','Cr','Mn','Fe','Co','Ni','Cu','Zn','Sr','Y','Zr','Nb','Mo',
+                    'Tc','Ru','Rh','Pd','Ag','Cd','In','Sn','Sb','Te','La','Ce','Pr','Nd','Pm',
+                    'Sm','Eu','Gd','Tb','Dy','Ho','Er','Tm','Yb','Lu','Hf','Ta','W','Re','Os',
+                    'Ir','Pt','Au','Hg','Tl','Pb','Bi','Po','At','Ac','Th','Pa','U','Np','Pu',
+                    'Am','Cm','Bk','Cf','Es','Fm','Md','No','Lr','Rf','Db','Sg','Bh','Hs','Mt']
+
 # Dictionary of atomic masses ; also serves as the list of elements (periodic table)
 #
 # Atomic mass data was updated on 2020-05-07 from NIST:
@@ -370,7 +377,7 @@ elif "geometric" in __name__:
 #===========================#
 
 ## One bohr equals this many angstroms
-bohr2ang = 0.529177210
+bohr2ang     = 0.529177210903      # Previous value: 0.529177210
 
 def unmangle(M1, M2):
     """
@@ -476,13 +483,8 @@ try:
     class MyG(nx.Graph):
         def __init__(self):
             super(MyG,self).__init__()
-            self.Alive = True
         def __eq__(self, other):
             # This defines whether two MyG objects are "equal" to one another.
-            if not self.Alive:
-                return False
-            if not other.Alive:
-                return False
             return nx.is_isomorphic(self,other,node_match=nodematch)
         def __hash__(self):
             """ The hash function is something we can use to discard two things that are obviously not equal.  Here we neglect the hash. """
@@ -1008,7 +1010,7 @@ def AtomContact(xyz, pairs, box=None, displace=False):
     Returns
     -------
     np.ndarray
-        N_pairs*N_frames (2D) array of minimum image convention distances
+        N_frames*N_pairs (2D) array of minimum image convention distances
     np.ndarray (optional)
         if displace=True, N_frames*N_pairs*3 array of displacement vectors
     """
@@ -1233,6 +1235,7 @@ class Molecule(object):
                           'in'      : 'qcin',
                           'qcin'    : 'qcin',
                           'com'     : 'gaussian',
+                          'gjf'     : 'gaussian',
                           'rst'     : 'inpcrd',
                           'out'     : 'qcout',
                           'esp'     : 'qcesp',
@@ -1364,7 +1367,7 @@ class Molecule(object):
         New.top_settings = copy.deepcopy(self.top_settings)
 
         for key in self.Data:
-            if key in ['xyzs', 'qm_grads', 'qm_hessians', 'qm_espxyzs', 'qm_espvals', 'qm_extchgs', 'qm_mulliken_charges', 'qm_mulliken_spins', 'molecules', 'qm_bondorder']:
+            if key in ['xyzs', 'qm_grads', 'qm_hessians', 'qm_espxyzs', 'qm_espvals', 'qm_extchgs', 'qm_mulliken_charges', 'qm_mulliken_spins', 'qm_bondorder']:
                 # These variables are lists of NumPy arrays, NetworkX graph objects, or others with
                 # explicitly defined copy() methods.
                 New.Data[key] = []
@@ -1373,6 +1376,10 @@ class Molecule(object):
             elif key in ['topology']:
                 # These are NetworkX graph objects or other variables with explicitly defined copy() methods.
                 New.Data[key] = self.Data[key].copy()
+            elif key in ['molecules']:
+                New.Data[key] = []
+                for i in range(len(self.Data[key])):
+                    New.Data[key].append(self.Data[key][i].copy())
             elif key in ['boxes', 'qcrems']:
                 # We'll use the default deepcopy method for these:
                 # boxes is a list of named tuples.
@@ -1584,6 +1591,8 @@ class Molecule(object):
         for key in self.FrameKeys:
             if key in ['xyzs', 'qm_grads', 'qm_mulliken_charges', 'qm_mulliken_spins']:
                 NewData[key] = list([self.Data[key][i][unmangled] for i in range(len(self))])
+            elif key in ['qm_hessians', 'qm_bondorder']:
+                NewData[key] = list([self.Data[key][i][unmangled, unmangled] for i in range(len(self))])
         for key in NewData:
             setattr(self, key, copy.deepcopy(NewData[key]))
 
@@ -1673,9 +1682,15 @@ class Molecule(object):
     #|     For doing useful things       |#
     #=====================================#
 
-    def center_of_mass(self):
-        totMass = sum([PeriodicTable.get(self.elem[i], 0.0) for i in range(self.na)])
-        return np.array([np.sum([xyz[i,:] * PeriodicTable.get(self.elem[i], 0.0) / totMass for i in range(xyz.shape[0])],axis=0) for xyz in self.xyzs])
+    def center_of_mass(self, mass=True):
+        """
+        Calculate the center of mass. If mass=False, then return the geometric center.
+        """
+        if mass:
+            totMass = sum([PeriodicTable.get(self.elem[i], 0.0) for i in range(self.na)])
+            return np.array([np.sum([xyz[i,:] * PeriodicTable.get(self.elem[i], 0.0) / totMass for i in range(xyz.shape[0])],axis=0) for xyz in self.xyzs])
+        else:
+            return np.array([np.mean(self.xyzs[i], axis=0) for i in range(len(self))])
 
     def radius_of_gyration(self):
         totMass = sum([PeriodicTable[self.elem[i]] for i in range(self.na)])
@@ -1686,6 +1701,74 @@ class Molecule(object):
             xyz1 -= coms[i]
             rgs.append(np.sqrt(np.sum([PeriodicTable[self.elem[i]]*np.dot(x,x) for i, x in enumerate(xyz1)])/totMass))
         return np.array(rgs)
+
+    def moment_of_inertia(self, mass=True):
+        """ Calculate moment of inertia in amu * angstrom**2. 
+        If mass = False, then all masses will be set to one."""
+        moments = []
+        for i in range(len(self)):
+            I = np.zeros((3,3))
+            xyz = self.xyzs[i]
+            coms = self.center_of_mass(mass=mass)
+            dxyz = xyz - coms[i, np.newaxis, :]
+            for j, xj in enumerate(dxyz):
+                factor = PeriodicTable[self.elem[j]] if mass else 1.0
+                I += factor*(np.dot(xj,xj)*np.eye(3) - np.outer(xj,xj))
+            moments.append(I)
+        return moments
+        
+    def calc_netforce_torque(self, mass=True):
+        """ Calculate net force and torque vectors
+        in units of hartree/bohr and hartree/bohr*bohr respectively.
+
+        These are actually the "negative" of the net force and torque
+        because the factor of -1 to convert grad into force has not been applied.
+
+        Requires forces to be entered into qm_grads.
+        """
+        netforces = []
+        torques = []
+        coms = self.center_of_mass(mass=mass)
+        if len(self.qm_grads) != len(self):
+            raise RuntimeError('qm_grads length does not match number of structures')
+        if self.qm_grads[0].shape != (self.na, 3):
+            raise RuntimeError('qm_grads element does not have the wrong shape (n_atoms, 3)')
+        for i in range(len(self)):
+            netforces.append(np.sum(self.qm_grads[i], axis=0))
+            torque_vec = np.zeros(3, dtype=float)
+            dxyz = (self.xyzs[i] - coms[i][np.newaxis, :])/bohr2ang
+            for j in range(self.na):
+                torque_vec += np.cross(dxyz[j], self.qm_grads[i][j])
+            torques.append(torque_vec)
+        return np.array(netforces), np.array(torques)
+
+    def remove_netforce_torque(self, mass=True):
+        """ Calculate net force and torque-less analogue of qm_grads. """
+        netforces, torques = self.calc_netforce_torque(mass=mass)
+        coms = self.center_of_mass(mass=mass)
+        moments = self.moment_of_inertia(mass=mass)
+        grad_proj = [frc.copy() for frc in self.qm_grads]
+        for i in range(len(self)):
+            # The purely translational component of the force on each atom
+            trans_frc = netforces[i] / self.na
+            grad_proj[i] -= trans_frc[np.newaxis, :]
+            dxyz = (self.xyzs[i] - coms[i][np.newaxis, :])/bohr2ang
+            # Moment of inertia in amu bohr**2
+            moment_au = moments[i]/bohr2ang**2
+            for j in range(self.na):
+                # The purely rotational component of the force on each atom.
+                # L = angular momentum, I = moment of inertia, w = angular velocity
+                # T = torque, v = perpendicular component of velocity
+                # F = perpendicular component of force, the desired quantity
+                #
+                # Start with F = m (dv/dt) = m (dw/dt x r)
+                # dw/dt = I^-1.dL/dt = I^-1.T
+                # Therefore F = m (I^-1.T) x r
+                I_torque = np.dot(np.linalg.pinv(moment_au), torques[i])
+                factor = PeriodicTable[self.elem[j]] if mass else 1.0
+                torque_frc = factor*np.cross(I_torque, dxyz[j])
+                grad_proj[i][j] -= torque_frc
+        return grad_proj
 
     def rigid_water(self):
         """ If one atom is oxygen and the next two are hydrogen, make the water molecule rigid. """
@@ -1840,9 +1923,12 @@ class Molecule(object):
         for key in self.FrameKeys:
            if key in ['xyzs', 'qm_grads', 'qm_mulliken_charges', 'qm_mulliken_spins']:
                New.Data[key] = [self.Data[key][i][atomslice] for i in range(len(self))]
+           elif key in ['qm_hessians', 'qm_bondorder']:
+               New.Data[key] = [self.Data[key][i][atomslice,atomslice] for i in range(len(self))]
         if 'bonds' in self.Data:
             New.Data['bonds'] = [(list(atomslice).index(b[0]), list(atomslice).index(b[1])) for b in self.bonds if (b[0] in atomslice and b[1] in atomslice)]
-        New.top_settings = self.top_settings
+        New.top_settings = copy.deepcopy(self.top_settings)
+        
         if build_topology:
             New.build_topology(force_bonds=False)
         return New
@@ -1861,8 +1947,19 @@ class Molecule(object):
         def FrameStack(k):
             if k in self.Data and k in other.Data:
                 New.Data[k] = [np.vstack((s, o)) for s, o in zip(self.Data[k], other.Data[k])]
-        for i in ['xyzs', 'qm_grads', 'qm_hessians', 'qm_espxyzs', 'qm_espvals', 'qm_extchgs', 'qm_mulliken_charges', 'qm_mulliken_spins']:
+                
+        def FrameStack2D(k):
+            if k in self.Data and k in other.Data:
+                new_data = [np.zeros((self.na+other.na, self.na+other.na), dtype=float) for i in range(len(self))]
+                for i in range(len(self)):
+                    new_data[i][:self.na, :self.na] = self.Data[k][i].copy()
+                    new_data[i][self.na:, self.na:] = other.Data[k][i].copy()
+                New.Data[k] = new_data[i].copy()
+                
+        for i in ['xyzs', 'qm_grads', 'qm_espxyzs', 'qm_espvals', 'qm_extchgs', 'qm_mulliken_charges', 'qm_mulliken_spins']:
             FrameStack(i)
+        for i in ['qm_hessians', 'qm_bondorder']:
+            FrameStack2D(i)
 
         # Now build the new atom keys.
         for key in self.AtomKeys:
@@ -2124,7 +2221,7 @@ class Molecule(object):
         self.Data['bonds'] = sorted(list(set(bondlist)))
         self.built_bonds = True
 
-    def build_topology(self, force_bonds=True, **kwargs):
+    def build_topology(self, force_bonds=True, bond_order=0.0, metal_bo_factor=0.5, **kwargs):
         """
 
         Create self.topology and self.molecules; these are graph
@@ -2139,9 +2236,17 @@ class Molecule(object):
             default behavior.  If creating a Molecule object using
             __init__, do not force the building of bonds by default
             (only build bonds if not read from file.)
+        bond_order : float
+            If set to a nonzero number, do not use distance criteria and 
+            build the bonds from QM bond orders using the provided threshold, 
+            if the qm_bondorder data attribute exists.
+        metal_bo_factor : float
+            Transition metal complexes tend to have a lower bond order.
+            This multiplicative factor adjusts the bond order for metals.
         topframe : int, optional
-            Provide the frame number used for reading the bonds.  If
-            not provided, this will be taken from the top_settings
+            Provide the frame number used for reading the bonds
+            (and the bond orders if use_bondorder = True).
+            If not provided, this will be taken from the top_settings
             field.  If provided, this will take priority and write
             the value into top_settings.
         """
@@ -2149,8 +2254,21 @@ class Molecule(object):
         self.top_settings['topframe'] = sn
         if self.na > 100000:
             logger.warning("Warning: Large number of atoms (%i), topology building may take a long time" % self.na)
-        # Build bonds from connectivity graph if not read from file.
-        if (not self.top_settings['read_bonds']) or force_bonds:
+        if bond_order > 0.0:
+            if not hasattr(self, 'qm_bondorder'):
+                raise RuntimeError('Molecule does not contain QM bond order info.')
+            print("Using QM bond order with a threshold of %.2f" % bond_order)
+            bondlist = []
+            for i in range(self.na):
+                for j in range(i+1, self.na):
+                    if self.qm_bondorder[sn][i, j] > bond_order:
+                        bondlist.append((i, j))
+                    elif ((self.elem[i] in TransitionMetals or self.elem[j] in TransitionMetals)
+                          and self.qm_bondorder[sn][i, j] > bond_order*metal_bo_factor):
+                        bondlist.append((i, j))
+            self.Data['bonds'] = sorted(list(set(bondlist)))
+        # Build bonds from connectivity graph.
+        elif (not self.top_settings['read_bonds']) or force_bonds:
             self.build_bonds()
         # Create a NetworkX graph object to hold the bonds.
         G = MyG()
@@ -2197,6 +2315,17 @@ class Molecule(object):
         else:
             drij, dxij = AtomContact(np.array(self.xyzs), AtomIterator, box=None, displace=True)
         return AtomIterator, list(drij), list(dxij)
+
+    def get_closest_atom(self, i, pbc=True):
+        """ Obtain the closest atom index to atom i. """
+        atom_pairs = [(i, j) for j in range(self.na)]
+        if pbc:
+            boxes = np.array([[self.boxes[i].a, self.boxes[i].b, self.boxes[i].c] for i in range(len(self))])
+            drij = AtomContact(np.array(self.xyzs), atom_pairs, box=boxes)
+        else:
+            drij = AtomContact(np.array(self.xyzs), atom_pairs, box=None)
+        drij[:, i] = 1e10
+        return np.argmin(drij, axis=1)
 
     def rotate_bond(self, frame, aj, ak, increment=15):
         """ 
@@ -3465,7 +3594,8 @@ class Molecule(object):
         ghost                = [] # If the element in the $molecule section is preceded by an '@' sign, it's a ghost atom for counterpoise calculations.
         infsm                = False
 
-        for line in open(fnm).readlines():
+        # The 'iso-8859-1' prevents some strange errors that show up when reading the Archival summary line
+        for line in open(fnm, encoding='iso-8859-1').readlines():
             line = line.strip().expandtabs()
             sline = line.split()
             dline = line.split('!')[0].split()
@@ -3762,7 +3892,8 @@ class Molecule(object):
         pcmgradmode = False
         pcmgrads = []
         pcmgrad = []
-        for line in open(fnm):
+        # The 'iso-8859-1' prevents some strange errors that show up when reading the Archival summary line
+        for line in open(fnm, encoding='iso-8859-1'):
             line = line.strip().expandtabs()
             if 'Welcome to Q-Chem' in line:
                 Answer['qcerr'] = ''
@@ -3956,7 +4087,7 @@ class Molecule(object):
             Answer['qm_grads'] = Mats['gradient_scf']['All']
         # Mayer bond order matrix from SCF_FINAL_PRINT=1
         if len(Mats['mayer']['All']) > 0:
-            Answer['qm_bondorder'] = Mats['mayer']['All'][-1]
+            Answer['qm_bondorder'] = Mats['mayer']['All']
         if len(Mats['hessian_scf']['All']) > 0:
             Answer['qm_hessians'] = Mats['hessian_scf']['All']
         #else:
@@ -4047,7 +4178,9 @@ class Molecule(object):
                 Answer['qm_mulliken_spins'].insert(i, np.array([0.0 for i in mkspn[-1]]))
             Answer['qm_mulliken_spins'] = Answer['qm_mulliken_spins'][:len(Answer['qm_energies'])]
 
-        Answer['Irc'] = IRCData
+        if any([Answer['qcrems'][i]['jobtype'].lower() == 'rpath' for i in range(len(Answer['qcrems']))]):
+            Answer['Irc'] = IRCData
+            
         if len(modes) > 0:
             unnorm = [np.array(i) for i in modes]
             Answer['freqs'] = np.array(frqs)

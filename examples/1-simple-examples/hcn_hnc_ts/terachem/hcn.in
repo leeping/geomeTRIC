@@ -1,0 +1,6 @@
+run gradient
+coordinates start.xyz
+charge 0
+spinmult 1
+method rhf
+basis 3-21g
