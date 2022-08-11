@@ -12,7 +12,7 @@ You can install or update geomeTRIC using the ``conda`` package manager.
 
 .. parsed-literal::
 
-    conda install :green-bold:`geOmetric` -c conda-forge
+    conda install geometric -c conda-forge
 
 This installs geomeTRIC and its dependencies.
 

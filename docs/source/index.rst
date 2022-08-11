@@ -12,6 +12,7 @@ GeomeTRIC Documentation for Users and Contributors
 
    install
    quickstart
+   examples
    constraints
    meci
    engines
