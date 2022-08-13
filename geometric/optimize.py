@@ -125,6 +125,11 @@ class Optimizer(object):
     def print_info(self):
         params = self.params
         logger.info("> ===== Optimization Info: ====\n")
+        if params.transition:
+            logger.info("> Job type: Transition state optimization\n")
+        else:
+            logger.info("> Job type: Energy minimization\n")
+            
         logger.info("> Maximum number of optimization cycles: %i\n" % params.maxiter)
         logger.info("> Initial / maximum trust radius (Angstrom): %.3f / %.3f\n" % (params.trust, params.tmax))
         logger.info("> Convergence Criteria:\n")
@@ -886,6 +891,7 @@ def run_optimizer(**kwargs):
 
     IC = CoordClass(M, build=True, connect=connect, addcart=addcart, constraints=Cons, cvals=CVals[0] if CVals is not None else None,
                     conmethod=params.conmethod)
+    
     #========================================#
     #| End internal coordinate system setup |#
     #========================================#
@@ -911,6 +917,22 @@ def run_optimizer(**kwargs):
         logger.info("%i internal coordinates being used (instead of %i Cartesians)\n" % (len(IC.Internals), 3*M.na))
     logger.info(IC)
     logger.info("\n")
+
+    # Print out a note if DFT is used for non-fragmented systems; recommend --dlc and --subfrctor 2.
+    if engine.detect_dft() and coordsys != "dlc" and len(IC.frags) == 1:
+        logger.info("#===================================================================================#\n")
+        logger.info("#| \x1b[91mNote: Detected the use of DFT for a system containing only one fragment.\x1b[0m        |#\n")
+        logger.info("#|                                                                                 |#\n")
+        logger.info("#| DFT calculations that use small to medium-sized grids can sometimes result in   |#\n")
+        logger.info("#| energies and/or gradients that are not translationally/rotationally invariant,  |#\n")
+        logger.info("#| which varies depending on the QC program used.                                  |#\n")
+        logger.info("#|                                                                                 |#\n")
+        logger.info("#| Spurious translation/rotation contributions to the energy and/or gradient       |#\n")
+        logger.info("#| may cause convergence failure that is observable as 'movement' or 'tumbling'    |#\n")
+        logger.info("#| of the molecule in the optimization output. If observed, rerun the calculation  |#\n")
+        logger.info("#| using --coordsys dlc and --subfrctor 2. It will project out overall translation |#\n")
+        logger.info("#| and rotation from the optimization space.                                       |#\n")
+        logger.info("#===================================================================================#\n")
 
     if Cons is None:
         # Run a standard geometry optimization

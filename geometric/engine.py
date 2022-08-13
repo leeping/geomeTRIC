@@ -51,6 +51,11 @@ from .nifty import bak, au2ev, eqcgmx, fqcgmx, bohr2ang, logger, getWorkQueue, q
 from .errors import EngineError, CheckCoordError, Psi4EngineError, QChemEngineError, TeraChemEngineError, \
     ConicalIntersectionEngineError, OpenMMEngineError, GromacsEngineError, MolproEngineError, QCEngineAPIEngineError, GaussianEngineError
 
+# Strings matching common DFT functionals
+# exclude "pw", "scan" because they might cause false positives
+dft_strings = ["lda", "svwn", "lyp", "b88", "p86", "b97", "hcth", "tpss", "hse", 
+               "hjs", "pbe", "m05", "m06", "m08", "m11", "m12", "m15", "gga"]
+
 #=============================#
 #| Useful TeraChem functions |#
 #=============================#
@@ -346,6 +351,9 @@ class Engine(object):
     def load_guess_files(self, dirname):
         return
 
+    def detect_dft(self):
+        return False
+
 class Blank(Engine):
     """
     Always return zero energy and gradient.
@@ -617,6 +625,12 @@ class TeraChem(Engine): # pragma: no cover
             raise TeraChemEngineError("Trying to copy %s but it does not exist" % os.path.join(src, self.scr))
         copy_tree_over(os.path.join(src, self.scr), os.path.join(dest, self.scr))
 
+    def detect_dft(self):
+        for i in dft_strings:
+            if i.lower() in self.tcin['method'].lower():
+                return True
+        return False
+
 class OpenMM(Engine):
     """
     Run a OpenMM energy and gradient calculation.
@@ -882,6 +896,12 @@ class Gaussian(Engine):
         gradient = np.array(gradient, dtype=np.float64).ravel()
         return {'energy':energy, 'gradient':gradient}
 
+    def detect_dft(self):
+        for i in dft_strings:
+            if i.lower() in self.route_line.lower():
+                return True
+        return False
+
 class Psi4(Engine):
     """
     Run a Psi4 energy and gradient calculation.
@@ -1040,6 +1060,14 @@ class Psi4(Engine):
         # so we will opt not to store and retrieve scratch files for now.
         return
 
+    def detect_dft(self):
+        for line in self.psi4_temp:
+            if "gradient(" in line:
+                for i in dft_strings:
+                    if i.lower() in line.lower():
+                        return True
+        return False
+
 class QChem(Engine): # pragma: no cover
     def __init__(self, molecule, dirname=None, qcdir=None, threads=None):
         super(QChem, self).__init__(molecule)
@@ -1158,6 +1186,14 @@ class QChem(Engine): # pragma: no cover
         if not os.path.exists(os.path.join(src, 'run.d')):
             raise QChemEngineError("Trying to copy %s but it does not exist" % os.path.join(src, 'run.d'))
         copy_tree_over(os.path.join(src, 'run.d'), os.path.join(dest, 'run.d'))
+
+    def detect_dft(self):
+        for qcrem in self.qcrems:
+            for key, val in qcrem.items():
+                if key.lower() in ['method', 'exchange', 'correlation']:
+                    if any([i.lower() in val.lower() for i in dft_strings]):
+                        return True
+        return False
     
 class Gromacs(Engine):
     def __init__(self, molecule):
@@ -1324,6 +1360,13 @@ class Molpro(Engine):
         gradient = np.array(gradient, dtype=np.float64).ravel()
         return {'energy':energy, 'gradient':gradient}
 
+    def detect_dft(self):
+        for line in self.molpro_temp:
+            for keyword in ["ks,", "ks;", "ks}"]:
+                if keyword in line.lower() or line.lower().strip().endswith("ks"):
+                    return True
+        return False
+
 class QCEngineAPI(Engine):
     def __init__(self, schema, program):
         try:
@@ -1370,6 +1413,9 @@ class QCEngineAPI(Engine):
         # overwrites the calc method of base class to skip caching and creating folders
         # **kwargs: for throwing away other arguments such as read_data and copyfiles.
         return self.calc_new(coords, dirname)
+
+    def detect_dft(self):
+        return any([i.lower() in self.schema["model"]["method"].lower() for i in dft_strings])
 
 class ConicalIntersection(Engine):
     """
@@ -1452,3 +1498,10 @@ class ConicalIntersection(Engine):
         for istate in range(len(self.engines)):
             state_dnm = os.path.join(dirname, 'state_%i' % istate)
             self.engines[istate].number_output(state_dnm, calcNum)
+
+    def detect_dft(self):
+        for istate in range(len(self.engines)):
+            if self.engines[istate].detect_dft():
+                return True
+        else:
+            return False

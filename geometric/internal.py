@@ -2010,6 +2010,8 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         self.cVals = []
         self.Rotators = OrderedDict()
         self.elem = molecule.elem
+        # List of fragments as determined by residue ID, distance criteria or bond order
+        self.frags = []
         for i in range(len(molecule)):
             self.makePrimitives(molecule[i], connect, addcart)
         # Assume we're using the first image for constraints
@@ -2024,6 +2026,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         molecule.build_topology(force_bonds=False)
         connect_isolated = True
         if 'resid' in molecule.Data.keys():
+            # Create fragments corresponding to unique resID numbers if provided.
             frags = []
             residues = []
             current_resid = -1
@@ -2040,6 +2043,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                 for sub_mol in residue_select.molecules:
                     frags.append([res[i] for i in sub_mol])
         else:
+            # Create fragments based on connectivity in provided molecule object.
             frags = [list(m.nodes()) for m in molecule.molecules]
             if connect_isolated:
                 isolates = [list(m.nodes())[0] for m in molecule.molecules if len(m.nodes()) == 1]
@@ -2052,6 +2056,8 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                 molecule.build_topology(force_bonds=False)
                 molecule.top_settings['read_bonds'] = old_read_bonds
                 frags = [list(m.nodes()) for m in molecule.molecules]
+        # Make frags accessible from outside.
+        self.frags = frags
             
         # coordinates in Angstrom
         coords = molecule.xyzs[0].flatten()
@@ -2071,6 +2077,12 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         noncov = []
         # Connect all non-bonded fragments together
         for edge in mst:
+            # LPW 2022-08-12
+            # Technically the MST should not add edges within a molecule, but
+            # the "bug" actually seemed to improve performance for the constrained
+            # dipeptide case (from OpenFF). To "fix" the bug add the following 
+            # clause to the if statement on the next line:
+            # and not nx.has_path(molecule.topology, edge[0], edge[1]):
             if edge not in list(molecule.topology.edges()):
                 # print "Adding %s from minimum spanning tree" % str(edge)
                 if connect:
@@ -2150,7 +2162,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         #                 molecule.topology.add_edge(conn_a, conn_b)
         #                 noncov.append((conn_a, conn_b))
 
-        # Add an internal coordinate for all interatomic distances
+        # Add an internal coordinate for bonded atom pairs
         for (a, b) in molecule.topology.edges():
             self.add(Distance(a, b))
 
@@ -2507,20 +2519,10 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                 rots.append(Internal.Rotator.stored_norm)
         return rots
 
-    def getRotatorDots(self):
-        dots = []
-        for Internal in self.Internals:
-            if type(Internal) in [RotationA]:
-                dots.append(Internal.Rotator.stored_dot2)
-        return dots
-
     def printRotations(self, xyz):
         rotNorms = self.getRotatorNorms()
         if len(rotNorms) > 0:
             logger.info("Rotator Norms: " + " ".join(["% .4f" % i for i in rotNorms]) + "\n")
-        rotDots = self.getRotatorDots()
-        if len(rotDots) > 0 and np.max(rotDots) > 1e-5:
-            logger.info("Rotator Dots : " + " ".join(["% .4f" % i for i in rotDots]) + "\n")
         linAngs = [ic.value(xyz) for ic in self.Internals if type(ic) is LinearAngle]
         if len(linAngs) > 0:
             logger.info("Linear Angles: " + " ".join(["% .4f" % i for i in linAngs]) + "\n")
@@ -2806,6 +2808,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         self.addcart = addcart
         # The DLC contains an instance of primitive internal coordinates.
         self.Prims = PrimitiveInternalCoordinates(molecule, connect=connect, addcart=addcart, constraints=constraints, cvals=cvals)
+        self.frags = self.Prims.frags
         self.na = molecule.na
         # Whether constraints have been enforced previously
         self.enforced = False

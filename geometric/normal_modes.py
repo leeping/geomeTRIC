@@ -112,7 +112,7 @@ def calc_cartesian_hessian(coords, molecule, engine, dirname, read_data=True, ve
     h = 1.0e-3
     wq = getWorkQueue()
     Hx = np.zeros((nc, nc), dtype=float)
-    logger.info("Calculating Cartesian Hessian using finite difference on Cartesian gradients\n")
+    logger.info("Calculating Cartesian Hessian using finite difference on Cartesian gradients (%i grads total)\n" % (2*nc))
     if wq:
         for i in range(nc):
             if verbose >= 2: logger.info(" Submitting gradient calculation for coordinate %i/%i\n" % (i+1, nc))
@@ -138,8 +138,8 @@ def calc_cartesian_hessian(coords, molecule, engine, dirname, read_data=True, ve
         # First calculate a gradient at the central point, for linking scratch files.
         engine.calc(coords, dirname, read_data=read_data)
         for i in range(nc):
-            if verbose >= 2: logger.info(" Running gradient calculation for coordinate %i/%i\n" % (i+1, nc))
-            elif verbose >= 1 and (i%5 == 0): logger.info("%i / %i gradient calculations complete\n" % (i*2, nc*2))
+            if verbose >= 1: logger.info(" Running gradient calculation for coordinate %i/%i\n" % (i+1, nc))
+            elif i%5 == 0: logger.info("%i / %i gradient calculations complete\n" % (i*2, nc*2))
             coords[i] += h
             dirname_d = os.path.join(dirname, "hessian/displace/%03ip" % (i+1))
             gfwd = engine.calc(coords, dirname_d, read_data=read_data, copydir=dirname)['gradient']
@@ -148,7 +148,7 @@ def calc_cartesian_hessian(coords, molecule, engine, dirname, read_data=True, ve
             gbak = engine.calc(coords, dirname_d, read_data=read_data, copydir=dirname)['gradient']
             coords[i] += h
             Hx[i] = (gfwd-gbak)/(2*h)
-            if verbose == 1 and i == (nc-1) : logger.info("%i / %i gradient calculations complete\n" % (nc*2, nc*2))
+            if i == (nc-1) : logger.info("%i / %i gradient calculations complete\n" % (nc*2, nc*2))
     # Save Hessian to text file
     oldxyz = molecule.xyzs[0].copy()
     molecule.xyzs[0] = coords.reshape(-1, 3)*bohr2ang
