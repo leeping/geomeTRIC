@@ -1,1 +1,1 @@
-geometric-optimize run.in
+geometric-optimize --engine tera run.in

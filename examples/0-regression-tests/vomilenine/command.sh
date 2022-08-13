@@ -1,1 +1,1 @@
-geometric-optimize --engine gaussian run.com
+geometric-optimize --engine gaussian run.gjf
