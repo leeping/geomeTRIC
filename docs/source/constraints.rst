@@ -127,3 +127,12 @@ The constraints for the calculation in the middle panel is as follows::
     rotation 1-36
     $scan
     rotation 37-72 0.0 1.0 0.0 0.0 175.0 36
+
+Enforcing constraint satisfaction
+---------------------------------
+
+In the default constrained optimization algorithm, the constrained degrees of freedom converge to their target values rather slowly if the starting and target values are not the same.
+This behavior can be adjusted using the ``--enforce`` command line option.
+By passing a parameter such as ``--enforce 0.1`` (for example), the optimizer will switch to an algorithm that `exactly` enforces constraint satisfaction once the current values are within 0.1 of the target.
+The units are in bohr/radians, so exact constraint enforcement is turned on when bond length constraints are within 0.1 bohr (about 0.529 Angstrom) and angle/dihedral constraints are within 0.1 rad (about 6.28 degrees) of the target values.
+Activating exact constraint enforcement may improve performance in many cases, and it is expected to become the default algorithm after more testing.
