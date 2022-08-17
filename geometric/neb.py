@@ -441,7 +441,7 @@ class Chain(object):
             dy, expect = trust_step(iopt, v0, X, G, H, None, False, self.params.verbose)
         # Expected energy change should be calculated from PlainGrad
         GP = self.get_global_grad("total", "plain")
-        expect = flat(0.5*np.dot(np.dot(row(dy),np.array(HP)),col(dy)))[0] + np.dot(dy,GP)
+        expect = flat(0.5*np.linalg.multi_dot([row(dy),HP,col(dy)]))[0] + np.dot(dy,GP)
         expectG = flat(np.dot(np.array(H),col(dy))) + G
         return dy, expect, expectG, ForceRebuild
 
@@ -1051,35 +1051,36 @@ class ElasticBand(Chain):
 
         # Because the gradient depends on the neighboring images, a locked image may get unlocked if a neighboring image moves.
         # This is a bit problematic and we should revisit it in the future.
-        new_scheme = True
-        if new_scheme:
-            newLocks = [True] + [False for n in range(1, len(self)-1)] + [True] #self.locks[:]
-            for n in range(1, len(self)):
-                #HP: Locking images considers maxg as well.
-                if rmsGrad[n] < self.params.avgg and maxGrad[n] < self.params.maxg:
-                    newLocks[n] = True
-            if False not in newLocks:
-                #HP: In case all of the images are locked before NEB converges, unlock a few.
-                print('All the images got locked, unlocking some images with tighter average gradient value.')
-                factor = 1.0
-                while False not in newLocks:
-                    factor *=0.9
-                    for n in range(1, len(self)):
-                        if rmsGrad[n] > self.params.avgg*factor:
-                            newLocks[n] = False
-            self.locks = newLocks[:]
-        else:
-            self.locks = [True] + [False for n in range(1, len(self)-1)] + [True]
-            while True:
-                newLocks = self.locks[:]
+        #new_scheme = True
+        #if new_scheme:
+        newLocks = [True] + [False for n in range(1, len(self)-1)] + [True] #self.locks[:]
+        for n in range(1, len(self)):
+            #HP: Locking images considers maxg as well.
+            if rmsGrad[n] < self.params.avgg and maxGrad[n] < self.params.maxg:
+                newLocks[n] = True
+        if False not in newLocks:
+            #HP: In case all of the images are locked before NEB converges, unlock a few.
+            print('All the images got locked, unlocking some images with tighter average gradient value.')
+            factor = 1.0
+            while False not in newLocks:
+                factor *=0.9
                 for n in range(1, len(self)):
-                    if rmsGrad[n] < self.params.avgg:
-                        if all(self.locks[:n]):
-                            newLocks[n] = True
-                        if all(self.locks[n+1:]):
-                            newLocks[n] = True
-                if newLocks == self.locks: break
-                self.locks = newLocks[:]
+                    if rmsGrad[n] > self.params.avgg*factor:
+                        newLocks[n] = False
+        self.locks = newLocks[:]
+        #else:
+        #    #TODO: Isn't the new_scheme always true?
+        #    self.locks = [True] + [False for n in range(1, len(self)-1)] + [True]
+        #    while True:
+        #        newLocks = self.locks[:]
+        #        for n in range(1, len(self)):
+        #            if rmsGrad[n] < self.params.avgg and maxGrad[n] < self.params.maxg:
+        #                if all(self.locks[:n]):
+        #                    newLocks[n] = True
+        #                if all(self.locks[n+1:]):
+        #                    newLocks[n] = True
+        #        if newLocks == self.locks: break
+        #        self.locks = newLocks[:]
         return recompute
             
     def ComputeTangent(self):

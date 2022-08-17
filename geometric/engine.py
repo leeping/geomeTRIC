@@ -516,7 +516,10 @@ class TeraChem(Engine): # pragma: no cover
         result = self.read_result(dirname)
 
         if self.nebtcguess:
-            shutil.move(dirname, dirname+".guess0")
+            nebdir = dirname+".guess0"
+            if os.path.exists(nebdir):
+                shutil.rmtree(nebdir)
+            shutil.move(dirname, nebdir)
             results = [result]
             energies = [result['energy']]
             for i, MOs in enumerate(self.initnebguess_files):
