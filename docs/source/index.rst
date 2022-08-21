@@ -14,6 +14,7 @@ GeomeTRIC Documentation for Users and Contributors
    quickstart
    examples
    constraints
+   transition
    meci
    engines
    options

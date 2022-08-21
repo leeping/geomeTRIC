@@ -25,8 +25,8 @@ which are specified using these keywords:
 More than one option can be provided at once (e.g. scanning a bond length while freezing an angle), and
 setting multiple constraints in ``$scan`` will result in a multi-dimensional scan.
 
-Examples
---------
+Input format
+------------
 
 Individual constrained degrees of freedom follow the ``$freeze``, ``$set`` and ``$scan`` keywords.
 A constraint that freezes the distance between atoms 5 and 6 would look like this::
