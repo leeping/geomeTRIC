@@ -35,6 +35,7 @@ POSSIBILITY OF SUCH DAMAGE.
 
 from __future__ import division
 import numpy as np
+from scipy import optimize
 from numpy.linalg import multi_dot
 
 from .nifty import row, col, flat, invert_svd, bohr2ang, ang2bohr, logger, pvec1d, pmat2d
@@ -95,9 +96,12 @@ def brent_wiki(f, a, b, rel, cvg=0.1, obj=None, verbose=0):
             s = a*fb*fc/((fa-fb)*(fa-fc))
             s += b*fa*fc/((fb-fa)*(fb-fc))
             s += c*fa*fb/((fc-fa)*(fc-fb))
+            # print("--> Inverse quadratic; a = %.3f b = %.3f c = %.3f fa = %.3f fb = %.3f fc = %.3f" % (a, b, c, fa, fb, fc)) 
         else:
             # Secant method
+            # Note: This is always used in the 1st cycle
             s = b-fb*(b-a)/(fb-fa)
+            # print("--> Secant method;     a = %.3f b = %.3f c = %.3f fa = %.3f fb = %.3f fc = %.3f" % (a, b, c, fa, fb, fc)) 
         # Evaluate conditions
         condition1 = not between(s, (3*a+b)/4, b)
         condition2 = mflag and (np.abs(s-b) >= np.abs(b-c)/2)
@@ -115,6 +119,7 @@ def brent_wiki(f, a, b, rel, cvg=0.1, obj=None, verbose=0):
         # print a, s, b, fs, rel, cvg
         # Successful convergence
         if np.abs(fs/rel) <= cvg:
+            # print("Brent converged to %.3f" % np.abs(fs/rel))
             return s
         # Convergence failure - interval becomes
         # smaller than threshold
@@ -160,6 +165,7 @@ class Froot(object):
         self.brentFailed = False
         self.params = params
         self.v0 = v0
+        self.v = v0 # Stored value of v from restricting the step
         self.X = X
         self.G = G
         self.H = H
@@ -185,7 +191,7 @@ class Froot(object):
                 cnorm = self.stores[trial]
                 self.from_above = False
             else:
-                dy, expect = trust_step(trial, v0, X, G, H, IC, self.params.transition, self.params.verbose)
+                dy, expect, self.v = trust_step(trial, v0, X, G, H, IC, self.params.transition, self.params.verbose)
                 cnorm = get_cartesian_norm(X, dy, IC, self.params.enforce, self.params.verbose, self.params.usedmax)
                 # Early "convergence"; this signals whether we have found a valid step that is
                 # above the current target, but below the original trust radius. This happens
@@ -290,7 +296,7 @@ def get_hessian_update_tsbfgs(Dy, Dg, H):
     return Hup
 
 def get_hessian_update_msp(Dy, Dg, H, verbose=False):
-    # Murtagh-Sargent-Powell update
+    # Murtagh-Sargent-Powell update, aka Bofill's formula
     Xi = Dg - np.dot(H,Dy)
     dH_MS = np.dot(Xi, Xi.T)/np.dot(Dy.T, Xi)
     dH_P = np.dot(Xi, Dy.T) + np.dot(Dy, Xi.T) - np.dot(Dy, Dy.T)*np.dot(Xi.T, Dy)/np.dot(Dy.T, Dy)
@@ -304,6 +310,9 @@ def get_hessian_update_msp(Dy, Dg, H, verbose=False):
     return Hup
 
 def get_hessian_update_bfgs(Dy, Dg, H):
+    # if np.dot(Dg.T,Dy)[0,0] < 0.0:
+    #     logger.info("BFGS: Dg.Dy < 0, not updating.\n")
+    #     return np.zeros_like(H)
     Mat1 = np.dot(Dg,Dg.T)/np.dot(Dg.T,Dy)[0,0]
     Mat2 = np.dot(np.dot(H,Dy), np.dot(H,Dy).T)/multi_dot([Dy.T,H,Dy])[0,0]
     Hup = Mat1-Mat2
@@ -379,8 +388,10 @@ def update_hessian(IC, H0, xyz_seq, gradx_seq, params, trust_limit=False, max_up
     if not params.transition:
         Eig = sorted_eigh(H, asc=True)[0]
         if np.min(Eig) <= params.epsilon and params.reset:
-            logger.info("Eigenvalues below %.4e (%.4e) - returning guess\n" % (params.epsilon, np.min(Eig)))
-            H = IC.guess_hessian(xyz_seq[-1])
+            # logger.info("Eigenvalues below %.4e (%.4e) - returning guess\n" % (params.epsilon, np.min(Eig)))
+            # H = IC.guess_hessian(xyz_seq[-1])
+            logger.info("Eigenvalues below %.4e (%.4e) - not updating\n" % (params.epsilon, np.min(Eig)))
+            H = H0.copy()
         
     return H
 
@@ -794,13 +805,15 @@ def trust_step(target, v0, X, G, H, IC, rfo, verbose=0):
         The internal coordinate step with the desired size
     sol : float
         Expected change of the objective function
+    v : float
+        The final number that is added to the Hessian diagonal
     """
     if verbose >= 2: logger.info("    trust_step targeting internal coordinate step of length %.4f\n" % target)
     dy, sol, dy_prime = get_delta_prime(v0, X, G, H, IC, rfo, verbose)
 
     ndy = np.linalg.norm(dy)
     if ndy < target:
-        return dy, sol
+        return dy, sol, v0
     v = v0
     niter = 0
     ndy_last = 0
@@ -820,12 +833,12 @@ def trust_step(target, v0, X, G, H, IC, rfo, verbose=0):
         if np.abs((ndy-target)/target) < 0.001:
             if verbose >= 3: get_delta_prime(v, X, G, H, IC, rfo, verbose+1)
             if verbose: logger.info("    trust_step Iter:  %4i, v = %.5f, dy on target:   %.5f ---> %.5f\n" % (niter, v, ndy, target))
-            return dy, sol
+            return dy, sol, v
         # With Lagrange multipliers it may be impossible to go under a target step size
         elif niter > 10 and np.abs(ndy_last-ndy)/ndy < 0.001:
             if verbose >= 3: get_delta_prime(v, X, G, H, IC, rfo, verbose+1)
             if verbose: logger.info("    trust_step Iter:  %4i, v = %.5f, dy over target: %.5f -x-> %.5f\n" % (niter, v, ndy, target))
-            return dy, sol
+            return dy, sol, v
         elif verbose >= 2:
             logger.info("    trust_step Iter:  %4i, v = %.5f, dy -> target:   %.5f ---> %.5f\n" % (niter, v, ndy, target))
         niter += 1
@@ -841,4 +854,59 @@ def trust_step(target, v0, X, G, H, IC, rfo, verbose=0):
         if niter%1000 == 999:
             if verbose >= 3: get_delta_prime(v, X, G, H, IC, rfo, verbose+1)
             if verbose: logger.info("    trust_step Iter:  %4i, v = %.5f, dy at max-iter: %.5f -x-> %.5f\n" % (niter, v, ndy, target))
-            return m_dy, m_sol
+            return m_dy, m_sol, v
+
+def constrained_quartic_fit(E0, g0, E1, g1):
+    # Subtract out the large constant contribution to the energy
+    E1 -= E0
+    E0 = 0.0
+
+    # Scale the problem to order one; when close to convergence, 
+    # want to keep the objective function from seeming artifically low.
+    scale = 1.0/max(abs(E1), 1e-6)
+
+    # Function that builds a quartic function
+    def f_wrapper(c_):
+        def f_(x):
+            return c_[4]*x**4 + c_[3]*x**3 + c_[2]*x**2 + c_[1]*x + c_[0]
+        def fp_(x):
+            return 4*c_[4]*x**3 + 3*c_[3]*x**2 + 2*c_[2]*x + c_[1]
+        def fpp_(x):
+            return 12*c_[4]*x**2 + 6*c_[3]*x + 2*c_[2]
+        return f_, fp_, fpp_
+
+    # Cubic fit without the constraint
+    c_init = np.zeros(5, dtype=float)
+    c_init[0] = E0
+    c_init[1] = g0
+    c_init[2] = 3*(E1-E0)-g1-2*g0
+    c_init[3] = -2*(E1-E0)+g1+g0
+    
+    xmin = 0
+    xmax = 3
+    npts = 31
+    # logger.info("Top of constrained_quartic_fit: E0, g0, E1, g1 = % 16.8f % 16.8f % 16.8f % 16.8f\n" % (E0, g0, E1, g1))
+    logger.info("Top of constrained_quartic_fit:\n")
+    def least_squares_calc(c, verbose=False):
+        f, fp, fpp = f_wrapper(c)
+        curv = fpp(np.linspace(xmin, xmax, 31))
+        curv_neg = curv.copy()
+        curv_neg[curv>0] = 0
+        resvec = np.sqrt(npts)*np.array([f(0)-E0, fp(0)-g0, f(1)-E1, fp(1)-g1])
+        resvec = np.hstack((resvec, curv_neg))
+        resvec *= scale
+        if verbose:
+            x_min_f = optimize.fminbound(f, xmin, xmax)
+            logger.info("    Step %3i: f(x) = % 9.4e x^4 + % 9.4e x^3 + % 9.4e x^2 + % 9.4e x + % 9.4e\n" % (least_squares_calc.step, c[4], c[3], c[2], c[1], c[0]))
+            logger.info("     Coefficients = % 9.4e % 9.4e % 9.4e % 9.4e % 9.4e\n" % (c[4], c[3], c[2], c[1], c[0]))
+            logger.info("     f(0) = % 9.4e -> %9.4e f'(0) = % 9.4e -> %9.4e f(1) = % 9.4e -> %9.4e f'(1) = % 9.4e -> %9.4e \n" % (f(0), E0, fp(0), g0, f(1), E1, fp(1), g1))
+            logger.info("     xmin = % 9.4e ; f(xmin) = % 9.4e f'(xmin) = % 9.4e f''(xmin) = % 9.4e\n" % (x_min_f, f(x_min_f), fp(x_min_f), fpp(x_min_f)))
+            logger.info("     Curvatures: %s\n" % (' '.join([" %9.6f" % i for i in curv])))
+            logger.info("     Objective function = % 9.4e\n" % np.dot(resvec, resvec))
+        least_squares_calc.step += 1
+        return resvec
+    least_squares_calc.step = 0
+
+    least_squares_calc(c_init, verbose=True)
+    result = optimize.least_squares(least_squares_calc, c_init)
+    least_squares_calc(result.x, verbose=True)

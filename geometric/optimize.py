@@ -51,7 +51,7 @@ from .info import print_logo, print_citation
 from .internal import CartesianCoordinates, PrimitiveInternalCoordinates, DelocalizedInternalCoordinates
 from .ic_tools import check_internal_grad, check_internal_hess, write_displacements
 from .normal_modes import calc_cartesian_hessian, frequency_analysis
-from .step import brent_wiki, Froot, calc_drms_dmax, get_cartesian_norm, get_delta_prime, trust_step, force_positive_definite, update_hessian
+from .step import brent_wiki, Froot, calc_drms_dmax, get_cartesian_norm, get_delta_prime, trust_step, force_positive_definite, update_hessian, constrained_quartic_fit
 from .prepare import get_molecule_engine, parse_constraints
 from .params import OptParams, parse_optimizer_args
 from .nifty import row, col, flat, bohr2ang, ang2bohr, logger, bak, createWorkQueue
@@ -171,9 +171,10 @@ class Optimizer(object):
 
         logger.info("> === End Optimization Info ===\n")
         
-    def get_cartesian_norm(self, dy, verbose=None):
-        if not verbose: verbose = self.params.verbose
-        return get_cartesian_norm(self.X, dy, self.IC, self.params.enforce, self.params.verbose, self.params.usedmax)
+    def get_cartesian_norm(self, dy, verbose=None, usedmax=None):
+        if verbose is None: verbose = self.params.verbose
+        if usedmax is None: usedmax = self.params.usedmax
+        return get_cartesian_norm(self.X, dy, self.IC, self.params.enforce, verbose, usedmax)
 
     def get_delta_prime(self, v0, verbose=None):
         # This method can be called at a different verbose level than the master
@@ -363,6 +364,7 @@ class Optimizer(object):
         # Initial history
         self.X_hist = [self.X]
         self.Gx_hist = [self.gradx]
+        self.E_hist = [self.E]
         # Initial Hessian
         if hasattr(self, 'Hx'):
             # Compute IC Hessian from Cartesian Hessian at the current step
@@ -387,7 +389,24 @@ class Optimizer(object):
         else:
             logger.info("Hessian Eigenvalues: " + ' '.join("%.5e" % i for i in Eig) + '\n')
         return Eig
-        
+
+    def restricted_step_test(self, n_pts = 50):
+        # Write the IC and Cartesian step size for various values of lambda
+        logger.info("%12s %12s %12s %12s %12s %12s %12s\n" % ("#lambda", "inorm", "cnorm_rms", "cnorm_max", "expect", "deltaE", "quality"))
+        dy, _, __ = self.get_delta_prime(0.0)
+        inorm = np.linalg.norm(dy)
+        for inorm_trial in inorm*np.linspace(1/n_pts, 1, n_pts)**2:
+            dy, expect, v = self.trust_step(inorm_trial, 0.0)
+            cnorm = self.get_cartesian_norm(dy, usedmax=False)
+            cmax = self.get_cartesian_norm(dy, usedmax=True)
+            X0 = self.X.copy()
+            E0 = self.E
+            self.newCartesian(dy)
+            self.calcEnergyForce()
+            logger.info("% 12.6f % 12.6f % 12.6f % 12.6f % 12.6f % 12.6f % 12.6f\n" % (v, np.linalg.norm(dy), cnorm, cmax, expect, self.E - E0, (self.E - E0)/expect))
+            self.X = X0.copy()
+            self.E = E0
+
     def step(self):
         """
         Perform one step of the optimization.
@@ -470,7 +489,7 @@ class Optimizer(object):
                 return
             ##### End Rebuild
             # Finally, take an internal coordinate step of the desired length.
-            dy, _ = self.trust_step(iopt, v0, verbose=(self.params.verbose+1 if self.params.verbose >= 2 else 0))
+            dy, _, __ = self.trust_step(iopt, v0, verbose=(self.params.verbose+1 if self.params.verbose >= 2 else 0))
             self.cnorm = self.get_cartesian_norm(dy)
         ### DONE OBTAINING THE STEP ###
         if isinstance(self.IC, PrimitiveInternalCoordinates):
@@ -491,6 +510,39 @@ class Optimizer(object):
         self.Eprev = self.E
         ### Update the Internal Coordinates ###
         X0 = self.X.copy()
+
+        # Test 
+        if self.Iteration in [1, 10, 18, 24, 40, 50, 60, 70]:
+            logger.info("%-12s %12s %12s %12s %12s %12s %12s %12s\n" % ("#mult", "inorm", "drms(x)", "deltaE", "grms(x)", "|dE_dalpha|", "gerr_rms", "gerr_frac"))
+            spcalc = self.engine.calc(self.X, self.dirname)
+            gradq_0 = self.IC.calcGrad(self.X, spcalc['gradient']).flatten()
+            self.newCartesian(dy)
+            spcalc = self.engine.calc(self.X, self.dirname)
+            gradq_1 = self.IC.calcGrad(self.X, spcalc['gradient']).flatten()
+            for mult in np.linspace(0.0, 3.0, 31):
+                self.X = X0.copy()
+                # Take Cartesian step
+                self.newCartesian(dy*mult)
+                # Calculate new energy and gradient
+                spcalc = self.engine.calc(self.X, self.dirname)
+                energy = spcalc['energy']
+                gradx = spcalc['gradient']
+                # Calculate metrics for printing
+                drms, dmax = calc_drms_dmax(self.X, X0)
+                atomgrad = np.sqrt(np.sum((gradx.reshape(-1,3))**2, axis=1))
+                grms = np.sqrt(np.mean(atomgrad**2))
+                gradq = self.IC.calcGrad(self.X, gradx).flatten()
+                gradq_inter = gradq_0*(1-mult) + gradq_1*mult
+                gradx_inter = np.dot(self.IC.wilsonB(self.X).T, gradq_inter.T)
+
+                gradx_err = np.sqrt(np.sum(((gradx-gradx_inter).reshape(-1,3))**2, axis=1))
+                gradx_err_rms = np.sqrt(np.mean(gradx_err**2))
+                
+                gradx_err_pct = np.linalg.norm(gradx_inter - gradx)/np.linalg.norm(gradx)
+                dE_dalpha = np.dot(gradq, dy)
+                logger.info("%-12.8f % 12.8f % 12.8f % 12.8f % 12.8f % 12.8f % 12.3e % 12.8f\n" % (mult, np.linalg.norm(dy*mult), drms, energy-self.E, grms, dE_dalpha, gradx_err_rms, gradx_err_pct))
+
+        self.X = X0.copy()
         self.newCartesian(dy)
         ## The "actual" dy may be different from the one passed to newCartesian(),
         ## for example if we enforce constraints or don't get the step we expect.
@@ -501,6 +553,30 @@ class Optimizer(object):
         self.expect = flat(0.5*multi_dot([row(dy),self.H,col(dy)]))[0] + np.dot(dy,self.G)
         # self.expectdG = np.dot(self.H, col(dy).flatten())
         self.state = OPT_STATE.NEEDS_EVALUATION
+
+    def check_wolfe_condition(self, verbose=False):
+        # Check Wolfe conditions - we use the last "condition satisfied" structure as the reference.
+        # Not using for now; but will enable after implementing interpolation
+        c1 = 0.1
+        c2 = 0.9
+        dE = self.E - self.E_hist[-1]
+        Gprev = self.IC.calcGrad(self.X_hist[-1], self.Gx_hist[-1]).flatten()
+        dy = self.IC.calcDiff(self.X, self.X_hist[-1])
+        c1_check = c1 * np.dot(self.Gprev, dy)
+        wolfe = True
+        if dE < c1_check:
+            if verbose: logger.info("dE  = % 12.5e < %.1f*G_prev*dy = % 12.5e, 1st Wolfe condition satisfied\n" % (dE, c1, c1_check))
+        else:
+            if verbose: logger.info("dE  = % 12.5e > %.1f*G_prev*dy = % 12.5e, 1st Wolfe condition not satisfied\n" % (dE, c1, c1_check))
+            wolfe = False
+
+        c2_check = c2 * np.linalg.norm(self.Gprev)
+        if np.linalg.norm(self.G) < c2_check:
+            if verbose: logger.info("|G| = % 12.5e < %.1f*|G_prev|  = % 12.5e, 2nd Wolfe condition satisfied\n" % (np.linalg.norm(self.G), c2, c2_check))
+        else:
+            if verbose: logger.info("|G| = % 12.5e > %.1f*|G_prev|  = % 12.5e, 2nd Wolfe condition not satisfied\n" % (np.linalg.norm(self.G), c2, c2_check))
+            wolfe = False
+        return wolfe
 
     def evaluateStep(self):
         ### At this point, the state should be NEEDS_EVALUATION
@@ -649,6 +725,8 @@ class Optimizer(object):
         # Append steps to history (for rebuilding Hessian)
         self.X_hist.append(self.X)
         self.Gx_hist.append(self.gradx)
+        self.E_hist.append(self.E)
+
         self.engine.save_guess_files(self.dirname)
 
         ### Rebuild Coordinate System if Necessary ###
@@ -677,6 +755,14 @@ class Optimizer(object):
             self.UpdateHessian()
         if hasattr(self, 'Hx'):
             self.H = self.IC.calcHess(self.X, self.gradx, self.Hx)
+
+        # Calculate constrained quartic fit
+        dy = self.IC.calcDiff(self.X, self.Xprev)
+        Gprev = self.IC.calcGrad(self.Xprev, self.Gxprev)
+        de_dalpha_0 = np.dot(Gprev, dy)
+        de_dalpha_1 = np.dot(self.G, dy)
+        if self.Iteration in [1, 10, 18, 24, 40, 50, 60, 70]:
+            constrained_quartic_fit(self.Eprev, de_dalpha_0, self.E, de_dalpha_1)
         # Then it's on to the next loop iteration!
         return
 
