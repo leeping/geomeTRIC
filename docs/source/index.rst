@@ -13,6 +13,7 @@ GeomeTRIC Documentation for Users and Contributors
    install
    quickstart
    examples
+   how-it-works
    constraints
    transition
    meci

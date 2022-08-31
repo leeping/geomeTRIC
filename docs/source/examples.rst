@@ -47,6 +47,8 @@ Energy minimization of water hexamer using Q-Chem
 
 The above image shows the initial structure (in green) and final optimized structure.  All 3D structures are visualized using VMD.
 
+.. _example-malonate:
+
 Transition state optimization of malonate anion using Psi4
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
