@@ -506,8 +506,8 @@ class TeraChem(Engine): # pragma: no cover
         edit_tcin(fout="%s/run.in" % dirname, options=self.tcin)
         # Back up any existing output files
         # Commented out (should be enabled during debuggin')
-        bak('run.out', cwd=dirname, start=0)
-        bak(start_xyz, cwd=dirname, start=0)
+        # bak('run.out', cwd=dirname, start=0)
+        # bak(start_xyz, cwd=dirname, start=0)
         # Convert coordinates back to the xyz file
         self.M.xyzs[0] = coords.reshape(-1, 3) * bohr2ang
         if self.qmmm:
@@ -1188,7 +1188,7 @@ class QChem(Engine): # pragma: no cover
         copy_tree_over(os.path.join(src, 'run.d'), os.path.join(dest, 'run.d'))
 
     def detect_dft(self):
-        for qcrem in self.qcrems:
+        for qcrem in self.M.qcrems:
             for key, val in qcrem.items():
                 if key.lower() in ['method', 'exchange', 'correlation']:
                     if any([i.lower() in val.lower() for i in dft_strings]):
