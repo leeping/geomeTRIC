@@ -791,7 +791,7 @@ def run_optimizer(**kwargs):
     # Output will only be written to log files after the 'logConfig' line is called!
     if kwargs.get('logIni') is None:
         import geometric.optimize
-        logIni = pkg_resources.resource_filename(geometric.optimize.__name__, 'config/log.ini')
+        logIni = pkg_resources.resource_filename(geometric.optimize.__name__, r'config/log.ini')
     else:
         logIni = kwargs.get('logIni')
     logfilename = kwargs.get('prefix')
@@ -801,7 +801,7 @@ def run_optimizer(**kwargs):
     # Get calculation prefix and temporary directory name
     arg_prefix = kwargs.get('prefix', None) #prefix for output file and temporary directory
     prefix = arg_prefix if arg_prefix is not None else os.path.splitext(inputf)[0]
-    logfilename = prefix + ".log"
+    logfilename = rf"{prefix}.log"
     # Create a backup if the log file already exists
     backed_up = bak(logfilename)
     import logging.config
