@@ -2814,7 +2814,7 @@ def prepare(prev):
     gradients = prev.pop("gradients")
 
     params = {
-        "neb": True,
+    "neb": True,
         "images": args_dict.get("images"),
         "maxg": args_dict.get("maximum_force"),
         "avgg": args_dict.get("average_force"),
@@ -2822,6 +2822,9 @@ def prepare(prev):
         "nebk": args_dict.get("spring_constant"),
         "maxcyc": args_dict.get("maximum_cycle"),
         "plain": args_dict.get("spring_type"),
+        "reset": args_dict.get("hessian_reset"),
+        "skip": not args_dict.get("hessian_reset"),
+        "epsilon": args_dict.get("epsilon"),
         "coordsys": "cart",
     }
 
@@ -3003,6 +3006,9 @@ def nextchain(prev):
         "nebk": args_dict.get("spring_constant"),
         "maxcyc": args_dict.get("maximum_cycle"),
         "plain": args_dict.get("spring_type"),
+        "reset": args_dict.get("hessian_reset"),
+        "skip": not args_dict.get("hessian_reset"),
+        "epsilon": args_dict.get("epsilon"),
         "coordsys": "cart",
     }
 
@@ -3055,7 +3061,7 @@ def nextchain(prev):
     chain = add_attr(chain, prev.get("new_attrs"))
     old_chain = add_attr(old_chain, prev.get("old_attrs"))
     chain.ComputeGuessHessian(full=False, blank=isinstance(engine, Blank))
-    old_chain.ComputeGuessHessian(full=False, blank=isinstance(engine, Blank))
+    #old_chain.ComputeGuessHessian(full=False, blank=isinstance(engine, Blank))
     #chain.guess_hessian_working = prev.pop("HW_guess")
     #chain.guess_hessian_plain = prev.pop("HP_guess")
 
