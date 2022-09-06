@@ -2374,9 +2374,8 @@ def compare(
         if Quality > ThreHQ
         else ("Okay" if Quality > ThreLQ else ("Poor" if Quality > -1.0 else "Reject"))
     )
-    print()
     print(
-        " %13s %13s %13s %13s %11s %14s %13s"
+        "\n %13s %13s %13s %13s %11s %14s %13s"
         % (
             "GAvg(eV/Ang)",
             "GMax(eV/Ang)",
@@ -2876,7 +2875,7 @@ def prepare(prev):
         )
     )
 
-    Y = chain.get_internal_all()
+    #Y = chain.get_internal_all()
     GW = chain.get_global_grad("total", "working")
     GP = chain.get_global_grad("total", "plain")
     HW = chain.guess_hessian_working.copy()
@@ -2889,13 +2888,13 @@ def prepare(prev):
     old_attrs = check_attr(chain)
 
     temp = {
-        "Y": Y.tolist(),
+        #"Y_prev": Y.tolist(),
         "GW": GW.tolist(),
         "GP": GP.tolist(),
         "HW": HW.tolist(),
         "HP": HP.tolist(),
-        "HP_guess": HP.tolist(),
-        "HW_guess": HW.tolist(),
+        #"HP_guess": HP.tolist(),
+        #"HW_guess": HW.tolist(),
         "new_attrs": new_attrs,
         "old_attrs": old_attrs,
         "trust": trust,
@@ -3038,14 +3037,14 @@ def nextchain(prev):
 
     trust = prev.get("trust")
     trustprint = prev.get("trustprint", "=")
-    Y = prev.get("Y")
-    Y_prev = prev.get("Y_prev", Y.copy())
+    Y = chain.get_internal_all()
+    Y_prev = old_chain.get_internal_all()
     GW = prev.get("GW")
     GW_prev = prev.get("GW_prev", GW.copy())
     GP = prev.get("GP")
-    GP_prev = prev.get("GP_prev", GP.copy())
-    HW = prev.get("HW")
-    HP = prev.get("HP")
+    GP_prev = prev.pop("GP_prev", GP.copy())
+    HW = np.array(prev.get("HW"))
+    HP = np.array(prev.get("HP"))
     respaced = prev.get("respaced")
     expect = prev.get("expect")
     expectG = prev.get("expectG")
@@ -3055,9 +3054,10 @@ def nextchain(prev):
 
     chain = add_attr(chain, prev.get("new_attrs"))
     old_chain = add_attr(old_chain, prev.get("old_attrs"))
-
-    chain.guess_hessian_working = prev.get("HW_guess")
-    chain.guess_hessian_plain = prev.get("HP_guess")
+    chain.ComputeGuessHessian(full=False, blank=isinstance(engine, Blank))
+    old_chain.ComputeGuessHessian(full=False, blank=isinstance(engine, Blank))
+    #chain.guess_hessian_working = prev.pop("HW_guess")
+    #chain.guess_hessian_plain = prev.pop("HP_guess")
 
     chain.ComputeChain(result=result)
 
@@ -3104,14 +3104,14 @@ def nextchain(prev):
             GP,
             HW,
             HP,
-            prev.get("result", result),
+            prev.get('result', result),
         )
         new_attrs = check_attr(chain)
         old_attrs = check_attr(old_chain)
         newcoords = chaintocoords(chain)
         temp = {
-            "Y": Y.tolist(),
-            "Y_prev": Y_prev.tolist(),
+            #"Y": Y.tolist(),
+            #"Y_prev": Y_prev.tolist(),
             "GW": GW.tolist(),
             "GW_prev": GW_prev.tolist(),
             "GP": GP.tolist(),
@@ -3187,8 +3187,8 @@ def nextchain(prev):
         old_attrs = check_attr(old_chain)
         newcoords = chaintocoords(chain)
         temp = {
-            "Y": Y,
-            "Y_prev": Y_prev,
+            #"Y": Y,
+            #"Y_prev": Y_prev,
             "GW": GW,
             "GW_prev": GW_prev,
             "GP": GP,
@@ -3220,7 +3220,7 @@ def nextchain(prev):
         GP_prev,
         LastForce,
         params,
-        prev.get("result", result),
+        prev.get('result', result),
     )
     (
         chain,
@@ -3252,8 +3252,8 @@ def nextchain(prev):
     new_attrs = check_attr(chain)
     old_attrs = check_attr(old_chain)
     temp = {
-        "Y": Y.tolist(),
-        "Y_prev": Y_prev.tolist(),
+        #"Y": Y.tolist(),
+        #"Y_prev": Y_prev.tolist(),
         "GW": GW.tolist(),
         "GW_prev": GW_prev.tolist(),
         "GP": GP.tolist(),

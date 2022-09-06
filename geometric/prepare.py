@@ -253,7 +253,6 @@ def get_molecule_engine(**kwargs):
         else:
             raise RuntimeError("Failed to create an engine object, this might be a bug in get_molecule_engine")
     elif customengine:
-        logger.info("Custom engine selected.\n")
         engine = customengine
         M = engine.M
     else:
