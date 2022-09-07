@@ -30,6 +30,9 @@ def test_isdecimal():
     assert geometric.nifty.isdecimal("1.0")
     assert not(geometric.nifty.isdecimal("1"))
 
+def test_grouper():
+    assert geometry.nifty.grouper('ABCDeFG', 3) == [['A', 'B', 'C'], ['D', 'e', 'F'], ['G']]
+
 def test_get_least_squares():
     for result in geometric.nifty.get_least_squares(([0]), [0]):
         assert not(result.any())
