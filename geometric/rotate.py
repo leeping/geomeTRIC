@@ -96,7 +96,6 @@ def build_F(x, y, r=np.array([0.0, 0.0, 0.0, 0.0])):
         Regularization, introduces a term in the quadratic form that drives the solution
         toward the direction of r.  Intended to lift degeneracies in the case of linear molecules.
     """
-    # print("build_F : r = ", r)
     R = build_correlation(x, y)
     F = np.zeros((4,4),dtype=float)
     R11 = R[0,0]
@@ -476,6 +475,7 @@ def get_q_der(x, y, second=False, fdcheck=False, use_loops=False, r=np.array([0.
         First four dimensions are (n_atoms, 3, n_atoms, 3), the variables being differentiated
         Fifth dimension is 4, the elements of the quaternion second derivatives with respect to atom u, dimension w, atom a, dimension b
     """
+
     x = x - np.mean(x,axis=0)
     y = y - np.mean(y,axis=0)
     q, l = get_quat(x, y, eig=True, r=r)
@@ -789,8 +789,8 @@ def get_expmap_der(x, y, second=False, fdcheck=False, use_loops=False, r=np.arra
                 fac_, _ = calc_fac_dfac(q_[0])
                 return fac_*q_[1:]
             for p in range(4):
-                for r in range(4):
-                    if p == r:
+                for s in range(4):
+                    if p == s:
                         FDiffV2 = V0.copy()
                         q[p] -= h
                         FDiffV2 -= 2*V_(q)
@@ -800,18 +800,18 @@ def get_expmap_der(x, y, second=False, fdcheck=False, use_loops=False, r=np.arra
                     else:
                         FDiffV2 = V0.copy()
                         q[p] -= h
-                        q[r] -= h
+                        q[s] -= h
                         FDiffV2 += V_(q)
-                        q[r] += h
+                        q[s] += h
                         FDiffV2 -= V_(q)
-                        q[r] -= h
+                        q[s] -= h
                         q[p] += h
                         FDiffV2 -= V_(q)
-                        q[r] += h
+                        q[s] += h
                     FDiffV2 /= h**2
-                    maxerr = np.max(np.abs(dvdq2[p, r]-FDiffV2))
+                    maxerr = np.max(np.abs(dvdq2[p, s]-FDiffV2))
                     if maxerr > 1e-7:
-                        logger.info("q %3i %3i : maxerr = %.3e %s\n" % (p, r, maxerr, 'X' if maxerr > 1e-5 else ''))
+                        logger.info("q %3i %3i : maxerr = %.3e %s\n" % (p, s, maxerr, 'X' if maxerr > 1e-5 else ''))
                     # logger.info("q %3i %3i : analytic %s numerical %s maxerr = %.3e %s" % (i, j, str(dvdq2[i, j]), str(FDiffV2), maxerr, 'X' if maxerr > 1e-4 else ''))
                 
     # Dimensionality: Number of atoms, number of dimensions (3), number of elements in q (4)
@@ -835,8 +835,8 @@ def get_expmap_der(x, y, second=False, fdcheck=False, use_loops=False, r=np.arra
                 for u in range(x.shape[0]):
                     for w in range(3):
                         for i in range(3):
-                            for r in range(4):
-                                dvdqx[p, u, w, i] += dvdq2[p, r, i] * dqdx[u, w, r]
+                            for j in range(4):
+                                dvdqx[p, u, w, i] += dvdq2[p, j, i] * dqdx[u, w, j]
             for u in range(x.shape[0]):
                 for w in range(3):
                     for a in range(x.shape[0]):

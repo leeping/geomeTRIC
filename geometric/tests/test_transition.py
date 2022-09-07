@@ -20,7 +20,7 @@ def test_transition_hcn_psi4(localizer):
     """
     shutil.copy2(os.path.join(datad, 'hcn.psi4in'), os.getcwd())
     progress = geometric.optimize.run_optimizer(engine='psi4', transition=True, input='hcn.psi4in',
-                                                converge=['gmax', '1.0e-5'])
+                                                converge=['gmax', '1.0e-5'], trust=0.1, tmax=0.3)
     # The results here are in Angstrom
     #
     ref = geometric.molecule.Molecule(os.path.join(datad, 'hcn_ts_optim.xyz')).xyzs[0]

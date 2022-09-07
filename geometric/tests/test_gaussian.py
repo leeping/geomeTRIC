@@ -60,8 +60,9 @@ def test_find_gaussian_missing():
     if not int(major) >= 3 and int(minor) >= 5:
         pytest.skip("Python version below 3.5 shutil.which not available.")
     kwargs = {"engine": "gaussian", "input": os.path.join(datad, "ethane.com")}
-    with pytest.raises(ValueError):
-        _ = get_molecule_engine(**kwargs)
+    if get_gaussian_version() is None:
+        with pytest.raises(ValueError):
+            _ = get_molecule_engine(**kwargs)
 
 
 def test_missing_force_input():
@@ -81,7 +82,7 @@ def test_gaussian_template():
     molecule = Molecule(os.path.join(datad, "ethane.com"))
     engine = Gaussian(molecule=molecule, exe="g09")
     engine.load_gaussian_input(os.path.join(datad, "ethane.com"))
-    assert engine.gauss_temp == ['%Mem=6GB\n', '%NProcShared=2\n', '%Chk=ligand\n', '# hf/6-31G(d) Force=NoStep\n', '\n',
+    assert engine.gauss_temp == ['%Mem=6GB\n', '%NProcShared=2\n', '%Chk=ligand\n', '$!route@here', '\n', 
                                  'ethane\n', '\n', '0 1\n', '$!geometry@here', '\n', '\n']
 
 
