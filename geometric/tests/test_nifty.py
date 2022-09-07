@@ -77,12 +77,6 @@ def test_exec(localizer):
     with pytest.raises(Exception) as excinfo:
         geometric.nifty._exec("exit 255")
 
-@pytest.fixture
-def wq_setup_teardown():
-    yield
-    if worker_program != '':
-        worker.terminate()
-
 @addons.using_workqueue
 def test_work_queue_functions():
     """Check work_queue functions behave as expected"""
@@ -110,6 +104,7 @@ def test_work_queue_functions():
                                   stdout=subprocess.PIPE)
 
         geometric.nifty.wq_wait1(wq, wait_time=5)
+        worker.terminate()
         assert wq.stats.total_tasks_complete == 1, "Expected queue to have a task completed"
     
     # Destroy the Work Queue object so it doesn't interfere with the rest of the tests.
