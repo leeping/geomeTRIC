@@ -69,10 +69,6 @@ def calc_cartesian_hessian(coords, molecule, engine, dirname, read_data=True, ve
     """
     nc = len(coords)
     # Attempt to read existing Hessian data if it exists.
-<<<<<<< HEAD
-    if dirname == None:
-        dirname = './'
-=======
     # Read from files hessian.txt/coords.xyz, hessian_1.txt/coords_1.xyz, etc.
     counter = 0
     while read_data:
@@ -95,7 +91,6 @@ def calc_cartesian_hessian(coords, molecule, engine, dirname, read_data=True, ve
         counter += 1
 
     # Compute hessian from scratch.
->>>>>>> bc5f480be21cb629fd99e2eee026aa7a3018fe24
     hesstxt = os.path.join(dirname, "hessian", "hessian.txt")
     hessxyz = os.path.join(dirname, "hessian", "coords.xyz")
     # First back up any existing Hessian data in a way that a future calculation could read it.
@@ -117,12 +112,7 @@ def calc_cartesian_hessian(coords, molecule, engine, dirname, read_data=True, ve
     h = 1.0e-3
     wq = getWorkQueue()
     Hx = np.zeros((nc, nc), dtype=float)
-<<<<<<< HEAD
-    logger.info("Calculating Cartesian Hessian using finite difference on Cartesian gradients\n")
-
-=======
     logger.info("Calculating Cartesian Hessian using finite difference on Cartesian gradients (%i grads total)\n" % (2*nc))
->>>>>>> bc5f480be21cb629fd99e2eee026aa7a3018fe24
     if wq:
         for i in range(nc):
             if verbose >= 2: logger.info(" Submitting gradient calculation for coordinate %i/%i\n" % (i+1, nc))

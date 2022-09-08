@@ -1586,25 +1586,7 @@ class ConicalIntersection(Engine):
                 spcalc = self.engines[istate].calc(coords, state_dnm)
             except EngineError:
                 raise ConicalIntersectionEngineError
-<<<<<<< HEAD
-            EDict[istate] = spcalc['energy']
-            GDict[istate] = spcalc['gradient']
-            SDict[istate] = spcalc.get('s2', 0.0)
-        # Determine the higher energy state
-        if EDict[2] > EDict[1]:
-            I = 2
-            J = 1
-        else:
-            I = 1
-            J = 2
-        # Calculate energy and gradient avg and differences
-        EAvg = 0.5*(EDict[I]+EDict[J])
-        EDif = EDict[I]-EDict[J]
-        GAvg = 0.5*(GDict[I]+GDict[J])
-        GDif = GDict[I]-GDict[J]
-        GAng = np.dot(GDict[I], GDict[J])/(np.linalg.norm(GDict[I])*np.linalg.norm(GDict[J]))
         # Compute penalty function
-=======
             E_states.append(spcalc['energy'])
             G_states.append(spcalc['gradient'])
             S_states.append(spcalc.get('s2', 0.0))
@@ -1669,4 +1651,3 @@ class ConicalIntersection(Engine):
                 return True
         else:
             return False
->>>>>>> bc5f480be21cb629fd99e2eee026aa7a3018fe24

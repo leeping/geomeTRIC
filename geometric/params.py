@@ -302,12 +302,8 @@ def parse_optimizer_args(*args):
     
     grp_jobtype = parser.add_argument_group('jobtype', 'Control the type of optimization job')
     grp_jobtype.add_argument('--transition', type=str2bool, help='Provide "yes" to Search for a first order saddle point / transition state.\n ')
-<<<<<<< HEAD
     #grp_jobtype.add_argument('--neb', type=str2bool, help=argparse.SUPPRESS)
-    grp_jobtype.add_argument('--meci', type=str, help='Provide second input file and search for minimum-energy conical\n '
-=======
     grp_jobtype.add_argument('--meci', type=str, nargs="+", help='Provide second input file and search for minimum-energy conical\n '
->>>>>>> bc5f480be21cb629fd99e2eee026aa7a3018fe24
                              'intersection or crossing point between two SCF solutions (TeraChem and Q-Chem supported).\n'
                              'Or, provide "engine" if the engine directly provides the MECI objective function and gradient.\n')
     grp_jobtype.add_argument('--meci_sigma', type=float, help='Sigma parameter for MECI penalty function (default 3.5).\n'
@@ -371,27 +367,18 @@ def parse_optimizer_args(*args):
                               'Defaults to True for minimization and False for transition states.\n ')
     grp_optparam.add_argument('--skip', action='store_true', help='Skip Hessian updates that would introduce negative eigenvalues.')
     grp_optparam.add_argument('--epsilon', type=float, help='Small eigenvalue threshold for resetting Hessian, default 1e-5.\n ')
-<<<<<<< HEAD
-    grp_optparam.add_argument('--check', type=int, help='Check coordinates every <N> steps and rebuild coordinate system, disabled by default.\n ')
-=======
     grp_optparam.add_argument('--check', type=int, help='Check coordinates every <N> steps and rebuild coordinate system, disabled by default.\n')
     grp_optparam.add_argument('--subfrctor', type=int, help='Project out net force and torque components from nuclear gradient.\n'
                               '0 = never project; 1 = auto-detect (default); 2 = always project.')
->>>>>>> bc5f480be21cb629fd99e2eee026aa7a3018fe24
-
     grp_modify = parser.add_argument_group('structure', 'Modify the starting molecular structure or connectivity')
     grp_modify.add_argument('--radii', type=str, nargs="+", help='List of atomic radii for construction of coordinate system.\n '
                             'Provide pairs of symbol/radius values such as Na 0.0 Fe 1.5\n ')
     grp_modify.add_argument('--pdb', type=str, help='PDB file name with coordinates and resids. TRIC will add T+R coordinates for each residue.\n ')
     grp_modify.add_argument('--coords', type=str, help='Coordinate file to override the QM input file / PDB file. The LAST frame will be used for optimizations. All the frames will be used for NEB calculations.\n ')
     grp_modify.add_argument('--frag', type=str2bool, help='Provide "yes" to delete bonds between residues, producing\n'
-<<<<<<< HEAD
-                            'separate fragments in the internal coordinate system.\n ')
-=======
                             'separate fragments in the internal coordinate system.')
     grp_modify.add_argument('--bothre', type=float, help='Set the bond order threshold for building bonds in transition state calculations (Q-Chem, TeraChem only). Set 0.0 to disable.\n ')
->>>>>>> bc5f480be21cb629fd99e2eee026aa7a3018fe24
-    
+
     grp_output = parser.add_argument_group('output', 'Control the format and amount of the output')
     grp_output.add_argument('--prefix', type=str, help='Specify a prefix for log file and temporary directory.\n'
                             'Defaults to the input file path (incl. file name with extension removed).\n ')

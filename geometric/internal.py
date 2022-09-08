@@ -2805,7 +2805,6 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         # Add Cartesian coordinates to all.
         self.addcart = addcart
         # The DLC contains an instance of primitive internal coordinates.
-<<<<<<< HEAD
         if chain:
             if constraints is not None:
                 raise RuntimeError("constraints don't work with chain coordinates")
@@ -2817,11 +2816,8 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
             xyz = np.array(molecule.xyzs).flatten() * ang2bohr
         else:
             self.Prims = PrimitiveInternalCoordinates(molecule, connect=connect, addcart=addcart, constraints=constraints, cvals=cvals)
+            self.frags = self.Prims.frags
             xyz = molecule.xyzs[imagenr].flatten() * ang2bohr
-=======
-        self.Prims = PrimitiveInternalCoordinates(molecule, connect=connect, addcart=addcart, constraints=constraints, cvals=cvals)
-        self.frags = self.Prims.frags
->>>>>>> bc5f480be21cb629fd99e2eee026aa7a3018fe24
         self.na = molecule.na
         # Whether constraints have been enforced previously
         self.enforced = False
