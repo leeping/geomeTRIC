@@ -1,5 +1,9 @@
 # Lines inside codes to exclude from coverage.
 [report]
+omit =
+    geometric/PDB.py
+    geometric/_version.py
+    
 exclude_lines =
     pragma: no cover
     if "forcebalance" in __name__

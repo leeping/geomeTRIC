@@ -42,6 +42,8 @@ using_qcengine = pytest.mark.skipif(
     _plugin_import("qcengine") is False, reason="could not find qcengine. please install the package to enable tests")
 using_openmm = pytest.mark.skipif(
     _plugin_import("simtk.openmm") is False, reason="could not find simtk.openmm. please install the package to enable tests")
+using_workqueue = pytest.mark.skipif(
+    _plugin_import("work_queue") is False, reason="could not find work_queue. please install the package to enable tests")
 
 # Points to the folder where the data files are installed.
 datad = os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), 'data')

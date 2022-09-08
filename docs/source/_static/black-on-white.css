@@ -1,105 +1,111 @@
-.ansi-block {
+.block {
     background-color: #eeeeee;
     color: #000000;
 }
 
-.ansi-bold {
+.bold {
     font-weight: bold;
 }
 
-.ansi-black {
+.black {
     color: #000000;
 }
 
-.ansi-red {
+.red {
     color: #b21717;
 }
 
-.ansi-green {
+.green {
     color: #17b217;
 }
 
-.ansi-yellow {
+.yellow {
     color: #b26717;
 }
 
-.ansi-blue {
+.blue {
     color: #1717b2;
 }
 
-.ansi-magenta {
+.magenta {
     color: #b217b2;
 }
 
-.ansi-cyan {
+.cyan {
     color: #17b2b2;
 }
 
-.ansi-white {
+.white {
     color: #b2b2b2;
 }
 
-.ansi-black.ansi-bold {
+.black-bold {
     color: #686868;
 }
 
-.ansi-red.ansi-bold {
+.red-bold {
     color: #ff5454;
 }
 
-.ansi-green.ansi-bold {
+.green-bold {
+    font-weight: bold;
+    color: #17b217;
+}
+
+.green-bright-bold {
+    font-weight: bold;
     color: #54ff54;
 }
 
-.ansi-yellow.ansi-bold {
+.yellow-bold {
     color: #ffff54;
 }
 
-.ansi-blue.ansi-bold {
+.blue-bold {
     color: #5454ff;
 }
 
-.ansi-magenta.ansi-bold {
+.magenta-bold {
     color: #ff54ff;
 }
 
-.ansi-cyan.ansi-bold {
+.cyan-bold {
     color: #54ffff;
 }
 
-.ansi-white.ansi-bold {
+.white-bold {
     color: #ffffff;
 }
 
-.ansi-bg_black {
+.bg_black {
     background-color: #000000;
 }
 
-.ansi-bg_red {
+.bg_red {
     background-color: #b21717;
 }
 
-.ansi-bg_green {
+.bg_green {
     background-color: #17b217;
 }
 
-.ansi-bg_yellow {
+.bg_yellow {
     background-color: #b26717;
 }
 
-.ansi-bg_blue {
+.bg_blue {
     background-color: #1717b2;
 }
 
-.ansi-bg_magenta {
+.bg_magenta {
     background-color: #b217b2;
 }
 
-.ansi-bg_cyan {
+.bg_cyan {
     background-color: #17b2b2;
 }
 
-.ansi-bg_white {
+.bg_white {
     background-color: #b2b2b2;
 }
 

@@ -11,28 +11,28 @@ The choice of engine is set on the command line using the ``--engine`` option.
 
 Different engines have different features available.  Here is a simple summary:
 
-+-------------+--------------+-----------------+---------+---------------+
-| Engine name | Scratch dir. | Work Queue task | Setting | Conical       |
-|             | handling     | distribution    | threads | intersections |
-+=============+==============+=================+=========+===============+
-| TeraChem    | Yes          | Yes             | CPU/GPU | Yes           |
-+-------------+--------------+-----------------+---------+---------------+
-| Q-Chem      | Yes          | Limited         | CPU     | Yes           |
-+-------------+--------------+-----------------+---------+---------------+
-| Psi4        | No           | No              | CPU     | Untested      |
-+-------------+--------------+-----------------+---------+---------------+
-| Molpro      | No           | No              | CPU     | Untested      |
-+-------------+--------------+-----------------+---------+---------------+
-| Gaussian    | No           | No              | CPU     | Untested      |
-+-------------+--------------+-----------------+---------+---------------+
-| OpenMM      | No           | No              | No      | No            |
-+-------------+--------------+-----------------+---------+---------------+
-| Gromacs     | No           | No              | No      | No            |
-+-------------+--------------+-----------------+---------+---------------+
-| QCEngine    | No           | No              | No      | No            |
-+-------------+--------------+-----------------+---------+---------------+
-| Custom      | No           | No              | No      | No            |
-+-------------+--------------+-----------------+---------+---------------+
++-------------+--------------+-----------------+---------+---------------+------------+
+| Engine name | Scratch dir. | Work Queue task | Setting | Conical       | Bond order |
+|             | handling     | distribution    | threads | intersections |            |
++=============+==============+=================+=========+===============+============+
+| TeraChem    | Yes          | Yes             | CPU/GPU | Yes           | Yes        |
++-------------+--------------+-----------------+---------+---------------+------------+
+| Q-Chem      | Yes          | Limited         | CPU     | Yes           | Yes        |
++-------------+--------------+-----------------+---------+---------------+------------+
+| Psi4        | No           | No              | CPU     | Untested      | No         |
++-------------+--------------+-----------------+---------+---------------+------------+
+| Molpro      | No           | No              | CPU     | Untested      | No         |
++-------------+--------------+-----------------+---------+---------------+------------+
+| Gaussian    | Yes          | No              | CPU     | Untested      | No         |
++-------------+--------------+-----------------+---------+---------------+------------+
+| OpenMM      | No           | No              | No      | No            | No         |
++-------------+--------------+-----------------+---------+---------------+------------+
+| Gromacs     | No           | No              | No      | No            | No         |
++-------------+--------------+-----------------+---------+---------------+------------+
+| QCEngine    | No           | No              | No      | No            | No         |
++-------------+--------------+-----------------+---------+---------------+------------+
+| Custom      | No           | No              | No      | No            | No         |
++-------------+--------------+-----------------+---------+---------------+------------+
 
 In what follows, all examples can be found in the ``[root]/examples/`` folder of the source distribution.
 
@@ -58,7 +58,7 @@ This interface supports the following features:
 * Conical intersection optimization either by running separate jobs for each state, or having TeraChem directly compute the CI objective function.
 * Setting number of CPU threads and GPUs via ``--nt`` option
 
-An example is provided in the ``[root]/examples/trp-cage`` folder.  This calculation takes a rather long time to run due to the large system size.
+An example is provided in the ``[root]/examples/2-challenges/trp-cage_terachem`` folder.  This calculation takes a rather long time to run due to the large system size.
 
     Note: TeraChem contains a C++ implementation of geomeTRIC that avoids the need to call the program repeatedly for single point gradients.
     It currently does not have some of the newer features such as transition state optimization and MECI optimization.
@@ -81,7 +81,7 @@ This interface supports the following features:
 * Conical intersection optimization by running separate jobs for each state (note: only tested for two *ground* states that differ in the initial guess.)
 * Setting number of CPU threads via ``--nt`` option
 
-An example is provided in the ``[root]/examples/water6_qchem`` folder.
+An example is provided in the ``[root]/examples/0-regression-tests/water6_qchem`` folder.
 
 Psi4
 ----
@@ -97,10 +97,10 @@ This interface supports the following features:
 * Setting number of CPU threads via ``--nt`` option
 * Conical intersection optimization should work, but not tested
 
-Examples of energy minimization are provided in the ``[root]/examples/water6_psi4`` and ``[root]/examples/water6_psi4_mbe`` folders.
+Examples of energy minimization are provided in the ``[root]/examples/1-simple-examples/water6_psi4`` and ``[root]/examples/1-simple-examples/water6_psi4_mbe`` folders.
 The latter example includes a basis set superposition error (BSSE) correction in the energy and gradient and shows how to use Psi4 fragment syntax.
 
-A two-dimensional scan of an improper torsion and bond angle is provided in ``[root]/examples/improper-2D``.
+A two-dimensional scan of an improper torsion and bond angle is provided in ``[root]/examples/2-challenges/improper-2D``.
 
 Molpro
 ------
@@ -117,7 +117,7 @@ This interface supports the following features:
 * Setting number of CPU threads via ``--nt`` option
 * Conical intersection optimization should work, but not tested
 
-An example is provided in the ``[root]/examples/water6_molpro`` folder.
+An example is provided in the ``[root]/examples/1-simple-examples/water6_molpro`` folder.
 
 Gaussian
 --------
@@ -134,7 +134,7 @@ This interface supports the following features:
 * Setting number of CPU threads via ``--nt`` option
 * Conical intersection optimization should work, but not tested
 
-Examples are provided in the ``[root]/examples/ethane_pcm_gaussian`` and ``[root]/examples/water2_gaussian`` folders.
+Examples are provided in the ``[root]/examples/1-simple-examples/ethane_pcm_gaussian`` and ``[root]/examples/1-simple-examples/water2_gaussian`` folders.
 
 OpenMM
 ------
@@ -172,7 +172,7 @@ The ForceBalance interface to GROMACS is used to compute single-point energies a
     Note: As the GROMACS engine is not extensively used, it is not guaranteed to work well with newer GROMACS versions
     so proceed with caution.
 
-An example is provided in ``<root>/examples/trp-cage_gromacs``.
+An example is provided in ``<root>/examples/1-simple-examples/trp-cage_gromacs``.
 
 QCEngine
 --------

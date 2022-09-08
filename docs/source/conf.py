@@ -18,11 +18,11 @@ import sys
 # -- Project information -----------------------------------------------------
 
 project = 'geomeTRIC'
-copyright = '2020, Lee-Ping Wang, Chenchen Song'
+copyright = '2016-2022, Regents of the University of California and the Authors'
 author = 'Lee-Ping Wang, Chenchen Song'
 
 # The full version, including alpha/beta/rc tags
-release = '0.9.7.2'
+release = '1.0 alpha'
 
 
 # -- General configuration ---------------------------------------------------
@@ -30,7 +30,7 @@ release = '0.9.7.2'
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
-extensions = ['sphinxcontrib.ansi']
+extensions = []
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -56,3 +56,5 @@ html_theme = 'alabaster'
 html_static_path = ['_static']
 
 html_css_files = ['black-on-white.css']
+
+rst_prolog = "\n.. include:: .special.rst\n"

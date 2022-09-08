@@ -143,6 +143,8 @@ au2kj        = 2625.4996394798254  # Previous value: 2625.5002
 kj2au        = 1.0 / au2kj
 grad_au2gmx  = 49614.75258920567   # Previous value: 49614.75960959161
 grad_gmx2au  = 1.0 / grad_au2gmx
+au2ev        = 27.211386245988
+ev2au        = 1.0 / au2ev
 au2evang     = 51.422067476325886  # Previous value: 51.42209166566339
 evang2au     = 1.0 / au2evang
 c_lightspeed = 299792458.
@@ -411,18 +413,20 @@ def isdecimal(word):
     return isfloat(word) and not isint(word)
 
 def floatornan(word):
-    """Returns a big number if we encounter NaN.
+    """Returns a big number if we encounter NaN or inf.
 
     @param[in] word The string to be converted
     @return answer The string converted to a float; if not a float, return 1e10
     @todo I could use suggestions for making this better.
     """
-    big = 1e10
+    big = 1e100
     if isfloat(word):
         return float(word)
-    else:
-        logger.info("Setting %s to % .1e\n" % big)
+    elif word.lower() in ['inf', 'nan']:
+        logger.info("Setting %s to % .1e\n" % (word, big))
         return big
+    else:
+        raise ValueError("%s cannot be converted to a number" % word)
 
 def col(vec):
     """
@@ -474,61 +478,6 @@ def est124(val):
         fac = 10.0
     return fac*10**logint
 
-def est1234568(val):
-    """Given any positive floating point value, return a value [1234568]e+xx
-    that is closest to it in the log space.  Just because I don't like seven
-    and nine.  Call me a numberist?
-    """
-    log = np.log10(val)
-    logint = math.floor(log)
-    logfrac = log - logint
-    log1 = 0.0
-    log2 = 0.3010299956639812
-    log3 = np.log10(3)
-    log4 = 0.6020599913279624
-    log5 = np.log10(5)
-    log6 = np.log10(6)
-    log8 = np.log10(8)
-    log10 = 1.0
-    if logfrac < 0.5*(log1+log2):
-        fac = 1.0
-    elif logfrac < 0.5*(log2+log3):
-        fac = 2.0
-    elif logfrac < 0.5*(log3+log4):
-        fac = 3.0
-    elif logfrac < 0.5*(log4+log5):
-        fac = 4.0
-    elif logfrac < 0.5*(log5+log6):
-        fac = 5.0
-    elif logfrac < 0.5*(log6+log8):
-        fac = 6.0
-    elif logfrac < 0.5*(log8+log10):
-        fac = 8.0
-    else:
-        fac = 10.0
-    return fac*10**logint
-
-def monotonic(arr, start, end):
-    # Make sure an array is monotonically decreasing from the start to the end.
-    a0 = arr[start]
-    i0 = start
-    if end > start:
-        i = start+1
-        while i < end:
-            if arr[i] < a0:
-                arr[i0:i+1] = np.linspace(a0, arr[i], i-i0+1)
-                a0 = arr[i]
-                i0 = i
-            i += 1
-    if end < start:
-        i = start-1
-        while i >= end:
-            if arr[i] < a0:
-                arr[i:i0+1] = np.linspace(arr[i], a0, i0-i+1)
-                a0 = arr[i]
-                i0 = i
-            i -= 1
-
 def monotonic_decreasing(arr, start=None, end=None, verbose=False):
     """
     Return the indices of an array corresponding to strictly monotonic
@@ -539,9 +488,9 @@ def monotonic_decreasing(arr, start=None, end=None, verbose=False):
     arr : numpy.ndarray
         Input array
     start : int
-        Starting index (first element if None)
+        Starting index, default 0
     end : int
-        Ending index (last element if None)
+        Ending index, included in loop, default len(arr) - 1
 
     Returns
     -------
@@ -557,7 +506,7 @@ def monotonic_decreasing(arr, start=None, end=None, verbose=False):
     if verbose: logger.info("Starting @ %i : %.6f\n" % (start, arr[start]))
     if end > start:
         i = start+1
-        while i < end:
+        while i <= end:
             if arr[i] < a0:
                 a0 = arr[i]
                 idx.append(i)
@@ -607,6 +556,7 @@ def invert_svd(X,thresh=1e-12):
     v      = np.transpose(vh)
     si     = s.copy()
     for i in range(s.shape[0]):
+        # print("SVD : %i -> %.3e" % (i, s[i]))
         if abs(s[i]) > thresh:
             si[i] = 1./s[i]
         else:
@@ -980,14 +930,14 @@ def wq_wait1(wq, wait_time=10, wait_intvl=1, print_time=60, verbose=False):
             exectime = task.cmd_execution_time/1000000
             if verbose:
                 logger.info('A job has finished!\n')
-                logger.info('Job name = ' + task.tag + 'command = ' + task.command + '\n')
-                logger.info("status = " + task.status + '\n')
-                logger.info("return_status = " + task.return_status)
-                logger.info("result = " + task.result)
+                logger.info('Job name = ' + task.tag + '\n')
+                logger.info('command = ' + task.command + '\n')
+                logger.info("return_status = " + str(task.return_status)) # the process's return status
+                logger.info("result = " + str(task.result)) # nonzero if the specified output file doesn't exist
                 logger.info("host = " + task.hostname + '\n')
-                logger.info("execution time = " + exectime)
-                logger.info("total_bytes_transferred = " + task.total_bytes_transferred + '\n')
-            if task.result != 0:
+                logger.info("execution time = %.3f" % exectime)
+                logger.info("total_bytes_transferred = %i" % task.total_bytes_transferred + '\n')
+            if task.result != 0: 
                 oldid = task.id
                 oldhost = task.hostname
                 tgtname = "None"
@@ -1055,7 +1005,7 @@ def splitall(path):
     return allparts
 
 # Back up a file.
-def bak(path, dest=None, cwd=None, start=1):
+def bak(path, dest=None, cwd=None, basename=None, start=1):
     oldf = path
     newf = None
     if cwd != None:
@@ -1067,6 +1017,7 @@ def bak(path, dest=None, cwd=None, start=1):
         dnm, fnm = os.path.split(path)
         if dnm == '' : dnm = '.'
         base, ext = os.path.splitext(fnm)
+        if basename: base = basename
         if dest is None:
             dest = dnm
         if not os.path.isdir(dest): os.makedirs(dest)

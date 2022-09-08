@@ -2167,6 +2167,7 @@ def BFGSUpdate(Y, Yprev, G, Gprev, H, params):
     Dg = col(G - Gprev)
     # Catch some abnormal cases of extremely small changes.
     if np.linalg.norm(Dg) < 1e-6 or np.linalg.norm(Dy) < 1e-6:
+        print('Coordinate and Gradient did not move')
         return False
     Mat1 = np.dot(Dg, Dg.T) / np.dot(Dg.T, Dy)[0, 0]
     Mat2 = np.dot(np.dot(H, Dy), np.dot(H, Dy).T) / np.dot(np.dot(Dy.T, H), Dy)[0, 0]
@@ -2208,6 +2209,7 @@ def updatehessian(
     """
     This function was part of the 'while' loop in OptimizeChain(). It updates hessian.
     """
+    H_reset = False
     HP_bak = HP.copy()
     HW_bak = HW.copy()
     BFGSUpdate(Y, Y_prev, GP, GP_prev, HP, params)
@@ -2222,6 +2224,7 @@ def updatehessian(
             Y_prev = Y.copy()
             GP_prev = GP.copy()
             GW_prev = GW.copy()
+            H_reset = True
         elif params.skip:
             print(
                 "Eigenvalues below %.4e (%.4e) - skipping Hessian update"
@@ -2234,7 +2237,7 @@ def updatehessian(
             HW = HW_bak.copy()
     del HP_bak
     del HW_bak
-    return chain, Y, GW, GP, HP, HW, Y_prev, GP_prev, GW_prev
+    return chain, Y, GW, GP, HP, HW, Y_prev, GP_prev, GW_prev, H_reset
 
 
 def qualitycheck(
@@ -2671,7 +2674,7 @@ def OptimizeChain(chain, engine, params):
         # =======================================#
         # |      Update the Hessian Matrix      |#
         # =======================================#
-        chain, Y, GW, GP, HP, HW, Y_prev, GP_prev, GW_prev = updatehessian(
+        chain, Y, GW, GP, HP, HW, Y_prev, GP_prev, GW_prev, _ = updatehessian(
             chain,
             old_chain,
             HP,
@@ -2887,8 +2890,8 @@ def prepare(prev):
     new_chain = chain.TakeStep(dy, printStep=False)
     respaced = new_chain.delete_insert(1.5)
     newcoords = chaintocoords(new_chain)
-    new_attrs = check_attr(new_chain)
-    old_attrs = check_attr(chain)
+    #new_attrs = check_attr(new_chain)
+    #old_attrs = check_attr(chain)
 
     temp = {
         #"Y_prev": Y.tolist(),
@@ -2898,8 +2901,8 @@ def prepare(prev):
         "HP": HP.tolist(),
         #"HP_guess": HP.tolist(),
         #"HW_guess": HW.tolist(),
-        "new_attrs": new_attrs,
-        "old_attrs": old_attrs,
+        #"new_attrs": new_attrs,
+        #"old_attrs": old_attrs,
         "trust": trust,
         "expect": expect,
         "expectG": expectG.tolist(),
@@ -2907,7 +2910,7 @@ def prepare(prev):
         "trustprint": "=",
         "frocerebuild": False,
         "lastforce": 0,
-        "old_coord": coords_ang.tolist(),
+        "old_coord": chaintocoords(chain, True),
         "result": result,
     }
     prev = prev | temp
@@ -2972,18 +2975,24 @@ def check_attr(chain):
 
     return attrs
 
+def dict_to_binary(the_dict):
+    import json
+    str = json.dumps(the_dict)
+    bin = ' '.join(format(ord(letter), 'b') for letter in str)
+    return bin
 
 def nextchain(prev):
     """
     Generate a next chain's Cartesian coordinate for QCFractal.
     """
+    import sys
     coords_bohr = prev.pop("geometry")
     coords_ang = np.array(coords_bohr) * bohr2ang
-    args_dict = prev.get("params")
+    args_dict = prev.pop("params")
     elems = prev.get("elems")
     charge = prev.get("charge")
     mult = prev.get("mult")
-    energies = prev.get("energies")
+    energies = prev.pop("energies")
     gradients = prev.pop("gradients")
     iteration = int(args_dict.get("iteration")) - 1
 
@@ -3045,12 +3054,9 @@ def nextchain(prev):
     trustprint = prev.get("trustprint", "=")
     Y = chain.get_internal_all()
     Y_prev = old_chain.get_internal_all()
-    GW = prev.get("GW")
-    GW_prev = prev.get("GW_prev", GW.copy())
-    GP = prev.get("GP")
-    GP_prev = prev.pop("GP_prev", GP.copy())
-    HW = np.array(prev.get("HW"))
-    HP = np.array(prev.get("HP"))
+
+    HW = prev.get("HW")
+    HP = prev.get("HP")
     respaced = prev.get("respaced")
     expect = prev.get("expect")
     expectG = prev.get("expectG")
@@ -3058,21 +3064,39 @@ def nextchain(prev):
     LastForce = prev.get("lastforce", 0)
     ForceBuild = prev.get("forcerebuild", False)
 
-    chain = add_attr(chain, prev.get("new_attrs"))
-    old_chain = add_attr(old_chain, prev.get("old_attrs"))
+    #chain = add_attr(chain, prev.get("new_attrs"))
+    #old_chain = add_attr(old_chain, prev.get("old_attrs"))
     chain.ComputeGuessHessian(full=False, blank=isinstance(engine, Blank))
-    #old_chain.ComputeGuessHessian(full=False, blank=isinstance(engine, Blank))
+    old_chain.ComputeGuessHessian(full=False, blank=isinstance(engine, Blank))
     #chain.guess_hessian_working = prev.pop("HW_guess")
     #chain.guess_hessian_plain = prev.pop("HP_guess")
+    GW_d = np.array(prev.get("GW"))
+    GP_d = np.array(prev.get("GP"))
+    GW_prev_d = np.array(prev.get("GW_prev", GW_d.copy()))
+    GP_prev_d = np.array(prev.get("GP_prev", GP_d.copy()))
+    #print('GW GP from dict', GW, GP)
+    #print('GW GP previous from dict', GW_prev, GP_prev)
 
     chain.ComputeChain(result=result)
+    GW = chain.get_global_grad("total", "working")
+    GP = chain.get_global_grad("total", "plain")
+
+    #print('GW GP from chain', GW, GP)
+    old_chain.ComputeChain(result=prev.get('result'))
+    GP_prev = old_chain.get_global_grad("total", "working")#prev.get("GP_prev", GP.copy())
+    GW_prev = old_chain.get_global_grad("total", "plain")#prev.get("GW_prev", GW.copy())
+    #print('GW GP previous from chain', GW_prev, GP_rev)
+    print(np.linalg.norm(GW_d - GW))
+    print(np.linalg.norm(GP_d - GP))
+    print(np.linalg.norm(GW_prev_d - GW_prev))
+    print(np.linalg.norm(GP_prev_d - GP_prev))
 
     chain, Y, GW, GP, HW, HP, c_hist, respaced, Quality = compare(
         old_chain,
         chain,
         ThreHQ,
         ThreLQ,
-        GW,
+        GW, #GW prev
         HW,
         HP,
         respaced,
@@ -3112,8 +3136,8 @@ def nextchain(prev):
             HP,
             prev.get('result', result),
         )
-        new_attrs = check_attr(chain)
-        old_attrs = check_attr(old_chain)
+        #new_attrs = check_attr(chain)
+        #old_attrs = check_attr(old_chain)
         newcoords = chaintocoords(chain)
         temp = {
             #"Y": Y.tolist(),
@@ -3124,18 +3148,19 @@ def nextchain(prev):
             "GP_prev": GP_prev.tolist(),
             "HW": HW.tolist(),
             "HP": HP.tolist(),
-            "new_attrs": new_attrs,
-            "old_attrs": old_attrs,
+            #"new_attrs": new_attrs,
+            #"old_attrs": old_attrs,
             "expect": expect,
             "expectG": expectG.tolist(),
             "respaced": respaced,
             "forcerebuild": ForceRebuild,
             "lastforce": LastForce,
-            "old_coord": coords_ang.tolist(),
+            "old_coord":chaintocoords(old_chain, True),
             "quality": Quality,
             "result": result,
         }
         prev = prev | temp
+        print('Size of nebinfo dict respaced %f Gb' %(sys.getsizeof(dict_to_binary(prev))*1e-9))
         return newcoords, prev
 
     if converged(
@@ -3143,6 +3168,7 @@ def nextchain(prev):
     ):
         return None, {}
 
+    # qualitycheck returns old_chain and smaller trust if quality is not good.
     chain, trust, trustprint, Y, GW, GP, good = qualitycheck(
         trust,
         chain,
@@ -3160,6 +3186,7 @@ def nextchain(prev):
         params.tmax,
     )
     if not good:
+        # chain here is old_chain
         chain.ComputeChain(result=prev.get("result"))
         (
             chain,
@@ -3173,6 +3200,7 @@ def nextchain(prev):
             GP_prev,
             respaced,
             _,
+        # chain = old_chain
         ) = takestep(
             chain,
             old_chain,
@@ -3186,34 +3214,35 @@ def nextchain(prev):
             GP,
             HW,
             HP,
-            prev.get("result", result),
+            prev.get("result"),
         )
-
-        new_attrs = check_attr(chain)
-        old_attrs = check_attr(old_chain)
+        #new_attrs = check_attr(chain)
+        #old_attrs = check_attr(old_chain)
         newcoords = chaintocoords(chain)
+        # Here GW, GP and their previous values should be same.
         temp = {
             #"Y": Y,
             #"Y_prev": Y_prev,
-            "GW": GW,
-            "GW_prev": GW_prev,
-            "GP": GP,
-            "GP_prev": GP_prev,
-            "new_attrs": new_attrs,
-            "old_attrs": old_attrs,
+            #"GW": GW,
+            #"GW_prev": GW_prev,
+            #"GP": GP,
+            #"GP_prev": GP_prev,
+            #"new_attrs": new_attrs,
+            #"old_attrs": old_attrs,
             "trust": trust,
             "expect": expect,
             "expectG": expectG.tolist(),
             "quality": Quality,
             "respaced": respaced,
-            "old_coord": coords_ang.tolist(),
+            "old_coord": chaintocoords(old_chain, True),
             "climbset": chain.climbSet,
             "result": result,
         }
         prev = prev | temp
+        print('Size of nebinfo dict from not good %f Gb' %(sys.getsizeof(dict_to_binary(prev))*1e-9))
         return newcoords, prev
-
-    chain, Y, GW, GP, HP, HW, Y_prev, GP_prev, GW_prev = updatehessian(
+    # If minimum eigenvalues of HW is lower than epsilon, GP, GW are same as their previous values.
+    chain, Y, GW, GP, HP, HW, Y_prev, GP_prev, GW_prev, H_reset = updatehessian(
         chain,
         old_chain,
         HP,
@@ -3226,8 +3255,10 @@ def nextchain(prev):
         GP_prev,
         LastForce,
         params,
-        prev.get('result', result),
+        prev.get("result", result),
     )
+    if H_reset:
+        result = prev.get("result", result)
     (
         chain,
         old_chain,
@@ -3255,32 +3286,35 @@ def nextchain(prev):
         HP,
         prev.get("result", result),
     )
-    new_attrs = check_attr(chain)
-    old_attrs = check_attr(old_chain)
+    #new_attrs = check_attr(chain)
+    #old_attrs = check_attr(old_chain)
     temp = {
         #"Y": Y.tolist(),
         #"Y_prev": Y_prev.tolist(),
-        "GW": GW.tolist(),
-        "GW_prev": GW_prev.tolist(),
-        "GP": GP.tolist(),
-        "GP_prev": GP_prev.tolist(),
+        #"GW": GW.tolist(),
+        #"GW_prev": GW_prev.tolist(),
+        #"GP": GP.tolist(),
+        #"GP_prev": GP_prev.tolist(),
         "HW": HW.tolist(),
         "HP": HP.tolist(),
-        "new_attrs": new_attrs,
-        "old_attrs": old_attrs,
-        "trust": trust,
+        #"new_attrs": new_attrs,
+        #"old_attrs": old_attrs,
+        "trust": trust,#
         "trustprint": trustprint,
         "expect": expect,
         "expectG": expectG.tolist(),
         "quality": Quality,
         "respaced": respaced,
-        "old_coord": coords_ang.tolist(),
+        "old_coord": chaintocoords(old_chain, True),
         "lastforce": LastForce,
         "forcerebuild": ForceRebuild,
         "result": result,
     }
     newcoords = chaintocoords(chain)
     prev = prev | temp
+    #for k, v in prev.items():
+    #    print(k)
+    print('Size of nebinfo dict normal %f Gb' %(sys.getsizeof(dict_to_binary(prev))*1e-9))
     return newcoords, prev
 
 
