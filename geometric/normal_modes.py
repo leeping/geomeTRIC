@@ -553,8 +553,7 @@ def free_energy_harmonic(coords, mass, freqs_wavenumber, energy, temperature, pr
     E_vib = 0.0
     S_vib = 0.0
     nimag = 0
-    if verbose >= 1:
-        logger.info("\nMode   Freq(1/cm)     Zero-point  +  Thermal = Evib(kcal/mol) Svib(cal/mol/K) DG(ZPE+Thermal-TS)\n\n")
+    if verbose >= 1: logger.info("\nMode   Freq(1/cm)     Zero-point  +  Thermal = Evib(kcal/mol) Svib(cal/mol/K) DG(ZPE+Thermal-TS)\n\n")
     imaginary_freqs = []
     for ifreq, freq in enumerate(freqs_wavenumber):
         if ifreq < ignore:
@@ -754,6 +753,8 @@ def wigner_sample(coords, mass, elem, freqs_wavenumber, normal_modes, temperatur
     sigma_p = []    
     for n in range(nmodes):
         freq = freq_au[n]
+        # Temporary (probably not correct) hack for imaginary freqs.
+        if freq < 0.0: freq *= -1
         if temperature ==0:
             tanhf = 1.0
         else:
@@ -842,7 +843,7 @@ def wigner_sample(coords, mass, elem, freqs_wavenumber, normal_modes, temperatur
     if ovr_idx:
         print("Wigner distribution sample generation: %s samples %s" % (commadash(ovr_idx), 'overwritten' if overwrite else 'skipped'))
             
-def main():
+def main(): # pragma: no cover
     import logging.config, pkg_resources
     import geometric.optimize
     logIni = pkg_resources.resource_filename(geometric.optimize.__name__, 'config/logTest.ini')

@@ -4,6 +4,7 @@ Tests the geomeTRIC molecule class.
 
 import pytest
 import geometric
+from copy import deepcopy
 import os
 import numpy as np
 from . import addons
@@ -13,8 +14,14 @@ localizer = addons.in_folder
 
 def test_blank_molecule():
     mol = geometric.molecule.Molecule()
-
     assert len(mol) == 0
+
+def test_cubic_box():
+    box = geometric.molecule.CubicLattice(1.5)
+    np.testing.assert_almost_equal(box.A, [1.5, 0.0, 0.0])
+    np.testing.assert_almost_equal(box.B, [0.0, 1.5, 0.0])
+    np.testing.assert_almost_equal(box.C, [0.0, 0.0, 1.5])
+    np.testing.assert_almost_equal(box.V, 1.5**3)
 
 class TestAlaGRO:
     @classmethod
@@ -174,6 +181,9 @@ class TestAlaGRO:
         assert ref_rmsd_noalign[2] > 1.0
         assert (path_rmsd + 1e-10 >= ref_rmsd_align[1:]).all()
         assert np.allclose(pairwise_rmsd[0], ref_rmsd_align)
+        M.align()
+        assert np.allclose(M.xyzs[1], M.xyzs[0])
+        assert not np.allclose(M.xyzs[2], M.xyzs[0])
 
     def test_find_angles_dihedrals(self):
         a = self.molecule.find_angles()
@@ -187,10 +197,43 @@ class TestAlaGRO:
         assert len(IC.Internals) == self.molecule.na*3
         assert len(IC_TR.Internals) == (self.molecule.na*3 - 6)
 
+    def test_reorder(self):
+        # Manually generated indices for scrambling atoms
+        newidx = [8, 25, 15, 30, 28, 14, 27, 46, 39, 16, 36, 10, 13, 41, 11, 
+                  12, 1, 2, 23, 21, 6, 20, 9, 43, 3, 44, 40, 34, 48, 0, 33, 
+                  29, 19, 31, 32, 37, 7, 42, 18, 47, 22, 45, 24, 38, 17, 4, 35, 5, 26]
+        newmol = self.molecule.atom_select(newidx)
+        newidx_2 = self.molecule.reorder_indices(newmol)
+        assert newidx == newidx_2
+        newmol2 = deepcopy(self.molecule)
+        newmol2.reorder_according_to(newmol)
+        np.testing.assert_almost_equal(newmol2.xyzs[0], newmol.xyzs[0])
+        # Now find the indices that would map the scrambled molecule back to the original
+        invidx = [newidx.index(i) for i in range(len(newidx))]
+        newmol3 = newmol.reorder_indices(self.molecule)
+        assert invidx == newmol3
+
+    def test_write_lammps(self):
+        # Outside of running LAMMPS we can't really check if it's correct.
+        # At least we confirm it doesn't crash.
+        self.molecule.xyzs[0] += np.array([10,10,10])[np.newaxis, :]
+        self.molecule.write_lammps_data()
+
+    def test_write_gro(self, localizer):
+        self.molecule.write('out.gro')
+        M1 = geometric.molecule.Molecule('out.gro')
+        assert M1.atomname == self.molecule.atomname
+        assert M1.elem == self.molecule.elem
+        assert M1.resid == self.molecule.resid
+        np.testing.assert_almost_equal(M1.boxes[0].A, self.molecule.boxes[0].A)
+        np.testing.assert_almost_equal(M1.boxes[0].B, self.molecule.boxes[0].B)
+        np.testing.assert_almost_equal(M1.boxes[0].C, self.molecule.boxes[0].C)
+        np.testing.assert_almost_equal(M1.xyzs[0], self.molecule.xyzs[0])
+
     def teardown_method(self, method):
         # This method is being called after each test case, and it will revert input back to original function
         geometric.molecule.input = input
-        
+
 class TestWaterQCOut:
     @classmethod
     def setup_class(cls):
@@ -276,7 +319,6 @@ def test_gaussian_input_single():
     assert molecule.Data["elem"] == ['C', 'H', 'H', 'H', 'C', 'H', 'H', 'H']
     assert molecule.Data["bonds"] == [(0, 1), (0, 2), (0, 3), (0, 4), (4, 5), (4, 6), (4, 7)]
 
-
 def test_gaussian_input_multiple():
     """
     Test reading a gaussian input with multiple molecules.
@@ -284,3 +326,9 @@ def test_gaussian_input_multiple():
     molecule = geometric.molecule.Molecule(os.path.join(datad, "waters.com"))
     assert len(molecule.molecules) == 6
     assert molecule.Data["bonds"] == [(0, 1), (0, 2), (3, 4), (3, 5), (6, 7), (6, 8), (9, 10), (9, 11), (12, 13), (12, 14), (15, 16), (15, 17)]
+
+def test_charmm_io(localizer):
+    molecule = geometric.molecule.Molecule(os.path.join(datad, "boat.crd"), ftype='charmm')
+    molecule.write("test.xyz")
+    molecule2 = geometric.molecule.Molecule("test.xyz")
+    np.testing.assert_almost_equal(molecule2.xyzs[0], molecule.xyzs[0])

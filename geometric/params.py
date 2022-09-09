@@ -139,6 +139,13 @@ class OptParams(object):
                 self.hess_data = np.loadtxt(self.hessian[5:])
             else:
                 raise IOError("No Hessian data file found at %s" % self.hessian)
+        if self.hessian.startswith('file+last:'):
+            if os.path.exists(self.hessian[10:]):
+                # If a path is provided for reading a Hessian file, read it now.
+                self.hess_data = np.loadtxt(self.hessian[10:])
+                self.hessian = 'last'
+            else:
+                raise IOError("No Hessian data file found at %s" % self.hessian)
         elif self.hessian.lower() in ['never', 'first', 'each', 'stop', 'last', 'first+last']:
             self.hessian = self.hessian.lower()
         else:
@@ -228,6 +235,8 @@ class OptParams(object):
             logger.info(' Hessian will be computed for both first and last step.\n')
         elif self.hessian.startswith('file:'):
             logger.info(' Hessian data will be read from file: %s\n' % self.hessian[5:])
+        elif self.hessian.startswith('file+last:'):
+            logger.info(' Hessian data will be read from file: %s, then computed for the last step.\n' % self.hessian[5:])
 
 def str2bool(v):
     """ Allows command line options such as "yes" and "True" to be converted into Booleans. """
@@ -342,7 +351,8 @@ def parse_optimizer_args(*args):
                              '"first+last" : Calculate Hessian for both the first and last structure.\n'
                              '"each" : Calculate for each step in the optimization (costly).\n'
                              '"stop" : Calculate Hessian for initial structure, then exit.\n'
-                             'file:<path> : Read initial Hessian data in NumPy format from path, e.g. file:folder/hessian.txt\n ')
+                             'file:<path> : Read initial Hessian data in NumPy format from path, e.g. file:folder/hessian.txt\n'
+                             'file+last:<path> : Read initial Hessian data as above, then compute for the last structure.\n ')
     grp_hessian.add_argument('--port', type=int, help='Work Queue port used to distribute Hessian calculations. Workers must be started separately.')
     grp_hessian.add_argument('--frequency', type=str2bool, help='Perform frequency analysis whenever Hessian is calculated, default is yes/true.\n ')
     grp_hessian.add_argument('--thermo', type=float, nargs=2, help='Temperature (K) and pressure (bar) for harmonic free energy\n'

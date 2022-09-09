@@ -232,7 +232,7 @@ class Engine(object):
                 Optional output containing expectation value of <S^2> operator, used in
                 crossing point optimizations
         """
-        coord_hash = hash(coords.tostring())
+        coord_hash = hash(coords.tobytes())
         if coord_hash in self.stored_calcs:
             result = self.stored_calcs[coord_hash]['result']
         else:
@@ -284,7 +284,7 @@ class Engine(object):
             prior to starting a calculation (e.g. when calculating the Hessian we want to use SCF
             guess of the midpoint)
         """
-        coord_hash = hash(coords.tostring())
+        coord_hash = hash(coords.tobytes())
         if coord_hash in self.stored_calcs:
             return
         else:
@@ -328,7 +328,7 @@ class Engine(object):
                 Optional output containing expectation value of <S^2> operator, used in
                 crossing point optimizations
         """
-        coord_hash = hash(coords.tostring())
+        coord_hash = hash(coords.tobytes())
         if coord_hash in self.stored_calcs:
             result = self.stored_calcs[coord_hash]['result']
         else:
@@ -366,7 +366,7 @@ class Blank(Engine):
         gradient = np.zeros(len(coords), dtype=float)
         return {'energy':energy, 'gradient':gradient}
 
-class TeraChem(Engine): # pragma: no cover
+class TeraChem(Engine):
     """
     Run a TeraChem energy and gradient calculation.
     """
@@ -700,11 +700,16 @@ class OpenMM(Engine):
     """
     def __init__(self, molecule, pdb, xml):
         try:
-            import simtk.openmm.app as app
-            import simtk.openmm as mm
-            import simtk.unit as u
+            try:
+                import openmm.app as app
+                import openmm as mm
+                import openmm.unit as u
+            except ImportError:
+                import simtk.openmm.app as app
+                import simtk.openmm as mm
+                import simtk.unit as u
         except ImportError:
-            raise ImportError("OpenMM computation object requires the 'simtk' package. Please pip or conda install 'openmm' from omnia channel.")
+            raise ImportError("OpenMM computation object requires the 'openmm' package. Please pip or conda install 'openmm' from omnia channel.")
         pdb = app.PDBFile(pdb)
         modeller = app.Modeller(pdb.topology, pdb.positions)
         xmlSystem = False
@@ -747,8 +752,12 @@ class OpenMM(Engine):
         super(OpenMM, self).__init__(molecule)
 
     def calc_new(self, coords, dirname):
-        from simtk.openmm import Vec3
-        import simtk.unit as u
+        try:
+            from openmm import Vec3
+            import openmm.unit as u
+        except ImportError:
+            from simtk.openmm import Vec3
+            import simtk.unit as u
         try:
             self.M.xyzs[0] = coords.reshape(-1, 3) * bohr2ang
             pos = [Vec3(self.M.xyzs[0][i, 0]/10, self.M.xyzs[0][i, 1]/10, self.M.xyzs[0][i, 2]/10) for i in range(self.M.na)]*u.nanometer
@@ -771,7 +780,10 @@ class OpenMM(Engine):
         """Apply the opls combination rule to the system."""
 
         from numpy import sqrt
-        import simtk.openmm as mm
+        try:
+            import openmm as mm
+        except ImportError:
+            import simtk.openmm as mm
 
         # get system information from the openmm system
         forces = {system.getForce(index).__class__.__name__: system.getForce(index) for index in
@@ -1068,6 +1080,30 @@ class Psi4(Engine):
         except (OSError, IOError, RuntimeError, subprocess.CalledProcessError):
             raise Psi4EngineError
         return result
+
+    def calc_wq_new(self, coords, dirname):
+        wq = getWorkQueue()
+        if not os.path.exists(dirname): os.makedirs(dirname)
+        # Convert coordinates back to the xyz file
+        self.M.xyzs[0] = coords.reshape(-1, 3) * bohr2ang
+        # Write Psi4 input.dat
+        with open(os.path.join(dirname, 'input.dat'), 'w') as outfile:
+            for line in self.psi4_temp:
+                if line == '$!geometry@here':
+                    for i, (e, c) in enumerate(zip(self.M.elem, self.M.xyzs[0])):
+                        if i in self.fragn:
+                            outfile.write('--\n')
+                        outfile.write("%-7s %13.7f %13.7f %13.7f\n" % (e, c[0], c[1], c[2]))
+                else:
+                    outfile.write(line)
+
+        # self.M.edit_qcrems({'jobtype':'force'})
+        # self.M[0].write(os.path.join(dirname, 'run.in'))
+        in_files = [('%s/input.dat' % dirname, 'input.dat')]
+        out_files = [('%s/output.dat' % dirname, 'output.dat'), ('%s/run.log' % dirname, 'run.log')]
+        # We will assume that the number of threads on the worker is 1, as this maximizes efficiency
+        # in the limit of large numbers of jobs, although it may be controlled via environment variables.
+        queue_up_src_dest(wq, 'psi4 input.dat &> run.log', in_files, out_files, verbose=False)
     
     def read_result(self, dirname, check_coord=None):
         """ Read Psi4 calculation output. """
@@ -1137,7 +1173,7 @@ class Psi4(Engine):
                         return True
         return False
 
-class QChem(Engine): # pragma: no cover
+class QChem(Engine):
     def __init__(self, molecule, dirname=None, qcdir=None, threads=None):
         super(QChem, self).__init__(molecule)
         self.threads = threads
@@ -1211,15 +1247,20 @@ class QChem(Engine): # pragma: no cover
     def calc_wq_new(self, coords, dirname):
         wq = getWorkQueue()
         if not os.path.exists(dirname): os.makedirs(dirname)
-        # Convert coordinates back to the xyz file<
+        # Convert coordinates back to the xyz file
         self.M.xyzs[0] = coords.reshape(-1, 3) * bohr2ang
         self.M.edit_qcrems({'jobtype':'force'})
-        self.M[0].write(os.path.join(dirname, 'run.in'))
         in_files = [('%s/run.in' % dirname, 'run.in')]
         out_files = [('%s/run.out' % dirname, 'run.out'), ('%s/run.log' % dirname, 'run.log')]
         if self.qcdir:
-            raise RuntimeError("--qcdir currently not supported with Work Queue")
-        queue_up_src_dest(wq, "qchem%s run.in run.out &> run.log" % self.nt(), in_files, out_files, verbose=False)
+            self.M.edit_qcrems({'scf_guess':'read'})
+            in_files += [('%s/run.d/53.0' % dirname, '53.0')]
+            out_files += [('%s/run.d/131.0' % dirname, 'run.d/131.0')]
+            cmdstr = "mkdir -p run.d ; mv 53.0 run.d ; qchem run.in run.out run.d &> run.log"
+        else:
+            cmdstr = "qchem%s run.in run.out &> run.log" % self.nt()
+        self.M[0].write(os.path.join(dirname, 'run.in'))
+        queue_up_src_dest(wq, cmdstr, in_files, out_files, verbose=False)
 
     def number_output(self, dirname, calcNum):
         if not os.path.exists(os.path.join(dirname, 'run.out')):
@@ -1264,7 +1305,7 @@ class QChem(Engine): # pragma: no cover
                         return True
         return False
     
-class Gromacs(Engine):
+class Gromacs(Engine): # pragma: no cover
     def __init__(self, molecule):
         super(Gromacs, self).__init__(molecule)
 
@@ -1294,7 +1335,7 @@ class Gromacs(Engine):
     def copy_scratch(self, src, dest):
         return
 
-class Molpro(Engine):
+class Molpro(Engine): # pragma: no cover
     """
     Run a Molpro energy and gradient calculation.
     """

@@ -1400,10 +1400,8 @@ def _exec(command, print_to_screen = False, outfnm = None, logfnm = None, stdin 
     def process_out(read):
         if print_to_screen:
             # LPW 2019-11-25: We should be writing a string, not a representation of bytes
-            if p2:
-                sys.stdout.write(str(read.encode('utf-8')))
-            else:
-                sys.stdout.write(read)
+            if p2: sys.stdout.write(str(read.encode('utf-8')))
+            else: sys.stdout.write(read)
         if copy_stdout:
             process_out.stdout.append(read)
             wtf(read)
@@ -1411,10 +1409,8 @@ def _exec(command, print_to_screen = False, outfnm = None, logfnm = None, stdin 
 
     def process_err(read):
         if print_to_screen:
-            if p2:
-                sys.stderr.write(str(read.encode('utf-8')))
-            else:
-                sys.stderr.write(read)
+            if p2: sys.stderr.write(str(read.encode('utf-8')))
+            else: sys.stderr.write(read)
         process_err.stderr.append(read)
         if copy_stderr:
             process_out.stdout.append(read)
@@ -1431,10 +1427,8 @@ def _exec(command, print_to_screen = False, outfnm = None, logfnm = None, stdin 
                 # This hang can be avoided by running fh.read1 (with a "1" at the end), however python2.7
                 # doesn't implement ByteStream.read1. So, to enable python3 builds on mac to work, we pick the "best"
                 # fh.read function we can get
-                if hasattr(fh, 'read1'):
-                    fhread = fh.read1
-                else:
-                    fhread = fh.read
+                if hasattr(fh, 'read1'): fhread = fh.read1
+                else: fhread = fh.read
 
                 if fh is p.stdout:
                     read_nbytes = 0
@@ -1456,7 +1450,7 @@ def _exec(command, print_to_screen = False, outfnm = None, logfnm = None, stdin 
                             try:
                                 out_chunker.push(read)
                                 break
-                            except UnicodeDecodeError:
+                            except UnicodeDecodeError: # pragma: no cover
                                 pass
                 elif fh is p.stderr:
                     read_nbytes = 0
@@ -1478,7 +1472,7 @@ def _exec(command, print_to_screen = False, outfnm = None, logfnm = None, stdin 
                             try:
                                 err_chunker.push(read)
                                 break
-                            except UnicodeDecodeError:
+                            except UnicodeDecodeError: # pragma: no cover
                                 pass
                 else:
                     raise RuntimeError
@@ -1513,7 +1507,7 @@ def _exec(command, print_to_screen = False, outfnm = None, logfnm = None, stdin 
     return Out
 _exec.returncode = None
 
-def warn_press_key(warning, timeout=10):
+def warn_press_key(warning, timeout=10): # pragma: no cover
     logger.warning(warning + '\n')
     if sys.stdin.isatty():
         logger.warning("\x1b[1;91mPress Enter or wait %i seconds (I assume no responsibility for what happens after this!)\x1b[0m\n" % timeout)
@@ -1523,7 +1517,7 @@ def warn_press_key(warning, timeout=10):
                 sys.stdin.readline()
         except: pass
 
-def warn_once(warning, warnhash = None):
+def warn_once(warning, warnhash = None): # pragma: no cover
     """ Prints a warning but will only do so once in a given run. """
     if warnhash is None:
         warnhash = warning
@@ -1536,30 +1530,3 @@ def warn_once(warning, warnhash = None):
         for line in warning:
             logger.info(line + '\n')
 warn_once.already = set()
-
-#=========================================#
-#| Development stuff (not commonly used) |#
-#=========================================#
-def concurrent_map(func, data):
-    """
-    Similar to the bultin function map(). But spawn a thread for each argument
-    and apply `func` concurrently.
-
-    Note: unlike map(), we cannot take an iterable argument. `data` should be an
-    indexable sequence.
-    """
-
-    N = len(data)
-    result = [None] * N
-
-    # wrapper to dispose the result in the right slot
-    def task_wrapper(i):
-        result[i] = func(data[i])
-
-    threads = [threading.Thread(target=task_wrapper, args=(i,)) for i in range(N)]
-    for t in threads:
-        t.start()
-    for t in threads:
-        t.join()
-
-    return result

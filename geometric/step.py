@@ -270,7 +270,8 @@ def get_cartesian_norm(X, dy, IC, enforce=0.0, verbose=0, usedmax=0):
     rmsd, maxd = calc_drms_dmax(Xnew, X)
     return maxd if usedmax else rmsd
 
-def get_hessian_update_tsbfgs(Dy, Dg, H):
+def get_hessian_update_tsbfgs(Dy, Dg, H): # pragma: no cover
+    # TS-BFGS update: not tested and currently not being used
     logger.info("TS-BFGS Hessian update\n")
     # yk = Dg; dk = Dy
     # dk = col(self.Y - self.Yprev)
@@ -353,10 +354,8 @@ def update_hessian(IC, H0, xyz_seq, gradx_seq, params, trust_limit=False, max_up
         if np.linalg.norm(Dy) < 1e-6: continue
         if params.transition:
             ts_bfgs = False
-            if ts_bfgs: # pragma: no cover
-                Hup = get_hessian_update_tsbfgs(Dy, Dg, H)
-            else:
-                Hup = get_hessian_update_msp(Dy, Dg, H, verbose=params.verbose)
+            if ts_bfgs: Hup = get_hessian_update_tsbfgs(Dy, Dg, H)
+            else: Hup = get_hessian_update_msp(Dy, Dg, H, verbose=params.verbose)
         else:
             Hup = get_hessian_update_bfgs(Dy, Dg, H)
         # Compute some diagnostics.
@@ -469,7 +468,7 @@ def get_delta_prime_trm(v, X, G, H, IC, verbose=0):
         logger.info("sorted(eig) : % .5e % .5e % .5e ... % .5e % .5e % .5e\n" % (seig[0], seig[1], seig[2], seig[-3], seig[-2], seig[-1]))
     try:
         Hi = invert_svd(HT)
-    except:
+    except: # pragma: no cover
         ht_txt = 'HT.v_%.5f.txt' % v
         np.savetxt(ht_txt, HT, fmt='% 14.10f')
         logger.info("\x1b[1;91mSVD Error - saving %s, increasing v by 0.001 and trying again\x1b[0m (% .5f -> % .5f)\n" % (ht_txt, v, v+0.001))
@@ -553,8 +552,8 @@ def get_delta_prime_rs_p_rfo(alpha, X, G, H, IC, verbose=0):
     if IC.haveConstraints():
         raise RuntimeError("Rational function optimization does not support constraints")
     # verbose = 2
-    if verbose >= 4:
-        logger.info("        === RS-P-RFO method with alpha = %.5f ===\n" % alpha)
+    if verbose >= 4: logger.info("        === RS-P-RFO method with alpha = %.5f ===\n" % alpha)
+
     # Sorted eigenvalues and corresponding eigenvectors of the Hessian
     Hvals, Hvecs = sorted_eigh(H, asc=True)
 
@@ -612,7 +611,7 @@ def get_delta_prime_rs_p_rfo(alpha, X, G, H, IC, verbose=0):
     # Use the quadratic approximation to get expected change in the energy
     expect = flat(0.5*multi_dot([row(dy),H,col(dy)]))[0] + np.dot(dy,G)
 
-    if verbose >= 5:
+    if verbose >= 5: # pragma: no cover
         logger.info("        Largest / smallest eigvals of small / large P-RFO matrix: % .5f % .5f\n" % (tv_vals[-1], ot_vals[0]))
         logger.info("        Small P-RFO matrix:\n        ")
         pmat2d(prfo_tv, precision=5, format='f')
@@ -631,7 +630,7 @@ def get_delta_prime_rs_p_rfo(alpha, X, G, H, IC, verbose=0):
         pvec1d(dy_coeffs)
         logger.info("        Step obtained from P-RFO method:\n        ")
         pvec1d(dy)
-    elif verbose >= 4:
+    elif verbose >= 4: # pragma: no cover
         logger.info("        Largest / smallest eigvals of small / large P-RFO matrix: % .5f % .5f\n" % (tv_vals[-1], ot_vals[0]))
         logger.info("        l_max*alpha(TS), l_min*alpha(min) = %.5f %.5f\n" % (tv_vals[-1]*alpha, ot_vals[0]*alpha))
         logger.info("        Coefficients of P-RFO step along normal modes:\n")
@@ -643,7 +642,7 @@ def get_delta_prime_rs_p_rfo(alpha, X, G, H, IC, verbose=0):
 
     return dy, expect, dy_prime
 
-def get_delta_prime_rfo(alpha, X, G, H, IC, verbose=0):
+def get_delta_prime_rfo(alpha, X, G, H, IC, verbose=0): # pragma: no cover
     """
     Return the restricted-step rational functional optimization
     step, given a particular value of alpha. The step is given by:
@@ -658,7 +657,8 @@ def get_delta_prime_rfo(alpha, X, G, H, IC, verbose=0):
     the RS-RFO step that satisfies a desired step length.
 
     Currently does not work with constraints, and gives equivalent performance
-    to the trust radius method.
+    to the trust radius method.  It is here for "reference" and not called by
+    anything important.
 
     Parameters
     ----------
@@ -824,8 +824,7 @@ def trust_step(target, v0, X, G, H, IC, rfo, verbose=0):
             if verbose >= 3: get_delta_prime(v, X, G, H, IC, rfo, verbose+1)
             if verbose: logger.info("    trust_step Iter:  %4i, v = %.5f, dy over target: %.5f -x-> %.5f\n" % (niter, v, ndy, target))
             return dy, sol
-        elif verbose >= 2:
-            logger.info("    trust_step Iter:  %4i, v = %.5f, dy -> target:   %.5f ---> %.5f\n" % (niter, v, ndy, target))
+        elif verbose >= 2: logger.info("    trust_step Iter:  %4i, v = %.5f, dy -> target:   %.5f ---> %.5f\n" % (niter, v, ndy, target))
         niter += 1
         ndy_last = ndy
         if ndy < m_ndy:

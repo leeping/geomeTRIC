@@ -3,6 +3,7 @@
 omit =
     geometric/PDB.py
     geometric/_version.py
+    geometric/tests/*
     
 exclude_lines =
     pragma: no cover
@@ -12,3 +13,8 @@ exclude_lines =
     logger.error
     logger.info
     raise RuntimeError
+    verbose:
+    if verbose >=
+    if params.verbose >=
+    HaveGZ
+    HaveBZ2

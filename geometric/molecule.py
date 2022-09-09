@@ -366,9 +366,14 @@ elif "geometric" in __name__:
     #| OpenMM interface functions |#
     #==============================#
     try:
-        from simtk.unit import *
-        from simtk.openmm import *
-        from simtk.openmm.app import *
+        try:
+            from openmm.unit import *
+            from openmm import *
+            from openmm.app import *
+        except ImportError:
+            from simtk.unit import *
+            from simtk.openmm import *
+            from simtk.openmm.app import *
     except ImportError:
         logger.debug('Note: Failed to import optional OpenMM module.\n')
 
@@ -388,18 +393,14 @@ def unmangle(M1, M2):
 
     M.elem = list(np.array(PDB.elem)[unmangled])
     """
-    if M1.na != M2.na:
-        logger.error("Unmangler only deals with same number of atoms\n")
-        raise RuntimeError
+    if M1.na != M2.na: raise RuntimeError("Unmangler only deals with same number of atoms")
     unmangler = {}
     for i in range(M1.na):
         for j in range(M2.na):
             if np.linalg.norm(M1.xyzs[0][i] - M2.xyzs[0][j]) < 0.1:
                 unmangler[j] = i
     unmangled = [unmangler[i] for i in sorted(unmangler.keys())]
-    if len(unmangled) != M1.na:
-        logger.error("Unmangler failed (different structures?)\n")
-        raise RuntimeError
+    if len(unmangled) != M1.na: raise RuntimeError("Unmangler failed (different structures?)")
     return unmangled
 
 def nodematch(node1,node2):
@@ -724,7 +725,7 @@ def ComputeOverlap(theta,elem,xyz1,xyz2):
                 Obj -= np.exp(-0.5*dx2)
     return Obj
 
-def AlignToDensity(elem,xyz1,xyz2,binary=False):
+def AlignToDensity(elem,xyz1,xyz2,binary=False): # pragma: no cover
     """
     Computes a "overlap density" from two frames.
     This function can be called by AlignToMoments to get rid of inversion problems
@@ -735,11 +736,14 @@ def AlignToDensity(elem,xyz1,xyz2,binary=False):
     xyz2R = np.dot(EulerMatrix(t1[0],t1[1],t1[2]), xyz2.T).T.copy()
     return xyz2R
 
-def AlignToMoments(elem,xyz1,xyz2=None):
+def AlignToMoments(elem,xyz1,xyz2=None): # pragma: no cover
     """Pre-aligns molecules to 'moment of inertia'.
     If xyz2 is passed in, it will assume that xyz1 is already
     aligned to the moment of inertia, and it simply does 180-degree
-    rotations to make sure nothing is inverted."""
+    rotations to make sure nothing is inverted.
+    
+    Note: This function hasn't been used for a long time and should either be tested or deleted.
+    """
     xyz = xyz1 if xyz2 is None else xyz2
     I = np.zeros((3,3))
     for i, xi in enumerate(xyz):
@@ -804,7 +808,7 @@ def cartesian_product2(arrays):
         arr[...,i] = a
     return arr.reshape(-1, la)
 
-def extract_int(arr, avgthre, limthre, label="value", verbose=True):
+def extract_int(arr, avgthre, limthre, label="value", verbose=True): # pragma: no cover
     """
     Get the representative integer value from an array.
     The integer value is the rounded mean.  Perform sanity
@@ -848,7 +852,7 @@ def extract_int(arr, avgthre, limthre, label="value", verbose=True):
         passed = False
     return int(rounded), passed
 
-def extract_pop(M, verbose=True):
+def extract_pop(M, verbose=True): # pragma: no cover
     """
     Extract our best estimate of charge and spin-z from the comments
     section of a Molecule object created with Nanoreactor.  Note that
@@ -906,7 +910,7 @@ def extract_pop(M, verbose=True):
     if verbose: logger.info("%i electrons; charge %i, spin %i" % (nelectron, chg, spn))
     return chg, spn
 
-def arc(Mol, begin=None, end=None, RMSD=True, align=True):
+def arc(Mol, begin=None, end=None, RMSD=True, align=True): # pragma: no cover
     """
     Get the arc-length for a trajectory segment.
     Uses RMSD or maximum displacement of any atom in the trajectory.
@@ -939,7 +943,7 @@ def arc(Mol, begin=None, end=None, RMSD=True, align=True):
         Arc = np.array([np.max([np.linalg.norm(Mol.xyzs[i+1][j]-Mol.xyzs[i][j]) for j in range(Mol.na)]) for i in range(begin, end-1)])
     return Arc
 
-def EqualSpacing(Mol, frames=0, dx=0, RMSD=True, align=True):
+def EqualSpacing(Mol, frames=0, dx=0, RMSD=True, align=True): # pragma: no cover
     """
     Equalize the spacing of frames in a trajectory with linear interpolation.
     This is done in a very simple way, first calculating the arc length
@@ -3520,7 +3524,7 @@ class Molecule(object):
                     thiscomm = []
                 else:
                     thiscomm.append(' '.join(sline[1:]))
-            elif re.match('^ *[0-9]+ +(EXT)?$',line):
+            elif re.match('^ *[0-9]+ *(EXT)?$',line):
                 na = int(sline[0])
             elif is_charmm_coord(line):
                 if frame == 0: # Create the list of residues, atom names etc. only if it's the first frame.
@@ -4293,8 +4297,7 @@ class Molecule(object):
         """
         selection = kwargs.get('selection', list(range(len(self))))
         if len(selection) != 1:
-            logger.error("only a single frame can be written for write_lammps_data\n")
-            raise RuntimeError
+            raise RuntimeError("only a single frame can be written for write_lammps_data")
         I = selection[0]
         out = []
         comm = self.comms[I]
@@ -4322,7 +4325,7 @@ class Molecule(object):
             xhi = self.boxes[I].a
             yhi = self.boxes[I].b
             zhi = self.boxes[I].c
-        else:
+        else: # pragma: no cover
             xlo = np.floor(np.min(self.xyzs[I][:,0]))
             ylo = np.floor(np.min(self.xyzs[I][:,1]))
             zlo = np.floor(np.min(self.xyzs[I][:,2]))
