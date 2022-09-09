@@ -13,3 +13,6 @@ exclude_lines =
     logger.error
     logger.info
     raise RuntimeError
+    verbose:
+    if verbose >=
+    if params.verbose >=

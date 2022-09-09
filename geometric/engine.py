@@ -366,7 +366,7 @@ class Blank(Engine):
         gradient = np.zeros(len(coords), dtype=float)
         return {'energy':energy, 'gradient':gradient}
 
-class TeraChem(Engine): # pragma: no cover
+class TeraChem(Engine):
     """
     Run a TeraChem energy and gradient calculation.
     """
@@ -534,7 +534,7 @@ class TeraChem(Engine): # pragma: no cover
         del self.tcin['bond_order_mat']
         return np.array(bo_mat)
 
-    def calc_wq_new(self, coords, dirname):
+    def calc_wq_new(self, coords, dirname): # pragma: no cover
         # Set up Work Queue object
         wq = getWorkQueue()
         scrdir = os.path.join(dirname, self.scr)
