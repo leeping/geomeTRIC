@@ -181,6 +181,9 @@ class TestAlaGRO:
         assert ref_rmsd_noalign[2] > 1.0
         assert (path_rmsd + 1e-10 >= ref_rmsd_align[1:]).all()
         assert np.allclose(pairwise_rmsd[0], ref_rmsd_align)
+        M.align()
+        assert np.allclose(M.xyzs[1], M.xyzs[0])
+        assert not np.allclose(M.xyzs[2], M.xyzs[0])
 
     def test_find_angles_dihedrals(self):
         a = self.molecule.find_angles()
@@ -209,6 +212,23 @@ class TestAlaGRO:
         invidx = [newidx.index(i) for i in range(len(newidx))]
         newmol3 = newmol.reorder_indices(self.molecule)
         assert invidx == newmol3
+
+    def test_write_lammps(self):
+        # Outside of running LAMMPS we can't really check if it's correct.
+        # At least we confirm it doesn't crash.
+        self.molecule.xyzs[0] += np.array([10,10,10])[np.newaxis, :]
+        self.molecule.write_lammps_data()
+
+    def test_write_gro(self):
+        self.molecule.write('out.gro')
+        M1 = geometric.molecule.Molecule('out.gro')
+        assert M1.atomname == self.molecule.atomname
+        assert M1.elem == self.molecule.elem
+        assert M1.resid == self.molecule.resid
+        np.testing.assert_almost_equal(M1.boxes[0].A, self.molecule.boxes[0].A)
+        np.testing.assert_almost_equal(M1.boxes[0].B, self.molecule.boxes[0].B)
+        np.testing.assert_almost_equal(M1.boxes[0].C, self.molecule.boxes[0].C)
+        np.testing.assert_almost_equal(M1.xyzs[0], self.molecule.xyzs[0])
 
     def teardown_method(self, method):
         # This method is being called after each test case, and it will revert input back to original function

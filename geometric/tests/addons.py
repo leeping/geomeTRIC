@@ -65,7 +65,21 @@ def in_folder(request):
     # Build and change to test folder
     if not os.path.exists(test_folder):
         os.makedirs(test_folder)
-
+    else:
+        # If previous results exist in the test folder, archive them.
+        prev_num = 0
+        allfiles = os.listdir(test_folder)
+        while os.path.exists(os.path.join(test_folder, 'previous.%03i' % prev_num)):
+            allfiles.remove('previous.%03i' % prev_num)
+            prev_num += 1
+        if prev_num == 1000:
+            raise IOError("There are too many previous result folders in %s" % test_folder)
+        os.makedirs(os.path.join(test_folder, 'previous.%03i' % prev_num))
+        for f in allfiles:
+            src_path = os.path.join(test_folder, f)
+            dst_path = os.path.join(test_folder, 'previous.%03i' % prev_num, f)
+            os.rename(src_path, dst_path)
+        
     os.chdir(test_folder)
 
     # Yield for testing

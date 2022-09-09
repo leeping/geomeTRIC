@@ -745,6 +745,8 @@ def wigner_sample(coords, mass, elem, freqs_wavenumber, normal_modes, temperatur
     sigma_p = []    
     for n in range(nmodes):
         freq = freq_au[n]
+        # Temporary (probably not correct) hack for imaginary freqs.
+        if freq < 0.0: freq *= -1
         if temperature ==0:
             tanhf = 1.0
         else:

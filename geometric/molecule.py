@@ -4294,8 +4294,7 @@ class Molecule(object):
         """
         selection = kwargs.get('selection', list(range(len(self))))
         if len(selection) != 1:
-            logger.error("only a single frame can be written for write_lammps_data\n")
-            raise RuntimeError
+            raise RuntimeError("only a single frame can be written for write_lammps_data")
         I = selection[0]
         out = []
         comm = self.comms[I]
@@ -4323,7 +4322,7 @@ class Molecule(object):
             xhi = self.boxes[I].a
             yhi = self.boxes[I].b
             zhi = self.boxes[I].c
-        else:
+        else: # pragma: no cover
             xlo = np.floor(np.min(self.xyzs[I][:,0]))
             ylo = np.floor(np.min(self.xyzs[I][:,1]))
             zlo = np.floor(np.min(self.xyzs[I][:,2]))
