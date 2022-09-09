@@ -270,7 +270,8 @@ def get_cartesian_norm(X, dy, IC, enforce=0.0, verbose=0, usedmax=0):
     rmsd, maxd = calc_drms_dmax(Xnew, X)
     return maxd if usedmax else rmsd
 
-def get_hessian_update_tsbfgs(Dy, Dg, H):
+def get_hessian_update_tsbfgs(Dy, Dg, H): # pragma: no cover
+    # TS-BFGS update: not tested and currently not being used
     logger.info("TS-BFGS Hessian update\n")
     # yk = Dg; dk = Dy
     # dk = col(self.Y - self.Yprev)
@@ -642,7 +643,7 @@ def get_delta_prime_rs_p_rfo(alpha, X, G, H, IC, verbose=0):
 
     return dy, expect, dy_prime
 
-def get_delta_prime_rfo(alpha, X, G, H, IC, verbose=0):
+def get_delta_prime_rfo(alpha, X, G, H, IC, verbose=0): # pragma: no cover
     """
     Return the restricted-step rational functional optimization
     step, given a particular value of alpha. The step is given by:
@@ -657,7 +658,8 @@ def get_delta_prime_rfo(alpha, X, G, H, IC, verbose=0):
     the RS-RFO step that satisfies a desired step length.
 
     Currently does not work with constraints, and gives equivalent performance
-    to the trust radius method.
+    to the trust radius method.  It is here for "reference" and not called by
+    anything important.
 
     Parameters
     ----------

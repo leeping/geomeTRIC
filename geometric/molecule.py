@@ -393,18 +393,14 @@ def unmangle(M1, M2):
 
     M.elem = list(np.array(PDB.elem)[unmangled])
     """
-    if M1.na != M2.na:
-        logger.error("Unmangler only deals with same number of atoms\n")
-        raise RuntimeError
+    if M1.na != M2.na: raise RuntimeError("Unmangler only deals with same number of atoms")
     unmangler = {}
     for i in range(M1.na):
         for j in range(M2.na):
             if np.linalg.norm(M1.xyzs[0][i] - M2.xyzs[0][j]) < 0.1:
                 unmangler[j] = i
     unmangled = [unmangler[i] for i in sorted(unmangler.keys())]
-    if len(unmangled) != M1.na:
-        logger.error("Unmangler failed (different structures?)\n")
-        raise RuntimeError
+    if len(unmangled) != M1.na: raise RuntimeError("Unmangler failed (different structures?)")
     return unmangled
 
 def nodematch(node1,node2):

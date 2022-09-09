@@ -4,6 +4,7 @@ Tests the geomeTRIC molecule class.
 
 import pytest
 import geometric
+from copy import deepcopy
 import os
 import numpy as np
 from . import addons
@@ -13,8 +14,14 @@ localizer = addons.in_folder
 
 def test_blank_molecule():
     mol = geometric.molecule.Molecule()
-
     assert len(mol) == 0
+
+def test_cubic_box():
+    box = geometric.molecule.CubicLattice(1.5)
+    np.testing.assert_almost_equal(box.A, [1.5, 0.0, 0.0])
+    np.testing.assert_almost_equal(box.B, [0.0, 1.5, 0.0])
+    np.testing.assert_almost_equal(box.C, [0.0, 0.0, 1.5])
+    np.testing.assert_almost_equal(box.V, 1.5**3)
 
 class TestAlaGRO:
     @classmethod
@@ -187,10 +194,26 @@ class TestAlaGRO:
         assert len(IC.Internals) == self.molecule.na*3
         assert len(IC_TR.Internals) == (self.molecule.na*3 - 6)
 
+    def test_reorder(self):
+        # Manually generated indices for scrambling atoms
+        newidx = [8, 25, 15, 30, 28, 14, 27, 46, 39, 16, 36, 10, 13, 41, 11, 
+                  12, 1, 2, 23, 21, 6, 20, 9, 43, 3, 44, 40, 34, 48, 0, 33, 
+                  29, 19, 31, 32, 37, 7, 42, 18, 47, 22, 45, 24, 38, 17, 4, 35, 5, 26]
+        newmol = self.molecule.atom_select(newidx)
+        newidx_2 = self.molecule.reorder_indices(newmol)
+        assert newidx == newidx_2
+        newmol2 = deepcopy(self.molecule)
+        newmol2.reorder_according_to(newmol)
+        np.testing.assert_almost_equal(newmol2.xyzs[0], newmol.xyzs[0])
+        # Now find the indices that would map the scrambled molecule back to the original
+        invidx = [newidx.index(i) for i in range(len(newidx))]
+        newmol3 = newmol.reorder_indices(self.molecule)
+        assert invidx == newmol3
+
     def teardown_method(self, method):
         # This method is being called after each test case, and it will revert input back to original function
         geometric.molecule.input = input
-        
+
 class TestWaterQCOut:
     @classmethod
     def setup_class(cls):
