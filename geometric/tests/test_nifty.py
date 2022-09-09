@@ -173,3 +173,35 @@ def test_monotonic_decreasing():
     sorted_argmins = sorted(list(set([int(l.strip()) for l in open(os.path.join(datad, 'bucky-argmin-indices.txt')).readlines()])))
     assert list(nifty.monotonic_decreasing(energies)) == sorted_argmins
     assert list(nifty.monotonic_decreasing(energies[::-1], start=len(energies) - 1, end = 0)) == [len(energies)-i-1 for i in sorted_argmins]
+
+def test_lp_dump_load(localizer):
+    # This isn't really used in geomeTRIC but might as well test it here.
+    test_dict = {'X': 0.18417850987695983,
+                 'G': np.array([-0.1046131 , -0.09901273, -0.21102632,  0.07767315,  0.14657123,
+                               -0.05605338, -0.00137182]),
+                 'H': np.array([[ 2.06315884e+00, -2.57250804e-02, -6.29836909e-02,
+                                  -8.82566192e-02, -6.08247392e-01, -5.84304473e-01,
+                                  5.45802740e-04],
+                                [-2.57250804e-02,  2.18584558e-01,  5.20280726e-01,
+                                 -1.47406932e-01, -1.47031895e-01,  1.43416651e-01,
+                                 8.99890458e-04],
+                                [-6.29836909e-02,  5.20280726e-01,  1.30714108e+00,
+                                 -3.98205308e-01, -3.90578323e-01,  3.85553976e-01,
+                                 -1.19773349e-03],
+                                [-8.82566192e-02, -1.47406932e-01, -3.98205308e-01,
+                                 2.92590490e-01,  1.78075298e-01, -1.29469940e-01,
+                                 5.99861100e-03],
+                                [-6.08247392e-01, -1.47031895e-01, -3.90578323e-01,
+                                 1.78075298e-01,  8.44482446e-01,  2.19087650e-01,
+                                 1.30076858e-03],
+                                [-5.84304473e-01,  1.43416651e-01,  3.85553976e-01,
+                                 -1.29469940e-01,  2.19087650e-01,  7.65388001e-01,
+                                 -1.71343364e-03],
+                                [ 5.45802740e-04,  8.99890458e-04, -1.19773349e-03,
+                                  5.99861100e-03,  1.30076858e-03, -1.71343364e-03,
+                                  4.05421648e-04]])}
+    nifty.lp_dump(test_dict, 'test_dict.p')
+    test_dict1 = nifty.lp_load('test_dict.p')
+    test_dict2 = nifty.lp_load(os.path.join(datad, 'test_dict.p'))
+    for key in ['X', 'G', 'H']:
+        np.testing.assert_almost_equal(test_dict1[key], test_dict2[key])

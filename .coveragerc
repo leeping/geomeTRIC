@@ -16,3 +16,5 @@ exclude_lines =
     verbose:
     if verbose >=
     if params.verbose >=
+    HaveGZ
+    HaveBZ2

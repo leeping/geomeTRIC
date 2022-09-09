@@ -3521,7 +3521,7 @@ class Molecule(object):
                     thiscomm = []
                 else:
                     thiscomm.append(' '.join(sline[1:]))
-            elif re.match('^ *[0-9]+ +(EXT)?$',line):
+            elif re.match('^ *[0-9]+ *(EXT)?$',line):
                 na = int(sline[0])
             elif is_charmm_coord(line):
                 if frame == 0: # Create the list of residues, atom names etc. only if it's the first frame.

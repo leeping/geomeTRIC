@@ -299,7 +299,6 @@ def test_gaussian_input_single():
     assert molecule.Data["elem"] == ['C', 'H', 'H', 'H', 'C', 'H', 'H', 'H']
     assert molecule.Data["bonds"] == [(0, 1), (0, 2), (0, 3), (0, 4), (4, 5), (4, 6), (4, 7)]
 
-
 def test_gaussian_input_multiple():
     """
     Test reading a gaussian input with multiple molecules.
@@ -307,3 +306,9 @@ def test_gaussian_input_multiple():
     molecule = geometric.molecule.Molecule(os.path.join(datad, "waters.com"))
     assert len(molecule.molecules) == 6
     assert molecule.Data["bonds"] == [(0, 1), (0, 2), (3, 4), (3, 5), (6, 7), (6, 8), (9, 10), (9, 11), (12, 13), (12, 14), (15, 16), (15, 17)]
+
+def test_charmm_io(localizer):
+    molecule = geometric.molecule.Molecule(os.path.join(datad, "boat.crd"), ftype='charmm')
+    molecule.write("test.xyz")
+    molecule2 = geometric.molecule.Molecule("test.xyz")
+    np.testing.assert_almost_equal(molecule2.xyzs[0], molecule.xyzs[0])
