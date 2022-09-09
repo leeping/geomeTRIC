@@ -219,7 +219,7 @@ class TestAlaGRO:
         self.molecule.xyzs[0] += np.array([10,10,10])[np.newaxis, :]
         self.molecule.write_lammps_data()
 
-    def test_write_gro(self):
+    def test_write_gro(self, localizer):
         self.molecule.write('out.gro')
         M1 = geometric.molecule.Molecule('out.gro')
         assert M1.atomname == self.molecule.atomname

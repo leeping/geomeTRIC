@@ -105,16 +105,15 @@ class TestWorkQueue:
         assert type(wq) is work_queue.WorkQueue, "Expected getWorkQueue() to return a " \
                                                  "WorkQueue object, but got %s instead" % str(type(wq))
         worker_program = nifty.which('work_queue_worker')
-        if worker_program != '':
-            nifty.queue_up(wq, "echo work queue test > test.job", [], ["test.job"], tgt=None, verbose=False)
-            assert wq.stats.tasks_waiting == 1, "Expected queue to have a task waiting"
-            self.worker = subprocess.Popen([os.path.join(worker_program, "work_queue_worker"), "localhost", str(wq.port)],
-                                      stdout=subprocess.PIPE)
-            nifty.wq_wait1(wq, wait_time=5)
-            assert wq.stats.total_tasks_complete == 1, "Expected queue to have a task completed"
-            nifty.queue_up(wq, "exit 1", [], ['no_exist'], tgt=None, verbose=False)
-            nifty.wq_wait1(wq, wait_time=1)
-            assert wq.stats.tasks_submitted == 1 + wq.stats.total_tasks_complete
+        nifty.queue_up(wq, "echo work queue test > test.job", [], ["test.job"], tgt=None, verbose=False)
+        assert wq.stats.tasks_waiting == 1, "Expected queue to have a task waiting"
+        self.worker = subprocess.Popen([os.path.join(worker_program, "work_queue_worker"), "localhost", str(wq.port)],
+                                  stdout=subprocess.PIPE)
+        nifty.wq_wait1(wq, wait_time=5)
+        assert wq.stats.total_tasks_complete == 1, "Expected queue to have a task completed"
+        nifty.queue_up(wq, "exit 1", [], ['no_exist'], tgt=None, verbose=False)
+        nifty.wq_wait1(wq, wait_time=1)
+        assert wq.stats.tasks_submitted == 1 + wq.stats.total_tasks_complete
             
         # Destroy the Work Queue object so it doesn't interfere with the rest of the tests.
         nifty.destroyWorkQueue()

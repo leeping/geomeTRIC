@@ -1,0 +1,26 @@
+$molecule
+0 1
+H       -0.4567640000    0.1664660000    1.5741900000
+C       -0.8296080000   -0.2791140000   -0.7296530000
+C       -0.9987230000    0.9789770000   -0.6753560000
+C        0.0893627000    0.1641450000    0.6333140000
+N        1.3546300000    0.1125310000    0.6414310000
+H        1.7362300000    0.1360150000   -0.3108370000
+H       -0.8720490000   -1.3163200000   -1.0154700000
+$end
+
+$rem
+exchange              b3lyp
+basis                 6-31g*
+symmetry              off
+incdft                false
+incfock               0
+sym_ignore            true
+unrestricted          true
+scf_convergence       8
+thresh                14
+jobtype               sp
+scf_algorithm         diis
+max_scf_cycles        100
+$end
+

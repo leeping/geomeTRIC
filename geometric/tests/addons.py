@@ -43,9 +43,11 @@ using_qcengine = pytest.mark.skipif(
 using_openmm = pytest.mark.skipif(
     _plugin_import("openmm") is False and _plugin_import("simtk.openmm") is False, reason="could not find openmm. please install the package to enable tests")
 using_workqueue = pytest.mark.skipif(
-    _plugin_import("work_queue") is False, reason="could not find work_queue. please install the package to enable tests")
+    (_plugin_import("work_queue") is False) or (not geometric.nifty.which('work_queue_worker')), reason="could not find work_queue module or work_queue_worker executable. please install the package to enable tests")
 using_terachem = pytest.mark.skipif(
     not geometric.nifty.which("terachem"), reason="could not find terachem. please make sure TeraChem is installed for these tests")
+using_qchem = pytest.mark.skipif(
+    not geometric.nifty.which("qchem"), reason="could not find qchem. please make sure Q-Chem is installed for these tests")
 
 # Points to the folder where the data files are installed.
 datad = os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), 'data')

@@ -725,7 +725,7 @@ def ComputeOverlap(theta,elem,xyz1,xyz2):
                 Obj -= np.exp(-0.5*dx2)
     return Obj
 
-def AlignToDensity(elem,xyz1,xyz2,binary=False):
+def AlignToDensity(elem,xyz1,xyz2,binary=False): # pragma: no cover
     """
     Computes a "overlap density" from two frames.
     This function can be called by AlignToMoments to get rid of inversion problems
@@ -736,11 +736,14 @@ def AlignToDensity(elem,xyz1,xyz2,binary=False):
     xyz2R = np.dot(EulerMatrix(t1[0],t1[1],t1[2]), xyz2.T).T.copy()
     return xyz2R
 
-def AlignToMoments(elem,xyz1,xyz2=None):
+def AlignToMoments(elem,xyz1,xyz2=None): # pragma: no cover
     """Pre-aligns molecules to 'moment of inertia'.
     If xyz2 is passed in, it will assume that xyz1 is already
     aligned to the moment of inertia, and it simply does 180-degree
-    rotations to make sure nothing is inverted."""
+    rotations to make sure nothing is inverted.
+    
+    Note: This function hasn't been used for a long time and should either be tested or deleted.
+    """
     xyz = xyz1 if xyz2 is None else xyz2
     I = np.zeros((3,3))
     for i, xi in enumerate(xyz):
@@ -805,7 +808,7 @@ def cartesian_product2(arrays):
         arr[...,i] = a
     return arr.reshape(-1, la)
 
-def extract_int(arr, avgthre, limthre, label="value", verbose=True):
+def extract_int(arr, avgthre, limthre, label="value", verbose=True): # pragma: no cover
     """
     Get the representative integer value from an array.
     The integer value is the rounded mean.  Perform sanity
@@ -849,7 +852,7 @@ def extract_int(arr, avgthre, limthre, label="value", verbose=True):
         passed = False
     return int(rounded), passed
 
-def extract_pop(M, verbose=True):
+def extract_pop(M, verbose=True): # pragma: no cover
     """
     Extract our best estimate of charge and spin-z from the comments
     section of a Molecule object created with Nanoreactor.  Note that
@@ -907,7 +910,7 @@ def extract_pop(M, verbose=True):
     if verbose: logger.info("%i electrons; charge %i, spin %i" % (nelectron, chg, spn))
     return chg, spn
 
-def arc(Mol, begin=None, end=None, RMSD=True, align=True):
+def arc(Mol, begin=None, end=None, RMSD=True, align=True): # pragma: no cover
     """
     Get the arc-length for a trajectory segment.
     Uses RMSD or maximum displacement of any atom in the trajectory.
@@ -940,7 +943,7 @@ def arc(Mol, begin=None, end=None, RMSD=True, align=True):
         Arc = np.array([np.max([np.linalg.norm(Mol.xyzs[i+1][j]-Mol.xyzs[i][j]) for j in range(Mol.na)]) for i in range(begin, end-1)])
     return Arc
 
-def EqualSpacing(Mol, frames=0, dx=0, RMSD=True, align=True):
+def EqualSpacing(Mol, frames=0, dx=0, RMSD=True, align=True): # pragma: no cover
     """
     Equalize the spacing of frames in a trajectory with linear interpolation.
     This is done in a very simple way, first calculating the arc length

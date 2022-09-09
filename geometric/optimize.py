@@ -54,7 +54,7 @@ from .normal_modes import calc_cartesian_hessian, frequency_analysis
 from .step import brent_wiki, Froot, calc_drms_dmax, get_cartesian_norm, get_delta_prime, trust_step, force_positive_definite, update_hessian
 from .prepare import get_molecule_engine, parse_constraints
 from .params import OptParams, parse_optimizer_args
-from .nifty import row, col, flat, bohr2ang, ang2bohr, logger, bak, createWorkQueue
+from .nifty import row, col, flat, bohr2ang, ang2bohr, logger, bak, createWorkQueue, destroyWorkQueue
 from .errors import InputError, HessianExit, EngineError, GeomOptNotConvergedError, GeomOptStructureError, LinearTorsionError
 
 class Optimizer(object):
@@ -975,6 +975,8 @@ def run_optimizer(**kwargs):
             if params.qdata is not None: Mfinal.write('qdata-final.txt')
     print_citation(logger)
     logger.info("Time elapsed since start of run_optimizer: %.3f seconds\n" % (time.time()-t0))
+    if kwargs.get('port', 0):
+        destroyWorkQueue()
     return progress
 
 def main(): # pragma: no cover
