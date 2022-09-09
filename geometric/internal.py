@@ -3792,7 +3792,6 @@ class ChainCoordinates(PrimitiveInternalCoordinates):
                 self.CartICs.append(CartesianCoordinates(molecule[i], **kwargs))
         self.ImageICs.append(EmptyCoordinates(molecule[-1], **kwargs))
         self.CartICs.append(EmptyCoordinates(molecule[-1], **kwargs))
-        self.Internals = []
         for i, imageIC in self.ICIter():
             for ic in imageIC.Internals:
                 self.Internals.append(ImagePrim(ic, self.na, i))

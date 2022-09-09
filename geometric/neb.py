@@ -1444,19 +1444,6 @@ class ElasticBand(Chain):
                     if rmsGrad[n] > self.params.avgg * factor:
                         newLocks[n] = False
         self.locks = newLocks[:]
-        # else:
-        #    #TODO: Isn't the new_scheme always true?
-        #    self.locks = [True] + [False for n in range(1, len(self)-1)] + [True]
-        #    while True:
-        #        newLocks = self.locks[:]
-        #        for n in range(1, len(self)):
-        #            if rmsGrad[n] < self.params.avgg and maxGrad[n] < self.params.maxg:
-        #                if all(self.locks[:n]):
-        #                    newLocks[n] = True
-        #                if all(self.locks[n+1:]):
-        #                    newLocks[n] = True
-        #        if newLocks == self.locks: break
-        #        self.locks = newLocks[:]
         return recompute
 
     def ComputeTangent(self):
@@ -2167,7 +2154,6 @@ def BFGSUpdate(Y, Yprev, G, Gprev, H, params):
     Dg = col(G - Gprev)
     # Catch some abnormal cases of extremely small changes.
     if np.linalg.norm(Dg) < 1e-6 or np.linalg.norm(Dy) < 1e-6:
-        print('Coordinate and Gradient did not move')
         return False
     Mat1 = np.dot(Dg, Dg.T) / np.dot(Dg.T, Dy)[0, 0]
     Mat2 = np.dot(np.dot(H, Dy), np.dot(H, Dy).T) / np.dot(np.dot(Dy.T, H), Dy)[0, 0]
@@ -2216,6 +2202,7 @@ def updatehessian(
     Eig1 = BFGSUpdate(Y, Y_prev, GW, GW_prev, HW, params)
     if np.min(Eig1) <= params.epsilon:
         if params.reset:
+            H_reset = True
             print(
                 "Eigenvalues below %.4e (%.4e) - will reset the Hessian"
                 % (params.epsilon, np.min(Eig1))
@@ -2224,7 +2211,6 @@ def updatehessian(
             Y_prev = Y.copy()
             GP_prev = GP.copy()
             GW_prev = GW.copy()
-            H_reset = True
         elif params.skip:
             print(
                 "Eigenvalues below %.4e (%.4e) - skipping Hessian update"
@@ -2903,6 +2889,7 @@ def prepare(prev):
         #"HW_guess": HW.tolist(),
         #"new_attrs": new_attrs,
         #"old_attrs": old_attrs,
+        "old_bandE": chain.TotBandEnergy,
         "trust": trust,
         "expect": expect,
         "expectG": expectG.tolist(),
@@ -2977,8 +2964,9 @@ def check_attr(chain):
 
 def dict_to_binary(the_dict):
     import json
-    str = json.dumps(the_dict)
-    bin = ' '.join(format(ord(letter), 'b') for letter in str)
+    import msgpack
+    bin = msgpack.dumps(the_dict)
+    #bin = ' '.join(format(ord(letter), 'b') for letter in str)
     return bin
 
 def nextchain(prev):
@@ -3068,28 +3056,30 @@ def nextchain(prev):
     #old_chain = add_attr(old_chain, prev.get("old_attrs"))
     chain.ComputeGuessHessian(full=False, blank=isinstance(engine, Blank))
     old_chain.ComputeGuessHessian(full=False, blank=isinstance(engine, Blank))
+    old_chain.TotBandEnergy = prev.get("old_bandE")
     #chain.guess_hessian_working = prev.pop("HW_guess")
     #chain.guess_hessian_plain = prev.pop("HP_guess")
-    GW_d = np.array(prev.get("GW"))
-    GP_d = np.array(prev.get("GP"))
-    GW_prev_d = np.array(prev.get("GW_prev", GW_d.copy()))
-    GP_prev_d = np.array(prev.get("GP_prev", GP_d.copy()))
+    GW = np.array(prev.get("GW"))
+    GP = np.array(prev.get("GP"))
+    #GW_prev = np.array(prev.get("GW_prev", GW.copy()))
+    #GP_prev = np.array(prev.get("GP_prev", GP.copy()))
     #print('GW GP from dict', GW, GP)
     #print('GW GP previous from dict', GW_prev, GP_prev)
 
     chain.ComputeChain(result=result)
-    GW = chain.get_global_grad("total", "working")
-    GP = chain.get_global_grad("total", "plain")
-
+    #GW = chain.get_global_grad("total", "working")
+    #GP = chain.get_global_grad("total", "plain")
+    GW_prev = np.array(prev.get("GW_prev", GW.copy()))
+    GP_prev = np.array(prev.get("GP_prev", GP.copy()))
     #print('GW GP from chain', GW, GP)
-    old_chain.ComputeChain(result=prev.get('result'))
-    GP_prev = old_chain.get_global_grad("total", "working")#prev.get("GP_prev", GP.copy())
-    GW_prev = old_chain.get_global_grad("total", "plain")#prev.get("GW_prev", GW.copy())
+    #old_chain.ComputeChain(result=prev.get('result'), qcf=True)
+    #GP_prev = old_chain.get_global_grad("total", "working")#prev.get("GP_prev", GP.copy())
+    #GW_prev = old_chain.get_global_grad("total", "plain")#prev.get("GW_prev", GW.copy())
     #print('GW GP previous from chain', GW_prev, GP_rev)
-    print(np.linalg.norm(GW_d - GW))
-    print(np.linalg.norm(GP_d - GP))
-    print(np.linalg.norm(GW_prev_d - GW_prev))
-    print(np.linalg.norm(GP_prev_d - GP_prev))
+    #print(np.linalg.norm(GW_d - GW))
+    #print(np.linalg.norm(GP_d - GP))
+    #print(np.linalg.norm(GW_prev_d - GW_prev))
+    #print(np.linalg.norm(GP_prev_d - GP_prev))
 
     chain, Y, GW, GP, HW, HP, c_hist, respaced, Quality = compare(
         old_chain,
@@ -3150,6 +3140,7 @@ def nextchain(prev):
             "HP": HP.tolist(),
             #"new_attrs": new_attrs,
             #"old_attrs": old_attrs,
+            "old_bandE": old_chain.TotBandEnergy,
             "expect": expect,
             "expectG": expectG.tolist(),
             "respaced": respaced,
@@ -3223,12 +3214,13 @@ def nextchain(prev):
         temp = {
             #"Y": Y,
             #"Y_prev": Y_prev,
-            #"GW": GW,
-            #"GW_prev": GW_prev,
-            #"GP": GP,
-            #"GP_prev": GP_prev,
+            "GW": GW.tolist(),
+            "GW_prev": GW_prev.tolist(),
+            "GP": GP.tolist(),
+            "GP_prev": GP_prev.tolist(),
             #"new_attrs": new_attrs,
             #"old_attrs": old_attrs,
+            "old_bandE": old_chain.TotBandEnergy,
             "trust": trust,
             "expect": expect,
             "expectG": expectG.tolist(),
@@ -3291,12 +3283,13 @@ def nextchain(prev):
     temp = {
         #"Y": Y.tolist(),
         #"Y_prev": Y_prev.tolist(),
-        #"GW": GW.tolist(),
-        #"GW_prev": GW_prev.tolist(),
-        #"GP": GP.tolist(),
-        #"GP_prev": GP_prev.tolist(),
+        "GW": GW.tolist(),
+        "GW_prev": GW_prev.tolist(),
+        "GP": GP.tolist(),
+        "GP_prev": GP_prev.tolist(),
         "HW": HW.tolist(),
         "HP": HP.tolist(),
+        "old_bandE": old_chain.TotBandEnergy,
         #"new_attrs": new_attrs,
         #"old_attrs": old_attrs,
         "trust": trust,#
@@ -3314,7 +3307,12 @@ def nextchain(prev):
     prev = prev | temp
     #for k, v in prev.items():
     #    print(k)
-    print('Size of nebinfo dict normal %f Gb' %(sys.getsizeof(dict_to_binary(prev))*1e-9))
+    for k, v in prev.items():
+        if k == "HW" or k == "HP":
+            print('%s shape: %s' %(k, np.array(v).shape))
+        mem_size = sys.getsizeof(dict_to_binary({k: v}))*1e-9
+        if mem_size > 1e-6:
+            print('Size of %s : %f Gb' %(k, mem_size))
     return newcoords, prev
 
 
