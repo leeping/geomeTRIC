@@ -3,6 +3,7 @@
 omit =
     geometric/PDB.py
     geometric/_version.py
+    geometric/tests/*
     
 exclude_lines =
     pragma: no cover

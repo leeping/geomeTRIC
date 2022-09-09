@@ -232,7 +232,7 @@ class Engine(object):
                 Optional output containing expectation value of <S^2> operator, used in
                 crossing point optimizations
         """
-        coord_hash = hash(coords.tostring())
+        coord_hash = hash(coords.tobytes())
         if coord_hash in self.stored_calcs:
             result = self.stored_calcs[coord_hash]['result']
         else:
@@ -284,7 +284,7 @@ class Engine(object):
             prior to starting a calculation (e.g. when calculating the Hessian we want to use SCF
             guess of the midpoint)
         """
-        coord_hash = hash(coords.tostring())
+        coord_hash = hash(coords.tobytes())
         if coord_hash in self.stored_calcs:
             return
         else:
@@ -328,7 +328,7 @@ class Engine(object):
                 Optional output containing expectation value of <S^2> operator, used in
                 crossing point optimizations
         """
-        coord_hash = hash(coords.tostring())
+        coord_hash = hash(coords.tobytes())
         if coord_hash in self.stored_calcs:
             result = self.stored_calcs[coord_hash]['result']
         else:
@@ -637,11 +637,16 @@ class OpenMM(Engine):
     """
     def __init__(self, molecule, pdb, xml):
         try:
-            import simtk.openmm.app as app
-            import simtk.openmm as mm
-            import simtk.unit as u
+            try:
+                import openmm.app as app
+                import openmm as mm
+                import openmm.unit as u
+            except ImportError:
+                import simtk.openmm.app as app
+                import simtk.openmm as mm
+                import simtk.unit as u
         except ImportError:
-            raise ImportError("OpenMM computation object requires the 'simtk' package. Please pip or conda install 'openmm' from omnia channel.")
+            raise ImportError("OpenMM computation object requires the 'openmm' package. Please pip or conda install 'openmm' from omnia channel.")
         pdb = app.PDBFile(pdb)
         modeller = app.Modeller(pdb.topology, pdb.positions)
         xmlSystem = False
@@ -684,8 +689,12 @@ class OpenMM(Engine):
         super(OpenMM, self).__init__(molecule)
 
     def calc_new(self, coords, dirname):
-        from simtk.openmm import Vec3
-        import simtk.unit as u
+        try:
+            from openmm import Vec3
+            import openmm.unit as u
+        except ImportError:
+            from simtk.openmm import Vec3
+            import simtk.unit as u
         try:
             self.M.xyzs[0] = coords.reshape(-1, 3) * bohr2ang
             pos = [Vec3(self.M.xyzs[0][i, 0]/10, self.M.xyzs[0][i, 1]/10, self.M.xyzs[0][i, 2]/10) for i in range(self.M.na)]*u.nanometer
@@ -708,7 +717,10 @@ class OpenMM(Engine):
         """Apply the opls combination rule to the system."""
 
         from numpy import sqrt
-        import simtk.openmm as mm
+        try:
+            import openmm as mm
+        except ImportError:
+            import simtk.openmm as mm
 
         # get system information from the openmm system
         forces = {system.getForce(index).__class__.__name__: system.getForce(index) for index in

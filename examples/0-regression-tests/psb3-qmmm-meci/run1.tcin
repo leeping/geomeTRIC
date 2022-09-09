@@ -1,0 +1,21 @@
+coordinates          x.inpcrd
+prmtop               x.prmtop
+qmindices            qmindices.txt
+run                  gradient
+charge               1
+spinmult             1
+precision            mixed
+basis                3-21g
+method               hf
+gpus                 1
+
+# casscf settings
+casscf yes
+cassinglets 2
+castarget 1
+active    6
+closed    19
+casscfmaxiter 200
+cpsacasscfmaxiter 200
+end
+

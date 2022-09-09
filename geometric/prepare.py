@@ -139,7 +139,10 @@ def get_molecule_engine(**kwargs):
             # optimization coordinates into the correct locations.
             qmmm = 'qmindices' in tcin
             if qmmm:
-                from simtk.openmm.app import AmberPrmtopFile
+                try:
+                    from openmm.app import AmberPrmtopFile
+                except importError:
+                    from simtk.openmm.app import AmberPrmtopFile
                 # Need to build a molecule object for the portion of the system being optimized
                 # We rely on OpenMM's AmberPrmtopFile class to read the .prmtop file
                 if not os.path.exists(tcin['coordinates']):

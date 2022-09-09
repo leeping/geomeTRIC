@@ -1,5 +1,5 @@
 """
-A set of tests for parsing inputs
+A set of tests for nifty utility functions
 """
 
 import copy
