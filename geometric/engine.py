@@ -1236,7 +1236,7 @@ class QChem(Engine):
                         return True
         return False
     
-class Gromacs(Engine):
+class Gromacs(Engine): # pragma: no cover
     def __init__(self, molecule):
         super(Gromacs, self).__init__(molecule)
 
