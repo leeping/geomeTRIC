@@ -935,7 +935,7 @@ def wq_wait1(wq, wait_time=10, wait_intvl=1, print_time=60, verbose=False):
                 logger.info("host = " + task.hostname + '\n')
                 logger.info("execution time = %.3f" % exectime)
                 logger.info("total_bytes_transferred = %i" % task.total_bytes_transferred + '\n')
-            if task.result != 0: 
+            if task.result != 0: # pragma: no cover
                 oldid = task.id
                 oldhost = task.hostname
                 tgtname = "None"

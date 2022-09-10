@@ -202,12 +202,16 @@ class TestAlaGRO:
         newidx = [8, 25, 15, 30, 28, 14, 27, 46, 39, 16, 36, 10, 13, 41, 11, 
                   12, 1, 2, 23, 21, 6, 20, 9, 43, 3, 44, 40, 34, 48, 0, 33, 
                   29, 19, 31, 32, 37, 7, 42, 18, 47, 22, 45, 24, 38, 17, 4, 35, 5, 26]
+
+        # Scrambled molecule
         newmol = self.molecule.atom_select(newidx)
+        
         newidx_2 = self.molecule.reorder_indices(newmol)
         assert newidx == newidx_2
         newmol2 = deepcopy(self.molecule)
         newmol2.reorder_according_to(newmol)
         np.testing.assert_almost_equal(newmol2.xyzs[0], newmol.xyzs[0])
+        
         # Now find the indices that would map the scrambled molecule back to the original
         invidx = [newidx.index(i) for i in range(len(newidx))]
         newmol3 = newmol.reorder_indices(self.molecule)
@@ -332,3 +336,9 @@ def test_charmm_io(localizer):
     molecule.write("test.xyz")
     molecule2 = geometric.molecule.Molecule("test.xyz")
     np.testing.assert_almost_equal(molecule2.xyzs[0], molecule.xyzs[0])
+
+def test_read_comm_charge_mult():
+    molecule = geometric.molecule.Molecule(os.path.join(datad, "reaction_000_deci.xyz"))
+    molecule.read_comm_charge_mult()
+    assert molecule.charge == 2
+    assert molecule.mult == 5

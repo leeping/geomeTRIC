@@ -78,7 +78,7 @@ def test_exec(localizer):
     assert not(os.path.isfile(".test"))
     with pytest.raises(Exception) as excinfo:
         nifty._exec("exit 255")
-    nifty._exec("echo error 1>&2; echo output; echo error2 1>&2 ; echo output2", cwd='.', print_to_screen=True, outfnm='test.out', logfnm='test.log')
+    nifty._exec("echo error 1>&2; echo output; echo error2 1>&2 ; echo output2", cwd='.', print_to_screen=True, outfnm='test.out', logfnm='test.log', copy_stdout=True, copy_stderr=True)
 
 class TestWorkQueue:
 
@@ -113,8 +113,8 @@ class TestWorkQueue:
         nifty.wq_wait1(wq, wait_time=5)
         assert wq.stats.total_tasks_complete == 1, "Expected queue to have a task completed"
         # 2022-09-09: The following test causes a problem in Work Queue, disabling until fixed.
-        # nifty.queue_up(wq, "exit 1", [], ['no_exist'], tgt=None, verbose=False)
-        # nifty.wq_wait1(wq, wait_time=2)
+        # nifty.queue_up(wq, "sleep 1; exit 1", [], ['no_exist'], tgt=None, verbose=False)
+        # nifty.wq_wait1(wq, wait_time=3)
         # assert wq.stats.tasks_submitted == 1 + wq.stats.total_tasks_complete
             
         # Destroy the Work Queue object so it doesn't interfere with the rest of the tests.

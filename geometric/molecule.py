@@ -684,6 +684,7 @@ def either(A, B, key):
 #===========================#
 #|  Alignment subroutines  |#
 #| Moments added 08/03/12  |#
+#|  (and deleted 9/10/22)  |#
 #===========================#
 def EulerMatrix(T1,T2,T3):
     """ Constructs an Euler matrix from three Euler angles. """
@@ -707,64 +708,6 @@ def EulerMatrix(T1,T2,T3):
     BMat[2,2] = 1
     EMat = multi_dot([BMat, CMat, DMat])
     return EMat
-
-def ComputeOverlap(theta,elem,xyz1,xyz2):
-    """
-    Computes an 'overlap' between two molecules based on some
-    fictitious density.  Good for fine-tuning alignment but gets stuck
-    in local minima.
-    """
-    xyz2R = np.dot(EulerMatrix(theta[0],theta[1],theta[2]), xyz2.T).T
-    Obj = 0.0
-    elem = np.array(elem)
-    for i in set(elem):
-        for j in np.where(elem==i)[0]:
-            for k in np.where(elem==i)[0]:
-                dx = xyz1[j] - xyz2R[k]
-                dx2 = np.dot(dx,dx)
-                Obj -= np.exp(-0.5*dx2)
-    return Obj
-
-def AlignToDensity(elem,xyz1,xyz2,binary=False): # pragma: no cover
-    """
-    Computes a "overlap density" from two frames.
-    This function can be called by AlignToMoments to get rid of inversion problems
-    """
-    grid = np.pi*np.array(list(itertools.product([0,1],[0,1],[0,1])))
-    ovlp = np.array([ComputeOverlap(e, elem, xyz1, xyz2) for e in grid]) # Mao
-    t1 = grid[np.argmin(ovlp)]
-    xyz2R = np.dot(EulerMatrix(t1[0],t1[1],t1[2]), xyz2.T).T.copy()
-    return xyz2R
-
-def AlignToMoments(elem,xyz1,xyz2=None): # pragma: no cover
-    """Pre-aligns molecules to 'moment of inertia'.
-    If xyz2 is passed in, it will assume that xyz1 is already
-    aligned to the moment of inertia, and it simply does 180-degree
-    rotations to make sure nothing is inverted.
-    
-    Note: This function hasn't been used for a long time and should either be tested or deleted.
-    """
-    xyz = xyz1 if xyz2 is None else xyz2
-    I = np.zeros((3,3))
-    for i, xi in enumerate(xyz):
-        I += (np.dot(xi,xi)*np.eye(3) - np.outer(xi,xi))
-        # This is the original line from MSMBuilder, but we're choosing not to use masses
-        # I += PeriodicTable[elem[i]]*(np.dot(xi,xi)*np.eye(3) - np.outer(xi,xi))
-    A, B = np.linalg.eig(I)
-    # Sort eigenvectors by eigenvalue
-    BB   = B[:, np.argsort(A)]
-    determ = np.linalg.det(BB)
-    Thresh = 1e-3
-    if np.abs(determ - 1.0) > Thresh:
-        if np.abs(determ + 1.0) > Thresh:
-            logger.info("in AlignToMoments, determinant is % .3f" % determ)
-        BB[:,2] *= -1
-    xyzr = np.dot(BB.T, xyz.T).T.copy()
-    if xyz2 is not None:
-        xyzrr = AlignToDensity(elem,xyz1,xyzr,binary=True)
-        return xyzrr
-    else:
-        return xyzr
 
 def get_rotate_translate(matrix1,matrix2):
     # matrix2 contains the xyz coordinates of the REFERENCE
@@ -1991,19 +1934,6 @@ class Molecule(object):
         if 'bonds' in self.Data and 'bonds' in other.Data:
             New.Data['bonds'] = self.bonds + [(b[0]+self.na, b[1]+self.na) for b in other.bonds]
         return New
-
-    def align_by_moments(self):
-        """ Align molecules using the moment of inertia.
-        Departs from MSMBuilder convention of
-        using arithmetic mean for mass. """
-        coms  = self.center_of_mass()
-        xyz1  = self.xyzs[0]
-        xyz1 -= coms[0]
-        xyz1  = AlignToMoments(self.elem,xyz1)
-        for index2, xyz2 in enumerate(self.xyzs):
-            xyz2 -= coms[index2]
-            xyz2 = AlignToMoments(self.elem,xyz1,xyz2)
-            self.xyzs[index2] = xyz2
 
     def get_populations(self):
         """ Return a cloned molecule object but with X-coordinates set
