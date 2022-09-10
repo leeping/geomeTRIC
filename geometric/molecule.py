@@ -751,7 +751,7 @@ def cartesian_product2(arrays):
         arr[...,i] = a
     return arr.reshape(-1, la)
 
-def extract_int(arr, avgthre, limthre, label="value", verbose=True): # pragma: no cover
+def extract_int(arr, avgthre, limthre, label="value", verbose=True):
     """
     Get the representative integer value from an array.
     The integer value is the rounded mean.  Perform sanity
@@ -795,7 +795,7 @@ def extract_int(arr, avgthre, limthre, label="value", verbose=True): # pragma: n
         passed = False
     return int(rounded), passed
 
-def extract_pop(M, verbose=True): # pragma: no cover
+def extract_pop(M, verbose=True):
     """
     Extract our best estimate of charge and spin-z from the comments
     section of a Molecule object created with Nanoreactor.  Note that
@@ -853,7 +853,7 @@ def extract_pop(M, verbose=True): # pragma: no cover
     if verbose: logger.info("%i electrons; charge %i, spin %i" % (nelectron, chg, spn))
     return chg, spn
 
-def arc(Mol, begin=None, end=None, RMSD=True, align=True): # pragma: no cover
+def arc(Mol, begin=None, end=None, RMSD=True, align=True):
     """
     Get the arc-length for a trajectory segment.
     Uses RMSD or maximum displacement of any atom in the trajectory.
@@ -886,7 +886,7 @@ def arc(Mol, begin=None, end=None, RMSD=True, align=True): # pragma: no cover
         Arc = np.array([np.max([np.linalg.norm(Mol.xyzs[i+1][j]-Mol.xyzs[i][j]) for j in range(Mol.na)]) for i in range(begin, end-1)])
     return Arc
 
-def EqualSpacing(Mol, frames=0, dx=0, RMSD=True, align=True): # pragma: no cover
+def EqualSpacing(Mol, frames=0, dx=0, RMSD=True, align=True):
     """
     Equalize the spacing of frames in a trajectory with linear interpolation.
     This is done in a very simple way, first calculating the arc length
@@ -1759,10 +1759,10 @@ class Molecule(object):
                 raise IOError
             ## Actually read the file.
             Parsed = self.Read_Tab[self.Funnel[ftype.lower()]](fnm, **kwargs)
-            if 'xyzs' not in Parsed:
+            if 'xyzs' not in Parsed: # pragma: no cover
                 logger.error('Did not get any coordinates from the new file %s\n' % fnm)
                 raise RuntimeError
-            if Parsed['xyzs'][0].shape[0] != self.na:
+            if Parsed['xyzs'][0].shape[0] != self.na: # pragma: no cover
                 logger.error('When loading frames, don\'t change the number of atoms\n')
                 raise RuntimeError
             ## Set member variables.
@@ -1860,7 +1860,10 @@ class Molecule(object):
                     s           = line.split()
                     if len(s) > 1:
                         for i in range(1,len(s)):
-                            s[i] = str(Map[int(s[i])])
+                            try:
+                                s[i] = str(Map[int(s[i])])
+                            except KeyError:
+                                raise KeyError("Atom selection includes bonds to atoms outside the selection (%i)" % int(s[i]))
                     sn = [int(i) for i in s[1:]]
                     s = [s[0]] + list(np.array(s[1:])[np.argsort(sn)])
                     NewSuf.append(''.join([whites[j]+s[j] for j in range(len(s))]))
