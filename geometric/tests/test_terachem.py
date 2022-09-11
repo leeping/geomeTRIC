@@ -80,3 +80,15 @@ class TestTerachemWorkQueue:
                             [-0.0052052918,  0.0010504165, -0.0097522852],
                             [ 0.0404225583,  0.0116268521, -0.0007552128]]).flatten()
         np.testing.assert_almost_equal(result, refgrad, decimal=5)
+
+def test_edit_tcin(localizer):
+    read_tcin_1 = geometric.engine.edit_tcin(fin=os.path.join(exampled, '0-regression-tests', 'ivermectin', 'run.tcin'), fout='test.tcin', 
+                                             options={'basis':'3-21g', 'threspdp':'1e-5'}, defaults={'method':'rhf', 'threspdp':'1e-4', 'precision':'mixed'})
+    with pytest.raises(RuntimeError):
+        read_tcin_2 = geometric.engine.edit_tcin(fin='test.tcin')
+    read_tcin_2 = geometric.engine.edit_tcin(fin='test.tcin', reqxyz=False)
+    assert read_tcin_1['run'] == read_tcin_2['run']
+    assert read_tcin_2['basis'] == '3-21g'
+    assert read_tcin_2['threspdp'] == '1e-5'
+    assert read_tcin_2['method'] == 'rb3lyp'
+    assert read_tcin_2['precision'] == 'mixed'
