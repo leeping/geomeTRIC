@@ -268,11 +268,29 @@ class TestWaterQCOut:
         fmt = 'qdata'
         print("Testing reading/writing of %s format for water hexamer system" % fmt)
         outfnm = "out.%s" % fmt
+        # Some dummy values to test the code for writing qdata
+        self.qm_interaction = [0.0]
+        self.qm_espxyzs = [np.array([0.0, 0.0, 0.0])]
+        self.qm_espvals = [1.0]
+        self.mm_energies = [0.0]
         self.molecule.write(outfnm)
         M_test = geometric.molecule.Molecule(outfnm)
         assert np.allclose(self.molecule.xyzs[0], M_test.xyzs[0])
         assert np.allclose(self.molecule.qm_energies, M_test.qm_energies)
         assert np.allclose(self.molecule.qm_grads[0], M_test.qm_grads[0])
+
+    def test_fill_atomname(self, localizer):
+        self.molecule.resname = ['HOH' for i in range(self.molecule.na)]
+        self.molecule.resid = [i//3 + 1 for i in range(self.molecule.na)]
+        self.molecule.boxes = [geometric.molecule.CubicLattice(20)]
+        self.molecule.write("out.pdb")
+        M = geometric.molecule.Molecule("out.pdb")
+        assert M.atomname == ['O1', 'H2', 'H3', 'O1', 'H2', 'H3', 'O1', 'H2', 'H3', 
+                              'O1', 'H2', 'H3', 'O1', 'H2', 'H3', 'O1', 'H2', 'H3']
+        self.molecule.write("out.gro")
+        M = geometric.molecule.Molecule("out.gro")
+        assert M.atomname == ['O1', 'H2', 'H3', 'O1', 'H2', 'H3', 'O1', 'H2', 'H3', 
+                              'O1', 'H2', 'H3', 'O1', 'H2', 'H3', 'O1', 'H2', 'H3']
 
 def test_rings(localizer):
     ring_size_data = {'tetrahedrane.xyz': [3, 3, 3, 3],

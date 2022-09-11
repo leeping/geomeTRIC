@@ -4208,7 +4208,7 @@ class Molecule(object):
                 out.append(format_xyz_coord(self.elem[i],xyz[i]))
         return out
 
-    def get_reaxff_atom_types(self):
+    def get_reaxff_atom_types(self): # pragma: no cover
         """
         Return a list of element names which maps the LAMMPS atom types
         to the ReaxFF elements
@@ -4294,7 +4294,7 @@ class Molecule(object):
             out.append("%4i 1 %2i 0.0 % 15.10f % 15.10f % 15.10f" % (i+1, list(atmap.keys()).index(self.elem[i])+1, self.xyzs[I][i, 0], self.xyzs[I][i, 1], self.xyzs[I][i, 2]))
         return out
 
-    def write_molproq(self, **kwargs):
+    def write_molproq(self, **kwargs): # pragma: no cover
         selection = kwargs.get('selection', list(range(len(self))))
         self.require('xyzs','partial_charge')
         out = []
@@ -4363,7 +4363,7 @@ class Molecule(object):
     def write_gro(self, **kwargs):
         selection = kwargs.get('selection', list(range(len(self))))
         out = []
-        if sys.stdin.isatty():
+        if sys.stdin.isatty(): # pragma: no cover
             self.require('elem','xyzs')
             self.require_resname()
             self.require_resid()
@@ -4432,7 +4432,7 @@ class Molecule(object):
                             'A', 'G', 'C', 'U', 'I', 'DA', 'DG', 'DC', 'DT', 'DI']
         # When converting from pdb to xyz in interactive prompt,
         # ask user for some PDB-specific info.
-        if sys.stdin.isatty():
+        if sys.stdin.isatty(): # pragma: no cover
             self.require('xyzs')
             self.require_resname()
             self.require_resid()
@@ -4588,7 +4588,7 @@ class Molecule(object):
             out.append('')
         return out
 
-    def require_resid(self):
+    def require_resid(self): # pragma: no cover
         if 'resid' not in self.Data:
             na_res = int(input("Enter how many atoms are in a residue, or zero as a single residue -> "))
             if na_res == 0:
@@ -4596,7 +4596,7 @@ class Molecule(object):
             else:
                 self.resid = [1 + int(i/na_res) for i in range(self.na)]
 
-    def require_resname(self):
+    def require_resname(self): # pragma: no cover
         if 'resname' not in self.Data:
             resname = input("Enter a residue name (3-letter like 'SOL') -> ")
             self.resname = [resname for i in range(self.na)]

@@ -18,3 +18,4 @@ exclude_lines =
     if params.verbose >=
     HaveGZ
     HaveBZ2
+    main()
