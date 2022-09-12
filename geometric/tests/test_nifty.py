@@ -8,11 +8,13 @@ import json, os, shutil
 from . import addons
 from geometric import nifty
 import pytest
+import filecmp
 import itertools
 import subprocess
 
 localizer = addons.in_folder
 datad = addons.datad
+logger = addons.test_logger
 
 def test_isint():
     assert nifty.isint("1")
@@ -40,7 +42,7 @@ def test_get_least_squares():
     #   trivial fully determined
     X=((1,3,-2),(3,5,6),(2,4,3))
     Y=(5,7,8)
-    result = nifty.get_least_squares(X,Y)[0]
+    result = nifty.get_least_squares(X,Y,w=[1, 1, 1])[0]
     np.testing.assert_almost_equal(result[0], -15)
     np.testing.assert_almost_equal(result[1], 8)
     np.testing.assert_almost_equal(result[2], 2)
@@ -236,6 +238,11 @@ def test_listfiles(localizer):
         f.write("extra-line\n")
     with pytest.raises(RuntimeError) as excinfo:
         nifty.listfiles(os.path.join(datad, 'ethanol.pdb'))
+    # Also back up ethanol.pdb
+    nifty.bak('ethanol.pdb', cwd='.')
+    with open("ethanol.pdb", 'a') as f:
+        f.write("extra-line\n")
+    nifty.bak('ethanol.pdb', cwd='.')
         
 def test_onefile(localizer):
     # Confirm error is raised if neither file name or path are provided
@@ -258,3 +265,69 @@ def test_onefile(localizer):
         f.write("extra-line\n")
     assert nifty.onefile(ext='pdb') is None
     
+def test_print_array(logger):
+    # Confirm functions work without errors
+    nifty.pvec1d(np.arange(5))
+    nifty.pmat2d(np.arange(25).reshape(-1, 5))
+    with pytest.raises(TypeError):
+        nifty.pvec1d(np.arange(25).reshape(-1, 5))
+    with pytest.raises(IndexError):
+        nifty.pmat2d(np.arange(5))
+
+def test_tar_extract(localizer):
+    shutil.copy(os.path.join(datad, "test_compress.tar.gz"), os.getcwd())
+    nifty.extract_tar("test_compress.tar.gz", ['ala_constraints.txt', 'parser_options.txt'])
+    assert os.path.exists('ala_constraints.txt')
+    assert os.path.exists('parser_options.txt')
+    assert not os.path.exists('linalg_torsion_constraints.txt')
+
+def test_gointo_leave_folder(localizer):
+    os.makedirs("test_folder")
+    nifty.GoInto("test_folder")
+    assert os.getcwd().endswith("test_gointo_leave_folder/test_folder")
+    nifty.Leave("test_folder")
+    os.rmdir("test_folder")
+    nifty.GoInto("test_folder")
+    assert os.getcwd().endswith("test_gointo_leave_folder/test_folder")
+    nifty.Leave("test_folder")
+    os.rmdir("test_folder")
+
+def test_missingfile_inspection():
+    assert 'Make sure to install GROMACS' in nifty.MissingFileInspection('mdrun')
+
+def test_wopen_link_copy(localizer):
+    # Copy ethanol.pdb into current folder
+    nifty.onefile(os.path.join(datad, "ethanol.pdb"))
+    # Make a broken symlink
+    os.symlink("no_exist.pdb", "ethanol_lnk.pdb")
+    # The function should replace the broken symlink with a working one
+    nifty.LinkFile("ethanol.pdb", "ethanol_lnk.pdb")
+    # Raise an error if attempting to make a broken symlink
+    with pytest.raises(RuntimeError):
+        nifty.LinkFile("no_exist.pdb", "test_link.pdb")
+    # Test that wopen can remove a symlink and replace it with a file
+    with nifty.wopen("ethanol_lnk.pdb") as f:
+        f.write("test content\n")
+    assert "test content" in open("ethanol_lnk.pdb").readlines()[0]
+    os.remove("ethanol_lnk.pdb")
+    # Confirm that an error is raised if trying to copy to a symlink
+    nifty.LinkFile("ethanol.pdb", "ethanol_lnk.pdb")
+    with pytest.raises(RuntimeError):
+        nifty.CopyFile("ethanol.pdb", "ethanol_lnk.pdb")
+    os.remove("ethanol_lnk.pdb")
+    # Confirm that CopyFile works as intended
+    nifty.CopyFile("ethanol.pdb", "ethanol_copy.pdb")
+    assert filecmp.cmp("ethanol.pdb", "ethanol_copy.pdb")
+    # Remove the file if it exists
+    nifty.remove_if_exists("ethanol_copy.pdb")
+    assert not os.path.exists("ethanol_copy.pdb")
+    nifty.remove_if_exists("ethanol.pdb")
+    os.makedirs("a")
+    nifty.GoInto("a")
+    for fnm in ["ethanol.pdb", "boat.crd", "test_compress.tar.gz"]:
+        nifty.onefile(os.path.join(datad, fnm))
+    nifty.Leave("a")
+    nifty.link_dir_contents("a", "b")
+    # nifty.link_dir_contents(datad, os.getcwd())
+    # for fnm in os.listdir(datad):
+    #     assert os.path.exists(fnm)

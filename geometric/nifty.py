@@ -90,7 +90,7 @@ else:
         logger = getLogger(__name__)
         logger.setLevel(INFO)
         package="geomeTRIC"
-    else:
+    else: # pragma: no cover
         logger = getLogger("NiftyLogger")
         logger.setLevel(INFO)
         handler = RawStreamHandler()
@@ -256,24 +256,20 @@ def uncommadash(s):
                 b = int(ws[1])
             else:
                 logger.warning("Dash-separated list cannot exceed length 2\n")
-                raise
+                raise RuntimeError
             if a < 0 or b <= 0 or b <= a:
                 if a < 0 or b <= 0:
-                    logger.warning("Items in list cannot be zero or negative: %d %d\n" % (a, b))
+                    raise RuntimeError("Items in list cannot be zero or negative: %d %d\n" % (a, b))
                 else:
-                    logger.warning("Second number cannot be smaller than first: %d %d\n" % (a, b))
-                raise
+                    raise RuntimeError("Second number cannot be smaller than first: %d %d\n" % (a, b))
             newL = range(a,b)
             if any([i in L for i in newL]):
-                logger.warning("Duplicate entries found in list\n")
-                raise
+                raise RuntimeError("Duplicate entries found in list\n")
             L += newL
         if sorted(L) != L:
-            logger.warning("List is out of order\n")
-            raise
+            raise RuntimeError("List is out of order\n")
     except:
-        logger.error('Invalid string for converting to list of numbers: %s\n' % s)
-        raise RuntimeError
+        raise RuntimeError('Invalid string for converting to list of numbers: %s\n' % s)
     return L
 
 def natural_sort(l):
@@ -1242,6 +1238,7 @@ def LinkFile(src, dest, nosrcok = False):
             os.remove(dest)
             os.symlink(src, dest)
         elif os.path.exists(dest):
+            # Todo: Do we really want to keep an existing symbolic link if it might point to a different file?
             if os.path.islink(dest): pass
             else:
                 logger.error("Tried to create symbolic link %s to %s, destination exists but isn't a symbolic link\n" % (src, dest))
@@ -1267,15 +1264,33 @@ def CopyFile(src, dest):
         raise RuntimeError
 
 def link_dir_contents(abssrcdir, absdestdir):
+    """ 
+    Link the contents of the folder abssrcdir into absdestdir.
+    First create absdestdir if it's not already an existing folder.
+    Next, remove broken symlinks (but not good links or files) in absdestdir
+    and create symlinks from abssrcdir by relative linking.
+    """
+    
+    abssrcdir = os.path.abspath(abssrcdir)
+    absdestdir = os.path.abspath(absdestdir)
+    if os.path.isfile(absdestdir):
+        raise RuntimeError("absdestdir %s is a file\n" % absdestdir)
+    elif not os.path.exists(absdestdir):
+        os.makedirs(absdestdir)
+    relpath = os.path.relpath(abssrcdir, absdestdir)
+    cwd = os.getcwd()
+    os.chdir(absdestdir)
     for fnm in os.listdir(abssrcdir):
         srcfnm = os.path.join(abssrcdir, fnm)
-        destfnm = os.path.join(absdestdir, fnm)
-        if os.path.islink(destfnm) and not os.path.exists(destfnm):
-            os.remove(destfnm)
-        if os.path.isfile(srcfnm) or (os.path.isdir(srcfnm) and fnm == 'IC'):
-            if not os.path.exists(destfnm):
+        # Remove broken symlinks if they exist
+        if os.path.islink(fnm) and not os.path.exists(fnm):
+            os.remove(fnm)
+        if os.path.isfile(srcfnm) or (os.path.isdir(srcfnm) and fnm == 'IC'): 
+            # Not sure what the 'IC' is - might remove later
+            if not os.path.exists(fnm):
                 #print "Linking %s to %s" % (srcfnm, destfnm)
-                os.symlink(srcfnm, destfnm)
+                os.symlink(os.path.join(relpath, fnm), fnm)
+    os.chdir(cwd)
 
 def remove_if_exists(fnm):
     """ Remove the file if it exists (doesn't return an error). """
