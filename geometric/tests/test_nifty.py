@@ -211,3 +211,50 @@ def test_statistical_inefficiency():
     a = np.loadtxt(os.path.join(datad, 'randn_1k.txt'))
     assert nifty.statisticalInefficiency(a) < 1.1
     assert nifty.statisticalInefficiency(np.repeat(a, 2)) > 2
+
+def test_listfiles(localizer):
+    # Confirm 'listfiles' raises error when a file doesn't exist in the list
+    with pytest.raises(RuntimeError) as excinfo:
+        nifty.listfiles(['ethanol.pdb', 'no_exist.file'], dnm=datad)
+    # Also confirm if a string corresponding to a nonexistent file raises the error
+    with pytest.raises(RuntimeError) as excinfo:
+        nifty.listfiles('no_exist.file', dnm=datad)
+    # Check file listing returns expected list of file names (in geometric/data)
+    assert nifty.listfiles('ethanol.pdb', dnm=datad) == ['ethanol.pdb']
+    assert nifty.listfiles(['ethanol.pdb', 'naphthax.xyz'], dnm=datad) == ['ethanol.pdb', 'naphthax.xyz']
+    # Check that all listed files end with the expected extension
+    for fnm in nifty.listfiles(ext='pdb', dnm=datad):
+        assert fnm.endswith('.pdb')
+    # Using absolute paths, check that file is copied over
+    assert not os.path.exists('ethanol.pdb')
+    nifty.listfiles(os.path.join(datad, 'ethanol.pdb'))
+    assert os.path.exists('ethanol.pdb')
+    # Nothing happens if identical file exists
+    nifty.listfiles(os.path.join(datad, 'ethanol.pdb'))
+    # Error is raised if files differ
+    with open("ethanol.pdb", 'a') as f:
+        f.write("extra-line\n")
+    with pytest.raises(RuntimeError) as excinfo:
+        nifty.listfiles(os.path.join(datad, 'ethanol.pdb'))
+        
+def test_onefile(localizer):
+    # Confirm error is raised if neither file name or path are provided
+    with pytest.raises(RuntimeError) as excinfo:
+        nifty.onefile(err=True)
+    # Confirm that file is copied over
+    assert not os.path.exists('ethanol.pdb')
+    nifty.onefile(os.path.join(datad, "ethanol.pdb"))
+    assert os.path.exists('ethanol.pdb')
+    nifty.onefile(os.path.join(datad, "ethanol.pdb"))
+    # Error is raised if file in abspath differs from local
+    with open("ethanol.pdb", 'a') as f:
+        f.write("extra-line\n")
+    with pytest.raises(RuntimeError) as excinfo:
+        nifty.onefile(os.path.join(datad, "ethanol.pdb"))
+    # Expected behavior - return one existing file matching pattern
+    assert nifty.onefile(ext='pdb') == "ethanol.pdb"
+    # Return None if more than one file exists
+    with open("other.pdb", 'w') as f:
+        f.write("extra-line\n")
+    assert nifty.onefile(ext='pdb') is None
+    

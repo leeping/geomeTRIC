@@ -1099,27 +1099,32 @@ def listfiles(fnms=None, ext=None, err=False, dnm=None):
         for i in fnms:
             if not os.path.exists(i):
                 logger.error('Specified %s but it does not exist' % i)
+                os.chdir(cwd)
                 raise RuntimeError
             answer.append(i)
     elif isinstance(fnms, six.string_types):
         if not os.path.exists(fnms):
             logger.error('Specified %s but it does not exist' % fnms)
+            os.chdir(cwd)
             raise RuntimeError
         answer = [fnms]
     elif fnms is not None:
         logger.info(str(fnms))
         logger.error('First argument to listfiles must be a list, a string, or None')
+        os.chdir(cwd)
         raise RuntimeError
     if answer == [] and ext is not None:
         answer = [os.path.basename(i) for i in os.listdir(os.getcwd()) if i.endswith('.%s' % ext)]
     if answer == [] and err:
         logger.error('listfiles function failed to come up with a file! (fnms = %s ext = %s)' % (str(fnms), str(ext)))
+        os.chdir(cwd)
         raise RuntimeError
 
     for ifnm, fnm in enumerate(answer):
         if os.path.dirname(os.path.abspath(fnm)) != os.getcwd():
             fsrc = os.path.abspath(fnm)
             fdest = os.path.join(os.getcwd(), os.path.basename(fnm))
+            logger.info("fsrc %s fdest %s\n" % (fsrc, fdest))
             #-----
             # If the file path doesn't correspond to the current directory, copy the file over
             # If the file exists in the current directory already and it's different, then crash.
@@ -1127,6 +1132,7 @@ def listfiles(fnms=None, ext=None, err=False, dnm=None):
             if os.path.exists(fdest):
                 if not filecmp.cmp(fsrc, fdest):
                     logger.error("onefile() will not overwrite %s with %s\n" % (os.path.join(os.getcwd(), os.path.basename(fnm)),os.path.abspath(fnm)))
+                    os.chdir(cwd)
                     raise RuntimeError
                 else:
                     logger.info("\x1b[93monefile() says the files %s and %s are identical\x1b[0m\n" % (os.path.abspath(fnm), os.getcwd()))
