@@ -19,3 +19,4 @@ exclude_lines =
     lp_dump
     lp_load
     main()
+    engine_str == 'gmx'

@@ -10,6 +10,7 @@ import geometric
 import pytest
 import itertools
 
+datad = addons.datad
 localizer = addons.in_folder
 exampled = addons.exampled
 
@@ -92,3 +93,13 @@ $end"""
     np.testing.assert_almost_equal(vals[3][22], 2.0/0.529177210903)
     np.testing.assert_almost_equal(vals[13][24], 0.5/0.529177210903)
     np.testing.assert_almost_equal(vals[14][25], 0.0)
+
+def test_get_molecule_engine_pdb():
+    for engine, inputf in zip(['terachem', 'qchem', 'molpro', 'psi4', 'gaussian'], ['water12.tcin', 'water12.qcin', 'water12.mol', 'water12.psi4in', 'water12.gjf']):
+    # for engine, inputf in zip(['terachem', 'qchem'], ['water12.tcin', 'water12.qcin']):
+        molecule, engine = geometric.prepare.get_molecule_engine(input=os.path.join(datad, inputf), engine=engine,
+                                                                 pdb=os.path.join(datad, 'water12.pdb'), 
+                                                                 coords=os.path.join(datad, 'water12.mdcrd'))
+        assert molecule.resid[-1] == 12
+        np.testing.assert_almost_equal(molecule.xyzs[0][-1,2], 1.288)
+        assert engine.detect_dft() == False
