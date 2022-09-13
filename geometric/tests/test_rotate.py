@@ -102,3 +102,4 @@ def test_write_displacements(localizer, test_logger):
     rot_diffs = np.min(np.abs(rot_diffs), axis=0)
     assert rot_diffs.shape[0] == 7
     np.testing.assert_almost_equal(rot_diffs, np.zeros(7))
+

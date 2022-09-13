@@ -8,11 +8,14 @@ omit =
 exclude_lines =
     pragma: no cover
     if "forcebalance" in __name__
-    except ImportError
     logger.warning
     logger.error
     logger.info
+    except ImportError
+    except np.linalg.LinAlgError
+    raise NotImplementedError
     raise RuntimeError
+    def visualize
     verbose:
     if verbose >=
     if params.verbose >=
@@ -20,3 +23,4 @@ exclude_lines =
     lp_load
     main()
     engine_str == 'gmx'
+    if False

@@ -84,3 +84,11 @@ def test_internal_geometry_functions(localizer):
         a[i] += 1e-6
         d_nucross_f[i] = (dplus-dminus)/2e-6
     np.testing.assert_almost_equal(geometric.internal.d_nucross(a, b), d_nucross_f)
+
+def test_update_internals():
+    M = geometric.molecule.Molecule(os.path.join(datad, 'water3.pdb'))
+    IC_1 = geometric.internal.PrimitiveInternalCoordinates(M, build=True, connect=False, addcart=False)
+    IC_2 = geometric.internal.PrimitiveInternalCoordinates(M, build=True, connect=False, addcart=True)
+    assert IC_1.update(IC_1) == False
+    assert IC_1.update(IC_2) == True
+    assert IC_1.join(IC_2) == False

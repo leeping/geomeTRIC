@@ -1769,7 +1769,9 @@ class InternalCoordinates(object):
         Inv = multi_dot([V, Sinv, UT])
         return Inv
 
-    def GInverse_EIG(self, xyz):
+    def GInverse_EIG(self, xyz): # pragma: no cover
+        # Currently unused function, but could possibly speed up calculations
+        # if used instead of SVD. Needs testing for reliability.
         xyz = xyz.reshape(-1,3)
         click()
         G = self.GMatrix(xyz)
@@ -2112,8 +2114,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                             self.add(CartesianX(j, w=1.0))
                             self.add(CartesianY(j, w=1.0))
                             self.add(CartesianZ(j, w=1.0))
-        add_tr = False
-        if add_tr:
+        if False: # Add an overall translation/rotation coordinate.
             i = range(molecule.na)
             self.add(TranslationX(i, w=np.ones(len(i))/len(i)))
             self.add(TranslationY(i, w=np.ones(len(i))/len(i)))
@@ -3355,7 +3356,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         self.Vecs = U[:, 6:].copy()
         self.Internals = ["Constraint" if i < ncon else "DLC" + " %i" % (i+1) for i in range(self.Vecs.shape[1])]
 
-    def weight_vectors(self, xyz):
+    def weight_vectors(self, xyz): # pragma: no cover
         """
         Not used anymore: Multiply each DLC by a constant so that a small displacement along each produces the
         same Cartesian displacement. Otherwise, some DLCs "move by a lot" and others only "move by a little".
