@@ -7,6 +7,9 @@ coverage:
     - setup.py
   status:
     patch: false
+  range: 60..90
+  round: nearest
+  precision: 1
 comment:
   layout: "header"
   require_changes: false
