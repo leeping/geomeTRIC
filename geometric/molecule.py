@@ -684,6 +684,7 @@ def either(A, B, key):
 #===========================#
 #|  Alignment subroutines  |#
 #| Moments added 08/03/12  |#
+#|  (and deleted 9/10/22)  |#
 #===========================#
 def EulerMatrix(T1,T2,T3):
     """ Constructs an Euler matrix from three Euler angles. """
@@ -707,64 +708,6 @@ def EulerMatrix(T1,T2,T3):
     BMat[2,2] = 1
     EMat = multi_dot([BMat, CMat, DMat])
     return EMat
-
-def ComputeOverlap(theta,elem,xyz1,xyz2):
-    """
-    Computes an 'overlap' between two molecules based on some
-    fictitious density.  Good for fine-tuning alignment but gets stuck
-    in local minima.
-    """
-    xyz2R = np.dot(EulerMatrix(theta[0],theta[1],theta[2]), xyz2.T).T
-    Obj = 0.0
-    elem = np.array(elem)
-    for i in set(elem):
-        for j in np.where(elem==i)[0]:
-            for k in np.where(elem==i)[0]:
-                dx = xyz1[j] - xyz2R[k]
-                dx2 = np.dot(dx,dx)
-                Obj -= np.exp(-0.5*dx2)
-    return Obj
-
-def AlignToDensity(elem,xyz1,xyz2,binary=False): # pragma: no cover
-    """
-    Computes a "overlap density" from two frames.
-    This function can be called by AlignToMoments to get rid of inversion problems
-    """
-    grid = np.pi*np.array(list(itertools.product([0,1],[0,1],[0,1])))
-    ovlp = np.array([ComputeOverlap(e, elem, xyz1, xyz2) for e in grid]) # Mao
-    t1 = grid[np.argmin(ovlp)]
-    xyz2R = np.dot(EulerMatrix(t1[0],t1[1],t1[2]), xyz2.T).T.copy()
-    return xyz2R
-
-def AlignToMoments(elem,xyz1,xyz2=None): # pragma: no cover
-    """Pre-aligns molecules to 'moment of inertia'.
-    If xyz2 is passed in, it will assume that xyz1 is already
-    aligned to the moment of inertia, and it simply does 180-degree
-    rotations to make sure nothing is inverted.
-    
-    Note: This function hasn't been used for a long time and should either be tested or deleted.
-    """
-    xyz = xyz1 if xyz2 is None else xyz2
-    I = np.zeros((3,3))
-    for i, xi in enumerate(xyz):
-        I += (np.dot(xi,xi)*np.eye(3) - np.outer(xi,xi))
-        # This is the original line from MSMBuilder, but we're choosing not to use masses
-        # I += PeriodicTable[elem[i]]*(np.dot(xi,xi)*np.eye(3) - np.outer(xi,xi))
-    A, B = np.linalg.eig(I)
-    # Sort eigenvectors by eigenvalue
-    BB   = B[:, np.argsort(A)]
-    determ = np.linalg.det(BB)
-    Thresh = 1e-3
-    if np.abs(determ - 1.0) > Thresh:
-        if np.abs(determ + 1.0) > Thresh:
-            logger.info("in AlignToMoments, determinant is % .3f" % determ)
-        BB[:,2] *= -1
-    xyzr = np.dot(BB.T, xyz.T).T.copy()
-    if xyz2 is not None:
-        xyzrr = AlignToDensity(elem,xyz1,xyzr,binary=True)
-        return xyzrr
-    else:
-        return xyzr
 
 def get_rotate_translate(matrix1,matrix2):
     # matrix2 contains the xyz coordinates of the REFERENCE
@@ -808,7 +751,7 @@ def cartesian_product2(arrays):
         arr[...,i] = a
     return arr.reshape(-1, la)
 
-def extract_int(arr, avgthre, limthre, label="value", verbose=True): # pragma: no cover
+def extract_int(arr, avgthre, limthre, label="value", verbose=True):
     """
     Get the representative integer value from an array.
     The integer value is the rounded mean.  Perform sanity
@@ -852,7 +795,7 @@ def extract_int(arr, avgthre, limthre, label="value", verbose=True): # pragma: n
         passed = False
     return int(rounded), passed
 
-def extract_pop(M, verbose=True): # pragma: no cover
+def extract_pop(M, verbose=True):
     """
     Extract our best estimate of charge and spin-z from the comments
     section of a Molecule object created with Nanoreactor.  Note that
@@ -910,7 +853,7 @@ def extract_pop(M, verbose=True): # pragma: no cover
     if verbose: logger.info("%i electrons; charge %i, spin %i" % (nelectron, chg, spn))
     return chg, spn
 
-def arc(Mol, begin=None, end=None, RMSD=True, align=True): # pragma: no cover
+def arc(Mol, begin=None, end=None, RMSD=True, align=True):
     """
     Get the arc-length for a trajectory segment.
     Uses RMSD or maximum displacement of any atom in the trajectory.
@@ -943,7 +886,7 @@ def arc(Mol, begin=None, end=None, RMSD=True, align=True): # pragma: no cover
         Arc = np.array([np.max([np.linalg.norm(Mol.xyzs[i+1][j]-Mol.xyzs[i][j]) for j in range(Mol.na)]) for i in range(begin, end-1)])
     return Arc
 
-def EqualSpacing(Mol, frames=0, dx=0, RMSD=True, align=True): # pragma: no cover
+def EqualSpacing(Mol, frames=0, dx=0, RMSD=True, align=True):
     """
     Equalize the spacing of frames in a trajectory with linear interpolation.
     This is done in a very simple way, first calculating the arc length
@@ -1816,10 +1759,10 @@ class Molecule(object):
                 raise IOError
             ## Actually read the file.
             Parsed = self.Read_Tab[self.Funnel[ftype.lower()]](fnm, **kwargs)
-            if 'xyzs' not in Parsed:
+            if 'xyzs' not in Parsed: # pragma: no cover
                 logger.error('Did not get any coordinates from the new file %s\n' % fnm)
                 raise RuntimeError
-            if Parsed['xyzs'][0].shape[0] != self.na:
+            if Parsed['xyzs'][0].shape[0] != self.na: # pragma: no cover
                 logger.error('When loading frames, don\'t change the number of atoms\n')
                 raise RuntimeError
             ## Set member variables.
@@ -1917,7 +1860,10 @@ class Molecule(object):
                     s           = line.split()
                     if len(s) > 1:
                         for i in range(1,len(s)):
-                            s[i] = str(Map[int(s[i])])
+                            try:
+                                s[i] = str(Map[int(s[i])])
+                            except KeyError:
+                                raise KeyError("Atom selection includes bonds to atoms outside the selection (%i)" % int(s[i]))
                     sn = [int(i) for i in s[1:]]
                     s = [s[0]] + list(np.array(s[1:])[np.argsort(sn)])
                     NewSuf.append(''.join([whites[j]+s[j] for j in range(len(s))]))
@@ -1991,19 +1937,6 @@ class Molecule(object):
         if 'bonds' in self.Data and 'bonds' in other.Data:
             New.Data['bonds'] = self.bonds + [(b[0]+self.na, b[1]+self.na) for b in other.bonds]
         return New
-
-    def align_by_moments(self):
-        """ Align molecules using the moment of inertia.
-        Departs from MSMBuilder convention of
-        using arithmetic mean for mass. """
-        coms  = self.center_of_mass()
-        xyz1  = self.xyzs[0]
-        xyz1 -= coms[0]
-        xyz1  = AlignToMoments(self.elem,xyz1)
-        for index2, xyz2 in enumerate(self.xyzs):
-            xyz2 -= coms[index2]
-            xyz2 = AlignToMoments(self.elem,xyz1,xyz2)
-            self.xyzs[index2] = xyz2
 
     def get_populations(self):
         """ Return a cloned molecule object but with X-coordinates set
@@ -4275,7 +4208,7 @@ class Molecule(object):
                 out.append(format_xyz_coord(self.elem[i],xyz[i]))
         return out
 
-    def get_reaxff_atom_types(self):
+    def get_reaxff_atom_types(self): # pragma: no cover
         """
         Return a list of element names which maps the LAMMPS atom types
         to the ReaxFF elements
@@ -4361,7 +4294,7 @@ class Molecule(object):
             out.append("%4i 1 %2i 0.0 % 15.10f % 15.10f % 15.10f" % (i+1, list(atmap.keys()).index(self.elem[i])+1, self.xyzs[I][i, 0], self.xyzs[I][i, 1], self.xyzs[I][i, 2]))
         return out
 
-    def write_molproq(self, **kwargs):
+    def write_molproq(self, **kwargs): # pragma: no cover
         selection = kwargs.get('selection', list(range(len(self))))
         self.require('xyzs','partial_charge')
         out = []
@@ -4430,7 +4363,7 @@ class Molecule(object):
     def write_gro(self, **kwargs):
         selection = kwargs.get('selection', list(range(len(self))))
         out = []
-        if sys.stdin.isatty():
+        if sys.stdin.isatty(): # pragma: no cover
             self.require('elem','xyzs')
             self.require_resname()
             self.require_resid()
@@ -4499,7 +4432,7 @@ class Molecule(object):
                             'A', 'G', 'C', 'U', 'I', 'DA', 'DG', 'DC', 'DT', 'DI']
         # When converting from pdb to xyz in interactive prompt,
         # ask user for some PDB-specific info.
-        if sys.stdin.isatty():
+        if sys.stdin.isatty(): # pragma: no cover
             self.require('xyzs')
             self.require_resname()
             self.require_resid()
@@ -4655,7 +4588,7 @@ class Molecule(object):
             out.append('')
         return out
 
-    def require_resid(self):
+    def require_resid(self): # pragma: no cover
         if 'resid' not in self.Data:
             na_res = int(input("Enter how many atoms are in a residue, or zero as a single residue -> "))
             if na_res == 0:
@@ -4663,7 +4596,7 @@ class Molecule(object):
             else:
                 self.resid = [1 + int(i/na_res) for i in range(self.na)]
 
-    def require_resname(self):
+    def require_resname(self): # pragma: no cover
         if 'resname' not in self.Data:
             resname = input("Enter a residue name (3-letter like 'SOL') -> ")
             self.resname = [resname for i in range(self.na)]

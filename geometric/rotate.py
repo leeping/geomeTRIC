@@ -262,7 +262,7 @@ def calc_rmsd(x, y, r=np.array([0.0, 0.0, 0.0, 0.0])):
     rmsd = np.sqrt((np.sum(x**2) + np.sum(y**2) - 2*lmax)/N)
     return rmsd
 
-def is_linear(x, y, thre=0.01):
+def is_linear(x, y, thre=0.01): # pragma: no cover
     """
     Returns True if molecule is linear 
     (largest eigenvalue almost equivalent to second largest)
@@ -337,7 +337,7 @@ def get_rot(x, y, r=np.array([0.0, 0.0, 0.0, 0.0])):
     return U
 
 
-def get_R_der(x, y):
+def get_R_der(x, y, fdcheck=False):
     """
     Calculate the derivatives of the correlation matrix with respect
     to the Cartesian coordinates.
@@ -366,10 +366,10 @@ def get_R_der(x, y):
                 for j in range(3):
                     if i == w:
                         ADiffR[u, w, i, j] = y[u, j]
-    fdcheck = False
     if fdcheck:
         h = 1e-4
         R0 = build_correlation(x, y)
+        FDiffR = np.zeros_like(ADiffR)
         for u in range(x.shape[0]):
             for w in range(3):
                 x[u, w] += h
@@ -377,11 +377,13 @@ def get_R_der(x, y):
                 x[u, w] -= 2*h
                 RMinus = build_correlation(x, y)
                 x[u, w] += h
-                FDiffR = (RPlus-RMinus)/(2*h)
-                logger.info("%i %i %12.6f\n" % (u, w, np.max(np.abs(ADiffR[u, w]-FDiffR))))
-    return ADiffR
+                FDiffR[u, w] = (RPlus-RMinus)/(2*h)
+                logger.info("%i %i %12.6f\n" % (u, w, np.max(np.abs(ADiffR[u, w]-FDiffR[u, w]))))
+        return FDiffR
+    else:
+        return ADiffR
 
-def get_F_der(x, y):
+def get_F_der(x, y, fdcheck=False):
     """
     Calculate the derivatives of the F-matrix with respect
     to the Cartesian coordinates.
@@ -431,10 +433,10 @@ def get_F_der(x, y):
             dF[u,w,3,1] = dR13 + dR31
             dF[u,w,3,2] = dR23 + dR32
             dF[u,w,3,3] = dR33 - dR22 - dR11
-    fdcheck = False
     if fdcheck:
         h = 1e-4
         F0 = build_F(x, y)
+        FDiffF = np.zeros_like(dF)
         for u in range(x.shape[0]):
             for w in range(3):
                 x[u, w] += h
@@ -442,9 +444,11 @@ def get_F_der(x, y):
                 x[u, w] -= 2*h
                 FMinus = build_F(x, y)
                 x[u, w] += h
-                FDiffF = (FPlus-FMinus)/(2*h)
-                logger.info("%i %i %12.6f\n" % (u, w, np.max(np.abs(dF[u, w]-FDiffF))))
-    return dF
+                FDiffF[u, w] = (FPlus-FMinus)/(2*h)
+                logger.info("%i %i %12.6f\n" % (u, w, np.max(np.abs(dF[u, w]-FDiffF[u, w]))))
+        return FDiffF
+    else:
+        return dF
 
 def get_q_der(x, y, second=False, fdcheck=False, use_loops=False, r=np.array([0.0, 0.0, 0.0, 0.0])):
     """

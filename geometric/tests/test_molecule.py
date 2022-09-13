@@ -202,12 +202,16 @@ class TestAlaGRO:
         newidx = [8, 25, 15, 30, 28, 14, 27, 46, 39, 16, 36, 10, 13, 41, 11, 
                   12, 1, 2, 23, 21, 6, 20, 9, 43, 3, 44, 40, 34, 48, 0, 33, 
                   29, 19, 31, 32, 37, 7, 42, 18, 47, 22, 45, 24, 38, 17, 4, 35, 5, 26]
+
+        # Scrambled molecule
         newmol = self.molecule.atom_select(newidx)
+        
         newidx_2 = self.molecule.reorder_indices(newmol)
         assert newidx == newidx_2
         newmol2 = deepcopy(self.molecule)
         newmol2.reorder_according_to(newmol)
         np.testing.assert_almost_equal(newmol2.xyzs[0], newmol.xyzs[0])
+        
         # Now find the indices that would map the scrambled molecule back to the original
         invidx = [newidx.index(i) for i in range(len(newidx))]
         newmol3 = newmol.reorder_indices(self.molecule)
@@ -264,11 +268,29 @@ class TestWaterQCOut:
         fmt = 'qdata'
         print("Testing reading/writing of %s format for water hexamer system" % fmt)
         outfnm = "out.%s" % fmt
+        # Some dummy values to test the code for writing qdata
+        self.qm_interaction = [0.0]
+        self.qm_espxyzs = [np.array([0.0, 0.0, 0.0])]
+        self.qm_espvals = [1.0]
+        self.mm_energies = [0.0]
         self.molecule.write(outfnm)
         M_test = geometric.molecule.Molecule(outfnm)
         assert np.allclose(self.molecule.xyzs[0], M_test.xyzs[0])
         assert np.allclose(self.molecule.qm_energies, M_test.qm_energies)
         assert np.allclose(self.molecule.qm_grads[0], M_test.qm_grads[0])
+
+    def test_fill_atomname(self, localizer):
+        self.molecule.resname = ['HOH' for i in range(self.molecule.na)]
+        self.molecule.resid = [i//3 + 1 for i in range(self.molecule.na)]
+        self.molecule.boxes = [geometric.molecule.CubicLattice(20)]
+        self.molecule.write("out.pdb")
+        M = geometric.molecule.Molecule("out.pdb")
+        assert M.atomname == ['O1', 'H2', 'H3', 'O1', 'H2', 'H3', 'O1', 'H2', 'H3', 
+                              'O1', 'H2', 'H3', 'O1', 'H2', 'H3', 'O1', 'H2', 'H3']
+        self.molecule.write("out.gro")
+        M = geometric.molecule.Molecule("out.gro")
+        assert M.atomname == ['O1', 'H2', 'H3', 'O1', 'H2', 'H3', 'O1', 'H2', 'H3', 
+                              'O1', 'H2', 'H3', 'O1', 'H2', 'H3', 'O1', 'H2', 'H3']
 
 def test_rings(localizer):
     ring_size_data = {'tetrahedrane.xyz': [3, 3, 3, 3],
@@ -332,3 +354,107 @@ def test_charmm_io(localizer):
     molecule.write("test.xyz")
     molecule2 = geometric.molecule.Molecule("test.xyz")
     np.testing.assert_almost_equal(molecule2.xyzs[0], molecule.xyzs[0])
+
+def test_is_gro_coord_box():
+    assert geometric.molecule.is_gro_coord('    1SOL     H6    6   0.018772  -0.140563  -0.004262') == True
+    assert geometric.molecule.is_gro_coord(' 2500MAZ    H1730100   0.576250553  11.044091225   0.476635426') == True
+    assert geometric.molecule.is_gro_coord('random string') == False
+    assert geometric.molecule.is_gro_box('  3.000000000   3.000000000   3.000000000') == True
+    assert geometric.molecule.is_gro_box('   7.41008   6.98629   6.05030   0.00000   0.00000   2.47003   0.00000  -2.47003   3.49314') == True
+    assert geometric.molecule.is_gro_box('   7.41008   6.98629   6.05030   0.00000   0.00000   2.47003   0.00000  -2.47003   3.49314x') == False
+
+def test_even_list():
+    assert geometric.molecule.even_list(27, 5) == [[0, 1, 2, 3, 4, 5], [6, 7, 8, 9, 10, 11], [12, 13, 14, 15, 16], [17, 18, 19, 20, 21], [22, 23, 24, 25, 26]]
+
+class TestReactionXYZ:
+    @classmethod
+    def setup_class(cls):
+        try: cls.molecule = geometric.molecule.Molecule(os.path.join(datad, 'reaction_000_deci.xyz'))
+        except:
+            assert 0, "Failed to load reaction_000_deci structure"
+
+    def test_arc_equal_spacing(self):
+        m_eq = geometric.molecule.EqualSpacing(self.molecule)
+        assert len(m_eq) == len(self.molecule)
+        arclength = sum(geometric.molecule.arc(self.molecule))
+        arclength2 = sum(geometric.molecule.arc(self.molecule[::2]))
+        assert arclength2 < arclength
+
+    def test_read_comm_charge_mult(self):
+        self.molecule.read_comm_charge_mult()
+        assert self.molecule.charge == 2
+        assert self.molecule.mult == 5
+    
+    def test_compare_topology(self):
+        m1 = self.molecule[0]
+        m1.build_topology()
+        assert geometric.molecule.TopEqual(m1, m1)
+        assert geometric.molecule.MolEqual(m1, m1)
+    
+        indices = [ 5, 22, 27, 26, 18, 20, 28,  7,  8, 21,  1, 12, 29,  2, 24, 19, 13, 11, 10,  4,  3, 23,  6,  9, 15, 16, 25, 17,  0, 14]
+        m2 = m1.atom_select(indices)
+        assert not geometric.molecule.TopEqual(m1, m2)
+        assert geometric.molecule.MolEqual(m1, m2)
+    
+        m3 = self.molecule[-1]
+        m3.build_topology()
+        assert not geometric.molecule.TopEqual(m1, m3)
+        assert not geometric.molecule.MolEqual(m1, m3)
+
+    def test_radius_gyration(self):
+        np.testing.assert_almost_equal(self.molecule.radius_of_gyration()[0], 3.577, decimal=3)
+
+    def test_iterate(self):
+        counter = 0
+        for i in self.molecule:
+            assert type(i) is geometric.molecule.Molecule
+            counter += 1
+        assert counter == 35
+
+    def test_repair(self):
+        m2 = deepcopy(self.molecule)
+        m2.boxes = [geometric.molecule.CubicLattice(20)]
+        m2.comms = ['test comment']
+        assert len(m2) == 35
+
+class TestWaterBox:
+
+    @classmethod
+    def setup_class(cls):
+        try: cls.molecule = geometric.molecule.Molecule(os.path.join(datad, 'spc216.gro'), toppbc=True)
+        except:
+            assert 0, "Failed to load spc216.gro structure"
+
+    def test_num_water_molecules(self):
+        """Check for the correct number of molecules in a cubic cell with broken molecules"""
+        assert len(self.molecule.molecules) == 216, "Incorrect number of molecules for water box structure"
+
+class TestWaterCluster:
+
+    @classmethod
+    def setup_class(cls):
+        try: cls.molecule = geometric.molecule.Molecule(os.path.join(datad, 'water12.mdcrd'), top=os.path.join(datad, 'water12.pdb'))
+        except:
+            assert 0, "Failed to load water12 structure"
+
+    def test_rigid_water(self, localizer):
+        self.molecule.rigid_water()
+        for i in range(len(self.molecule)):
+            for j in range(12):
+                np.testing.assert_almost_equal(self.molecule[i].measure_distances(j*3, j*3+1)[0], 0.9572)
+                np.testing.assert_almost_equal(self.molecule[i].measure_distances(j*3, j*3+2)[0], 0.9572)
+                np.testing.assert_almost_equal(self.molecule[i].measure_angles(j*3+1, j*3, j*3+2)[0], 104.52)
+        self.molecule.write('frame0-2.mdcrd', selection=[2, 3, 4])
+        molecule2 = geometric.molecule.Molecule('frame0-2.mdcrd', top=os.path.join(datad, 'water12.pdb'))
+        np.testing.assert_almost_equal(self.molecule.xyzs[4], molecule2.xyzs[2], decimal=3)
+
+def test_tinker_atom_select_stack():
+    molecule = geometric.molecule.Molecule(os.path.join(datad, 'naphthax.xyz'), ftype='tinker')
+    with pytest.raises(KeyError) as excinfo:
+        b = molecule.atom_select(list(range(18)))
+    a = molecule.atom_select([0, 1, 2, 3, 4, 5, 6, 7, 8, 18, 19, 20, 21, 22, 23, 24, 25, 26])
+    b = molecule.atom_select([9, 10, 11, 12, 13, 14, 15, 16, 17, 27, 28, 29, 30, 31, 32, 33, 34, 35])
+    assert b.tinkersuf[0].split() == ['2', '2', '5', '6']
+    s = a.atom_stack(b)
+    assert s.tinkersuf[18].split() == ['2', '20', '23', '24']
+    

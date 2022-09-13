@@ -12,6 +12,8 @@ QCArchive packages also provide interfaces to geomeTRIC for
 optimization. MM optimizations using OpenMM and Gromacs are
 also supported through the command line interface.
 
+Documentation is hosted at https://geometric.readthedocs.io/ .
+
 Authors: Lee-Ping Wang, Chenchen Song
 
 Contributors: Yudong Qiu (Psi4 engine, error handling); Daniel G. A. Smith (Testing framework, QCEngine JSON API); Sebastian Lee (Molpro engine); Chaya Stern (Travis, Conda); Qiming Sun (Custom engine); Alberto Gobbi (Batch energy/gradient, logging); Josh Horton (Convergence criteria, Gaussian engine)

@@ -133,13 +133,13 @@ class OptParams(object):
             # Otherwise the default is to never calculate the Hessian.
             if self.transition: self.hessian = 'first'
             else: self.hessian = 'never'
-        if self.hessian.startswith('file:'):
+        elif self.hessian.startswith('file:'):
             if os.path.exists(self.hessian[5:]):
                 # If a path is provided for reading a Hessian file, read it now.
                 self.hess_data = np.loadtxt(self.hessian[5:])
             else:
                 raise IOError("No Hessian data file found at %s" % self.hessian)
-        if self.hessian.startswith('file+last:'):
+        elif self.hessian.startswith('file+last:'):
             if os.path.exists(self.hessian[10:]):
                 # If a path is provided for reading a Hessian file, read it now.
                 self.hess_data = np.loadtxt(self.hessian[10:])
@@ -149,7 +149,7 @@ class OptParams(object):
         elif self.hessian.lower() in ['never', 'first', 'each', 'stop', 'last', 'first+last']:
             self.hessian = self.hessian.lower()
         else:
-            raise RuntimeError("Hessian command line argument can only be never, first, last, first+last, each, stop, or file:<path>")
+            raise RuntimeError("Hessian command line argument can only be never, first, last, first+last, file+last, each, stop, or file:<path>")
         # Perform a frequency analysis whenever a cartesian Hessian is computed
         self.frequency = kwargs.get('frequency', None)
         if self.frequency is None: self.frequency = True

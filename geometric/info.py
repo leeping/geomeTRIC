@@ -111,7 +111,7 @@ def print_logo(logger=None):
                     newline += colorString(words[i], colorlist[ln][i])
                 except: pass
                 i += 1
-        elif len(line) > 0:
+        elif len(line) > 0: # pragma: no cover
             while i < max(len(words), len(whites)):
                 try:
                     newline += colorString(words[i], colorlist[ln][i])

@@ -142,7 +142,7 @@ def get_molecule_engine(**kwargs):
             if qmmm:
                 try:
                     from openmm.app import AmberPrmtopFile
-                except importError:
+                except ImportError:
                     from simtk.openmm.app import AmberPrmtopFile
                 # Need to build a molecule object for the portion of the system being optimized
                 # We rely on OpenMM's AmberPrmtopFile class to read the .prmtop file
@@ -185,7 +185,7 @@ def get_molecule_engine(**kwargs):
                 M = Molecule(pdb, radii=radii, fragment=frag)
                 M1 = Molecule(inputf, radii=radii)
                 for i in ['qctemplate', 'qcrems', 'elem', 'qm_ghost', 'charge', 'mult']:
-                    if i in M1: M[i] = M1[i]
+                    M.Data[i] = M1.Data[i]
             else:
                 M = Molecule(inputf, radii=radii)
             engine = QChem(M, dirname=dirname, qcdir=qcdir, threads=threads)
@@ -213,24 +213,44 @@ def get_molecule_engine(**kwargs):
             engine.load_psi4_input(inputf)
             if pdb is not None:
                 M = Molecule(pdb, radii=radii, fragment=frag)
+                # Make the PDB Molecule the engine's Molecule
+                # but keep the original 'elem'.
                 M1 = engine.M
-                for i in ['elem']:
-                    if i in M1: M[i] = M1[i]
+                M.Data['elem'] = M1.Data['elem']
+                engine.M = M
             else:
                 M = engine.M
                 M.top_settings['radii'] = radii
+            M.build_topology()
             threads_enabled = True
         elif engine_str == 'molpro':
             logger.info("Molpro engine selected. Expecting Molpro input for gradient calculation.\n")
             engine = Molpro(threads=threads)
             engine.load_molpro_input(inputf)
-            M = engine.M
+            if pdb is not None:
+                M = Molecule(pdb, radii=radii, fragment=frag)
+                # Make the PDB Molecule the engine's Molecule
+                # but keep the original 'elem'.
+                M1 = engine.M
+                M.Data['elem'] = M1.Data['elem']
+                engine.M = M
+            else:
+                M = engine.M
+                M.top_settings['radii'] = radii
+            M.build_topology()
             if molproexe is not None:
                 engine.set_molproexe(molproexe)
             threads_enabled = True
         elif engine_str == "gaussian":
             logger.info("Gaussian engine selected. Expecting Gaussian input for gradient calculation. \n")
-            M = Molecule(inputf, radii=radii, fragment=frag)
+            if pdb is not None:
+                # Use the PDB Molecule, but the Gaussian input's elem, charge, mult
+                M = Molecule(pdb, radii=radii, fragment=frag)
+                M1 = Molecule(inputf, radii=radii)
+                for i in ['elem', 'charge', 'mult']:
+                    M.Data[i] = M1.Data[i]
+            else:
+                M = Molecule(inputf, radii=radii)
             # now work out which gaussian version we have
             if shutil.which("g16") is not None:
                 exe = "g16"
@@ -268,20 +288,23 @@ def get_molecule_engine(**kwargs):
     # to override all previously provided coordinates.
     arg_coords = kwargs.get('coords', None)
     if arg_coords is not None:
-        M1 = Molecule(arg_coords)
+        M.load_frames(arg_coords)
         if kwargs.get('neb', False):
             images = kwargs.get('images', 11)
             charge = M.charge
             mult = M.mult
-            M2 = M1
+            M1 = M
             print("Input coordinates have %i frames. The following will be used to initialize NEB images:" % len(M1))
             print(', '.join(["%i" % (int(round(i))) for i in np.linspace(0, len(M1)-1, images)]))
             for i in range(len(M1)):
-                M2[i].charge = charge
-                M2[i].mult = mult
-            M = M2[np.array([int(round(i)) for i in np.linspace(0, len(M2)-1, images)])]
+                M1[i].charge = charge
+                M1[i].mult = mult
+            M = M1[np.array([int(round(i)) for i in np.linspace(0, len(M1)-1, images)])]
         else:
-            M = M1[-1]
+            M = M[-1]
+        # 2022-09-13: If extra coordinates are provided, the topology may be rebuilt. This decision can be revisited later.
+        M.build_topology()
+
     # Perform some sanity checks on arguments
     if not using_qchem and qcdir:
         raise EngineError("qcdir keyword argument passed to get_molecule_engine but Q-Chem engine is not being used")

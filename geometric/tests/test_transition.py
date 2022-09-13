@@ -14,6 +14,7 @@ import subprocess
 
 localizer = addons.in_folder
 datad = addons.datad
+exampled = addons.exampled
 
 @addons.using_psi4
 def test_transition_hcn_psi4(localizer):
@@ -45,6 +46,32 @@ def test_transition_hcn_psi4(localizer):
     freqs, modes, G = geometric.normal_modes.frequency_analysis(coords, hessian, elem=progress.elem, energy=progress.qm_energies[-1], wigner=(-10, 'hcn.wigner'))
     np.testing.assert_almost_equal(G, -92.25677301, decimal=5)
     np.testing.assert_almost_equal(freqs[0]/10, -121.5855, decimal=0)
+
+@addons.using_terachem
+def test_transition_hcn_terachem(localizer):
+    """
+    Optimize the transition state of the HCN <-> HNC isomerization.
+    """
+    shutil.copy2(os.path.join(exampled, '0-regression-tests', 'hcn-hnc-ts', 'start.xyz'), os.getcwd())
+    # shutil.copy2(os.path.join(exampled, '0-regression-tests', 'hcn-hnc-ts', 'run.tcin'), os.getcwd())
+    geometric.engine.edit_tcin(fin=os.path.join(exampled, '0-regression-tests', 'hcn-hnc-ts', 'run.tcin'), fout='run.tcin', options={'guess':'c0'})
+    shutil.copy2(os.path.join(datad, 'hcn_tsguess.c0'), os.path.join(os.getcwd(), 'c0'))
+    shutil.copy2(os.path.join(datad, 'hcn_tsguess_hessian.txt'), os.getcwd())
+    progress = geometric.optimize.run_optimizer(engine='terachem', transition=True, input='run.tcin',
+                                                converge=['gmax', '1.0e-5'], trust=0.1, tmax=0.3, hessian='file:hcn_tsguess_hessian.txt')
+    # The results here are in Angstrom
+    #
+    molecule = geometric.molecule.Molecule(os.path.join(datad, 'hcn_ts_optim.xyz'))
+    ref = molecule.xyzs[0]
+    e_ref = -92.2460196061
+    rmsd, maxd = geometric.optimize.calc_drms_dmax(progress.xyzs[-1], ref, align=True)
+    # Check that the energy is 0.0001 a.u. above reference. 
+    assert progress.qm_energies[-1] < (e_ref + 0.0001)
+    # Check that the optimization converged in less than 20 steps
+    assert len(progress) < 20
+    # Check that the geometry matches the reference to within 0.01 RMS 0.02 max displacement
+    assert rmsd < 0.001
+    assert maxd < 0.002
 
 class TestTransitionQchemWorkQueue:
 

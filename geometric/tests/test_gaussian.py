@@ -174,8 +174,9 @@ def test_read_results_gaussian():
     """
     Test reading the results from a fchk and log gaussian file.
     """
-    molecule = Molecule(os.path.join(datad, "ethane.com"))
-    engine = Gaussian(molecule=molecule, exe="g09")
+    #molecule = Molecule(os.path.join(datad, "ethane.com"))
+    #engine = Gaussian(molecule=molecule, exe="g09")
+    molecule, engine = get_molecule_engine(input=os.path.join(datad, "ethane.com"), engine='gaussian')
     result = engine.read_result(dirname=datad)
     assert result["energy"] == -79.2232076157635
     assert np.allclose(result["gradient"], np.array([-0.00656039, -0.00927754, -0.01606933, -0.00169808, 0.01040138,
