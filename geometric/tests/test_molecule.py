@@ -292,6 +292,12 @@ class TestWaterQCOut:
         assert M.atomname == ['O1', 'H2', 'H3', 'O1', 'H2', 'H3', 'O1', 'H2', 'H3', 
                               'O1', 'H2', 'H3', 'O1', 'H2', 'H3', 'O1', 'H2', 'H3']
 
+    def test_add_quantum(self):
+        molecule2 = geometric.molecule.Molecule(os.path.join(datad, "water6.pdb"))
+        molecule2.add_quantum(self.molecule)
+        print(self.molecule.Data.keys())#assert 'qm_energies' in molecule2.Data
+        print(molecule2.Data.keys())#assert 'qm_energies' in molecule2.Data
+
 def test_rings(localizer):
     ring_size_data = {'tetrahedrane.xyz': [3, 3, 3, 3],
                       'cholesterol.xyz' : [6, 6, 6, 5],

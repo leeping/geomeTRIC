@@ -181,7 +181,9 @@ AtomVariableNames = {'elem', 'partial_charge', 'atomname', 'atomtype', 'tinkersu
 MetaVariableNames = {'fnm', 'ftype', 'qcrems', 'qctemplate', 'qcerr', 'charge', 'mult', 'bonds', 'topology',
                      'molecules'}
 # Variable names relevant to quantum calculations explicitly
-QuantumVariableNames = {'qcrems', 'qctemplate', 'charge', 'mult', 'qcsuf', 'qm_ghost', 'qm_bondorder'}
+QuantumVariableNames = {'qcrems', 'qctemplate', 'charge', 'mult', 'qcsuf', 'qm_ghost', 'qm_energies', 'qm_grads', 'qm_hessians',
+                        'qm_interaction', 'qm_espxyzs', 'qm_espvals', 'qm_extchgs', 'qm_mulliken_charges', 'qm_mulliken_spins',
+                        'qm_zpe', 'qm_entropy', 'qm_enthalpy','qm_bondorder'}
 # Superset of all variable names.
 AllVariableNames = QuantumVariableNames | AtomVariableNames | MetaVariableNames | FrameVariableNames
 
@@ -1439,7 +1441,7 @@ class Molecule(object):
                     Sum.Data[key] = list(self.Data[key] + other.Data[key])
             elif either(self, other, key):
                 # TINKER 6.3 compatibility - catch the specific case that one has a periodic box and the other doesn't.
-                if key == 'boxes':
+                if key == 'boxes': # pragma: no cover
                     if key in self.Data:
                         other.Data['boxes'] = [self.Data['boxes'][0] for i in range(len(other))]
                     elif key in other.Data:
@@ -1481,7 +1483,7 @@ class Molecule(object):
                     self.Data[key] += other.Data[key]
             elif either(self, other, key):
                 # TINKER 6.3 compatibility - catch the specific case that one has a periodic box and the other doesn't.
-                if key == 'boxes':
+                if key == 'boxes': # pragma: no cover
                     if key in self.Data:
                         other.Data['boxes'] = [self.Data['boxes'][0] for i in range(len(other))]
                     elif key in other.Data:
