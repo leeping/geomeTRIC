@@ -1,0 +1,319 @@
+$comment
+TZ2P, CH2
+3B1 state geometry: EOM-CCSD(dT) calculation
+$end
+
+$molecule
+0 3
+C
+H  1 rCH
+H  1 rCH  2 HCH
+
+rCH    = 1.0775
+HCH    = 133.29 
+$end
+
+$rem
+jobtype            SP            single point
+CORRELATION        CCSD(dT)
+BASIS              GENERAL
+PURECART           111
+UNRESTRICTED       TRUE
+SCF_GUESS          CORE
+SCF_CONVERGENCE    12
+CC_T_CONV          9     CCSD amplitude convergence
+EOM_DAVIDSON_CONV   9     EOM amplitude convergence
+EOM_SF_STATES     [2,0,0,2]
+EOM_DAVIDSON_MAX_ITER        60     increase number of iterations in Davidson procedure
+EOM_NGUESS_SINGLES  4
+CCMAN2             FALSE
+$end
+
+$basis
+ C   0
+ S   6  1.00
+       9471.00000         0.776000000E-03
+       1398.00000         0.621800000E-02
+       307.500000         0.335750000E-01
+       84.5400000         0.134278000    
+       26.9100000         0.393668000    
+       9.40900000         0.544169000    
+ S   2  1.00
+       9.40900000         0.248075000    
+       3.50000000         0.782844000    
+ S   1  1.00
+       1.06800000          1.00000000    
+ S   1  1.00
+      0.400200000          1.00000000    
+ S   1  1.00
+      0.135100000          1.00000000    
+ P   4  1.00
+       25.3700000         0.162950000E-01
+       5.77600000         0.102098000    
+       1.78700000         0.340228000    
+      0.657700000         0.668269000    
+ P   1  1.00
+      0.248000000          1.00000000    
+ P   1  1.00
+      0.910600000E-01      1.00000000    
+ D   1  1.00
+      1.500000000          1.00000000    
+ D   1  1.00
+      0.375000000          1.00000000    
+ ****
+ H   0
+ S   3  1.00
+       33.6400000         0.253740000E-01
+       5.05800000         0.189684000    
+       1.14700000         0.852933000    
+ S   1  1.00
+      0.321100000          1.00000000    
+ S   1  1.00
+      0.101300000          1.00000000    
+ P   1  1.00
+      1.500000000          1.00000000    
+ P   1  1.00
+      0.375000000          1.00000000    
+ ****
+$end
+
+
+@@@
+$comment
+TZ2P, CH2 at a 1A1 state geometry, EOM-CCSD(dT) calculation
+$end 
+
+$molecule
+0 3
+C
+H  1 rCH
+H  1 rCH  2 HCH
+
+rCH    = 1.1089
+HCH    = 101.89 
+$end
+
+$rem
+jobtype            SP            single point
+CORRELATION        CCSD(dT)
+BASIS              GENERAL
+PURECART           111
+UNRESTRICTED       TRUE
+SCF_GUESS          READ
+SCF_CONVERGENCE    12
+CC_T_CONV          9     CCSD amplitude convergence
+EOM_DAVIDSON_CONV  9     EOM amplitude convergence
+EOM_SF_STATES      [2,0,0,2]
+EOM_DAVIDSON_MAX_ITER        60     increase number of iterations in Davidson procedure
+EOM_NGUESS_SINGLES  4
+CCMAN2             FALSE
+$end
+
+$basis
+ C   0
+ S   6  1.00
+       9471.00000         0.776000000E-03
+       1398.00000         0.621800000E-02
+       307.500000         0.335750000E-01
+       84.5400000         0.134278000    
+       26.9100000         0.393668000    
+       9.40900000         0.544169000    
+ S   2  1.00
+       9.40900000         0.248075000    
+       3.50000000         0.782844000    
+ S   1  1.00
+       1.06800000          1.00000000    
+ S   1  1.00
+      0.400200000          1.00000000    
+ S   1  1.00
+      0.135100000          1.00000000    
+ P   4  1.00
+       25.3700000         0.162950000E-01
+       5.77600000         0.102098000    
+       1.78700000         0.340228000    
+      0.657700000         0.668269000    
+ P   1  1.00
+      0.248000000          1.00000000    
+ P   1  1.00
+      0.910600000E-01      1.00000000    
+ D   1  1.00
+      1.500000000          1.00000000    
+ D   1  1.00
+      0.375000000          1.00000000    
+ ****
+ H   0
+ S   3  1.00
+       33.6400000         0.253740000E-01
+       5.05800000         0.189684000    
+       1.14700000         0.852933000    
+ S   1  1.00
+      0.321100000          1.00000000    
+ S   1  1.00
+      0.101300000          1.00000000    
+ P   1  1.00
+      1.500000000          1.00000000    
+ P   1  1.00
+      0.375000000          1.00000000    
+ ****
+$end
+
+
+@@@
+$comment
+TZ2P, CH2; at  1B1 state geometry, EOM-CCSD(dT) calculations
+$end
+
+$molecule
+0 3
+C
+H  1 rCH
+H  1 rCH  2 HCH
+
+rCH    = 1.0748
+HCH    = 141.56 
+$end
+
+$rem
+jobtype            SP            single point
+CORRELATION        CCSD(dT)
+BASIS              GENERAL
+PURECART           111
+UNRESTRICTED       TRUE
+SCF_GUESS          READ
+SCF_CONVERGENCE    12
+CC_T_CONV          9     CCSD amplitude convergence
+EOM_DAVIDSON_CONV  9     EOM amplitude convergence
+EOM_SF_STATES      [2,0,0,2]
+EOM_DAVIDSON_MAX_ITER  60     increase number of iterations in Davidson procedure
+EOM_NGUESS_SINGLES  4
+CCMAN2             FALSE
+$end
+
+$basis
+ C   0
+ S   6  1.00
+       9471.00000         0.776000000E-03
+       1398.00000         0.621800000E-02
+       307.500000         0.335750000E-01
+       84.5400000         0.134278000    
+       26.9100000         0.393668000    
+       9.40900000         0.544169000    
+ S   2  1.00
+       9.40900000         0.248075000    
+       3.50000000         0.782844000    
+ S   1  1.00
+       1.06800000          1.00000000    
+ S   1  1.00
+      0.400200000          1.00000000    
+ S   1  1.00
+      0.135100000          1.00000000    
+ P   4  1.00
+       25.3700000         0.162950000E-01
+       5.77600000         0.102098000    
+       1.78700000         0.340228000    
+      0.657700000         0.668269000    
+ P   1  1.00
+      0.248000000          1.00000000    
+ P   1  1.00
+      0.910600000E-01      1.00000000    
+ D   1  1.00
+      1.500000000          1.00000000    
+ D   1  1.00
+      0.375000000          1.00000000    
+ ****
+ H   0
+ S   3  1.00
+       33.6400000         0.253740000E-01
+       5.05800000         0.189684000    
+       1.14700000         0.852933000    
+ S   1  1.00
+      0.321100000          1.00000000    
+ S   1  1.00
+      0.101300000          1.00000000    
+ P   1  1.00
+      1.500000000          1.00000000    
+ P   1  1.00
+      0.375000000          1.00000000    
+ ****
+$end
+
+@@@
+$comment
+TZ2P, CH2; at  c 1A1 state geometry, CCSD(dT)
+$end
+
+$molecule
+0 3
+C
+H  1 rCH
+H  1 rCH  2 HCH
+
+rCH    = 1.0678
+HCH    = 170.08 
+$end
+
+$rem
+jobtype            SP            single point
+CORRELATION        CCSD(dT)
+BASIS              GENERAL
+PURECART           111
+UNRESTRICTED       TRUE
+SCF_GUESS          READ
+SCF_CONVERGENCE    12
+CC_T_CONV          9     CCSD amplitude convergence
+EOM_DAVIDSON_CONV  9     EOM amplitude convergence
+EOM_SF_STATES      [2,0,0,2]
+EOM_DAVIDSON_MAX_ITER        60     increase number of iterations in Davidson procedure
+EOM_NGUESS_SINGLES  4
+CCMAN2             FALSE
+$end
+
+$basis
+ C   0
+ S   6  1.00
+       9471.00000         0.776000000E-03
+       1398.00000         0.621800000E-02
+       307.500000         0.335750000E-01
+       84.5400000         0.134278000    
+       26.9100000         0.393668000    
+       9.40900000         0.544169000    
+ S   2  1.00
+       9.40900000         0.248075000    
+       3.50000000         0.782844000    
+ S   1  1.00
+       1.06800000          1.00000000    
+ S   1  1.00
+      0.400200000          1.00000000    
+ S   1  1.00
+      0.135100000          1.00000000    
+ P   4  1.00
+       25.3700000         0.162950000E-01
+       5.77600000         0.102098000    
+       1.78700000         0.340228000    
+      0.657700000         0.668269000    
+ P   1  1.00
+      0.248000000          1.00000000    
+ P   1  1.00
+      0.910600000E-01      1.00000000    
+ D   1  1.00
+      1.500000000          1.00000000    
+ D   1  1.00
+      0.375000000          1.00000000    
+ ****
+ H   0
+ S   3  1.00
+       33.6400000         0.253740000E-01
+       5.05800000         0.189684000    
+       1.14700000         0.852933000    
+ S   1  1.00
+      0.321100000          1.00000000    
+ S   1  1.00
+      0.101300000          1.00000000    
+ P   1  1.00
+      1.500000000          1.00000000    
+ P   1  1.00
+      0.375000000          1.00000000    
+ ****
+$end
+
+

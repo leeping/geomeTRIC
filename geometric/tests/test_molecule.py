@@ -292,6 +292,12 @@ class TestWaterQCOut:
         assert M.atomname == ['O1', 'H2', 'H3', 'O1', 'H2', 'H3', 'O1', 'H2', 'H3', 
                               'O1', 'H2', 'H3', 'O1', 'H2', 'H3', 'O1', 'H2', 'H3']
 
+    def test_add_quantum(self):
+        molecule2 = geometric.molecule.Molecule(os.path.join(datad, "water6.pdb"))
+        molecule2.add_quantum(self.molecule)
+        print(self.molecule.Data.keys())#assert 'qm_energies' in molecule2.Data
+        print(molecule2.Data.keys())#assert 'qm_energies' in molecule2.Data
+
 def test_rings(localizer):
     ring_size_data = {'tetrahedrane.xyz': [3, 3, 3, 3],
                       'cholesterol.xyz' : [6, 6, 6, 5],
@@ -458,3 +464,60 @@ def test_tinker_atom_select_stack():
     s = a.atom_stack(b)
     assert s.tinkersuf[18].split() == ['2', '20', '23', '24']
     
+def test_read_write_qcfsm_in(localizer):
+    molecule = geometric.molecule.Molecule(os.path.join(datad, 'qcfsm.in'), ftype='qcin')
+    assert molecule.na == 8
+    assert molecule.qcrems[0]['jobtype'] == 'fsm'
+    assert len(molecule) == 2
+    # Add a fictitious external charge
+    molecule.qm_extchgs = [np.array([[0.0, 0.0, 1.0, 0.0]]), np.array([[0.0, 1.0, 0.0, 0.0]])]
+    molecule.write('qcfsm_out.in', ftype='qcin')
+
+def test_read_qcfsm_out(localizer):
+    import bz2
+    with bz2.open(os.path.join(datad, "qcfsm.out.bz2")) as f:
+        content = f.read()
+    with open("qcfsm.out", "wb") as fo:
+        fo.write(content)
+    molecule = geometric.molecule.Molecule("qcfsm.out")
+    np.testing.assert_almost_equal(molecule.qm_energies[-1], -170.998405245)
+    np.testing.assert_almost_equal(molecule.xyzs[-1][-1, 2], -0.5693570713)
+
+def test_read_qcesp():
+    M = geometric.molecule.Molecule(os.path.join(datad, 'test_qchem.esp'))
+    assert 'qm_espxyzs' in M.Data
+    assert 'qm_espvals' in M.Data
+    assert len(M.qm_espvals[0]) == 280
+
+def test_read_qcin_4part(localizer):
+    # Read in a Q-Chem input file with 4 parts and a z-matrix (the Z-matrix is not parsed or interpreted).
+    M = geometric.molecule.Molecule(os.path.join(datad, 'qchem_4part.in'))
+    assert len(M.qcrems) == 4
+    assert M.qcrems[3]['scf_guess'] == 'READ'
+    M.write('qchem_4part_out.in')
+
+def test_read_qcfreq(localizer):
+    import bz2
+    with bz2.open(os.path.join(datad, "qchem_tsfreq.out.bz2")) as f:
+        content = f.read()
+    with open("qchem_tsfreq.out", "wb") as fo:
+        fo.write(content)
+    molecule = geometric.molecule.Molecule("qchem_tsfreq.out")
+    assert len(molecule.freqs) == 63
+
+def test_read_qcirc(localizer):
+    import bz2
+    with bz2.open(os.path.join(datad, "qchem_irc.out.bz2")) as f:
+        content = f.read()
+    with open("qchem_irc.out", "wb") as fo:
+        fo.write(content)
+    molecule = geometric.molecule.Molecule("qchem_irc.out")
+    # Todo: Verify IRC data.
+    assert hasattr(molecule, 'Irc')
+
+def test_read_triclinic_gro():
+    M = geometric.molecule.Molecule(os.path.join(datad, 'triclinic.gro'))
+    np.testing.assert_almost_equal(M.boxes[-1].A / 10, [1.824070000, 0.000000000, 0.000000000])
+    np.testing.assert_almost_equal(M.boxes[-1].B / 10, [-0.151660337, 1.817797398, 0.000000000])
+    np.testing.assert_almost_equal(M.boxes[-1].C / 10, [0.148010793, -0.149309580, 1.807615769])
+

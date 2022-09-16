@@ -181,7 +181,9 @@ AtomVariableNames = {'elem', 'partial_charge', 'atomname', 'atomtype', 'tinkersu
 MetaVariableNames = {'fnm', 'ftype', 'qcrems', 'qctemplate', 'qcerr', 'charge', 'mult', 'bonds', 'topology',
                      'molecules'}
 # Variable names relevant to quantum calculations explicitly
-QuantumVariableNames = {'qcrems', 'qctemplate', 'charge', 'mult', 'qcsuf', 'qm_ghost', 'qm_bondorder'}
+QuantumVariableNames = {'qcrems', 'qctemplate', 'charge', 'mult', 'qcsuf', 'qm_ghost', 'qm_energies', 'qm_grads', 'qm_hessians',
+                        'qm_interaction', 'qm_espxyzs', 'qm_espvals', 'qm_extchgs', 'qm_mulliken_charges', 'qm_mulliken_spins',
+                        'qm_zpe', 'qm_entropy', 'qm_enthalpy','qm_bondorder'}
 # Superset of all variable names.
 AllVariableNames = QuantumVariableNames | AtomVariableNames | MetaVariableNames | FrameVariableNames
 
@@ -1439,7 +1441,7 @@ class Molecule(object):
                     Sum.Data[key] = list(self.Data[key] + other.Data[key])
             elif either(self, other, key):
                 # TINKER 6.3 compatibility - catch the specific case that one has a periodic box and the other doesn't.
-                if key == 'boxes':
+                if key == 'boxes': # pragma: no cover
                     if key in self.Data:
                         other.Data['boxes'] = [self.Data['boxes'][0] for i in range(len(other))]
                     elif key in other.Data:
@@ -1481,7 +1483,7 @@ class Molecule(object):
                     self.Data[key] += other.Data[key]
             elif either(self, other, key):
                 # TINKER 6.3 compatibility - catch the specific case that one has a periodic box and the other doesn't.
-                if key == 'boxes':
+                if key == 'boxes': # pragma: no cover
                     if key in self.Data:
                         other.Data['boxes'] = [self.Data['boxes'][0] for i in range(len(other))]
                     elif key in other.Data:
@@ -3144,7 +3146,7 @@ class Molecule(object):
             Answer['qm_espvals'] = espvals
         return Answer
 
-    def read_mol2(self, fnm, **kwargs):
+    def read_mol2(self, fnm, **kwargs): # pragma: no cover
         xyz      = []
         charge   = []
         atomname = []
@@ -3510,6 +3512,7 @@ class Molecule(object):
         qcrems               = []
         xyz                  = []
         xyzs                 = []
+        xyz_fsm              = []
         elem                 = []
         section              = None
         # The Z-matrix printing in new versions throws me off.
@@ -3518,7 +3521,7 @@ class Molecule(object):
         # section that follows.
         zmatrix              = False
         template             = []
-        fff = False
+        found_first_mol      = False
         inside_section       = False
         reading_template     = True
         charge               = 0
@@ -3546,11 +3549,12 @@ class Molecule(object):
                 else:
                     if wrd == 'end':
                         inside_section = False
+                        infsm = False
                         if section == 'molecule':
                             if len(xyz) > 0:
                                 xyzs.append(np.array(xyz))
                             xyz = []
-                            fff = True
+                            found_first_mol = True
                             if suffix:
                                 readsuf = False
                         elif section == 'rem':
@@ -3570,24 +3574,29 @@ class Molecule(object):
                 if section == 'molecule':
                     if line.startswith("*"):
                         infsm = True
-                    if (not infsm) and (len(dline) >= 4 and all([isfloat(dline[i]) for i in range(1,4)])):
-                        if fff:
-                            reading_template = False
-                            template_cut = list(i for i, dat in enumerate(template) if '@@@' in dat[0])[-1]
+                    if len(dline) >= 4 and all([isfloat(dline[i]) for i in range(1,4)]):
+                        if infsm:
+                            xyz_fsm.append([float(i) for i in sline[1:4]])
                         else:
-                            if re.match('^@', sline[0]): # This is a ghost atom
-                                ghost.append(True)
+                            if found_first_mol:
+                                reading_template = False
+                                template_cut = list(i for i, dat in enumerate(template) if '@@@' in dat[0])[-1]
                             else:
-                                ghost.append(False)
-                            elem.append(re.sub('@','',sline[0]))
-                        xyz.append([float(i) for i in sline[1:4]])
-                        if readsuf and len(sline) > 4:
-                            whites      = re.split('[^ ]+',line)
-                            suffix.append(''.join([whites[j]+sline[j] for j in range(4,len(sline))]))
+                                if re.match('^@', sline[0]): # This is a ghost atom
+                                    ghost.append(True)
+                                else:
+                                    ghost.append(False)
+                                elem.append(re.sub('@','',sline[0]))
+                            xyz.append([float(i) for i in sline[1:4]])
+                            if readsuf and len(sline) > 4:
+                                whites      = re.split('[^ ]+',line)
+                                suffix.append(''.join([whites[j]+sline[j] for j in range(4,len(sline))]))
                     elif re.match("[+-]?[0-9]+ +[0-9]+$",line.split('!')[0].strip()):
-                        if not fff:
+                        if not found_first_mol:
                             charge = int(sline[0])
                             mult = int(sline[1])
+                    elif infsm and re.sub(r'\$','',line).lower() != 'end':
+                        pass
                     else:
                         SectionData.append(line)
                 elif reading_template:
@@ -3603,7 +3612,7 @@ class Molecule(object):
                         SectionData.append(line)
             elif re.match('^@+$', line) and reading_template:
                 template.append(('@@@', []))
-            elif re.match('Welcome to Q-Chem', line) and reading_template and fff:
+            elif re.match('Welcome to Q-Chem', line) and reading_template and found_first_mol:
                 template.append(('@@@', []))
 
         if template_cut != 0:
@@ -3621,6 +3630,8 @@ class Molecule(object):
             Answer['xyzs'] = xyzs
         else:
             Answer['xyzs'] = [np.array([])]
+        if xyz_fsm:
+            Answer['xyzs'].append(np.array(xyz_fsm))
         if len(elem) > 0:
             Answer['elem'] = elem
         if len(ghost) > 0:
@@ -4069,19 +4080,12 @@ class Molecule(object):
             # Catch the case of failed geometry optimizations.
             if len(Answer['xyzs']) == len(Answer['qm_energies']) + 1:
                 Answer['xyzs'] = Answer['xyzs'][:-1]
-            # Catch the case of freezing string method, it prints out two extra coordinates.
-            if len(Answer['xyzs']) == len(Answer['qm_energies']) + 2:
-                for i in range(2):
-                    Answer['qm_energies'].append(0.0)
-                    mkchg.append([0.0 for j in mkchg[-1]])
-                    mkspn.append([0.0 for j in mkchg[-1]])
-            # Q-Chem 4.4 prints out three more coordinates.
-            if FSM and (len(Answer['xyzs']) == len(Answer['qm_energies']) + 3):
-                Answer['xyzs'] = Answer['xyz'][1:]
-                for i in range(2):
-                    Answer['qm_energies'].append(0.0)
-                    mkchg.append([0.0 for j in mkchg[-1]])
-                    mkspn.append([0.0 for j in mkchg[-1]])
+            # Catch the case of freezing string method, it prints out two extra coordinates at the end.
+            # and one extra coordinate / energy pair at the top.
+            if FSM:
+                Answer['qm_energies'] = Answer['qm_energies'][1:]
+                Answer['xyzs'] = Answer['xyzs'][1:]
+                Answer['xyzs'] = Answer['xyzs'][:-2]
             if FDiff and (len(Answer['qm_energies']) == (len(Answer['xyzs'])+1)):
                 logger.info("Aligning energies because finite difference calculation prints one extra")
                 Answer['qm_energies'] = Answer['qm_energies'][:-1]
@@ -4101,7 +4105,7 @@ class Molecule(object):
             for i in np.where(np.array(conv) == 0)[0]:
                 Answer['qm_grads'].insert(i, Answer['qm_grads'][0]*0.0)
             if len(Answer['qm_grads']) != len(Answer['qm_energies']):
-                logger.warning("Number of energies and gradients is inconsistent (composite jobs?)  Deleting gradients.")
+                logger.warning("Number of energies and gradients is inconsistent (%i != %i) ; deleting gradients." % (len(Answer['qm_energies']), len(Answer['qm_grads'])))
                 del Answer['qm_grads']
         # A strange peculiarity; Q-Chem sometimes prints out the final Mulliken charges a second time, after the geometry optimization.
         if mkchg:
