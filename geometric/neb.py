@@ -2255,7 +2255,7 @@ def qualitycheck(
     elif Quality >= ThreHQ:
         if trust < params_tmax:
             # For good steps, the trust radius is increased
-            trust = min(np.sqrt(2) * trust, params_tmax)
+            trust = min(2 * trust, params_tmax)
             trustprint = "\x1b[92m+\x1b[0m"
         else:
             trustprint = "="
@@ -2333,7 +2333,7 @@ def compare(
         )
         HW = (
             new_chain.guess_hessian_working.copy()
-        )  # TODO: Comment this out to keep the hessian
+        )  #Comment this out to keep the hessian
         HP = new_chain.guess_hessian_plain.copy()
         c_hist = [new_chain]
         return (
@@ -2876,8 +2876,8 @@ def prepare(prev):
     new_chain = chain.TakeStep(dy, printStep=False)
     respaced = new_chain.delete_insert(1.5)
     newcoords = chaintocoords(new_chain)
-    #new_attrs = check_attr(new_chain)
-    #old_attrs = check_attr(chain)
+    new_attrs = check_attr(new_chain)
+    old_attrs = check_attr(chain)
 
     temp = {
         #"Y_prev": Y.tolist(),
@@ -2887,8 +2887,8 @@ def prepare(prev):
         "HP": HP.tolist(),
         #"HP_guess": HP.tolist(),
         #"HW_guess": HW.tolist(),
-        #"new_attrs": new_attrs,
-        #"old_attrs": old_attrs,
+        "new_attrs": new_attrs,
+        "old_attrs": old_attrs,
         "old_bandE": chain.TotBandEnergy,
         "trust": trust,
         "expect": expect,
@@ -3052,25 +3052,21 @@ def nextchain(prev):
     LastForce = prev.get("lastforce", 0)
     ForceBuild = prev.get("forcerebuild", False)
 
-    #chain = add_attr(chain, prev.get("new_attrs"))
-    #old_chain = add_attr(old_chain, prev.get("old_attrs"))
+    chain = add_attr(chain, prev.get("new_attrs"))
+    old_chain = add_attr(old_chain, prev.get("old_attrs"))
     chain.ComputeGuessHessian(full=False, blank=isinstance(engine, Blank))
     old_chain.ComputeGuessHessian(full=False, blank=isinstance(engine, Blank))
-    old_chain.TotBandEnergy = prev.get("old_bandE")
+    #old_chain.TotBandEnergy = prev.get("old_bandE")
     #chain.guess_hessian_working = prev.pop("HW_guess")
     #chain.guess_hessian_plain = prev.pop("HP_guess")
     GW = np.array(prev.get("GW"))
     GP = np.array(prev.get("GP"))
-    #GW_prev = np.array(prev.get("GW_prev", GW.copy()))
-    #GP_prev = np.array(prev.get("GP_prev", GP.copy()))
+    GW_prev = np.array(prev.get("GW_prev", GW.copy()))
+    GP_prev = np.array(prev.get("GP_prev", GP.copy()))
     #print('GW GP from dict', GW, GP)
     #print('GW GP previous from dict', GW_prev, GP_prev)
 
     chain.ComputeChain(result=result)
-    #GW = chain.get_global_grad("total", "working")
-    #GP = chain.get_global_grad("total", "plain")
-    GW_prev = np.array(prev.get("GW_prev", GW.copy()))
-    GP_prev = np.array(prev.get("GP_prev", GP.copy()))
     #print('GW GP from chain', GW, GP)
     #old_chain.ComputeChain(result=prev.get('result'), qcf=True)
     #GP_prev = old_chain.get_global_grad("total", "working")#prev.get("GP_prev", GP.copy())
@@ -3126,8 +3122,8 @@ def nextchain(prev):
             HP,
             prev.get('result', result),
         )
-        #new_attrs = check_attr(chain)
-        #old_attrs = check_attr(old_chain)
+        new_attrs = check_attr(chain)
+        old_attrs = check_attr(old_chain)
         newcoords = chaintocoords(chain)
         temp = {
             #"Y": Y.tolist(),
@@ -3138,9 +3134,9 @@ def nextchain(prev):
             "GP_prev": GP_prev.tolist(),
             "HW": HW.tolist(),
             "HP": HP.tolist(),
-            #"new_attrs": new_attrs,
-            #"old_attrs": old_attrs,
-            "old_bandE": old_chain.TotBandEnergy,
+            "new_attrs": new_attrs,
+            "old_attrs": old_attrs,
+            #"old_bandE": old_chain.TotBandEnergy,
             "expect": expect,
             "expectG": expectG.tolist(),
             "respaced": respaced,
@@ -3207,8 +3203,8 @@ def nextchain(prev):
             HP,
             prev.get("result"),
         )
-        #new_attrs = check_attr(chain)
-        #old_attrs = check_attr(old_chain)
+        new_attrs = check_attr(chain)
+        old_attrs = check_attr(old_chain)
         newcoords = chaintocoords(chain)
         # Here GW, GP and their previous values should be same.
         temp = {
@@ -3218,9 +3214,9 @@ def nextchain(prev):
             "GW_prev": GW_prev.tolist(),
             "GP": GP.tolist(),
             "GP_prev": GP_prev.tolist(),
-            #"new_attrs": new_attrs,
-            #"old_attrs": old_attrs,
-            "old_bandE": old_chain.TotBandEnergy,
+            "new_attrs": new_attrs,
+            "old_attrs": old_attrs,
+            #"old_bandE": old_chain.TotBandEnergy,
             "trust": trust,
             "expect": expect,
             "expectG": expectG.tolist(),
@@ -3231,7 +3227,6 @@ def nextchain(prev):
             "result": result,
         }
         prev = prev | temp
-        print('Size of nebinfo dict from not good %f Gb' %(sys.getsizeof(dict_to_binary(prev))*1e-9))
         return newcoords, prev
     # If minimum eigenvalues of HW is lower than epsilon, GP, GW are same as their previous values.
     chain, Y, GW, GP, HP, HW, Y_prev, GP_prev, GW_prev, H_reset = updatehessian(
@@ -3278,8 +3273,8 @@ def nextchain(prev):
         HP,
         prev.get("result", result),
     )
-    #new_attrs = check_attr(chain)
-    #old_attrs = check_attr(old_chain)
+    new_attrs = check_attr(chain)
+    old_attrs = check_attr(old_chain)
     temp = {
         #"Y": Y.tolist(),
         #"Y_prev": Y_prev.tolist(),
@@ -3289,10 +3284,10 @@ def nextchain(prev):
         "GP_prev": GP_prev.tolist(),
         "HW": HW.tolist(),
         "HP": HP.tolist(),
-        "old_bandE": old_chain.TotBandEnergy,
-        #"new_attrs": new_attrs,
-        #"old_attrs": old_attrs,
-        "trust": trust,#
+        #"old_bandE": old_chain.TotBandEnergy,
+        "new_attrs": new_attrs,
+        "old_attrs": old_attrs,
+        "trust": trust,
         "trustprint": trustprint,
         "expect": expect,
         "expectG": expectG.tolist(),
@@ -3305,13 +3300,11 @@ def nextchain(prev):
     }
     newcoords = chaintocoords(chain)
     prev = prev | temp
-    #for k, v in prev.items():
-    #    print(k)
     for k, v in prev.items():
-        if k == "HW" or k == "HP":
+        if k == "HW":
             print('%s shape: %s' %(k, np.array(v).shape))
         mem_size = sys.getsizeof(dict_to_binary({k: v}))*1e-9
-        if mem_size > 1e-6:
+        if mem_size > 1e-5:
             print('Size of %s : %f Gb' %(k, mem_size))
     return newcoords, prev
 
