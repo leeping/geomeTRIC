@@ -1452,8 +1452,8 @@ class QCEngineAPI(Engine):
         return {'energy':energy, 'gradient':gradient, 'hessian':hessian}
 
     def calc(self, coords, dirname, driver="gradient", **kwargs):
-        # overwrites the calc method of base class to skip c aching and creating folders
-        # **kwargs: for throwing away other arguments such as read_data and copyfiles.
+        # overwrites the calc method of base class to skip caching and creating folders
+        # **kwargs: for throwing away other arguments such as read_data and copy files.
         return self.calc_new(coords, dirname, driver)
 
     def detect_dft(self):
