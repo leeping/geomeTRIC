@@ -139,7 +139,8 @@ def calc_cartesian_hessian(coords, molecule, engine, dirname, read_data=True, ve
             Hx[i] = (gfwd-gbak)/(2*h)
 
     elif type(engine).__name__ == "QCEngineAPI":
-        rec = engine.calc(coords, None)
+        #Requesting Hessian calculation from QCEngine
+        rec = engine.calc(coords, None, "hessian")
         Hx = rec["hessian"].reshape(nc, nc)
 
     else:

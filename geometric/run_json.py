@@ -198,9 +198,6 @@ def geometric_run_json(in_json_dict):
     logger.addHandler(log_stream)
 
     input_opts = parse_input_json_dict(in_json_dict)
-    input_opts['qcschema']['driver'] = "gradient"
-    if input_opts.get('transition', False):
-        input_opts['qcschema']['driver'] = "hessian"
     M, engine = geometric.optimize.get_molecule_engine(**input_opts)
 
     # Get initial coordinates in bohr
