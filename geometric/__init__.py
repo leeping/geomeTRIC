@@ -39,6 +39,7 @@ POSSIBILITY OF SUCH DAMAGE.
 
 from . import molecule
 from . import optimize
+from . import prepare
 from . import engine
 from . import run_json
 
