@@ -2415,7 +2415,7 @@ class Molecule(object):
             clashDists_frames.append(clashDists.copy())
         return minPair_frames, minDist_frames, clashPairs_frames, clashDists_frames
 
-    def rotate_check_clash(self, frame, rotate_index, thresh_hyd=1.4, thresh_hvy=1.8, printLevel=1):
+    def rotate_check_clash(self, frame, rotate_index, increment=15, thresh_hyd=1.4, thresh_hvy=1.8, printLevel=1):
         """ 
         Return a new Molecule object containing the selected frame 
         plus a number of frames where the selected dihedral angle is rotated
@@ -2450,7 +2450,7 @@ class Molecule(object):
         ai, aj, ak, al = rotate_index
         Success = False
         # Create grid of rotated structures
-        M_rot_H, frags = self.rotate_bond(frame, aj, ak, 15)
+        M_rot_H, frags = self.rotate_bond(frame, aj, ak, increment)
         phis = M_rot_H.measure_dihedrals(*rotate_index)
         for i in range(len(M_rot_H)):
             M_rot_H.comms[i] = ('Rigid scan: atomname %s, serial %s, dihedral %.3f' 
