@@ -68,11 +68,10 @@ def calc_cartesian_hessian(coords, molecule, engine, dirname, read_data=True, ve
         Files are also written to <prefix.tmp>/hessian.
     """
     nc = len(coords)
-    dir = dirname is not None
     # Attempt to read existing Hessian data if it exists.
     # Read from files hessian.txt/coords.xyz, hessian_1.txt/coords_1.xyz, etc.
     counter = 0
-    while read_data and dir:
+    while read_data:
         if counter > 0:
             hesstxt = os.path.join(dirname, "hessian", "hessian_%i.txt" % counter)
             hessxyz = os.path.join(dirname, "hessian", "coords_%i.xyz" % counter)
@@ -92,22 +91,20 @@ def calc_cartesian_hessian(coords, molecule, engine, dirname, read_data=True, ve
         counter += 1
 
     # Compute hessian from scratch.
-    if dir:
-        hesstxt = os.path.join(dirname, "hessian", "hessian.txt")
-        hessxyz = os.path.join(dirname, "hessian", "coords.xyz")
-        # First back up any existing Hessian data in a way that a future calculation could read it.
-        if os.path.exists(hessxyz) and os.path.exists(hesstxt):
-            bak(hessxyz)
-            bak(hesstxt)
+    hesstxt = os.path.join(dirname, "hessian", "hessian.txt")
+    hessxyz = os.path.join(dirname, "hessian", "coords.xyz")
+    # First back up any existing Hessian data in a way that a future calculation could read it.
+    if os.path.exists(hessxyz) and os.path.exists(hesstxt):
+        bak(hessxyz)
+        bak(hesstxt)
 
-    #oldxyz = molecule.xyzs[0].copy()
+    oldxyz = molecule.xyzs[0].copy()
     molecule.xyzs[0] = coords.reshape(-1, 3)*bohr2ang
-    if dir:
-        if not os.path.exists(os.path.join(dirname, "hessian")):
-            os.makedirs(os.path.join(dirname, "hessian"))
-        molecule[0].write(hessxyz)
-
-    if not read_data and dir:
+    if not os.path.exists(os.path.join(dirname, "hessian")):
+        os.makedirs(os.path.join(dirname, "hessian"))
+        
+    molecule[0].write(hessxyz)
+    if not read_data: 
         if os.path.exists(os.path.join(dirname, "hessian", "displace")):
             shutil.rmtree(os.path.join(dirname, "hessian", "displace"))
     # Calculate Hessian using finite difference
@@ -137,12 +134,6 @@ def calc_cartesian_hessian(coords, molecule, engine, dirname, read_data=True, ve
             gbak = engine.read_wq(coords, dirname_d)['gradient']
             coords[i] += h
             Hx[i] = (gfwd-gbak)/(2*h)
-
-    elif type(engine).__name__ == "QCEngineAPI":
-        #Requesting Hessian calculation from QCEngine
-        rec = engine.calc(coords, None, "hessian")
-        Hx = rec["hessian"].reshape(nc, nc)
-
     else:
         # First calculate a gradient at the central point, for linking scratch files.
         engine.calc(coords, dirname, read_data=read_data)
@@ -161,13 +152,12 @@ def calc_cartesian_hessian(coords, molecule, engine, dirname, read_data=True, ve
     # Save Hessian to text file
     oldxyz = molecule.xyzs[0].copy()
     molecule.xyzs[0] = coords.reshape(-1, 3)*bohr2ang
-    if dir:
-        molecule[0].write(hessxyz)
-        np.savetxt(hesstxt, Hx)
+    molecule[0].write(hessxyz)
     molecule.xyzs[0] = oldxyz
+    np.savetxt(hesstxt, Hx)
     # Delete displacement calcs because they take up too much space
     keep_displace = False
-    if not keep_displace and dir:
+    if not keep_displace:
         if os.path.exists(os.path.join(dirname, "hessian", "displace")):
             shutil.rmtree(os.path.join(dirname, "hessian", "displace"))
     return Hx

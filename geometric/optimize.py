@@ -264,9 +264,7 @@ class Optimizer(object):
                 do_wigner = True
         if do_wigner:
             logger.info("Requesting %i samples from Wigner distribution.\n" % self.params.wigner)
-        prefix = self.params.xyzout
-        if prefix is not None:
-            prefix = prefix.replace("_optim.xyz", "").replace(".xyz", "")
+        prefix = self.params.xyzout.replace("_optim.xyz", "").replace(".xyz", "")
         # Call the frequency analysis function with an input Hessian, with most arguments populated from self.params
         frequency_analysis(self.X, hessian, self.molecule.elem, energy=self.E, temperature=self.params.temperature, pressure=self.params.pressure, verbose=self.params.verbose, 
                            outfnm='%s.vdata_%s' % (prefix, suffix), note='Iteration %i Energy % .8f%s' % (self.Iteration, self.E, ' (Optimized Structure)' if afterOpt else ''),
@@ -323,7 +321,7 @@ class Optimizer(object):
                     logger.info("Cartesian Hessian is stored in %s/hessian/hessian.txt.\n" % self.dirname)
                     raise HessianExit
                     # sys.exit(0)
-            elif hasattr(self.params, 'hess_data') and self.Iteration == 0:
+            elif hasattr(self.params, 'hess_data'):
                 self.Hx0 = self.params.hess_data.copy()
                 logger.info(">> Initial Cartesian Hessian Eigenvalues\n")
                 self.SortedEigenvalues(self.Hx0)
