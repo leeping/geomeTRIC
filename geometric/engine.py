@@ -1417,7 +1417,6 @@ class QCEngineAPI(Engine):
 
         self.schema = schema
         self.program = program
-        self.schema["driver"] = "gradient"
 
         self.M = Molecule()
         self.M.elem = list(schema["molecule"]["symbols"])
@@ -1435,25 +1434,27 @@ class QCEngineAPI(Engine):
         # one additional attribute to store each schema on the opt trajectory
         self.schema_traj = []
 
-    def calc_new(self, coords, dirname):
+    def calc_new(self, coords, dirname, driver):
         import qcengine
         new_schema = deepcopy(self.schema)
         new_schema["molecule"]["geometry"] = coords.tolist()
+        new_schema["driver"] = driver
         new_schema.pop("program", None)
         ret = qcengine.compute(new_schema, self.program, return_dict=True)
         # store the schema_traj for run_json to pick up
         self.schema_traj.append(ret)
-        if ret["success"] is False:
+        if not ret["success"]:
             raise QCEngineAPIEngineError("QCEngineAPI computation did not execute correctly. Message: " + ret["error"]["error_message"])
         # Unpack the energy and gradient
         energy = ret["properties"]["return_energy"]
         gradient = np.array(ret["return_result"])
-        return {'energy':energy, 'gradient':gradient}
+        hessian = np.array(ret["properties"]["return_hessian"])
+        return {'energy':energy, 'gradient':gradient, 'hessian':hessian}
 
-    def calc(self, coords, dirname, **kwargs):
+    def calc(self, coords, dirname, driver="gradient", **kwargs):
         # overwrites the calc method of base class to skip caching and creating folders
-        # **kwargs: for throwing away other arguments such as read_data and copyfiles.
-        return self.calc_new(coords, dirname)
+        # **kwargs: for throwing away other arguments such as read_data and copy files.
+        return self.calc_new(coords, dirname, driver)
 
     def detect_dft(self):
         return any([i.lower() in self.schema["model"]["method"].lower() for i in dft_strings])
