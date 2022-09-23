@@ -11,10 +11,9 @@ from . import addons
 from geometric.internal import *
 
 datad = addons.datad
-test_logger = addons.test_logger
 localizer = addons.in_folder
 
-def test_hessian_assort(test_logger):
+def test_hessian_assort():
     M = geometric.molecule.Molecule(os.path.join(datad, 'assort.xyz'))
     coords = M.xyzs[0].flatten() * ang2bohr
     # Build TRIC coordinate system

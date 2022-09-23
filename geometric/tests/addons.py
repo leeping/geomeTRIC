@@ -28,7 +28,6 @@ def _plugin_import(plug):
     else:
         return True
 
-
 # Modify paths for testing
 os.environ["DQM_CONFIG_PATH"] = os.path.dirname(os.path.abspath(__file__))
 os.environ["TMPDIR"] = "/tmp/"
@@ -48,9 +47,6 @@ using_terachem = pytest.mark.skipif(
     not geometric.nifty.which("terachem"), reason="could not find terachem. please make sure TeraChem is installed for these tests")
 using_qchem = pytest.mark.skipif(
     not geometric.nifty.which("qchem"), reason="could not find qchem. please make sure Q-Chem is installed for these tests")
-
-# Points to the folder where the data files are installed.
-datad = os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), 'data')
 
 # Points to the folder where the data files are installed.
 datad = os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), 'data')
@@ -89,14 +85,3 @@ def in_folder(request):
 
     # Change back to CWD
     os.chdir(cwd)
-
-# make tests run in their own folder
-@pytest.fixture(scope="function")
-def test_logger(request):
-
-    # Adding these three lines here removes the extra newline that was printed 
-    logIni = pkg_resources.resource_filename(geometric.optimize.__name__, 'config/logTest.ini')
-    logging.config.fileConfig(logIni,disable_existing_loggers=False)
-    
-    # Yield for testing
-    yield 

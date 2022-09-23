@@ -14,7 +14,6 @@ import subprocess
 
 localizer = addons.in_folder
 datad = addons.datad
-logger = addons.test_logger
 
 def test_isint():
     assert nifty.isint("1")
@@ -115,9 +114,9 @@ class TestWorkQueue:
         nifty.wq_wait1(wq, wait_time=5)
         assert wq.stats.total_tasks_complete == 1, "Expected queue to have a task completed"
         # 2022-09-09: The following test causes a problem in Work Queue, disabling until fixed.
-        # nifty.queue_up(wq, "sleep 1; exit 1", [], ['no_exist'], tgt=None, verbose=False)
-        # nifty.wq_wait1(wq, wait_time=3)
-        # assert wq.stats.tasks_submitted == 1 + wq.stats.total_tasks_complete
+        nifty.queue_up(wq, "sleep 1; exit 1", [], ['no_exist'], tgt=None, verbose=False)
+        nifty.wq_wait1(wq, wait_time=5)
+        assert wq.stats.tasks_submitted == 1 + wq.stats.total_tasks_complete
             
         # Destroy the Work Queue object so it doesn't interfere with the rest of the tests.
         nifty.destroyWorkQueue()
@@ -265,8 +264,7 @@ def test_onefile(localizer):
         f.write("extra-line\n")
     assert nifty.onefile(ext='pdb') is None
     
-def test_print_array(logger):
-    # Confirm functions work without errors
+def test_print_array():
     nifty.pvec1d(np.arange(5))
     nifty.pmat2d(np.arange(25).reshape(-1, 5))
     with pytest.raises(TypeError):
