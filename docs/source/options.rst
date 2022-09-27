@@ -379,7 +379,7 @@ Activating this option will generate a ForceBalance-readable ``qdata.txt`` file 
 
 Provide a custom ``log.ini`` file to customize the logger.  
 This is most useful when using geomeTRIC in ways other than the command line.
-Examples are provided in the source distribution under ``<root>/geometric/config/[log.ini, logJson.ini, logTest.ini]``.
+Examples are provided in the source distribution under ``<root>/geometric/config/[log.ini, logJson.ini]``.
 
 ....
 

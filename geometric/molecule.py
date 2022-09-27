@@ -3,7 +3,6 @@ from __future__ import division
 from __future__ import print_function
 
 import copy
-import imp
 import itertools
 import os
 import re
@@ -25,6 +24,14 @@ try:
     from itertools import zip_longest as zip_longest
 except ImportError:
     from itertools import izip_longest as zip_longest
+
+# imp is being deprecated
+try:
+    import importlib
+    have_importlib = True
+except ImportError:
+    import imp
+    have_importlib = False
 
 # For Python 2 backwards-compatibility
 try:
@@ -311,6 +318,13 @@ def elem_from_atomname(atomname):
     """ Given an atom name, attempt to get the element in most cases. """
     return re.search('[A-Z][a-z]*',atomname).group(0)
 
+def get_module_path():
+    # Return the root folder of the module that this file is part of.
+    if have_importlib:
+        return importlib.util.find_spec(__name__.split('.')[0]).submodule_search_locations[0]
+    else:
+        return imp.find_module(__name__.split('.')[0])[1]
+
 if "forcebalance" in __name__:
     #============================#
     #| DCD read/write functions |#
@@ -319,8 +333,8 @@ if "forcebalance" in __name__:
     # or from the same directory as this module.
     have_dcdlib = False
     for fnm in ["_dcdlib.so",
-                os.path.join(imp.find_module(__name__.split('.')[0])[1],"_dcdlib.so"),
-                os.path.join(imp.find_module(__name__.split('.')[0])[1],"_dcdlib"+str(sysconfig.get_config_var('EXT_SUFFIX'))),
+                os.path.join(get_module_path(),"_dcdlib.so"),
+                os.path.join(get_module_path(),"_dcdlib"+str(sysconfig.get_config_var('EXT_SUFFIX'))),
                 os.path.join(os.path.dirname(__file__),"_dcdlib.so"),
                 os.path.join(os.path.dirname(__file__),"_dcdlib"+str(sysconfig.get_config_var('EXT_SUFFIX')))]:
         if os.path.exists(fnm):

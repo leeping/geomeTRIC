@@ -18,7 +18,6 @@ from geometric.internal import CartesianCoordinates,\
 from geometric.nifty import ang2bohr
 
 localizer = addons.in_folder
-test_logger = addons.test_logger
 
 _base_schema = {
         "schema_version": 1,
@@ -161,7 +160,7 @@ class BatchOptimizer(object):
 
 @addons.using_qcengine
 @addons.using_rdkit
-def test_rdkit_simple(test_logger):
+def test_rdkit_simple():
 
     schema1 = copy.deepcopy(_base_schema)
     schema2 = copy.deepcopy(_base_schema)
@@ -215,7 +214,7 @@ _N2_geo2 = [0.0, 0., 0.,
 
 @addons.using_qcengine
 @addons.using_rdkit
-def test_rdkit_N2(test_logger):
+def test_rdkit_N2():
 
     schema1 = copy.deepcopy(_N2_schema)
     schema2 = copy.deepcopy(_N2_schema)

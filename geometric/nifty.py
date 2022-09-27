@@ -63,11 +63,7 @@ else:
         """
         def __init__(self, stream = sys.stdout):
             super(RawStreamHandler, self).__init__(stream)
-
-        def emit(self, record):
-            message = record.getMessage()
-            self.stream.write(message)
-            self.flush()
+            self.terminator = ""
 
     class RawFileHandler(FileHandler):
         """
@@ -77,13 +73,7 @@ else:
         """
         def __init__(self, *args, **kwargs):
             super(RawFileHandler, self).__init__(*args, **kwargs)
-
-        def emit(self, record):
-            if self.stream is None:
-                self.stream = self._open()
-            message = record.getMessage()
-            self.stream.write(message)
-            self.flush()
+            self.terminator = ""
 
     if "geometric" in __name__:
         # This ensures logging behavior is consistent with the rest of geomeTRIC
