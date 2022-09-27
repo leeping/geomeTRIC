@@ -268,20 +268,19 @@ def test_run_json_psi4_hydrogen(localizer):
 
 @addons.using_qcengine
 @addons.using_psi4
-def test_run_json_psi4_hydrogen_ts(localizer):
-
-    datad = addons.datad
-    molecule = geometric.molecule.Molecule(os.path.join(datad, 'hcn_ts_optim.xyz'))
-
+def test_run_json_psi4_hcn_ts(localizer):
     from geometric.nifty import ang2bohr
-    qcel = {
-        "geometry": (molecule.xyzs[0]*ang2bohr).tolist(),
-        "symbols": molecule.elem,
+    datad = addons.datad
+    molecule = {
+        "geometry": [0.0, 0.0, 0.0,
+                     0.0, 0.0, 2.170112,
+                     -2.99588, 0.0, 2.170112],
+        "symbols": ["C","N","H"],
     } # yapf: disable
 
     hessian = np.loadtxt(os.path.join(datad, "hcn_tsguess_hessian.txt"))
 
-    in_json_dict = _build_input(qcel, program="psi4", method="HF", basis="3-21g")
+    in_json_dict = _build_input(molecule, program="psi4", method="HF", basis="3-21g")
     kws = in_json_dict.pop('keywords')
     kws["transition"] = True
     in_json_dict['keywords']=kws
@@ -296,11 +295,11 @@ def test_run_json_psi4_hydrogen_ts(localizer):
 
     assert out_json["success"], out_json["error"]
     result_geo = out_json['final_molecule']['geometry']
-
     # The results here are in Bohr
-    ref = molecule.xyzs[0].flatten()*ang2bohr
+    ref = geometric.molecule.Molecule(os.path.join(datad, "hcn_ts_optim.xyz")).xyzs[0]*ang2bohr
     assert pytest.approx(out_json["energies"][-1], 1.e-4) == -92.24601961
-    assert np.allclose(ref, result_geo, atol=1.e-3)
+    rmsd, maxd = geometric.optimize.calc_drms_dmax(np.array(result_geo), ref, align=True)
+    assert rmsd < 0.001 and maxd < 0.002
     assert out_json["schema_name"] == "qc_schema_optimization_output"
     assert "Converged" in out_json["stdout"]
     assert "Valid Hessian data not found" in out_json["stdout"]
@@ -320,7 +319,8 @@ def test_run_json_psi4_hydrogen_ts(localizer):
 
     result_geo = out_json['final_molecule']['geometry']
     assert pytest.approx(out_json["energies"][-1], 1.e-4) == -92.24601961
-    assert np.allclose(ref, result_geo, atol=1.e-3)
+    rmsd, maxd = geometric.optimize.calc_drms_dmax(np.array(result_geo), ref, align=True)
+    assert rmsd < 0.001 and maxd < 0.002
     assert out_json["schema_name"] == "qc_schema_optimization_output"
     assert "Converged" in out_json["stdout"]
     assert "Hessian was provided" in out_json["stdout"]
