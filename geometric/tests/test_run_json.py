@@ -289,7 +289,7 @@ def test_rdkit_run_error(localizer):
 
 
 @addons.using_psi4
-def test_transition_hnn_psi4_json(localizer):
+def test_transition_hcn_psi4_json(localizer):
     
     input_data = {}
     input_data["input_specification"] = {}
