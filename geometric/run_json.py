@@ -40,6 +40,7 @@ import geometric
 import json
 import traceback
 import pkg_resources
+import tempfile
 
 try:
     from cStringIO import StringIO      # Python 2
@@ -241,12 +242,14 @@ def geometric_run_json(in_json_dict):
     logger.info("\n")
 
     params = geometric.optimize.OptParams(**input_opts)
+    params.xyzout = params.get('xyzout', 'default.xyz')
+    dirname = tempfile.mkdtemp()
 
     try:
         # Run the optimization
         if Cons is None:
             # Run a standard geometry optimization
-            geometric.optimize.Optimize(coords, M, IC, engine, None, params)
+            geometric.optimize.Optimize(coords, M, IC, engine, dirname, params)
         else:
             # Run a constrained geometry optimization
             if isinstance(IC, (geometric.internal.CartesianCoordinates,
