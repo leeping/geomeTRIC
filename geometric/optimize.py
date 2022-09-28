@@ -310,7 +310,7 @@ class Optimizer(object):
                     delattr(self, 'Hx')
                 self.recalcHess = False
         elif self.Iteration == 0:
-            if self.params.hessian in ['first', 'stop', 'first+last']:
+            if self.params.hessian in ['first', 'stop', 'first+last'] and not hasattr(self.params, 'hess_data'):
                 self.Hx0 = calc_cartesian_hessian(self.X, self.molecule, self.engine, self.dirname, read_data=True, verbose=self.params.verbose)
                 logger.info(">> Initial Cartesian Hessian Eigenvalues\n")
                 self.SortedEigenvalues(self.Hx0)
@@ -321,7 +321,8 @@ class Optimizer(object):
                     logger.info("Cartesian Hessian is stored in %s/hessian/hessian.txt.\n" % self.dirname)
                     raise HessianExit
                     # sys.exit(0)
-            elif hasattr(self.params, 'hess_data') and self.Iteration == 0:
+            elif hasattr(self.params, 'hess_data'):
+                logger.info("Hessian was provided\n")
                 self.Hx0 = self.params.hess_data.copy()
                 logger.info(">> Initial Cartesian Hessian Eigenvalues\n")
                 self.SortedEigenvalues(self.Hx0)

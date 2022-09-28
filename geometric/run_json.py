@@ -41,6 +41,7 @@ import json
 import traceback
 import pkg_resources
 import tempfile
+import numpy as np
 
 try:
     from cStringIO import StringIO      # Python 2
@@ -199,6 +200,7 @@ def geometric_run_json(in_json_dict):
     logger.addHandler(log_stream)
 
     input_opts = parse_input_json_dict(in_json_dict)
+    hess = input_opts.pop('hessian', None)
     M, engine = geometric.optimize.get_molecule_engine(**input_opts)
 
     # Get initial coordinates in bohr
@@ -242,13 +244,17 @@ def geometric_run_json(in_json_dict):
     logger.info("\n")
 
     params = geometric.optimize.OptParams(**input_opts)
-    params.xyzout = params.get('xyzout', 'default.xyz')
     dirname = tempfile.mkdtemp()
+
+    if hess is not None:
+        n = len(coords)
+        params.hess_data = np.array(hess).reshape(n, n)
 
     try:
         # Run the optimization
         if Cons is None:
             # Run a standard geometry optimization
+            params.xyzout = "qce_optim.xyz"
             geometric.optimize.Optimize(coords, M, IC, engine, dirname, params)
         else:
             # Run a constrained geometry optimization
@@ -260,7 +266,7 @@ def geometric_run_json(in_json_dict):
                     logger.info("---=== Scan %i/%i : Constrained Optimization ===---\n" % (ic + 1, len(CVals)))
                 IC = CoordClass(M, build=True, connect=connect, addcart=addcart, constraints=Cons, cvals=CVal)
                 IC.printConstraints(coords, thre=-1)
-                geometric.optimize.Optimize(coords, M, IC, engine, None, params, print_info = (ic==0))
+                geometric.optimize.Optimize(coords, M, IC, engine, dirname, params, print_info = (ic==0))
 
         out_json_dict = get_output_json_dict(in_json_dict, engine.schema_traj)
         out_json_dict["success"] = True
