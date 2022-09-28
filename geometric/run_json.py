@@ -242,6 +242,7 @@ def geometric_run_json(in_json_dict):
     logger.info("\n")
 
     params = geometric.optimize.OptParams(**input_opts)
+    params.xyzout = params.get('xyzout', 'default.xyz')
     dirname = tempfile.mkdtemp()
 
     try:
