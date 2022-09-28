@@ -92,8 +92,8 @@ class OptParams(object):
         self.conmethod = kwargs.get('conmethod', 0)
         # Write Hessian matrix at optimized structure to text file
         self.write_cart_hess = kwargs.get('write_cart_hess', None)
-        # Output .xyz file name may be set separately in
-        # run_optimizer() prior to calling Optimize().
+        # Output .xyz is deliberately not set here in order to give run_optimizer()
+        # and geometric_run_json() more control over the default value of this variable.
         self.xyzout = kwargs.get('xyzout', None)
         # Name of the qdata.txt file to be written.
         # The CLI is designed so the user passes true/false instead of the file name.

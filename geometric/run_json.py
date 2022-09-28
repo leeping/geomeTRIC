@@ -41,6 +41,7 @@ import json
 import traceback
 import pkg_resources
 import tempfile
+
 try:
     from cStringIO import StringIO      # Python 2
 except ImportError:
@@ -189,7 +190,6 @@ def geometric_run_json(in_json_dict):
     """ Take a input dictionary loaded from json, and return an output dictionary for json """
 
     # Default logger configuration (prevents extra newline from being printed)
-    import numpy as np
     logIni = pkg_resources.resource_filename(geometric.optimize.__name__, 'config/logJson.ini')
     import logging.config
     logging.config.fileConfig(logIni,disable_existing_loggers=False)

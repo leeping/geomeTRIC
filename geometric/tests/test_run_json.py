@@ -8,8 +8,10 @@ import json, os, sys, shutil
 from . import addons
 import geometric
 import pytest
+from geometric.run_json import geometric_run_json
 
 localizer = addons.in_folder
+datad = addons.datad
 
 def _compare_constraint_strings(str1, str2, atol=1e-6):
     str1lines = str1.split('\n')
@@ -343,3 +345,37 @@ def test_rdkit_run_error(localizer):
     print(ret['stdout'])
     assert ret["success"] == False
     assert "UFF" in ret["error"]["error_message"]
+
+
+@addons.using_psi4
+def test_transition_hcn_psi4_json(localizer):
+    
+    input_data = {}
+    input_data["input_specification"] = {}
+    input_data["keywords"] = {}
+    input_data["keywords"]["transition"] = True
+    input_data["keywords"]["converge"] = ['gmax', '1.0e-5']
+    input_data["initial_molecule"] = {
+        "symbols": ["C", "N", "H"],
+        # Geometry in bohr
+        "geometry": [0.0, 0.0, 0.0, 0.0, 0.0 , 2.17012369, -2.99589621, 0.0, 2.17012369]
+        
+    }
+    input_data["input_specification"]["model"] = {"method": "hf", "basis": "3-21g"}
+    engine = "psi4"
+    input_data["keywords"]["program"] = engine
+
+    result = geometric_run_json(input_data)
+    # The results here are in Angstrom
+    #
+    ref = geometric.molecule.Molecule(os.path.join(datad, 'hcn_ts_optim.xyz')).xyzs[0]
+    ref_bohr = ref * geometric.nifty.ang2bohr
+    e_ref = -92.2460196061
+    rmsd, maxd = geometric.optimize.calc_drms_dmax(np.array(result['trajectory'][-1]['molecule']['geometry']), ref_bohr, align=True)
+    # Check that the energy is 0.0001 a.u. above reference.
+    assert result['energies'][-1] < (e_ref + 0.0001)
+    # Check that the optimization converged in less than 20 steps
+    assert len(result['trajectory']) < 40
+    # Check that the geometry matches the reference to within 0.01 RMS 0.02 max displacement
+    assert rmsd < 0.01
+    assert maxd < 0.02
