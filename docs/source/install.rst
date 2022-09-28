@@ -8,7 +8,9 @@ You can install `geomeTRIC` with ``conda``, with ``pip``, or by installing from 
 Conda
 -----
 
-You can install or update geomeTRIC using the ``conda`` package manager.::
+You can install or update geomeTRIC using the ``conda`` package manager.
+
+.. parsed-literal::
 
     conda install geometric -c conda-forge
 
@@ -39,7 +41,7 @@ Dependencies
 
 The required packages for geomeTRIC are as follows. Older versions of packages may work, no guarantees.
 
-* Python : Versions 2.7, 3.5, 3.6, 3.7 are supported. Presumably it will work with version 3.8.
+* Python : Versions 2.7, 3.5, 3.6, 3.7 are supported. Presumably it will work with version 3.8 and above.
 * NumPy: Version 1.15 or above
 * NetworkX : Version 2.2 or above
 
@@ -50,10 +52,11 @@ Supported QM packages are as follows. Older versions of packages may work, no gu
 * Q-Chem : Version 4.2 or above
 * TeraChem : Version 1.5 or above
 * Psi4 : Version 1.2 or above
-* Molpro : Version 2015 and 2019
+* Molpro : Version 2015 or 2019
 * Gaussian : Version 09 or 16
   
 Supported MM packages are:
+
 * OpenMM : Version 6.3 or above
 * Gromacs : Version 4.6.7 or 5.1.4. Newer versions are not tested.
 
@@ -75,10 +78,13 @@ Test geomeTRIC with ``pytest``::
 
 More information is available in the developer documentation.
 
+.. _installcctools:
+
 Installation of cctools
-------------------------
+-----------------------
+
 The Work Queue library in the `CCTools <https://github.com/cooperative-computing-lab/cctools>`_ package is utilized to provide distributed computing features in geomeTRIC, primarily the computation of numerical Hessian matrices.
 
-Installation of ``cctools`` is done separately. A convenient bash script has been made to simplify the process::
+Installation of ``cctools`` can be done easily via conda as follows:
 
-    $bash geomeTRIC/devtools/travis-ci/install-cctools.sh
+    conda install -c conda-forge ndcctools

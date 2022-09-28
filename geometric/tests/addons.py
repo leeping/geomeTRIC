@@ -28,7 +28,6 @@ def _plugin_import(plug):
     else:
         return True
 
-
 # Modify paths for testing
 os.environ["DQM_CONFIG_PATH"] = os.path.dirname(os.path.abspath(__file__))
 os.environ["TMPDIR"] = "/tmp/"
@@ -41,10 +40,17 @@ using_rdkit = pytest.mark.skipif(
 using_qcengine = pytest.mark.skipif(
     _plugin_import("qcengine") is False, reason="could not find qcengine. please install the package to enable tests")
 using_openmm = pytest.mark.skipif(
-    _plugin_import("simtk.openmm") is False, reason="could not find simtk.openmm. please install the package to enable tests")
+    _plugin_import("openmm") is False and _plugin_import("simtk.openmm") is False, reason="could not find openmm. please install the package to enable tests")
+using_workqueue = pytest.mark.skipif(
+    (_plugin_import("work_queue") is False) or (not geometric.nifty.which('work_queue_worker')), reason="could not find work_queue module or work_queue_worker executable. please install the package to enable tests")
+using_terachem = pytest.mark.skipif(
+    not geometric.nifty.which("terachem"), reason="could not find terachem. please make sure TeraChem is installed for these tests")
+using_qchem = pytest.mark.skipif(
+    not geometric.nifty.which("qchem"), reason="could not find qchem. please make sure Q-Chem is installed for these tests")
 
 # Points to the folder where the data files are installed.
 datad = os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), 'data')
+exampled = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath(__file__)))), 'examples')
 
 # make tests run in their own folder
 @pytest.fixture(scope="function")
@@ -57,7 +63,21 @@ def in_folder(request):
     # Build and change to test folder
     if not os.path.exists(test_folder):
         os.makedirs(test_folder)
-
+    else:
+        # If previous results exist in the test folder, archive them.
+        prev_num = 0
+        allfiles = os.listdir(test_folder)
+        while os.path.exists(os.path.join(test_folder, 'previous.%03i' % prev_num)):
+            allfiles.remove('previous.%03i' % prev_num)
+            prev_num += 1
+        if prev_num == 1000:
+            raise IOError("There are too many previous result folders in %s" % test_folder)
+        os.makedirs(os.path.join(test_folder, 'previous.%03i' % prev_num))
+        for f in allfiles:
+            src_path = os.path.join(test_folder, f)
+            dst_path = os.path.join(test_folder, 'previous.%03i' % prev_num, f)
+            os.rename(src_path, dst_path)
+        
     os.chdir(test_folder)
 
     # Yield for testing
@@ -65,14 +85,3 @@ def in_folder(request):
 
     # Change back to CWD
     os.chdir(cwd)
-
-# make tests run in their own folder
-@pytest.fixture(scope="function")
-def test_logger(request):
-
-    # Adding these three lines here removes the extra newline that was printed 
-    logIni = pkg_resources.resource_filename(geometric.optimize.__name__, 'config/logTest.ini')
-    logging.config.fileConfig(logIni,disable_existing_loggers=False)
-    
-    # Yield for testing
-    yield 

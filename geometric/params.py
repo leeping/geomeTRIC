@@ -66,9 +66,20 @@ class OptParams(object):
         # Maximum value of trust radius
         self.tmax = kwargs.get('tmax', 0.03 if self.transition else 0.3)
         # Minimum value of the trust radius
-        self.tmin = kwargs.get('tmin', 0.0 if (self.transition or self.meci) else min(1.2e-3, self.Convergence_drms))
-        # Minimum size of a step that can be rejected
-        self.thre_rj = kwargs.get('thre_rj', 1e-4 if (self.transition or self.meci) else 1e-2)
+        # Also sets the maximum step size that can be rejected
+        # LPW: Add to documentation later:
+        # This parameter is complicated.  It represents the length scale below which the PES is expected to be smooth.
+        # If set too small, the trust radius can decrease without limit and make the optimization impossible.
+        # This could happen for example if the potential energy surface contains a "step", which occurs infrequently;
+        # we don't want the optimization to stop there completely, but rather we accept a bad step and keep going.
+        # If set too large, then the rejection algorithm becomes ineffective as too-large low-quality steps will be kept.
+        # It should also not be smaller than 2*Convergence_drms because that could artifically cause convergence.
+        # Because MECI optimizations have more "sharpness" in their PES, it is set
+        # PS: If the PES is inherently rough on extremely small length scales,
+        # then the optimization is not expected to converge regardless of tmin.
+        self.tmin = kwargs.get('tmin', min(1.0e-4 if (self.meci or self.transition) else 1.2e-3, self.Convergence_drms))
+        # Use maximum component instead of RMS displacement when applying trust radius.
+        self.usedmax = kwargs.get('usedmax', False)
         # Sanity checks on trust radius
         if self.tmax < self.tmin:
             raise ParamError("Max trust radius must be larger than min")
@@ -87,6 +98,9 @@ class OptParams(object):
         # Name of the qdata.txt file to be written.
         # The CLI is designed so the user passes true/false instead of the file name.
         self.qdata = 'qdata.txt' if kwargs.get('qdata', False) else None
+        # Bond order threshold parameter, when using bond orders to build bonds.
+        # Turned on by default for TS calculations; with sufficient testing could turn on for minimization.
+        self.bothre = kwargs.get('bothre', 0.6 if self.transition else 0.0)
         # Whether to calculate or read a Hessian matrix.
         self.hessian = kwargs.get('hessian', None)
         if self.hessian is None:
@@ -94,16 +108,23 @@ class OptParams(object):
             # Otherwise the default is to never calculate the Hessian.
             if self.transition: self.hessian = 'first'
             else: self.hessian = 'never'
-        if self.hessian.startswith('file:'):
+        elif self.hessian.startswith('file:'):
             if os.path.exists(self.hessian[5:]):
                 # If a path is provided for reading a Hessian file, read it now.
                 self.hess_data = np.loadtxt(self.hessian[5:])
             else:
                 raise IOError("No Hessian data file found at %s" % self.hessian)
+        elif self.hessian.startswith('file+last:'):
+            if os.path.exists(self.hessian[10:]):
+                # If a path is provided for reading a Hessian file, read it now.
+                self.hess_data = np.loadtxt(self.hessian[10:])
+                self.hessian = 'last'
+            else:
+                raise IOError("No Hessian data file found at %s" % self.hessian)
         elif self.hessian.lower() in ['never', 'first', 'each', 'stop', 'last', 'first+last']:
             self.hessian = self.hessian.lower()
         else:
-            raise RuntimeError("Hessian command line argument can only be never, first, last, first+last, each, stop, or file:<path>")
+            raise RuntimeError("Hessian command line argument can only be never, first, last, first+last, file+last, each, stop, or file:<path>")
         # Perform a frequency analysis whenever a cartesian Hessian is computed
         self.frequency = kwargs.get('frequency', None)
         if self.frequency is None: self.frequency = True
@@ -113,9 +134,22 @@ class OptParams(object):
         self.wigner = kwargs.get('wigner', 0)
         if self.wigner and not self.frequency:
             raise ParamError('Wigner sampling requires frequency analysis')
+        # Ignore N lowest force constants when computing free energy
+        # (may be used when comparing two free energies when some of the modes are imaginary)
+        self.ignore_modes = kwargs.get('ignore_modes', 0)
         # Reset Hessian to guess whenever eigenvalues drop below epsilon
         self.reset = kwargs.get('reset', None)
         if self.reset is None: self.reset = not (self.transition or self.meci or self.hessian == 'each')
+        # Subtract net force and torque components from the gradient.
+        # In DFT calcs, there is often a small nonzero torque that is
+        # inconsistent with the energy change (W. Swope, personal communication).
+        # This torque component may cause geomeTRIC to fail to converge because
+        # it induces a gradual rotation of the structure that does not reduce the energy.
+        # Enabling this option eliminates the net force/torque component, which
+        # should speed convergence in these cases.
+        # In other cases (e.g. Fe4N catalyst), enabling this option can slow convergence.
+        # 0 = never project; 1 = auto-detect (default); 2 = always project
+        self.subfrctor = kwargs.get('subfrctor', 1)
 
     def convergence_criteria(self, **kwargs):
         criteria = kwargs.get('converge', [])
@@ -156,8 +190,12 @@ class OptParams(object):
         # Convergence criteria that are only used if molconv is set to True
         self.Convergence_molpro_gmax = kwargs.get('convergence_molpro_gmax', 3e-4)
         self.Convergence_molpro_dmax = kwargs.get('convergence_molpro_dmax', 1.2e-3)
+        # Convergence criteria for constraint violation
+        self.Convergence_cmax = kwargs.get('convergence_cmax', 1.0e-2)
 
     def printInfo(self):
+        if self.subfrctor == 2:
+            logger.info(' Net force and torque will be projected out of gradient.\n')
         if self.transition:
             logger.info(' Transition state optimization requested.\n')
         if self.hessian == 'first':
@@ -172,6 +210,8 @@ class OptParams(object):
             logger.info(' Hessian will be computed for both first and last step.\n')
         elif self.hessian.startswith('file:'):
             logger.info(' Hessian data will be read from file: %s\n' % self.hessian[5:])
+        elif self.hessian.startswith('file+last:'):
+            logger.info(' Hessian data will be read from file: %s, then computed for the last step.\n' % self.hessian[5:])
 
 def str2bool(v):
     """ Allows command line options such as "yes" and "True" to be converted into Booleans. """
@@ -246,7 +286,7 @@ def parse_optimizer_args(*args):
     
     grp_jobtype = parser.add_argument_group('jobtype', 'Control the type of optimization job')
     grp_jobtype.add_argument('--transition', type=str2bool, help='Provide "yes" to Search for a first order saddle point / transition state.\n ')
-    grp_jobtype.add_argument('--meci', type=str, help='Provide second input file and search for minimum-energy conical\n '
+    grp_jobtype.add_argument('--meci', type=str, nargs="+", help='Provide second input file and search for minimum-energy conical\n '
                              'intersection or crossing point between two SCF solutions (TeraChem and Q-Chem supported).\n'
                              'Or, provide "engine" if the engine directly provides the MECI objective function and gradient.')
     grp_jobtype.add_argument('--meci_sigma', type=float, help='Sigma parameter for MECI penalty function (default 3.5).\n'
@@ -262,13 +302,16 @@ def parse_optimizer_args(*args):
                              '"first+last" : Calculate Hessian for both the first and last structure.\n'
                              '"each" : Calculate for each step in the optimization (costly).\n'
                              '"stop" : Calculate Hessian for initial structure, then exit.\n'
-                             'file:<path> : Read initial Hessian data in NumPy format from path, e.g. file:folder/hessian.txt\n ')
+                             'file:<path> : Read initial Hessian data in NumPy format from path, e.g. file:folder/hessian.txt\n'
+                             'file+last:<path> : Read initial Hessian data as above, then compute for the last structure.\n ')
     grp_hessian.add_argument('--port', type=int, help='Work Queue port used to distribute Hessian calculations. Workers must be started separately.')
     grp_hessian.add_argument('--frequency', type=str2bool, help='Perform frequency analysis whenever Hessian is calculated, default is yes/true.\n ')
     grp_hessian.add_argument('--thermo', type=float, nargs=2, help='Temperature (K) and pressure (bar) for harmonic free energy\n'
                              'following frequency analysis, default is 300 K and 1.0 bar.\n ')
     grp_hessian.add_argument('--wigner', type=int, help='Number of desired samples from Wigner distribution after frequency analysis.\n'
                              'Provide negative number to overwrite any existing samples.\n ')
+    grp_hessian.add_argument('--ignore_modes', type=int, help='Number of modes to ignore when computing harmonic free energy (default 0).\n'
+                             'The lowest/most negative force constants are ignored first.\n ')
     
     grp_optparam = parser.add_argument_group('optparam', 'Control various aspects of the optimization algorithm')
     grp_optparam.add_argument('--maxiter', type=int, help='Maximum number of optimization steps, default 300.\n ')
@@ -277,12 +320,16 @@ def parse_optimizer_args(*args):
                               'and/or set specific criteria using key/value pairs e.g. "energy 1e-5 grms 1e-3"\n ')
     grp_optparam.add_argument('--trust', type=float, help='Starting trust radius, defaults to 0.1 (energy minimization) or 0.01 (TS optimization).\n ')
     grp_optparam.add_argument('--tmax', type=float, help='Maximum trust radius, defaults to 0.3 (energy minimization) or 0.03 (TS optimization).\n ')
+    grp_optparam.add_argument('--tmin', type=float, help='Minimum trust radius, do not reject steps trust radius is below this threshold (method-dependent).\n ')
+    grp_optparam.add_argument('--usedmax', type=str2bool, help='Use maximum component instead of RMS displacement when applying trust radius.\n ')
     grp_optparam.add_argument('--enforce', type=float, help='Enforce exact constraints when within provided tolerance (in a.u./radian, default 0.0)\n ')
     grp_optparam.add_argument('--conmethod', type=int, help='Set to 1 to enable updated constraint algorithm (default 0).\n ')
     grp_optparam.add_argument('--reset', type=str2bool, help='Reset approximate Hessian to guess when eigenvalues are under epsilon.\n '
                               'Defaults to True for minimization and False for transition states.\n ')
     grp_optparam.add_argument('--epsilon', type=float, help='Small eigenvalue threshold for resetting Hessian, default 1e-5.\n ')
-    grp_optparam.add_argument('--check', type=int, help='Check coordinates every <N> steps and rebuild coordinate system, disabled by default.')
+    grp_optparam.add_argument('--check', type=int, help='Check coordinates every <N> steps and rebuild coordinate system, disabled by default.\n')
+    grp_optparam.add_argument('--subfrctor', type=int, help='Project out net force and torque components from nuclear gradient.\n'
+                              '0 = never project; 1 = auto-detect (default); 2 = always project.')
 
     grp_modify = parser.add_argument_group('structure', 'Modify the starting molecular structure or connectivity')
     grp_modify.add_argument('--radii', type=str, nargs="+", help='List of atomic radii for construction of coordinate system.\n '
@@ -291,6 +338,7 @@ def parse_optimizer_args(*args):
     grp_modify.add_argument('--coords', type=str, help='Coordinate file to override the QM input file / PDB file. The LAST frame will be used.\n ')
     grp_modify.add_argument('--frag', type=str2bool, help='Provide "yes" to delete bonds between residues, producing\n'
                             'separate fragments in the internal coordinate system.')
+    grp_modify.add_argument('--bothre', type=float, help='Set the bond order threshold for building bonds in transition state calculations (Q-Chem, TeraChem only). Set 0.0 to disable.\n ')
     
     grp_output = parser.add_argument_group('output', 'Control the format and amount of the output')
     grp_output.add_argument('--prefix', type=str, help='Specify a prefix for log file and temporary directory.\n'

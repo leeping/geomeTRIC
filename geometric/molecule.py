@@ -3,7 +3,6 @@ from __future__ import division
 from __future__ import print_function
 
 import copy
-import imp
 import itertools
 import os
 import re
@@ -25,6 +24,14 @@ try:
     from itertools import zip_longest as zip_longest
 except ImportError:
     from itertools import izip_longest as zip_longest
+
+# imp is being deprecated
+try:
+    import importlib
+    have_importlib = True
+except ImportError:
+    import imp
+    have_importlib = False
 
 # For Python 2 backwards-compatibility
 try:
@@ -181,7 +188,9 @@ AtomVariableNames = {'elem', 'partial_charge', 'atomname', 'atomtype', 'tinkersu
 MetaVariableNames = {'fnm', 'ftype', 'qcrems', 'qctemplate', 'qcerr', 'charge', 'mult', 'bonds', 'topology',
                      'molecules'}
 # Variable names relevant to quantum calculations explicitly
-QuantumVariableNames = {'qcrems', 'qctemplate', 'charge', 'mult', 'qcsuf', 'qm_ghost', 'qm_bondorder'}
+QuantumVariableNames = {'qcrems', 'qctemplate', 'charge', 'mult', 'qcsuf', 'qm_ghost', 'qm_energies', 'qm_grads', 'qm_hessians',
+                        'qm_interaction', 'qm_espxyzs', 'qm_espvals', 'qm_extchgs', 'qm_mulliken_charges', 'qm_mulliken_spins',
+                        'qm_zpe', 'qm_entropy', 'qm_enthalpy','qm_bondorder'}
 # Superset of all variable names.
 AllVariableNames = QuantumVariableNames | AtomVariableNames | MetaVariableNames | FrameVariableNames
 
@@ -251,6 +260,13 @@ Elements = ["None",'H','He',
             'Lu','Hf','Ta','W','Re','Os','Ir','Pt','Au','Hg','Tl','Pb','Bi','Po','At','Rn',
             'Fr','Ra','Ac','Th','Pa','U','Np','Pu','Am','Cm','Bk','Cf','Es','Fm','Md','No','Lr','Rf','Db','Sg','Bh','Hs','Mt']
 
+# A list of transition and f-block metals (also some on the dividing line), used to adjust bond order thresholds
+TransitionMetals = ['Sc','Ti','V','Cr','Mn','Fe','Co','Ni','Cu','Zn','Sr','Y','Zr','Nb','Mo',
+                    'Tc','Ru','Rh','Pd','Ag','Cd','In','Sn','Sb','Te','La','Ce','Pr','Nd','Pm',
+                    'Sm','Eu','Gd','Tb','Dy','Ho','Er','Tm','Yb','Lu','Hf','Ta','W','Re','Os',
+                    'Ir','Pt','Au','Hg','Tl','Pb','Bi','Po','At','Ac','Th','Pa','U','Np','Pu',
+                    'Am','Cm','Bk','Cf','Es','Fm','Md','No','Lr','Rf','Db','Sg','Bh','Hs','Mt']
+
 # Dictionary of atomic masses ; also serves as the list of elements (periodic table)
 #
 # Atomic mass data was updated on 2020-05-07 from NIST:
@@ -302,6 +318,13 @@ def elem_from_atomname(atomname):
     """ Given an atom name, attempt to get the element in most cases. """
     return re.search('[A-Z][a-z]*',atomname).group(0)
 
+def get_module_path():
+    # Return the root folder of the module that this file is part of.
+    if have_importlib:
+        return importlib.util.find_spec(__name__.split('.')[0]).submodule_search_locations[0]
+    else:
+        return imp.find_module(__name__.split('.')[0])[1]
+
 if "forcebalance" in __name__:
     #============================#
     #| DCD read/write functions |#
@@ -310,8 +333,8 @@ if "forcebalance" in __name__:
     # or from the same directory as this module.
     have_dcdlib = False
     for fnm in ["_dcdlib.so",
-                os.path.join(imp.find_module(__name__.split('.')[0])[1],"_dcdlib.so"),
-                os.path.join(imp.find_module(__name__.split('.')[0])[1],"_dcdlib"+str(sysconfig.get_config_var('EXT_SUFFIX'))),
+                os.path.join(get_module_path(),"_dcdlib.so"),
+                os.path.join(get_module_path(),"_dcdlib"+str(sysconfig.get_config_var('EXT_SUFFIX'))),
                 os.path.join(os.path.dirname(__file__),"_dcdlib.so"),
                 os.path.join(os.path.dirname(__file__),"_dcdlib"+str(sysconfig.get_config_var('EXT_SUFFIX')))]:
         if os.path.exists(fnm):
@@ -359,9 +382,14 @@ elif "geometric" in __name__:
     #| OpenMM interface functions |#
     #==============================#
     try:
-        from simtk.unit import *
-        from simtk.openmm import *
-        from simtk.openmm.app import *
+        try:
+            from openmm.unit import *
+            from openmm import *
+            from openmm.app import *
+        except ImportError:
+            from simtk.unit import *
+            from simtk.openmm import *
+            from simtk.openmm.app import *
     except ImportError:
         logger.debug('Note: Failed to import optional OpenMM module.\n')
 
@@ -370,7 +398,7 @@ elif "geometric" in __name__:
 #===========================#
 
 ## One bohr equals this many angstroms
-bohr2ang = 0.529177210
+bohr2ang     = 0.529177210903      # Previous value: 0.529177210
 
 def unmangle(M1, M2):
     """
@@ -381,18 +409,14 @@ def unmangle(M1, M2):
 
     M.elem = list(np.array(PDB.elem)[unmangled])
     """
-    if M1.na != M2.na:
-        logger.error("Unmangler only deals with same number of atoms\n")
-        raise RuntimeError
+    if M1.na != M2.na: raise RuntimeError("Unmangler only deals with same number of atoms")
     unmangler = {}
     for i in range(M1.na):
         for j in range(M2.na):
             if np.linalg.norm(M1.xyzs[0][i] - M2.xyzs[0][j]) < 0.1:
                 unmangler[j] = i
     unmangled = [unmangler[i] for i in sorted(unmangler.keys())]
-    if len(unmangled) != M1.na:
-        logger.error("Unmangler failed (different structures?)\n")
-        raise RuntimeError
+    if len(unmangled) != M1.na: raise RuntimeError("Unmangler failed (different structures?)")
     return unmangled
 
 def nodematch(node1,node2):
@@ -476,13 +500,8 @@ try:
     class MyG(nx.Graph):
         def __init__(self):
             super(MyG,self).__init__()
-            self.Alive = True
         def __eq__(self, other):
             # This defines whether two MyG objects are "equal" to one another.
-            if not self.Alive:
-                return False
-            if not other.Alive:
-                return False
             return nx.is_isomorphic(self,other,node_match=nodematch)
         def __hash__(self):
             """ The hash function is something we can use to discard two things that are obviously not equal.  Here we neglect the hash. """
@@ -681,6 +700,7 @@ def either(A, B, key):
 #===========================#
 #|  Alignment subroutines  |#
 #| Moments added 08/03/12  |#
+#|  (and deleted 9/10/22)  |#
 #===========================#
 def EulerMatrix(T1,T2,T3):
     """ Constructs an Euler matrix from three Euler angles. """
@@ -704,61 +724,6 @@ def EulerMatrix(T1,T2,T3):
     BMat[2,2] = 1
     EMat = multi_dot([BMat, CMat, DMat])
     return EMat
-
-def ComputeOverlap(theta,elem,xyz1,xyz2):
-    """
-    Computes an 'overlap' between two molecules based on some
-    fictitious density.  Good for fine-tuning alignment but gets stuck
-    in local minima.
-    """
-    xyz2R = np.dot(EulerMatrix(theta[0],theta[1],theta[2]), xyz2.T).T
-    Obj = 0.0
-    elem = np.array(elem)
-    for i in set(elem):
-        for j in np.where(elem==i)[0]:
-            for k in np.where(elem==i)[0]:
-                dx = xyz1[j] - xyz2R[k]
-                dx2 = np.dot(dx,dx)
-                Obj -= np.exp(-0.5*dx2)
-    return Obj
-
-def AlignToDensity(elem,xyz1,xyz2,binary=False):
-    """
-    Computes a "overlap density" from two frames.
-    This function can be called by AlignToMoments to get rid of inversion problems
-    """
-    grid = np.pi*np.array(list(itertools.product([0,1],[0,1],[0,1])))
-    ovlp = np.array([ComputeOverlap(e, elem, xyz1, xyz2) for e in grid]) # Mao
-    t1 = grid[np.argmin(ovlp)]
-    xyz2R = np.dot(EulerMatrix(t1[0],t1[1],t1[2]), xyz2.T).T.copy()
-    return xyz2R
-
-def AlignToMoments(elem,xyz1,xyz2=None):
-    """Pre-aligns molecules to 'moment of inertia'.
-    If xyz2 is passed in, it will assume that xyz1 is already
-    aligned to the moment of inertia, and it simply does 180-degree
-    rotations to make sure nothing is inverted."""
-    xyz = xyz1 if xyz2 is None else xyz2
-    I = np.zeros((3,3))
-    for i, xi in enumerate(xyz):
-        I += (np.dot(xi,xi)*np.eye(3) - np.outer(xi,xi))
-        # This is the original line from MSMBuilder, but we're choosing not to use masses
-        # I += PeriodicTable[elem[i]]*(np.dot(xi,xi)*np.eye(3) - np.outer(xi,xi))
-    A, B = np.linalg.eig(I)
-    # Sort eigenvectors by eigenvalue
-    BB   = B[:, np.argsort(A)]
-    determ = np.linalg.det(BB)
-    Thresh = 1e-3
-    if np.abs(determ - 1.0) > Thresh:
-        if np.abs(determ + 1.0) > Thresh:
-            logger.info("in AlignToMoments, determinant is % .3f" % determ)
-        BB[:,2] *= -1
-    xyzr = np.dot(BB.T, xyz.T).T.copy()
-    if xyz2 is not None:
-        xyzrr = AlignToDensity(elem,xyz1,xyzr,binary=True)
-        return xyzrr
-    else:
-        return xyzr
 
 def get_rotate_translate(matrix1,matrix2):
     # matrix2 contains the xyz coordinates of the REFERENCE
@@ -1008,7 +973,7 @@ def AtomContact(xyz, pairs, box=None, displace=False):
     Returns
     -------
     np.ndarray
-        N_pairs*N_frames (2D) array of minimum image convention distances
+        N_frames*N_pairs (2D) array of minimum image convention distances
     np.ndarray (optional)
         if displace=True, N_frames*N_pairs*3 array of displacement vectors
     """
@@ -1233,6 +1198,7 @@ class Molecule(object):
                           'in'      : 'qcin',
                           'qcin'    : 'qcin',
                           'com'     : 'gaussian',
+                          'gjf'     : 'gaussian',
                           'rst'     : 'inpcrd',
                           'out'     : 'qcout',
                           'esp'     : 'qcesp',
@@ -1364,7 +1330,7 @@ class Molecule(object):
         New.top_settings = copy.deepcopy(self.top_settings)
 
         for key in self.Data:
-            if key in ['xyzs', 'qm_grads', 'qm_hessians', 'qm_espxyzs', 'qm_espvals', 'qm_extchgs', 'qm_mulliken_charges', 'qm_mulliken_spins', 'molecules', 'qm_bondorder']:
+            if key in ['xyzs', 'qm_grads', 'qm_hessians', 'qm_espxyzs', 'qm_espvals', 'qm_extchgs', 'qm_mulliken_charges', 'qm_mulliken_spins', 'qm_bondorder']:
                 # These variables are lists of NumPy arrays, NetworkX graph objects, or others with
                 # explicitly defined copy() methods.
                 New.Data[key] = []
@@ -1373,6 +1339,10 @@ class Molecule(object):
             elif key in ['topology']:
                 # These are NetworkX graph objects or other variables with explicitly defined copy() methods.
                 New.Data[key] = self.Data[key].copy()
+            elif key in ['molecules']:
+                New.Data[key] = []
+                for i in range(len(self.Data[key])):
+                    New.Data[key].append(self.Data[key][i].copy())
             elif key in ['boxes', 'qcrems']:
                 # We'll use the default deepcopy method for these:
                 # boxes is a list of named tuples.
@@ -1485,7 +1455,7 @@ class Molecule(object):
                     Sum.Data[key] = list(self.Data[key] + other.Data[key])
             elif either(self, other, key):
                 # TINKER 6.3 compatibility - catch the specific case that one has a periodic box and the other doesn't.
-                if key == 'boxes':
+                if key == 'boxes': # pragma: no cover
                     if key in self.Data:
                         other.Data['boxes'] = [self.Data['boxes'][0] for i in range(len(other))]
                     elif key in other.Data:
@@ -1527,7 +1497,7 @@ class Molecule(object):
                     self.Data[key] += other.Data[key]
             elif either(self, other, key):
                 # TINKER 6.3 compatibility - catch the specific case that one has a periodic box and the other doesn't.
-                if key == 'boxes':
+                if key == 'boxes': # pragma: no cover
                     if key in self.Data:
                         other.Data['boxes'] = [self.Data['boxes'][0] for i in range(len(other))]
                     elif key in other.Data:
@@ -1584,6 +1554,8 @@ class Molecule(object):
         for key in self.FrameKeys:
             if key in ['xyzs', 'qm_grads', 'qm_mulliken_charges', 'qm_mulliken_spins']:
                 NewData[key] = list([self.Data[key][i][unmangled] for i in range(len(self))])
+            elif key in ['qm_hessians', 'qm_bondorder']:
+                NewData[key] = list([self.Data[key][i][unmangled, unmangled] for i in range(len(self))])
         for key in NewData:
             setattr(self, key, copy.deepcopy(NewData[key]))
 
@@ -1673,9 +1645,15 @@ class Molecule(object):
     #|     For doing useful things       |#
     #=====================================#
 
-    def center_of_mass(self):
-        totMass = sum([PeriodicTable.get(self.elem[i], 0.0) for i in range(self.na)])
-        return np.array([np.sum([xyz[i,:] * PeriodicTable.get(self.elem[i], 0.0) / totMass for i in range(xyz.shape[0])],axis=0) for xyz in self.xyzs])
+    def center_of_mass(self, mass=True):
+        """
+        Calculate the center of mass. If mass=False, then return the geometric center.
+        """
+        if mass:
+            totMass = sum([PeriodicTable.get(self.elem[i], 0.0) for i in range(self.na)])
+            return np.array([np.sum([xyz[i,:] * PeriodicTable.get(self.elem[i], 0.0) / totMass for i in range(xyz.shape[0])],axis=0) for xyz in self.xyzs])
+        else:
+            return np.array([np.mean(self.xyzs[i], axis=0) for i in range(len(self))])
 
     def radius_of_gyration(self):
         totMass = sum([PeriodicTable[self.elem[i]] for i in range(self.na)])
@@ -1686,6 +1664,74 @@ class Molecule(object):
             xyz1 -= coms[i]
             rgs.append(np.sqrt(np.sum([PeriodicTable[self.elem[i]]*np.dot(x,x) for i, x in enumerate(xyz1)])/totMass))
         return np.array(rgs)
+
+    def moment_of_inertia(self, mass=True):
+        """ Calculate moment of inertia in amu * angstrom**2. 
+        If mass = False, then all masses will be set to one."""
+        moments = []
+        for i in range(len(self)):
+            I = np.zeros((3,3))
+            xyz = self.xyzs[i]
+            coms = self.center_of_mass(mass=mass)
+            dxyz = xyz - coms[i, np.newaxis, :]
+            for j, xj in enumerate(dxyz):
+                factor = PeriodicTable[self.elem[j]] if mass else 1.0
+                I += factor*(np.dot(xj,xj)*np.eye(3) - np.outer(xj,xj))
+            moments.append(I)
+        return moments
+        
+    def calc_netforce_torque(self, mass=True):
+        """ Calculate net force and torque vectors
+        in units of hartree/bohr and hartree/bohr*bohr respectively.
+
+        These are actually the "negative" of the net force and torque
+        because the factor of -1 to convert grad into force has not been applied.
+
+        Requires forces to be entered into qm_grads.
+        """
+        netforces = []
+        torques = []
+        coms = self.center_of_mass(mass=mass)
+        if len(self.qm_grads) != len(self):
+            raise RuntimeError('qm_grads length does not match number of structures')
+        if self.qm_grads[0].shape != (self.na, 3):
+            raise RuntimeError('qm_grads element does not have the wrong shape (n_atoms, 3)')
+        for i in range(len(self)):
+            netforces.append(np.sum(self.qm_grads[i], axis=0))
+            torque_vec = np.zeros(3, dtype=float)
+            dxyz = (self.xyzs[i] - coms[i][np.newaxis, :])/bohr2ang
+            for j in range(self.na):
+                torque_vec += np.cross(dxyz[j], self.qm_grads[i][j])
+            torques.append(torque_vec)
+        return np.array(netforces), np.array(torques)
+
+    def remove_netforce_torque(self, mass=True):
+        """ Calculate net force and torque-less analogue of qm_grads. """
+        netforces, torques = self.calc_netforce_torque(mass=mass)
+        coms = self.center_of_mass(mass=mass)
+        moments = self.moment_of_inertia(mass=mass)
+        grad_proj = [frc.copy() for frc in self.qm_grads]
+        for i in range(len(self)):
+            # The purely translational component of the force on each atom
+            trans_frc = netforces[i] / self.na
+            grad_proj[i] -= trans_frc[np.newaxis, :]
+            dxyz = (self.xyzs[i] - coms[i][np.newaxis, :])/bohr2ang
+            # Moment of inertia in amu bohr**2
+            moment_au = moments[i]/bohr2ang**2
+            for j in range(self.na):
+                # The purely rotational component of the force on each atom.
+                # L = angular momentum, I = moment of inertia, w = angular velocity
+                # T = torque, v = perpendicular component of velocity
+                # F = perpendicular component of force, the desired quantity
+                #
+                # Start with F = m (dv/dt) = m (dw/dt x r)
+                # dw/dt = I^-1.dL/dt = I^-1.T
+                # Therefore F = m (I^-1.T) x r
+                I_torque = np.dot(np.linalg.pinv(moment_au), torques[i])
+                factor = PeriodicTable[self.elem[j]] if mass else 1.0
+                torque_frc = factor*np.cross(I_torque, dxyz[j])
+                grad_proj[i][j] -= torque_frc
+        return grad_proj
 
     def rigid_water(self):
         """ If one atom is oxygen and the next two are hydrogen, make the water molecule rigid. """
@@ -1729,10 +1775,10 @@ class Molecule(object):
                 raise IOError
             ## Actually read the file.
             Parsed = self.Read_Tab[self.Funnel[ftype.lower()]](fnm, **kwargs)
-            if 'xyzs' not in Parsed:
+            if 'xyzs' not in Parsed: # pragma: no cover
                 logger.error('Did not get any coordinates from the new file %s\n' % fnm)
                 raise RuntimeError
-            if Parsed['xyzs'][0].shape[0] != self.na:
+            if Parsed['xyzs'][0].shape[0] != self.na: # pragma: no cover
                 logger.error('When loading frames, don\'t change the number of atoms\n')
                 raise RuntimeError
             ## Set member variables.
@@ -1830,7 +1876,10 @@ class Molecule(object):
                     s           = line.split()
                     if len(s) > 1:
                         for i in range(1,len(s)):
-                            s[i] = str(Map[int(s[i])])
+                            try:
+                                s[i] = str(Map[int(s[i])])
+                            except KeyError:
+                                raise KeyError("Atom selection includes bonds to atoms outside the selection (%i)" % int(s[i]))
                     sn = [int(i) for i in s[1:]]
                     s = [s[0]] + list(np.array(s[1:])[np.argsort(sn)])
                     NewSuf.append(''.join([whites[j]+s[j] for j in range(len(s))]))
@@ -1840,9 +1889,12 @@ class Molecule(object):
         for key in self.FrameKeys:
            if key in ['xyzs', 'qm_grads', 'qm_mulliken_charges', 'qm_mulliken_spins']:
                New.Data[key] = [self.Data[key][i][atomslice] for i in range(len(self))]
+           elif key in ['qm_hessians', 'qm_bondorder']:
+               New.Data[key] = [self.Data[key][i][atomslice,atomslice] for i in range(len(self))]
         if 'bonds' in self.Data:
             New.Data['bonds'] = [(list(atomslice).index(b[0]), list(atomslice).index(b[1])) for b in self.bonds if (b[0] in atomslice and b[1] in atomslice)]
-        New.top_settings = self.top_settings
+        New.top_settings = copy.deepcopy(self.top_settings)
+        
         if build_topology:
             New.build_topology(force_bonds=False)
         return New
@@ -1861,8 +1913,19 @@ class Molecule(object):
         def FrameStack(k):
             if k in self.Data and k in other.Data:
                 New.Data[k] = [np.vstack((s, o)) for s, o in zip(self.Data[k], other.Data[k])]
-        for i in ['xyzs', 'qm_grads', 'qm_hessians', 'qm_espxyzs', 'qm_espvals', 'qm_extchgs', 'qm_mulliken_charges', 'qm_mulliken_spins']:
+                
+        def FrameStack2D(k):
+            if k in self.Data and k in other.Data:
+                new_data = [np.zeros((self.na+other.na, self.na+other.na), dtype=float) for i in range(len(self))]
+                for i in range(len(self)):
+                    new_data[i][:self.na, :self.na] = self.Data[k][i].copy()
+                    new_data[i][self.na:, self.na:] = other.Data[k][i].copy()
+                New.Data[k] = new_data[i].copy()
+                
+        for i in ['xyzs', 'qm_grads', 'qm_espxyzs', 'qm_espvals', 'qm_extchgs', 'qm_mulliken_charges', 'qm_mulliken_spins']:
             FrameStack(i)
+        for i in ['qm_hessians', 'qm_bondorder']:
+            FrameStack2D(i)
 
         # Now build the new atom keys.
         for key in self.AtomKeys:
@@ -1890,19 +1953,6 @@ class Molecule(object):
         if 'bonds' in self.Data and 'bonds' in other.Data:
             New.Data['bonds'] = self.bonds + [(b[0]+self.na, b[1]+self.na) for b in other.bonds]
         return New
-
-    def align_by_moments(self):
-        """ Align molecules using the moment of inertia.
-        Departs from MSMBuilder convention of
-        using arithmetic mean for mass. """
-        coms  = self.center_of_mass()
-        xyz1  = self.xyzs[0]
-        xyz1 -= coms[0]
-        xyz1  = AlignToMoments(self.elem,xyz1)
-        for index2, xyz2 in enumerate(self.xyzs):
-            xyz2 -= coms[index2]
-            xyz2 = AlignToMoments(self.elem,xyz1,xyz2)
-            self.xyzs[index2] = xyz2
 
     def get_populations(self):
         """ Return a cloned molecule object but with X-coordinates set
@@ -2124,7 +2174,7 @@ class Molecule(object):
         self.Data['bonds'] = sorted(list(set(bondlist)))
         self.built_bonds = True
 
-    def build_topology(self, force_bonds=True, **kwargs):
+    def build_topology(self, force_bonds=True, bond_order=0.0, metal_bo_factor=0.5, **kwargs):
         """
 
         Create self.topology and self.molecules; these are graph
@@ -2139,9 +2189,17 @@ class Molecule(object):
             default behavior.  If creating a Molecule object using
             __init__, do not force the building of bonds by default
             (only build bonds if not read from file.)
+        bond_order : float
+            If set to a nonzero number, do not use distance criteria and 
+            build the bonds from QM bond orders using the provided threshold, 
+            if the qm_bondorder data attribute exists.
+        metal_bo_factor : float
+            Transition metal complexes tend to have a lower bond order.
+            This multiplicative factor adjusts the bond order for metals.
         topframe : int, optional
-            Provide the frame number used for reading the bonds.  If
-            not provided, this will be taken from the top_settings
+            Provide the frame number used for reading the bonds
+            (and the bond orders if use_bondorder = True).
+            If not provided, this will be taken from the top_settings
             field.  If provided, this will take priority and write
             the value into top_settings.
         """
@@ -2149,8 +2207,21 @@ class Molecule(object):
         self.top_settings['topframe'] = sn
         if self.na > 100000:
             logger.warning("Warning: Large number of atoms (%i), topology building may take a long time" % self.na)
-        # Build bonds from connectivity graph if not read from file.
-        if (not self.top_settings['read_bonds']) or force_bonds:
+        if bond_order > 0.0:
+            if not hasattr(self, 'qm_bondorder'):
+                raise RuntimeError('Molecule does not contain QM bond order info.')
+            print("Using QM bond order with a threshold of %.2f" % bond_order)
+            bondlist = []
+            for i in range(self.na):
+                for j in range(i+1, self.na):
+                    if self.qm_bondorder[sn][i, j] > bond_order:
+                        bondlist.append((i, j))
+                    elif ((self.elem[i] in TransitionMetals or self.elem[j] in TransitionMetals)
+                          and self.qm_bondorder[sn][i, j] > bond_order*metal_bo_factor):
+                        bondlist.append((i, j))
+            self.Data['bonds'] = sorted(list(set(bondlist)))
+        # Build bonds from connectivity graph.
+        elif (not self.top_settings['read_bonds']) or force_bonds:
             self.build_bonds()
         # Create a NetworkX graph object to hold the bonds.
         G = MyG()
@@ -2197,6 +2268,17 @@ class Molecule(object):
         else:
             drij, dxij = AtomContact(np.array(self.xyzs), AtomIterator, box=None, displace=True)
         return AtomIterator, list(drij), list(dxij)
+
+    def get_closest_atom(self, i, pbc=True):
+        """ Obtain the closest atom index to atom i. """
+        atom_pairs = [(i, j) for j in range(self.na)]
+        if pbc:
+            boxes = np.array([[self.boxes[i].a, self.boxes[i].b, self.boxes[i].c] for i in range(len(self))])
+            drij = AtomContact(np.array(self.xyzs), atom_pairs, box=boxes)
+        else:
+            drij = AtomContact(np.array(self.xyzs), atom_pairs, box=None)
+        drij[:, i] = 1e10
+        return np.argmin(drij, axis=1)
 
     def rotate_bond(self, frame, aj, ak, increment=15):
         """ 
@@ -2347,7 +2429,7 @@ class Molecule(object):
             clashDists_frames.append(clashDists.copy())
         return minPair_frames, minDist_frames, clashPairs_frames, clashDists_frames
 
-    def rotate_check_clash(self, frame, rotate_index, thresh_hyd=1.4, thresh_hvy=1.8, printLevel=1):
+    def rotate_check_clash(self, frame, rotate_index, increment=15, thresh_hyd=1.4, thresh_hvy=1.8, printLevel=1):
         """ 
         Return a new Molecule object containing the selected frame 
         plus a number of frames where the selected dihedral angle is rotated
@@ -2382,7 +2464,7 @@ class Molecule(object):
         ai, aj, ak, al = rotate_index
         Success = False
         # Create grid of rotated structures
-        M_rot_H, frags = self.rotate_bond(frame, aj, ak, 15)
+        M_rot_H, frags = self.rotate_bond(frame, aj, ak, increment)
         phis = M_rot_H.measure_dihedrals(*rotate_index)
         for i in range(len(M_rot_H)):
             M_rot_H.comms[i] = ('Rigid scan: atomname %s, serial %s, dihedral %.3f' 
@@ -3078,7 +3160,7 @@ class Molecule(object):
             Answer['qm_espvals'] = espvals
         return Answer
 
-    def read_mol2(self, fnm, **kwargs):
+    def read_mol2(self, fnm, **kwargs): # pragma: no cover
         xyz      = []
         charge   = []
         atomname = []
@@ -3391,7 +3473,7 @@ class Molecule(object):
                     thiscomm = []
                 else:
                     thiscomm.append(' '.join(sline[1:]))
-            elif re.match('^ *[0-9]+ +(EXT)?$',line):
+            elif re.match('^ *[0-9]+ *(EXT)?$',line):
                 na = int(sline[0])
             elif is_charmm_coord(line):
                 if frame == 0: # Create the list of residues, atom names etc. only if it's the first frame.
@@ -3444,6 +3526,7 @@ class Molecule(object):
         qcrems               = []
         xyz                  = []
         xyzs                 = []
+        xyz_fsm              = []
         elem                 = []
         section              = None
         # The Z-matrix printing in new versions throws me off.
@@ -3452,7 +3535,7 @@ class Molecule(object):
         # section that follows.
         zmatrix              = False
         template             = []
-        fff = False
+        found_first_mol      = False
         inside_section       = False
         reading_template     = True
         charge               = 0
@@ -3465,7 +3548,8 @@ class Molecule(object):
         ghost                = [] # If the element in the $molecule section is preceded by an '@' sign, it's a ghost atom for counterpoise calculations.
         infsm                = False
 
-        for line in open(fnm).readlines():
+        # The 'iso-8859-1' prevents some strange errors that show up when reading the Archival summary line
+        for line in open(fnm, encoding='iso-8859-1').readlines():
             line = line.strip().expandtabs()
             sline = line.split()
             dline = line.split('!')[0].split()
@@ -3479,11 +3563,12 @@ class Molecule(object):
                 else:
                     if wrd == 'end':
                         inside_section = False
+                        infsm = False
                         if section == 'molecule':
                             if len(xyz) > 0:
                                 xyzs.append(np.array(xyz))
                             xyz = []
-                            fff = True
+                            found_first_mol = True
                             if suffix:
                                 readsuf = False
                         elif section == 'rem':
@@ -3503,24 +3588,29 @@ class Molecule(object):
                 if section == 'molecule':
                     if line.startswith("*"):
                         infsm = True
-                    if (not infsm) and (len(dline) >= 4 and all([isfloat(dline[i]) for i in range(1,4)])):
-                        if fff:
-                            reading_template = False
-                            template_cut = list(i for i, dat in enumerate(template) if '@@@' in dat[0])[-1]
+                    if len(dline) >= 4 and all([isfloat(dline[i]) for i in range(1,4)]):
+                        if infsm:
+                            xyz_fsm.append([float(i) for i in sline[1:4]])
                         else:
-                            if re.match('^@', sline[0]): # This is a ghost atom
-                                ghost.append(True)
+                            if found_first_mol:
+                                reading_template = False
+                                template_cut = list(i for i, dat in enumerate(template) if '@@@' in dat[0])[-1]
                             else:
-                                ghost.append(False)
-                            elem.append(re.sub('@','',sline[0]))
-                        xyz.append([float(i) for i in sline[1:4]])
-                        if readsuf and len(sline) > 4:
-                            whites      = re.split('[^ ]+',line)
-                            suffix.append(''.join([whites[j]+sline[j] for j in range(4,len(sline))]))
+                                if re.match('^@', sline[0]): # This is a ghost atom
+                                    ghost.append(True)
+                                else:
+                                    ghost.append(False)
+                                elem.append(re.sub('@','',sline[0]))
+                            xyz.append([float(i) for i in sline[1:4]])
+                            if readsuf and len(sline) > 4:
+                                whites      = re.split('[^ ]+',line)
+                                suffix.append(''.join([whites[j]+sline[j] for j in range(4,len(sline))]))
                     elif re.match("[+-]?[0-9]+ +[0-9]+$",line.split('!')[0].strip()):
-                        if not fff:
+                        if not found_first_mol:
                             charge = int(sline[0])
                             mult = int(sline[1])
+                    elif infsm and re.sub(r'\$','',line).lower() != 'end':
+                        pass
                     else:
                         SectionData.append(line)
                 elif reading_template:
@@ -3536,7 +3626,7 @@ class Molecule(object):
                         SectionData.append(line)
             elif re.match('^@+$', line) and reading_template:
                 template.append(('@@@', []))
-            elif re.match('Welcome to Q-Chem', line) and reading_template and fff:
+            elif re.match('Welcome to Q-Chem', line) and reading_template and found_first_mol:
                 template.append(('@@@', []))
 
         if template_cut != 0:
@@ -3554,6 +3644,8 @@ class Molecule(object):
             Answer['xyzs'] = xyzs
         else:
             Answer['xyzs'] = [np.array([])]
+        if xyz_fsm:
+            Answer['xyzs'].append(np.array(xyz_fsm))
         if len(elem) > 0:
             Answer['elem'] = elem
         if len(ghost) > 0:
@@ -3762,7 +3854,8 @@ class Molecule(object):
         pcmgradmode = False
         pcmgrads = []
         pcmgrad = []
-        for line in open(fnm):
+        # The 'iso-8859-1' prevents some strange errors that show up when reading the Archival summary line
+        for line in open(fnm, encoding='iso-8859-1'):
             line = line.strip().expandtabs()
             if 'Welcome to Q-Chem' in line:
                 Answer['qcerr'] = ''
@@ -3956,7 +4049,7 @@ class Molecule(object):
             Answer['qm_grads'] = Mats['gradient_scf']['All']
         # Mayer bond order matrix from SCF_FINAL_PRINT=1
         if len(Mats['mayer']['All']) > 0:
-            Answer['qm_bondorder'] = Mats['mayer']['All'][-1]
+            Answer['qm_bondorder'] = Mats['mayer']['All']
         if len(Mats['hessian_scf']['All']) > 0:
             Answer['qm_hessians'] = Mats['hessian_scf']['All']
         #else:
@@ -4001,19 +4094,12 @@ class Molecule(object):
             # Catch the case of failed geometry optimizations.
             if len(Answer['xyzs']) == len(Answer['qm_energies']) + 1:
                 Answer['xyzs'] = Answer['xyzs'][:-1]
-            # Catch the case of freezing string method, it prints out two extra coordinates.
-            if len(Answer['xyzs']) == len(Answer['qm_energies']) + 2:
-                for i in range(2):
-                    Answer['qm_energies'].append(0.0)
-                    mkchg.append([0.0 for j in mkchg[-1]])
-                    mkspn.append([0.0 for j in mkchg[-1]])
-            # Q-Chem 4.4 prints out three more coordinates.
-            if FSM and (len(Answer['xyzs']) == len(Answer['qm_energies']) + 3):
-                Answer['xyzs'] = Answer['xyz'][1:]
-                for i in range(2):
-                    Answer['qm_energies'].append(0.0)
-                    mkchg.append([0.0 for j in mkchg[-1]])
-                    mkspn.append([0.0 for j in mkchg[-1]])
+            # Catch the case of freezing string method, it prints out two extra coordinates at the end.
+            # and one extra coordinate / energy pair at the top.
+            if FSM:
+                Answer['qm_energies'] = Answer['qm_energies'][1:]
+                Answer['xyzs'] = Answer['xyzs'][1:]
+                Answer['xyzs'] = Answer['xyzs'][:-2]
             if FDiff and (len(Answer['qm_energies']) == (len(Answer['xyzs'])+1)):
                 logger.info("Aligning energies because finite difference calculation prints one extra")
                 Answer['qm_energies'] = Answer['qm_energies'][:-1]
@@ -4033,7 +4119,7 @@ class Molecule(object):
             for i in np.where(np.array(conv) == 0)[0]:
                 Answer['qm_grads'].insert(i, Answer['qm_grads'][0]*0.0)
             if len(Answer['qm_grads']) != len(Answer['qm_energies']):
-                logger.warning("Number of energies and gradients is inconsistent (composite jobs?)  Deleting gradients.")
+                logger.warning("Number of energies and gradients is inconsistent (%i != %i) ; deleting gradients." % (len(Answer['qm_energies']), len(Answer['qm_grads'])))
                 del Answer['qm_grads']
         # A strange peculiarity; Q-Chem sometimes prints out the final Mulliken charges a second time, after the geometry optimization.
         if mkchg:
@@ -4047,7 +4133,9 @@ class Molecule(object):
                 Answer['qm_mulliken_spins'].insert(i, np.array([0.0 for i in mkspn[-1]]))
             Answer['qm_mulliken_spins'] = Answer['qm_mulliken_spins'][:len(Answer['qm_energies'])]
 
-        Answer['Irc'] = IRCData
+        if any([Answer['qcrems'][i]['jobtype'].lower() == 'rpath' for i in range(len(Answer['qcrems']))]):
+            Answer['Irc'] = IRCData
+            
         if len(modes) > 0:
             unnorm = [np.array(i) for i in modes]
             Answer['freqs'] = np.array(frqs)
@@ -4138,7 +4226,7 @@ class Molecule(object):
                 out.append(format_xyz_coord(self.elem[i],xyz[i]))
         return out
 
-    def get_reaxff_atom_types(self):
+    def get_reaxff_atom_types(self): # pragma: no cover
         """
         Return a list of element names which maps the LAMMPS atom types
         to the ReaxFF elements
@@ -4160,8 +4248,7 @@ class Molecule(object):
         """
         selection = kwargs.get('selection', list(range(len(self))))
         if len(selection) != 1:
-            logger.error("only a single frame can be written for write_lammps_data\n")
-            raise RuntimeError
+            raise RuntimeError("only a single frame can be written for write_lammps_data")
         I = selection[0]
         out = []
         comm = self.comms[I]
@@ -4189,7 +4276,7 @@ class Molecule(object):
             xhi = self.boxes[I].a
             yhi = self.boxes[I].b
             zhi = self.boxes[I].c
-        else:
+        else: # pragma: no cover
             xlo = np.floor(np.min(self.xyzs[I][:,0]))
             ylo = np.floor(np.min(self.xyzs[I][:,1]))
             zlo = np.floor(np.min(self.xyzs[I][:,2]))
@@ -4225,7 +4312,7 @@ class Molecule(object):
             out.append("%4i 1 %2i 0.0 % 15.10f % 15.10f % 15.10f" % (i+1, list(atmap.keys()).index(self.elem[i])+1, self.xyzs[I][i, 0], self.xyzs[I][i, 1], self.xyzs[I][i, 2]))
         return out
 
-    def write_molproq(self, **kwargs):
+    def write_molproq(self, **kwargs): # pragma: no cover
         selection = kwargs.get('selection', list(range(len(self))))
         self.require('xyzs','partial_charge')
         out = []
@@ -4294,7 +4381,7 @@ class Molecule(object):
     def write_gro(self, **kwargs):
         selection = kwargs.get('selection', list(range(len(self))))
         out = []
-        if sys.stdin.isatty():
+        if sys.stdin.isatty(): # pragma: no cover
             self.require('elem','xyzs')
             self.require_resname()
             self.require_resid()
@@ -4363,7 +4450,7 @@ class Molecule(object):
                             'A', 'G', 'C', 'U', 'I', 'DA', 'DG', 'DC', 'DT', 'DI']
         # When converting from pdb to xyz in interactive prompt,
         # ask user for some PDB-specific info.
-        if sys.stdin.isatty():
+        if sys.stdin.isatty(): # pragma: no cover
             self.require('xyzs')
             self.require_resname()
             self.require_resid()
@@ -4519,7 +4606,7 @@ class Molecule(object):
             out.append('')
         return out
 
-    def require_resid(self):
+    def require_resid(self): # pragma: no cover
         if 'resid' not in self.Data:
             na_res = int(input("Enter how many atoms are in a residue, or zero as a single residue -> "))
             if na_res == 0:
@@ -4527,7 +4614,7 @@ class Molecule(object):
             else:
                 self.resid = [1 + int(i/na_res) for i in range(self.na)]
 
-    def require_resname(self):
+    def require_resname(self): # pragma: no cover
         if 'resname' not in self.Data:
             resname = input("Enter a residue name (3-letter like 'SOL') -> ")
             self.resname = [resname for i in range(self.na)]

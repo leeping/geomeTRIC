@@ -1,0 +1,8 @@
+This folder contains examples for running a transition state optimization.
+The system is a prototypical HCN <-> HNC isomerization with HF/3-21G.
+
+Because geomeTRIC places emphasis on maximizing job success rates,
+the default values of the starting and maximum trust radius are set to
+small values in the code (0.01 and 0.03 respectively).  This particular
+test case can converge in fewer steps if larger values of the trust radii
+are provided, but it is not guaranteed in general.

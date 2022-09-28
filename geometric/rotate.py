@@ -81,7 +81,7 @@ def build_correlation(x, y):
     ymat = y.T
     return np.dot(xmat, ymat.T)
 
-def build_F(x, y):
+def build_F(x, y, r=np.array([0.0, 0.0, 0.0, 0.0])):
     """
     Build the 4x4 F-matrix used in constructing the rotation quaternion
     given by Equation 10 of Reference 1
@@ -92,6 +92,9 @@ def build_F(x, y):
         Trial coordinates, dimensionality (number of atoms) x 3
     y : numpy.ndarray
         Target coordinates, dimensionalty must match trial coordinates
+    r : numpy.ndarray
+        Regularization, introduces a term in the quadratic form that drives the solution
+        toward the direction of r.  Intended to lift degeneracies in the case of linear molecules.
     """
     R = build_correlation(x, y)
     F = np.zeros((4,4),dtype=float)
@@ -120,6 +123,8 @@ def build_F(x, y):
     F[3,1] = R13 + R31
     F[3,2] = R23 + R32
     F[3,3] = R33 - R22 - R11
+    for i in range(4):
+        F[i,i] += r[i]
     return F
 
 def al(p):
@@ -228,7 +233,7 @@ def sorted_eigh(mat, asc=False):
     Q = Q[:,idx]
     return L, Q
 
-def calc_rmsd(x, y):
+def calc_rmsd(x, y, r=np.array([0.0, 0.0, 0.0, 0.0])):
     """
     Calculate the minimal RMSD between two structures x and y following
     the algorithm in Reference 1.
@@ -248,7 +253,7 @@ def calc_rmsd(x, y):
     x = x - np.mean(x,axis=0)
     y = y - np.mean(y,axis=0)
     N = x.shape[0]
-    L, Q = sorted_eigh(build_F(x, y))
+    L, Q = sorted_eigh(build_F(x, y, r=r))
     idx = L.argsort()[::-1]   
     L = L[idx]
     Q = Q[:,idx]
@@ -257,7 +262,7 @@ def calc_rmsd(x, y):
     rmsd = np.sqrt((np.sum(x**2) + np.sum(y**2) - 2*lmax)/N)
     return rmsd
 
-def is_linear(x, y):
+def is_linear(x, y, thre=0.01): # pragma: no cover
     """
     Returns True if molecule is linear 
     (largest eigenvalue almost equivalent to second largest)
@@ -266,12 +271,12 @@ def is_linear(x, y):
     y = y - np.mean(y,axis=0)
     N = x.shape[0]
     L, Q = sorted_eigh(build_F(x, y))
-    if L[0]/L[1] < 1.01 and L[0]/L[1] > 0.0:
+    if L[0]/L[1] < (1.0 + thre) and L[0]/L[1] > 0.0:
         return True
     else:
         return False
 
-def get_quat(x, y, eig=False):
+def get_quat(x, y, eig=False, r=np.array([0.0, 0.0, 0.0, 0.0])):
     """
     Calculate the quaternion that rotates x into maximal coincidence with y
     to minimize the RMSD, following the algorithm in Reference 1.
@@ -291,7 +296,7 @@ def get_quat(x, y, eig=False):
     x = x - np.mean(x,axis=0)
     y = y - np.mean(y,axis=0)
     N = x.shape[0]
-    L, Q = sorted_eigh(build_F(x, y))
+    L, Q = sorted_eigh(build_F(x, y, r=r))
     q = Q[:,0]
     # Standardize the orientation somewhat
     if q[0] < 0:
@@ -301,7 +306,7 @@ def get_quat(x, y, eig=False):
     else:
         return q
 
-def get_rot(x, y):
+def get_rot(x, y, r=np.array([0.0, 0.0, 0.0, 0.0])):
     """
     Calculate the rotation matrix that brings x into maximal coincidence with y
     to minimize the RMSD, following the algorithm in Reference 1.  Mainly
@@ -323,7 +328,7 @@ def get_rot(x, y):
     x = x - np.mean(x,axis=0)
     y = y - np.mean(y,axis=0)
     N = x.shape[0]
-    q = get_quat(x, y)
+    q = get_quat(x, y, r=r)
     U = form_rot(q)
     # x = np.matrix(x)
     # xr = np.array((U*x.T).T)
@@ -332,7 +337,7 @@ def get_rot(x, y):
     return U
 
 
-def get_R_der(x, y):
+def get_R_der(x, y, fdcheck=False):
     """
     Calculate the derivatives of the correlation matrix with respect
     to the Cartesian coordinates.
@@ -361,10 +366,10 @@ def get_R_der(x, y):
                 for j in range(3):
                     if i == w:
                         ADiffR[u, w, i, j] = y[u, j]
-    fdcheck = False
     if fdcheck:
         h = 1e-4
         R0 = build_correlation(x, y)
+        FDiffR = np.zeros_like(ADiffR)
         for u in range(x.shape[0]):
             for w in range(3):
                 x[u, w] += h
@@ -372,11 +377,13 @@ def get_R_der(x, y):
                 x[u, w] -= 2*h
                 RMinus = build_correlation(x, y)
                 x[u, w] += h
-                FDiffR = (RPlus-RMinus)/(2*h)
-                logger.info("%i %i %12.6f\n" % (u, w, np.max(np.abs(ADiffR[u, w]-FDiffR))))
-    return ADiffR
+                FDiffR[u, w] = (RPlus-RMinus)/(2*h)
+                logger.info("%i %i %12.6f\n" % (u, w, np.max(np.abs(ADiffR[u, w]-FDiffR[u, w]))))
+        return FDiffR
+    else:
+        return ADiffR
 
-def get_F_der(x, y):
+def get_F_der(x, y, fdcheck=False):
     """
     Calculate the derivatives of the F-matrix with respect
     to the Cartesian coordinates.
@@ -426,10 +433,10 @@ def get_F_der(x, y):
             dF[u,w,3,1] = dR13 + dR31
             dF[u,w,3,2] = dR23 + dR32
             dF[u,w,3,3] = dR33 - dR22 - dR11
-    fdcheck = False
     if fdcheck:
         h = 1e-4
         F0 = build_F(x, y)
+        FDiffF = np.zeros_like(dF)
         for u in range(x.shape[0]):
             for w in range(3):
                 x[u, w] += h
@@ -437,11 +444,13 @@ def get_F_der(x, y):
                 x[u, w] -= 2*h
                 FMinus = build_F(x, y)
                 x[u, w] += h
-                FDiffF = (FPlus-FMinus)/(2*h)
-                logger.info("%i %i %12.6f\n" % (u, w, np.max(np.abs(dF[u, w]-FDiffF))))
-    return dF
+                FDiffF[u, w] = (FPlus-FMinus)/(2*h)
+                logger.info("%i %i %12.6f\n" % (u, w, np.max(np.abs(dF[u, w]-FDiffF[u, w]))))
+        return FDiffF
+    else:
+        return dF
 
-def get_q_der(x, y, second=False, fdcheck=False, use_loops=False):
+def get_q_der(x, y, second=False, fdcheck=False, use_loops=False, r=np.array([0.0, 0.0, 0.0, 0.0])):
     """
     Calculate the derivatives of the quaternion with respect
     to the Cartesian coordinates.
@@ -470,10 +479,11 @@ def get_q_der(x, y, second=False, fdcheck=False, use_loops=False):
         First four dimensions are (n_atoms, 3, n_atoms, 3), the variables being differentiated
         Fifth dimension is 4, the elements of the quaternion second derivatives with respect to atom u, dimension w, atom a, dimension b
     """
+
     x = x - np.mean(x,axis=0)
     y = y - np.mean(y,axis=0)
-    q, l = get_quat(x, y, eig=True)
-    F = build_F(x, y)
+    q, l = get_quat(x, y, eig=True, r=r)
+    F = build_F(x, y, r=r)
     dF = get_F_der(x, y)
     mat = np.eye(4)*l - F
     # pinv = np.matrix(np.linalg.pinv(np.eye(4)*l - F))
@@ -524,18 +534,21 @@ def get_q_der(x, y, second=False, fdcheck=False, use_loops=False):
         for u in range(x.shape[0]):
             for w in range(3):
                 x[u, w] += h
-                QPlus = get_quat(x, y)
+                QPlus = get_quat(x, y, r=r)
                 x[u, w] -= 2*h
-                QMinus = get_quat(x, y)
+                QMinus = get_quat(x, y, r=r)
                 x[u, w] += h
+                if np.linalg.norm(QPlus-QMinus) > np.linalg.norm(QPlus+QMinus):
+                    QMinus *= -1
                 FDiffQ[u, w] = (QPlus-QMinus)/(2*h)
                 maxerr = np.max(np.abs(dq[u, w]-FDiffQ[u, w]))
-                logger.info("atom %3i %s : maxerr = %.3e %s\n" % (u, 'xyz'[w], maxerr, 'X' if maxerr > 1e-6 else ''))
+                maxelem = np.max(np.abs(FDiffQ[u, w]))
+                logger.info("atom %3i %s : maxelem(FD) = %.3e maxerr = %.3e %s\n" % (u, 'xyz'[w], maxelem, maxerr, 'X' if maxerr > 1e-6 else ''))
         dq = FDiffQ
         if second:
             h = 1.0e-3
             logger.info("-=# Now checking second derivatives of superposition quaternion w/r.t. Cartesians #=-\n")
-            Q0 = get_quat(x, y)
+            Q0 = get_quat(x, y, r=r)
             FDiffQ2 = np.zeros((x.shape[0], 3, y.shape[0], 3, 4), dtype=float)
             for u in range(x.shape[0]):
                 for w in range(3):
@@ -543,21 +556,21 @@ def get_q_der(x, y, second=False, fdcheck=False, use_loops=False):
                         for b in range(3):
                             if a == u and b == w:
                                 x[u, w] += h
-                                QPlus = get_quat(x, y)
+                                QPlus = get_quat(x, y, r=r)
                                 x[u, w] -= 2*h
-                                QMinus = get_quat(x, y)
+                                QMinus = get_quat(x, y, r=r)
                                 x[u, w] += h
                                 FDiffQ2[u, w, a, b] = (QPlus+QMinus-2*Q0)/h**2
                             else:
                                 x[u, w] += h
                                 x[a, b] += h   # (+, +)
-                                FDiffQ2[u, w, a, b] = get_quat(x, y)
+                                FDiffQ2[u, w, a, b] = get_quat(x, y, r=r)
                                 x[u, w] -= 2*h # (-, +)
-                                FDiffQ2[u, w, a, b] -= get_quat(x, y)
+                                FDiffQ2[u, w, a, b] -= get_quat(x, y, r=r)
                                 x[a, b] -= 2*h # (-, -)
-                                FDiffQ2[u, w, a, b] += get_quat(x, y)
+                                FDiffQ2[u, w, a, b] += get_quat(x, y, r=r)
                                 x[u, w] += 2*h # (+, -)
-                                FDiffQ2[u, w, a, b] -= get_quat(x, y)
+                                FDiffQ2[u, w, a, b] -= get_quat(x, y, r=r)
                                 x[u, w] -= h
                                 x[a, b] += h
                                 FDiffQ2[u, w, a, b] /= (4*h**2)
@@ -569,6 +582,95 @@ def get_q_der(x, y, second=False, fdcheck=False, use_loops=False):
         return dq, dq2
     else:
         return dq
+
+def get_rot_der(x, y, second=False, fdcheck=False, r=np.array([0.0, 0.0, 0.0, 0.0])):
+    q = get_quat(x, y, r=r)
+    qc = conj(q)
+
+    if second:
+        dq, dq2 = get_q_der(x, y, second=True, r=r)
+    else:
+        dq = get_q_der(x, y, second=False, r=r)
+
+    # Form the first derivative; apply form_rot to dq
+    dU = np.zeros((x.shape[0], 3, 3, 3), dtype=float)
+    # The derivative of the conjugate
+    dqc = dq.copy()
+    dqc[:, :, 1:] *= -1
+
+    for u in range(x.shape[0]):
+        for w in range(3):
+            dU[u, w]  = np.dot(al(dq[u, w]), ar(qc))[1:, 1:]
+            dU[u, w] += np.dot(al(q), ar(dqc[u, w]))[1:, 1:]
+
+    if second:
+        dq2c = dq2.copy()
+        dq2c[:, :, :, :, 1:] *= -1
+        dU2 = np.zeros((x.shape[0], 3, x.shape[0], 3, 3, 3), dtype=float)
+        for u in range(x.shape[0]):
+            for w in range(3):
+                for a in range(x.shape[0]):
+                    for b in range(3):
+                        dU2[u, w, a, b]  = np.dot(al(dq2[u, w, a, b]), ar(qc))[1:, 1:]
+                        dU2[u, w, a, b] += np.dot(al(dq[u, w]), ar(dqc[a, b]))[1:, 1:]
+                        dU2[u, w, a, b] += np.dot(al(dq[a, b]), ar(dqc[u, w]))[1:, 1:]
+                        dU2[u, w, a, b] += np.dot(al(q), ar(dq2c[u, w, a, b]))[1:, 1:]
+
+    if fdcheck:
+        # If fdcheck = True, then return finite difference derivatives
+        h = 1e-6
+        logger.info("-=# Now checking first derivatives of rotation matrix w/r.t. Cartesians #=-\n")
+        FDiffU = np.zeros((x.shape[0], 3, 3, 3), dtype=float)
+        for u in range(x.shape[0]):
+            for w in range(3):
+                x[u, w] += h
+                UPlus = get_rot(x, y, r=r)
+                x[u, w] -= 2*h
+                UMinus = get_rot(x, y, r=r)
+                x[u, w] += h
+                FDiffU[u, w] = (UPlus-UMinus)/(2*h)
+                maxerr = np.max(np.abs(dU[u, w]-FDiffU[u, w]))
+                maxelem = np.max(np.abs(FDiffU[u, w]))
+                logger.info("atom %3i %s : maxelem(FD) = %.3e maxerr = %.3e %s\n" % (u, 'xyz'[w], maxelem, maxerr, 'X' if maxerr > 1e-6 else ''))
+        dU = FDiffU
+        if second:
+            h = 1.0e-3
+            logger.info("-=# Now checking second derivatives of rotation matrix w/r.t. Cartesians #=-\n")
+            U0 = get_rot(x, y, r=r)
+            FDiffU2 = np.zeros((x.shape[0], 3, y.shape[0], 3, 3, 3), dtype=float)
+            for u in range(x.shape[0]):
+                for w in range(3):
+                    for a in range(x.shape[0]):
+                        for b in range(3):
+                            if a == u and b == w:
+                                x[u, w] += h
+                                UPlus = get_rot(x, y, r=r)
+                                x[u, w] -= 2*h
+                                UMinus = get_rot(x, y, r=r)
+                                x[u, w] += h
+                                FDiffU2[u, w, a, b] = (UPlus+UMinus-2*U0)/h**2
+                            else:
+                                x[u, w] += h
+                                x[a, b] += h   # (+, +)
+                                FDiffU2[u, w, a, b] = get_rot(x, y, r=r)
+                                x[u, w] -= 2*h # (-, +)
+                                FDiffU2[u, w, a, b] -= get_rot(x, y, r=r)
+                                x[a, b] -= 2*h # (-, -)
+                                FDiffU2[u, w, a, b] += get_rot(x, y, r=r)
+                                x[u, w] += 2*h # (+, -)
+                                FDiffU2[u, w, a, b] -= get_rot(x, y, r=r)
+                                x[u, w] -= h
+                                x[a, b] += h
+                                FDiffU2[u, w, a, b] /= (4*h**2)
+                            maxerr = np.max(np.abs(dU2[u, w, a, b]-FDiffU2[u, w, a, b]))
+                            if maxerr > 1e-8:
+                                logger.info("atom %3i %s, %3i %s : maxerr = %.3e %s\n" % (u, 'xyz'[w], a, 'xyz'[b], maxerr, 'X' if maxerr > 1e-6 else ''))
+            dU2 = FDiffU2
+
+    if second:
+        return dU, dU2
+    else:
+        return dU
 
 def calc_fac_dfac(q0, second=False):
     """
@@ -598,7 +700,7 @@ def calc_fac_dfac(q0, second=False):
     else:
         return fac, dfac
 
-def get_expmap(x, y):
+def get_expmap(x, y, r=np.array([0.0, 0.0, 0.0, 0.0])):
     """
     Calculate the exponential map that rotates x into maximal coincidence with y
     to minimize the RMSD.
@@ -615,13 +717,13 @@ def get_expmap(x, y):
     numpy.ndarray
         3-element array representing exponential map
     """
-    q = get_quat(x, y)
+    q = get_quat(x, y, r=r)
     # print q
     fac, _ = calc_fac_dfac(q[0])
     v = fac*q[1:]
     return v
 
-def get_expmap_der(x, y, second=False, fdcheck=False, use_loops=False):
+def get_expmap_der(x, y, second=False, fdcheck=False, use_loops=False, r=np.array([0.0, 0.0, 0.0, 0.0])):
     """
     Given trial coordinates x and target coordinates y, 
     return the derivatives of the exponential map that brings
@@ -653,8 +755,8 @@ def get_expmap_der(x, y, second=False, fdcheck=False, use_loops=False):
         Fifth dimension is 3, the elements of the exponential map second derivatives with respect to atom u, dimension w, atom a, dimension b
     """
     # t0 = time.time()
-    q = get_quat(x,y)
-    v = get_expmap(x,y)
+    q = get_quat(x,y,r=r)
+    v = get_expmap(x,y,r=r)
     if second:
         fac, dfac, dfac2 = calc_fac_dfac(q[0], second=True)
     else:
@@ -691,8 +793,8 @@ def get_expmap_der(x, y, second=False, fdcheck=False, use_loops=False):
                 fac_, _ = calc_fac_dfac(q_[0])
                 return fac_*q_[1:]
             for p in range(4):
-                for r in range(4):
-                    if p == r:
+                for s in range(4):
+                    if p == s:
                         FDiffV2 = V0.copy()
                         q[p] -= h
                         FDiffV2 -= 2*V_(q)
@@ -702,25 +804,25 @@ def get_expmap_der(x, y, second=False, fdcheck=False, use_loops=False):
                     else:
                         FDiffV2 = V0.copy()
                         q[p] -= h
-                        q[r] -= h
+                        q[s] -= h
                         FDiffV2 += V_(q)
-                        q[r] += h
+                        q[s] += h
                         FDiffV2 -= V_(q)
-                        q[r] -= h
+                        q[s] -= h
                         q[p] += h
                         FDiffV2 -= V_(q)
-                        q[r] += h
+                        q[s] += h
                     FDiffV2 /= h**2
-                    maxerr = np.max(np.abs(dvdq2[p, r]-FDiffV2))
+                    maxerr = np.max(np.abs(dvdq2[p, s]-FDiffV2))
                     if maxerr > 1e-7:
-                        logger.info("q %3i %3i : maxerr = %.3e %s\n" % (p, r, maxerr, 'X' if maxerr > 1e-5 else ''))
+                        logger.info("q %3i %3i : maxerr = %.3e %s\n" % (p, s, maxerr, 'X' if maxerr > 1e-5 else ''))
                     # logger.info("q %3i %3i : analytic %s numerical %s maxerr = %.3e %s" % (i, j, str(dvdq2[i, j]), str(FDiffV2), maxerr, 'X' if maxerr > 1e-4 else ''))
                 
     # Dimensionality: Number of atoms, number of dimensions (3), number of elements in q (4)
     if second:
-        dqdx, dqdx2 = get_q_der(x, y, second=True)
+        dqdx, dqdx2 = get_q_der(x, y, second=True, r=r)
     else:
-        dqdx = get_q_der(x, y)
+        dqdx = get_q_der(x, y, r=r)
     # Dimensionality: Number of atoms, number of dimensions (3), number of elements in v (3)
     dvdx = np.zeros((x.shape[0], 3, 3), dtype=float)
     for u in range(x.shape[0]):
@@ -737,8 +839,8 @@ def get_expmap_der(x, y, second=False, fdcheck=False, use_loops=False):
                 for u in range(x.shape[0]):
                     for w in range(3):
                         for i in range(3):
-                            for r in range(4):
-                                dvdqx[p, u, w, i] += dvdq2[p, r, i] * dqdx[u, w, r]
+                            for j in range(4):
+                                dvdqx[p, u, w, i] += dvdq2[p, j, i] * dqdx[u, w, j]
             for u in range(x.shape[0]):
                 for w in range(3):
                     for a in range(x.shape[0]):
@@ -760,9 +862,9 @@ def get_expmap_der(x, y, second=False, fdcheck=False, use_loops=False):
         for u in range(x.shape[0]):
             for w in range(3):
                 x[u, w] += h
-                VPlus = get_expmap(x, y)
+                VPlus = get_expmap(x, y, r=r)
                 x[u, w] -= 2*h
-                VMinus = get_expmap(x, y)
+                VMinus = get_expmap(x, y, r=r)
                 x[u, w] += h
                 FDiffV[u, w] = (VPlus-VMinus)/(2*h)
                 maxerr = np.max(np.abs(dvdx[u, w]-FDiffV[u, w]))
@@ -777,21 +879,21 @@ def get_expmap_der(x, y, second=False, fdcheck=False, use_loops=False):
                         for b in range(3):
                             if a == u and b == w:
                                 x[u, w] += h
-                                VPlus = get_expmap(x, y)
+                                VPlus = get_expmap(x, y, r=r)
                                 x[u, w] -= 2*h
-                                VMinus = get_expmap(x, y)
+                                VMinus = get_expmap(x, y, r=r)
                                 x[u, w] += h
                                 FDiffV2[u, w, a, b] = (VPlus+VMinus-2*V0)/h**2
                             else:
                                 x[u, w] += h
                                 x[a, b] += h   # (+, +)
-                                FDiffV2[u, w, a, b] = get_expmap(x, y)
+                                FDiffV2[u, w, a, b] = get_expmap(x, y, r=r)
                                 x[u, w] -= 2*h # (-, +)
-                                FDiffV2[u, w, a, b] -= get_expmap(x, y)
+                                FDiffV2[u, w, a, b] -= get_expmap(x, y, r=r)
                                 x[a, b] -= 2*h # (-, -)
-                                FDiffV2[u, w, a, b] += get_expmap(x, y)
+                                FDiffV2[u, w, a, b] += get_expmap(x, y, r=r)
                                 x[u, w] += 2*h # (+, -)
-                                FDiffV2[u, w, a, b] -= get_expmap(x, y)
+                                FDiffV2[u, w, a, b] -= get_expmap(x, y, r=r)
                                 x[u, w] -= h
                                 x[a, b] += h
                                 FDiffV2[u, w, a, b] /= (4*h**2)

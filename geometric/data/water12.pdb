@@ -1,0 +1,39 @@
+REMARK   1 CREATED WITH FORCEBALANCE 2018-02-16
+CRYST1    3.000    3.000    3.000  90.00  90.00  90.00 P 1           1 
+HETATM    1  OW  SOL A   1       0.300  -1.091  -0.633  1.00  0.00           O  
+HETATM    2  HW1 SOL A   1      -0.439  -0.862  -0.019  1.00  0.00           H  
+HETATM    3  HW2 SOL A   1       0.174  -2.012  -0.896  1.00  0.00           H  
+HETATM    4  OW  SOL A   2       2.739  -0.286   0.486  1.00  0.00           O  
+HETATM    5  HW1 SOL A   2       3.039  -1.153   0.877  1.00  0.00           H  
+HETATM    6  HW2 SOL A   2       2.002  -0.611  -0.056  1.00  0.00           H  
+HETATM    7  OW  SOL A   3      -1.983  -0.305   0.796  1.00  0.00           O  
+HETATM    8  HW1 SOL A   3      -2.337   0.560   0.692  1.00  0.00           H  
+HETATM    9  HW2 SOL A   3      -1.957  -0.476   1.725  1.00  0.00           H  
+HETATM   10  OW  SOL A   4      -1.223   2.673  -1.116  1.00  0.00           O  
+HETATM   11  HW1 SOL A   4      -2.030   2.459  -0.581  1.00  0.00           H  
+HETATM   12  HW2 SOL A   4      -1.105   1.996  -1.778  1.00  0.00           H  
+HETATM   13  OW  SOL A   5       2.290   2.017   1.898  1.00  0.00           O  
+HETATM   14  HW1 SOL A   5       1.782   2.587   1.279  1.00  0.00           H  
+HETATM   15  HW2 SOL A   5       2.299   1.170   1.401  1.00  0.00           H  
+HETATM   16  OW  SOL A   6      -0.793   0.505  -2.871  1.00  0.00           O  
+HETATM   17  HW1 SOL A   6      -0.245  -0.247  -2.487  1.00  0.00           H  
+HETATM   18  HW2 SOL A   6      -0.514   0.597  -3.811  1.00  0.00           H  
+HETATM   19  OW  SOL A   7       1.052   3.712   0.239  1.00  0.00           O  
+HETATM   20  HW1 SOL A   7       0.474   3.132  -0.362  1.00  0.00           H  
+HETATM   21  HW2 SOL A   7       0.490   4.260   0.766  1.00  0.00           H  
+HETATM   22  OW  SOL A   8      -0.215  -3.239   1.692  1.00  0.00           O  
+HETATM   23  HW1 SOL A   8      -0.433  -2.417   2.180  1.00  0.00           H  
+HETATM   24  HW2 SOL A   8       0.460  -3.609   2.259  1.00  0.00           H  
+HETATM   25  OW  SOL A   9       0.456  -3.969  -1.025  1.00  0.00           O  
+HETATM   26  HW1 SOL A   9       0.098  -4.120  -0.165  1.00  0.00           H  
+HETATM   27  HW2 SOL A   9       1.424  -4.106  -1.026  1.00  0.00           H  
+HETATM   28  OW  SOL A  10      -3.475  -2.386  -0.086  1.00  0.00           O  
+HETATM   29  HW1 SOL A  10      -3.542  -2.288  -1.071  1.00  0.00           H  
+HETATM   30  HW2 SOL A  10      -2.997  -1.574   0.197  1.00  0.00           H  
+HETATM   31  OW  SOL A  11      -3.206   2.267   0.757  1.00  0.00           O  
+HETATM   32  HW1 SOL A  11      -4.123   2.503   0.531  1.00  0.00           H  
+HETATM   33  HW2 SOL A  11      -3.228   2.389   1.767  1.00  0.00           H  
+HETATM   34  OW  SOL A  12       4.968   0.869  -0.835  1.00  0.00           O  
+HETATM   35  HW1 SOL A  12       4.130   0.546  -0.417  1.00  0.00           H  
+HETATM   36  HW2 SOL A  12       5.670   0.509  -0.304  1.00  0.00           H  
+TER      37      SOL A  12

@@ -35,7 +35,9 @@ POSSIBILITY OF SUCH DAMAGE.
 """
 
 import numpy as np
-from .nifty import logger
+from copy import deepcopy
+from .nifty import logger, bohr2ang
+from .step import calc_drms_dmax
 
 def check_internal_grad(coords, molecule, IC, engine, dirname, verbose=0):
     """ Check the internal coordinate gradient using finite difference. """
@@ -126,7 +128,7 @@ def check_internal_hess(coords, molecule, IC, engine, dirname, verbose=0):
         logger.info("% 10.5f %s" % (Eigq[i], "\n" if i%9 == 8 else ""))
     return Hq, Hq_f
 
-def write_displacements(coords, M, IC, dirname, verbose):
+def write_displacements(coords, M, IC, dirname, ic_select="all", displace_range=(-0.3, 0.3, 7), verbose=0):
     """
     Write coordinate files containing animations
     of displacements along the internal coordinates.
@@ -141,12 +143,33 @@ def write_displacements(coords, M, IC, dirname, verbose):
         The internal coordinate system
     dirname : str
         Directory name for files to be written
+    ic_select : str, int, or list
+        If "all", then include all the ICs.
+        If a string, then select the IC 
+        If integer, select the IC numerically from the list.
+        If a list, select one or more ICs numerically or by name from the list.
+    displace_range : tuple
+        Provide three numbers which will be used to create a linearly spaced array of displacements.
     verbose : int
         Print diagnostic messages
     """
-    for i in range(len(IC.Internals)):
+    M1 = deepcopy(M)
+    ic_names = [str(i) for i in IC.Internals]
+    if len(ic_names) != len(set(ic_names)): raise RuntimeError("IC names should be unique; please check __repr__ functions")
+    if type(ic_select) is str and ic_select == "all": ic_select_nums = list(range(len(IC.Internals)))
+    elif type(ic_select) is str: ic_select_nums = [ic_names.index(ic_select)]
+    elif type(ic_select) is int: ic_select_nums = [ic_select]
+    elif type(ic_select) is list:
+        ic_select_nums = []
+        for ic in ic_select:
+            if type(ic) is str: ic_select_nums.append(ic_names.index(ic))
+            elif type(ic) is int: ic_select_nums.append(ic)
+            else: raise TypeError("ic_select should be int, str, or list of ints/strs")
+    else: raise TypeError("ic_select should be int, str, or list of ints/strs")
+
+    for i in ic_select_nums:
         x = []
-        for j in np.linspace(-0.3, 0.3, 7):
+        for j in np.linspace(*displace_range):
             if j != 0:
                 dq = np.zeros(len(IC.Internals))
                 dq[i] = j
@@ -156,6 +179,6 @@ def write_displacements(coords, M, IC, dirname, verbose):
             rms_displacement, max_displacement = calc_drms_dmax(x1, coords, align=False)
             x.append(x1.reshape(-1,3) * bohr2ang)
             logger.info("%i %.1f Displacement (rms/max) = %.5f / %.5f %s\n" % (i, j, rms_displacement, max_displacement, "(Bork)" if IC.bork else "(Good)"))
-        M.xyzs = x
-        M.write("%s/ic_%03i.xyz" % (dirname, i))
-
+        M1.xyzs = x
+        M1.write("%s/ic_%03i.xyz" % (dirname, i))
+    return M1

@@ -1,0 +1,14 @@
+coordinates start.xyz
+run gradient
+basis lanl2dz_ecp
+method rbp86
+charge -1
+spinmult 1
+precision mixed
+convthre 1.0e-5
+threall 1.0e-16
+mixguess 0.0
+scf diis+a
+maxit 50
+threspdp 1e-4
+dftgrid 1

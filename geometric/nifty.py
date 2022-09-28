@@ -63,11 +63,7 @@ else:
         """
         def __init__(self, stream = sys.stdout):
             super(RawStreamHandler, self).__init__(stream)
-
-        def emit(self, record):
-            message = record.getMessage()
-            self.stream.write(message)
-            self.flush()
+            self.terminator = ""
 
     class RawFileHandler(FileHandler):
         """
@@ -77,20 +73,14 @@ else:
         """
         def __init__(self, *args, **kwargs):
             super(RawFileHandler, self).__init__(*args, **kwargs)
-
-        def emit(self, record):
-            if self.stream is None:
-                self.stream = self._open()
-            message = record.getMessage()
-            self.stream.write(message)
-            self.flush()
+            self.terminator = ""
 
     if "geometric" in __name__:
         # This ensures logging behavior is consistent with the rest of geomeTRIC
         logger = getLogger(__name__)
         logger.setLevel(INFO)
         package="geomeTRIC"
-    else:
+    else: # pragma: no cover
         logger = getLogger("NiftyLogger")
         logger.setLevel(INFO)
         handler = RawStreamHandler()
@@ -141,6 +131,8 @@ au2kj        = 2625.4996394798254  # Previous value: 2625.5002
 kj2au        = 1.0 / au2kj
 grad_au2gmx  = 49614.75258920567   # Previous value: 49614.75960959161
 grad_gmx2au  = 1.0 / grad_au2gmx
+au2ev        = 27.211386245988
+ev2au        = 1.0 / au2ev
 au2evang     = 51.422067476325886  # Previous value: 51.42209166566339
 evang2au     = 1.0 / au2evang
 c_lightspeed = 299792458.
@@ -254,24 +246,20 @@ def uncommadash(s):
                 b = int(ws[1])
             else:
                 logger.warning("Dash-separated list cannot exceed length 2\n")
-                raise
+                raise RuntimeError
             if a < 0 or b <= 0 or b <= a:
                 if a < 0 or b <= 0:
-                    logger.warning("Items in list cannot be zero or negative: %d %d\n" % (a, b))
+                    raise RuntimeError("Items in list cannot be zero or negative: %d %d\n" % (a, b))
                 else:
-                    logger.warning("Second number cannot be smaller than first: %d %d\n" % (a, b))
-                raise
+                    raise RuntimeError("Second number cannot be smaller than first: %d %d\n" % (a, b))
             newL = range(a,b)
             if any([i in L for i in newL]):
-                logger.warning("Duplicate entries found in list\n")
-                raise
+                raise RuntimeError("Duplicate entries found in list\n")
             L += newL
         if sorted(L) != L:
-            logger.warning("List is out of order\n")
-            raise
+            raise RuntimeError("List is out of order\n")
     except:
-        logger.error('Invalid string for converting to list of numbers: %s\n' % s)
-        raise RuntimeError
+        raise RuntimeError('Invalid string for converting to list of numbers: %s\n' % s)
     return L
 
 def natural_sort(l):
@@ -409,18 +397,20 @@ def isdecimal(word):
     return isfloat(word) and not isint(word)
 
 def floatornan(word):
-    """Returns a big number if we encounter NaN.
+    """Returns a big number if we encounter NaN or inf.
 
     @param[in] word The string to be converted
     @return answer The string converted to a float; if not a float, return 1e10
     @todo I could use suggestions for making this better.
     """
-    big = 1e10
+    big = 1e100
     if isfloat(word):
         return float(word)
-    else:
-        logger.info("Setting %s to % .1e\n" % big)
+    elif word.lower() in ['inf', 'nan']:
+        logger.info("Setting %s to % .1e\n" % (word, big))
         return big
+    else:
+        raise ValueError("%s cannot be converted to a number" % word)
 
 def col(vec):
     """
@@ -472,61 +462,6 @@ def est124(val):
         fac = 10.0
     return fac*10**logint
 
-def est1234568(val):
-    """Given any positive floating point value, return a value [1234568]e+xx
-    that is closest to it in the log space.  Just because I don't like seven
-    and nine.  Call me a numberist?
-    """
-    log = np.log10(val)
-    logint = math.floor(log)
-    logfrac = log - logint
-    log1 = 0.0
-    log2 = 0.3010299956639812
-    log3 = np.log10(3)
-    log4 = 0.6020599913279624
-    log5 = np.log10(5)
-    log6 = np.log10(6)
-    log8 = np.log10(8)
-    log10 = 1.0
-    if logfrac < 0.5*(log1+log2):
-        fac = 1.0
-    elif logfrac < 0.5*(log2+log3):
-        fac = 2.0
-    elif logfrac < 0.5*(log3+log4):
-        fac = 3.0
-    elif logfrac < 0.5*(log4+log5):
-        fac = 4.0
-    elif logfrac < 0.5*(log5+log6):
-        fac = 5.0
-    elif logfrac < 0.5*(log6+log8):
-        fac = 6.0
-    elif logfrac < 0.5*(log8+log10):
-        fac = 8.0
-    else:
-        fac = 10.0
-    return fac*10**logint
-
-def monotonic(arr, start, end):
-    # Make sure an array is monotonically decreasing from the start to the end.
-    a0 = arr[start]
-    i0 = start
-    if end > start:
-        i = start+1
-        while i < end:
-            if arr[i] < a0:
-                arr[i0:i+1] = np.linspace(a0, arr[i], i-i0+1)
-                a0 = arr[i]
-                i0 = i
-            i += 1
-    if end < start:
-        i = start-1
-        while i >= end:
-            if arr[i] < a0:
-                arr[i:i0+1] = np.linspace(arr[i], a0, i0-i+1)
-                a0 = arr[i]
-                i0 = i
-            i -= 1
-
 def monotonic_decreasing(arr, start=None, end=None, verbose=False):
     """
     Return the indices of an array corresponding to strictly monotonic
@@ -537,9 +472,9 @@ def monotonic_decreasing(arr, start=None, end=None, verbose=False):
     arr : numpy.ndarray
         Input array
     start : int
-        Starting index (first element if None)
+        Starting index, default 0
     end : int
-        Ending index (last element if None)
+        Ending index, included in loop, default len(arr) - 1
 
     Returns
     -------
@@ -555,7 +490,7 @@ def monotonic_decreasing(arr, start=None, end=None, verbose=False):
     if verbose: logger.info("Starting @ %i : %.6f\n" % (start, arr[start]))
     if end > start:
         i = start+1
-        while i < end:
+        while i <= end:
             if arr[i] < a0:
                 a0 = arr[i]
                 idx.append(i)
@@ -605,6 +540,7 @@ def invert_svd(X,thresh=1e-12):
     v      = np.transpose(vh)
     si     = s.copy()
     for i in range(s.shape[0]):
+        # print("SVD : %i -> %.3e" % (i, s[i]))
         if abs(s[i]) > thresh:
             si[i] = 1./s[i]
         else:
@@ -978,14 +914,14 @@ def wq_wait1(wq, wait_time=10, wait_intvl=1, print_time=60, verbose=False):
             exectime = task.cmd_execution_time/1000000
             if verbose:
                 logger.info('A job has finished!\n')
-                logger.info('Job name = ' + task.tag + 'command = ' + task.command + '\n')
-                logger.info("status = " + task.status + '\n')
-                logger.info("return_status = " + task.return_status)
-                logger.info("result = " + task.result)
+                logger.info('Job name = ' + task.tag + '\n')
+                logger.info('command = ' + task.command + '\n')
+                logger.info("return_status = " + str(task.return_status)) # the process's return status
+                logger.info("result = " + str(task.result)) # nonzero if the specified output file doesn't exist
                 logger.info("host = " + task.hostname + '\n')
-                logger.info("execution time = " + exectime)
-                logger.info("total_bytes_transferred = " + task.total_bytes_transferred + '\n')
-            if task.result != 0:
+                logger.info("execution time = %.3f" % exectime)
+                logger.info("total_bytes_transferred = %i" % task.total_bytes_transferred + '\n')
+            if task.result != 0: # pragma: no cover
                 oldid = task.id
                 oldhost = task.hostname
                 tgtname = "None"
@@ -1053,7 +989,7 @@ def splitall(path):
     return allparts
 
 # Back up a file.
-def bak(path, dest=None, cwd=None, start=1):
+def bak(path, dest=None, cwd=None, basename=None, start=1):
     oldf = path
     newf = None
     if cwd != None:
@@ -1065,6 +1001,7 @@ def bak(path, dest=None, cwd=None, start=1):
         dnm, fnm = os.path.split(path)
         if dnm == '' : dnm = '.'
         base, ext = os.path.splitext(fnm)
+        if basename: base = basename
         if dest is None:
             dest = dnm
         if not os.path.isdir(dest): os.makedirs(dest)
@@ -1148,27 +1085,32 @@ def listfiles(fnms=None, ext=None, err=False, dnm=None):
         for i in fnms:
             if not os.path.exists(i):
                 logger.error('Specified %s but it does not exist' % i)
+                os.chdir(cwd)
                 raise RuntimeError
             answer.append(i)
     elif isinstance(fnms, six.string_types):
         if not os.path.exists(fnms):
             logger.error('Specified %s but it does not exist' % fnms)
+            os.chdir(cwd)
             raise RuntimeError
         answer = [fnms]
     elif fnms is not None:
         logger.info(str(fnms))
         logger.error('First argument to listfiles must be a list, a string, or None')
+        os.chdir(cwd)
         raise RuntimeError
     if answer == [] and ext is not None:
         answer = [os.path.basename(i) for i in os.listdir(os.getcwd()) if i.endswith('.%s' % ext)]
     if answer == [] and err:
         logger.error('listfiles function failed to come up with a file! (fnms = %s ext = %s)' % (str(fnms), str(ext)))
+        os.chdir(cwd)
         raise RuntimeError
 
     for ifnm, fnm in enumerate(answer):
         if os.path.dirname(os.path.abspath(fnm)) != os.getcwd():
             fsrc = os.path.abspath(fnm)
             fdest = os.path.join(os.getcwd(), os.path.basename(fnm))
+            logger.info("fsrc %s fdest %s\n" % (fsrc, fdest))
             #-----
             # If the file path doesn't correspond to the current directory, copy the file over
             # If the file exists in the current directory already and it's different, then crash.
@@ -1176,6 +1118,7 @@ def listfiles(fnms=None, ext=None, err=False, dnm=None):
             if os.path.exists(fdest):
                 if not filecmp.cmp(fsrc, fdest):
                     logger.error("onefile() will not overwrite %s with %s\n" % (os.path.join(os.getcwd(), os.path.basename(fnm)),os.path.abspath(fnm)))
+                    os.chdir(cwd)
                     raise RuntimeError
                 else:
                     logger.info("\x1b[93monefile() says the files %s and %s are identical\x1b[0m\n" % (os.path.abspath(fnm), os.getcwd()))
@@ -1285,6 +1228,7 @@ def LinkFile(src, dest, nosrcok = False):
             os.remove(dest)
             os.symlink(src, dest)
         elif os.path.exists(dest):
+            # Todo: Do we really want to keep an existing symbolic link if it might point to a different file?
             if os.path.islink(dest): pass
             else:
                 logger.error("Tried to create symbolic link %s to %s, destination exists but isn't a symbolic link\n" % (src, dest))
@@ -1310,15 +1254,33 @@ def CopyFile(src, dest):
         raise RuntimeError
 
 def link_dir_contents(abssrcdir, absdestdir):
+    """ 
+    Link the contents of the folder abssrcdir into absdestdir.
+    First create absdestdir if it's not already an existing folder.
+    Next, remove broken symlinks (but not good links or files) in absdestdir
+    and create symlinks from abssrcdir by relative linking.
+    """
+    
+    abssrcdir = os.path.abspath(abssrcdir)
+    absdestdir = os.path.abspath(absdestdir)
+    if os.path.isfile(absdestdir):
+        raise RuntimeError("absdestdir %s is a file\n" % absdestdir)
+    elif not os.path.exists(absdestdir):
+        os.makedirs(absdestdir)
+    relpath = os.path.relpath(abssrcdir, absdestdir)
+    cwd = os.getcwd()
+    os.chdir(absdestdir)
     for fnm in os.listdir(abssrcdir):
         srcfnm = os.path.join(abssrcdir, fnm)
-        destfnm = os.path.join(absdestdir, fnm)
-        if os.path.islink(destfnm) and not os.path.exists(destfnm):
-            os.remove(destfnm)
-        if os.path.isfile(srcfnm) or (os.path.isdir(srcfnm) and fnm == 'IC'):
-            if not os.path.exists(destfnm):
+        # Remove broken symlinks if they exist
+        if os.path.islink(fnm) and not os.path.exists(fnm):
+            os.remove(fnm)
+        if os.path.isfile(srcfnm) or (os.path.isdir(srcfnm) and fnm == 'IC'): 
+            # Not sure what the 'IC' is - might remove later
+            if not os.path.exists(fnm):
                 #print "Linking %s to %s" % (srcfnm, destfnm)
-                os.symlink(srcfnm, destfnm)
+                os.symlink(os.path.join(relpath, fnm), fnm)
+    os.chdir(cwd)
 
 def remove_if_exists(fnm):
     """ Remove the file if it exists (doesn't return an error). """
@@ -1447,10 +1409,8 @@ def _exec(command, print_to_screen = False, outfnm = None, logfnm = None, stdin 
     def process_out(read):
         if print_to_screen:
             # LPW 2019-11-25: We should be writing a string, not a representation of bytes
-            if p2:
-                sys.stdout.write(str(read.encode('utf-8')))
-            else:
-                sys.stdout.write(read)
+            if p2: sys.stdout.write(str(read.encode('utf-8')))
+            else: sys.stdout.write(read)
         if copy_stdout:
             process_out.stdout.append(read)
             wtf(read)
@@ -1458,10 +1418,8 @@ def _exec(command, print_to_screen = False, outfnm = None, logfnm = None, stdin 
 
     def process_err(read):
         if print_to_screen:
-            if p2:
-                sys.stderr.write(str(read.encode('utf-8')))
-            else:
-                sys.stderr.write(read)
+            if p2: sys.stderr.write(str(read.encode('utf-8')))
+            else: sys.stderr.write(read)
         process_err.stderr.append(read)
         if copy_stderr:
             process_out.stdout.append(read)
@@ -1478,10 +1436,8 @@ def _exec(command, print_to_screen = False, outfnm = None, logfnm = None, stdin 
                 # This hang can be avoided by running fh.read1 (with a "1" at the end), however python2.7
                 # doesn't implement ByteStream.read1. So, to enable python3 builds on mac to work, we pick the "best"
                 # fh.read function we can get
-                if hasattr(fh, 'read1'):
-                    fhread = fh.read1
-                else:
-                    fhread = fh.read
+                if hasattr(fh, 'read1'): fhread = fh.read1
+                else: fhread = fh.read
 
                 if fh is p.stdout:
                     read_nbytes = 0
@@ -1503,7 +1459,7 @@ def _exec(command, print_to_screen = False, outfnm = None, logfnm = None, stdin 
                             try:
                                 out_chunker.push(read)
                                 break
-                            except UnicodeDecodeError:
+                            except UnicodeDecodeError: # pragma: no cover
                                 pass
                 elif fh is p.stderr:
                     read_nbytes = 0
@@ -1525,7 +1481,7 @@ def _exec(command, print_to_screen = False, outfnm = None, logfnm = None, stdin 
                             try:
                                 err_chunker.push(read)
                                 break
-                            except UnicodeDecodeError:
+                            except UnicodeDecodeError: # pragma: no cover
                                 pass
                 else:
                     raise RuntimeError
@@ -1560,7 +1516,7 @@ def _exec(command, print_to_screen = False, outfnm = None, logfnm = None, stdin 
     return Out
 _exec.returncode = None
 
-def warn_press_key(warning, timeout=10):
+def warn_press_key(warning, timeout=10): # pragma: no cover
     logger.warning(warning + '\n')
     if sys.stdin.isatty():
         logger.warning("\x1b[1;91mPress Enter or wait %i seconds (I assume no responsibility for what happens after this!)\x1b[0m\n" % timeout)
@@ -1570,7 +1526,7 @@ def warn_press_key(warning, timeout=10):
                 sys.stdin.readline()
         except: pass
 
-def warn_once(warning, warnhash = None):
+def warn_once(warning, warnhash = None): # pragma: no cover
     """ Prints a warning but will only do so once in a given run. """
     if warnhash is None:
         warnhash = warning
@@ -1583,30 +1539,3 @@ def warn_once(warning, warnhash = None):
         for line in warning:
             logger.info(line + '\n')
 warn_once.already = set()
-
-#=========================================#
-#| Development stuff (not commonly used) |#
-#=========================================#
-def concurrent_map(func, data):
-    """
-    Similar to the bultin function map(). But spawn a thread for each argument
-    and apply `func` concurrently.
-
-    Note: unlike map(), we cannot take an iterable argument. `data` should be an
-    indexable sequence.
-    """
-
-    N = len(data)
-    result = [None] * N
-
-    # wrapper to dispose the result in the right slot
-    def task_wrapper(i):
-        result[i] = func(data[i])
-
-    threads = [threading.Thread(target=task_wrapper, args=(i,)) for i in range(N)]
-    for t in threads:
-        t.start()
-    for t in threads:
-        t.join()
-
-    return result

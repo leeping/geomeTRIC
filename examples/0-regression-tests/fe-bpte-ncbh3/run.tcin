@@ -1,0 +1,8 @@
+coordinates start.xyz
+run gradient
+basis 6-31gs_ldz
+method ub3lyp
+charge 0
+spinmult 5
+dftgrid 1
+dispersion yes
