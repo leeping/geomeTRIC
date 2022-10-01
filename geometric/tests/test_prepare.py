@@ -35,7 +35,7 @@ $end"""
     assert ics[5] == geometric.internal.Dihedral(5, 7, 8, 15)
     assert vals[0][:3] == [None, None, None]
     np.testing.assert_almost_equal(np.array(vals[0][3:]), np.array([1.554/0.529177210903, 110.139*np.pi/180, 60.050*np.pi/180]))
-    
+
     # Test multidimensional constraint scanning
     constraint_str = """$scan
 distance 6 8 1.2 1.4 3
@@ -46,7 +46,7 @@ $end"""
     assert ics[0] == geometric.internal.Distance(5, 7)
     assert ics[1] == geometric.internal.Angle(7, 5, 21)
     assert ics[2] == geometric.internal.Dihedral(5, 7, 8, 15)
-    dvals, avals, tvals = np.meshgrid(np.linspace(1.2, 1.4, 3)/0.529177210903, np.linspace(110, 119, 4)*np.pi/180, 
+    dvals, avals, tvals = np.meshgrid(np.linspace(1.2, 1.4, 3)/0.529177210903, np.linspace(110, 119, 4)*np.pi/180,
                                       np.linspace(60, 65, 2)*np.pi/180, indexing='ij')
     dvals = dvals.flatten()
     avals = avals.flatten()
@@ -73,7 +73,7 @@ $end"""
     np.testing.assert_almost_equal(vals[2][3:6], [rg2*np.pi/6, 0.0, 0.0])
     np.testing.assert_almost_equal(vals[0][6:9], [0.0, 0.0, 0.0])
     np.testing.assert_almost_equal(vals[1][6:9], [0.0, 0.0, rg3*np.pi/18])
-    
+
     # Test freeze/set/scan for position constraints
     constraint_str = """$freeze
 x 1
@@ -94,12 +94,40 @@ $end"""
     np.testing.assert_almost_equal(vals[13][24], 0.5/0.529177210903)
     np.testing.assert_almost_equal(vals[14][25], 0.0)
 
-def test_get_molecule_engine_pdb():
-    for engine, inputf in zip(['terachem', 'qchem', 'molpro', 'psi4', 'gaussian'], ['water12.tcin', 'water12.qcin', 'water12.mol', 'water12.psi4in', 'water12.gjf']):
-    # for engine, inputf in zip(['terachem', 'qchem'], ['water12.tcin', 'water12.qcin']):
-        molecule, engine = geometric.prepare.get_molecule_engine(input=os.path.join(datad, inputf), engine=engine,
-                                                                 pdb=os.path.join(datad, 'water12.pdb'), 
-                                                                 coords=os.path.join(datad, 'water12.mdcrd'))
-        assert molecule.resid[-1] == 12
-        np.testing.assert_almost_equal(molecule.xyzs[0][-1,2], 1.288)
-        assert engine.detect_dft() == False
+
+@addons.using_terachem
+def test_get_molecule_engine_pdb__terrachem():
+    get_molecule_engine_pdb("terachem", "water12.tcin")
+
+
+def test_get_molecule_engine_pdb__psi4():
+    # no need for Psi4 to be installed
+    get_molecule_engine_pdb("psi4", "water12.psi4in")
+
+
+def test_get_molecule_engine_pdb__qchem():
+    # no need for QChem
+    get_molecule_engine_pdb("qchem", "water12.qcin")
+
+
+@addons.using_gaussian
+def test_get_molecule_engine_pdb__gaussian():
+    get_molecule_engine_pdb("gaussian", "water12.gjf")
+
+
+def test_get_molecule_engine_pdb__molpro():
+    # no need for molpro
+    get_molecule_engine_pdb("molpro", "water12.mol")
+
+
+def get_molecule_engine_pdb(engine, inputf):
+    # worker for the above tests which all require different engines
+    molecule, engine = geometric.prepare.get_molecule_engine(
+        input=os.path.join(datad, inputf),
+        engine=engine,
+        pdb=os.path.join(datad, "water12.pdb"),
+        coords=os.path.join(datad, "water12.mdcrd"),
+    )
+    assert molecule.resid[-1] == 12
+    np.testing.assert_almost_equal(molecule.xyzs[0][-1, 2], 1.288)
+    assert engine.detect_dft() is False
