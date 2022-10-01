@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: [ 3.6, 3.7, 3.8, 3.9, 3.10 ]
+        python-version: [ "3.6", "3.7", "3.8", "3.9", "3.10" ]
 
     steps:
       - uses: actions/checkout@v3
@@ -20,9 +20,16 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: 'pip'
 
+      # most of the dependencies
       - name: Install dependencies with PIP
         run: |
-          pip install numpy networkx six rdkit pytest pytest-cov
+          pip install numpy networkx six pytest pytest-cov
+
+      # rdkit: PyPi only supplies it for 3.7 and above
+      - name: Install rdkit
+        if: matrix.python-version != '3.6'
+        run: |
+          pip install rdkit
 
       - name: Install geomeTRIC
         run: |
