@@ -8,16 +8,15 @@ on: [ push ]
 jobs:
   build-linux:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.8"]
+    env:
+      python-version: "3.8"
 
     steps:
       - uses: actions/checkout@v3
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: Set up Python ${{ env.python-version }}
         uses: actions/setup-python@v4
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: ${{ env.python-version }}
 
       - name: Add conda to system path
         run: |
@@ -25,7 +24,7 @@ jobs:
           echo $CONDA/bin >> $GITHUB_PATH
 
       - name: Install Dependencies from Conda
-        run: conda env update --file=devtools/conda-envs/latest.yml --name=base
+        run: conda env update --file=devtools/conda-envs/latest.yaml --name=base
 
       - name: Install geomeTRIC
         run: |
