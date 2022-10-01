@@ -31,10 +31,6 @@ jobs:
         run: |
           pip install rdkit
 
-      - name: Install geomeTRIC
-        run: |
-          python setup.py develop --no-deps
-
       - name: pytest
         run: |
           pytest -v --cov=geometric  geometric/tests/

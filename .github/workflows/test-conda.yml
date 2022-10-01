@@ -41,10 +41,6 @@ jobs:
         if: steps.cache-conda.outputs.cache-hit != 'true'
         run: conda env update --file=devtools/conda-envs/latest.yaml --name=base
 
-      - name: Install geomeTRIC
-        run: |
-          python setup.py develop --no-deps
-
       - name: pytest
         run: |
           pytest -v --cov=geometric  geometric/tests/
