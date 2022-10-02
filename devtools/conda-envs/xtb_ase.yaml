@@ -1,0 +1,18 @@
+# Conda environment with XTB and ASE packages, you can execute the
+# associatedexamples of using an ASE-compatible calculator.
+name: test
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  # ASE tests require
+  - ase
+  - xtb-python
+
+  # geomeTRIC base depends
+  - numpy
+  - networkx
+
+  # Testing
+  - pytest
+  - pytest-cov
