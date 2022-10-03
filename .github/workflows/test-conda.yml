@@ -8,44 +8,20 @@ on: [ push ]
 jobs:
   build-linux:
     runs-on: ubuntu-latest
-    env:
-      python-version: "3.8"
-      CACHE_NUMBER: 1 # increase to reset cache
 
     steps:
       - uses: actions/checkout@v3
-      - name: Set up Python ${{ env.python-version }}
-        uses: actions/setup-python@v4
-        with:
-          python-version: ${{ env.python-version }}
 
       - name: Add conda to system path
         run: |
           # $CONDA is an environment variable pointing to the root of the miniconda directory
           echo $CONDA/bin >> $GITHUB_PATH
 
-      # sets up caching for the conda env - speeding up build
-      # - Only need to actually download and install when version changes
-      # or periodically when caches are invalidated.
-      # - If there is some problem, you can change the CACHE_NUMBER above
-      # to trigger rebuilding manually
-      - name: Cache Conda env
-        id: cache-conda
-        uses: actions/cache@v3
-        with:
-          # apparently the $CONDA does not work for some reason, at the point of
-          # actually saving the cache the path is not found
-          path: /usr/share/miniconda
-          key: ${{ runner.os }}-conda-${{ hashFiles('devtools/conda-envs/latest.yaml') }}-${{ env.CACHE_NUMBER }}
-
-      # Only happens if we cannot restore from cache
       - name: Install Dependencies from Conda
-        if: steps.cache-conda.outputs.cache-hit != 'true'
         run: conda env update --file=devtools/conda-envs/latest.yaml --name=base
 
       - name: pytest
-        run: |
-          pytest -v --cov=geometric  geometric/tests/
+        run: pytest -v --cov=geometric  geometric/tests/
 
       - name: Codecov upload
         uses: codecov/codecov-action@v1
