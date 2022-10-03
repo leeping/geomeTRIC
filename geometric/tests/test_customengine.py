@@ -47,8 +47,9 @@ def test_customengine(localizer):
                     ]
     customengine = CustomEngine(molecule)
 
-    tmpf = tempfile.mktemp()
-    m = geometric.optimize.run_optimizer(customengine=customengine, check=1, input=tmpf)
+    # tmpf = tempfile.mktemp()
+    with tempfile.NamedTemporaryFile(mode="w+", delete=False) as tmpf:
+        m = geometric.optimize.run_optimizer(customengine=customengine, check=1, input=tmpf.name)
 
     coords = m.xyzs[-1] / Bohr
     e = model(coords)[0]
