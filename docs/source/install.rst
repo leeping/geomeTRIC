@@ -85,6 +85,6 @@ Installation of cctools
 
 The Work Queue library in the `CCTools <https://github.com/cooperative-computing-lab/cctools>`_ package is utilized to provide distributed computing features in geomeTRIC, primarily the computation of numerical Hessian matrices.
 
-Installation of ``cctools`` can be done easily via conda as follows:
+Installation of ``cctools`` can be done easily via conda as follows ::
 
     conda install -c conda-forge ndcctools
