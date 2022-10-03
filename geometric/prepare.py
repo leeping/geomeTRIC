@@ -35,6 +35,7 @@ POSSIBILITY OF SUCH DAMAGE.
 
 from __future__ import division
 
+import json
 import os
 import itertools
 import numpy as np
@@ -42,6 +43,7 @@ import shutil
 
 import os
 
+from .ase_engine import EngineASE
 from .errors import EngineError
 from .internal import Distance, Angle, Dihedral, CartesianX, CartesianY, CartesianZ, TranslationX, TranslationY, TranslationZ, RotationA, RotationB, RotationC
 from .engine import set_tcenv, load_tcin, TeraChem, ConicalIntersection, Psi4, QChem, Gromacs, Molpro, OpenMM, QCEngineAPI, Gaussian
@@ -274,6 +276,21 @@ def get_molecule_engine(**kwargs):
                 raise RuntimeError("QCEngineAPI option requires a qce_program option")
             engine = QCEngineAPI(schema, program)
             M = engine.M
+        elif engine_str == "ase":
+            logger.info("ASE-Calculator engine selected. \n")
+            M = Molecule(kwargs.get("input"), radii=radii, fragment=frag)
+
+            ase_class_name = kwargs.get("ase_class")
+            ase_kwargs = kwargs.get("ase_kwargs", "{}")
+
+            logger.info("   ASE  calculator:{}\n".format(ase_class_name))
+            logger.info("   ASE calc kwargs:{}\n".format(ase_kwargs))
+
+            engine = EngineASE.from_calculator_string(
+                M,
+                ase_class_name,
+                **json.loads(ase_kwargs),
+            )
         else:
             raise RuntimeError("Failed to create an engine object, this might be a bug in get_molecule_engine")
     elif customengine:
