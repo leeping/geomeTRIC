@@ -23,9 +23,11 @@ jobs:
       - name: pytest
         run: pytest -v --cov=geometric  geometric/tests/
 
-      - name: Codecov upload
-        uses: codecov/codecov-action@v1
-        with:
-          flags: unittests-conda
-          fail_ci_if_error: true
-          verbose: true
+      # LPW 2022-10-03 Commenting out because GH Actions cannot test or cover Engine interfaces to commercial packages.
+      # Enabling Codecov upload for GH Actions would undercount the lines actually covered.
+      # - name: Codecov upload
+      #   uses: codecov/codecov-action@v1
+      #   with:
+      #     flags: unittests-conda
+      #     fail_ci_if_error: true
+      #     verbose: true
