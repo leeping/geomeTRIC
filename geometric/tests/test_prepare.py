@@ -96,7 +96,7 @@ $end"""
 
 
 @addons.using_terachem
-def test_get_molecule_engine_pdb__terrachem():
+def test_get_molecule_engine_pdb__terachem():
     get_molecule_engine_pdb("terachem", "water12.tcin")
 
 
