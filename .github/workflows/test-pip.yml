@@ -1,0 +1,43 @@
+# Testing with packages that are available from PIP
+# this is faste than the tests needing conda
+
+name: Tests with Pip
+
+on: [ push ]
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [ "3.6", "3.7", "3.8", "3.9", "3.10" ]
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+
+      # most of the dependencies
+      - name: Install dependencies with PIP
+        run: |
+          pip install numpy networkx six pytest pytest-cov
+
+      # rdkit: PyPi only supplies it for 3.7 and above
+      - name: Install rdkit
+        if: matrix.python-version != '3.6'
+        run: |
+          pip install rdkit
+
+      - name: pytest
+        run: |
+          pytest -v --cov=geometric  geometric/tests/
+
+      - name: Codecov upload
+        uses: codecov/codecov-action@v1
+        with:
+          flags: unittests-pip
+          fail_ci_if_error: true
+          verbose: true

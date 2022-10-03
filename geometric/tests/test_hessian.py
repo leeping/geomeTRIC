@@ -76,6 +76,8 @@ class TestWorkQueueHessian:
         assert len(freqs) == 4
         geometric.nifty.destroyWorkQueue()
 
+
+@addons.using_psi4
 def test_hessian_conversion(localizer):
     shutil.copy2(os.path.join(datad, 'hcn_tsguess.psi4in'), os.getcwd())
     molecule, engine = geometric.prepare.get_molecule_engine(engine="psi4", input="hcn_tsguess.psi4in")
@@ -87,4 +89,3 @@ def test_hessian_conversion(localizer):
     hessian_internal = IC.calcHess(coords, gradient, hessian)
     hessian_backconv = IC.calcHessCart(coords, gradient_internal, hessian_internal)
     np.testing.assert_almost_equal(hessian, hessian_backconv)
-    

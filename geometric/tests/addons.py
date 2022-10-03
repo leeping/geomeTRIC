@@ -1,6 +1,7 @@
 """
 Figures out currently available modules
 """
+import shutil
 
 import geometric
 import pytest
@@ -8,17 +9,21 @@ import os
 import logging.config
 import pkg_resources
 
+
 def _plugin_import(plug):
     """
     Tests to see if a module is available
     """
     import sys
+
     try:
         if sys.version_info >= (3, 4):
             from importlib import util
+
             plug_spec = util.find_spec(plug)
         else:
             import pkgutil
+
             plug_spec = pkgutil.find_loader(plug)
     except ModuleNotFoundError:
         return False
@@ -27,6 +32,19 @@ def _plugin_import(plug):
         return False
     else:
         return True
+
+
+def get_gaussian_version():
+    """
+    Try and work out the gaussian version if it can not be found return none.
+    """
+    if shutil.which("g16") is not None:
+        return "g16"
+    elif shutil.which("g09") is not None:
+        return "g09"
+    else:
+        return None
+
 
 # Modify paths for testing
 os.environ["DQM_CONFIG_PATH"] = os.path.dirname(os.path.abspath(__file__))
@@ -47,6 +65,11 @@ using_terachem = pytest.mark.skipif(
     not geometric.nifty.which("terachem"), reason="could not find terachem. please make sure TeraChem is installed for these tests")
 using_qchem = pytest.mark.skipif(
     not geometric.nifty.which("qchem"), reason="could not find qchem. please make sure Q-Chem is installed for these tests")
+using_gaussian = pytest.mark.skipif(
+    get_gaussian_version() is None,
+    reason="could not find Gaussian. please make sure Gaussian is installed for these tests",
+)
+
 
 # Points to the folder where the data files are installed.
 datad = os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), 'data')
@@ -77,7 +100,7 @@ def in_folder(request):
             src_path = os.path.join(test_folder, f)
             dst_path = os.path.join(test_folder, 'previous.%03i' % prev_num, f)
             os.rename(src_path, dst_path)
-        
+
     os.chdir(test_folder)
 
     # Yield for testing

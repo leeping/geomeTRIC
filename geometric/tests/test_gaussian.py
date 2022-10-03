@@ -11,22 +11,10 @@ import numpy as np
 import tempfile
 import os
 import platform
-import shutil
 from . import addons
+from .addons import get_gaussian_version
 
 datad = addons.datad
-
-
-def get_gaussian_version():
-    """
-    Try and work out the gaussian version if it can not be found return none.
-    """
-    if shutil.which("g16") is not None:
-        return "g16"
-    elif shutil.which("g09") is not None:
-        return "g09"
-    else:
-        return None
 
 
 def test_gaussian_version_wrong():
@@ -82,7 +70,7 @@ def test_gaussian_template():
     molecule = Molecule(os.path.join(datad, "ethane.com"))
     engine = Gaussian(molecule=molecule, exe="g09")
     engine.load_gaussian_input(os.path.join(datad, "ethane.com"))
-    assert engine.gauss_temp == ['%Mem=6GB\n', '%NProcShared=2\n', '%Chk=ligand\n', '$!route@here', '\n', 
+    assert engine.gauss_temp == ['%Mem=6GB\n', '%NProcShared=2\n', '%Chk=ligand\n', '$!route@here', '\n',
                                  'ethane\n', '\n', '0 1\n', '$!geometry@here', '\n', '\n']
 
 
@@ -169,7 +157,7 @@ def test_calc_new_gaussian():
 
         os.chdir(home)
 
-
+@addons.using_gaussian
 def test_read_results_gaussian():
     """
     Test reading the results from a fchk and log gaussian file.
