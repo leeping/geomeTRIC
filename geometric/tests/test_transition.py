@@ -32,8 +32,9 @@ def test_transition_hcn_psi4(localizer):
     rmsd, maxd = geometric.optimize.calc_drms_dmax(progress.xyzs[-1], ref, align=True)
     # Check that the energy is 0.0001 a.u. above reference. 
     assert progress.qm_energies[-1] < (e_ref + 0.0001)
-    # Check that the optimization converged in less than 20 steps
-    assert len(progress) < 20
+    # Check that the optimization converged in less than 30 steps
+    # LPW 2022-10-04: Increased from 20 to 30 because occasionally see 21 steps
+    assert len(progress) < 30
     # Check that the geometry matches the reference to within 0.01 RMS 0.02 max displacement
     assert rmsd < 0.001
     assert maxd < 0.002
