@@ -35,9 +35,9 @@ jobs:
         run: |
           pytest -v --cov=geometric  geometric/tests/
 
-      - name: Codecov upload
-        uses: codecov/codecov-action@v1
-        with:
-          flags: unittests-pip
-          fail_ci_if_error: true
-          verbose: true
+      # - name: Codecov upload
+      #   uses: codecov/codecov-action@v1
+      #   with:
+      #     flags: unittests-pip
+      #     fail_ci_if_error: true
+      #     verbose: true
