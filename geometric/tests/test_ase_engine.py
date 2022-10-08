@@ -91,3 +91,10 @@ def test_from_string_errors(molecule_h2o):
         EngineASE.from_calculator_string(
             molecule_h2o, calculator_import="ase.optimize.optimize.Optimizer"
         )
+
+
+def test_importability_no_ase():
+    # this should be able to import the ase_engine
+    # without ase being installed
+    import geometric.prepare
+    import geometric.ase_engine
