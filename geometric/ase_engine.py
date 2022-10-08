@@ -27,7 +27,7 @@ from .molecule import Molecule
 
 class EngineASE(Engine):
     def __init__(self, molecule: Molecule, calculator: Calculator):
-        super(EngineASE, self).__init__(molecule)
+        super().__init__(molecule)
 
         self.calculator = calculator
         self.ase_atoms = Atoms(self.M.elem, positions=self.M.Data.get("xyzs")[0])
@@ -52,9 +52,11 @@ class EngineASE(Engine):
         # class of the calculator
         if hasattr(module, class_name):
             calc_class = getattr(module, class_name)
-            assert issubclass(calc_class, Calculator)
         else:
             raise EngineError("ASE-calculator's class ({}) not found in module {}".format(class_name, module_name))
+
+        if not issubclass(calc_class, Calculator):
+            raise EngineError("Not an ASE calculator class ({}) found in module ({})".format(class_name, module_name))
 
         # construct from the constructor
         return cls.from_calculator_constructor(molecule, calc_class, *args, **kwargs)
