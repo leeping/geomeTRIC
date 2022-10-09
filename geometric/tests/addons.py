@@ -73,6 +73,10 @@ using_ase = pytest.mark.skipif(
     _plugin_import("ase") is False,
     reason="could not find ase. please install the package to enable tests",
 )
+using_xtb = pytest.mark.skipif(
+    _plugin_import("xtb") is False,
+    reason="could not find ase. please install the package to enable tests",
+)
 
 
 # Points to the folder where the data files are installed.
