@@ -1,22 +1,25 @@
 name: test
 channels:
+  - defaults
   - psi4
+  - omnia
   - rdkit
   - conda-forge
-  - defaults
 dependencies:
+  # ASE tests
+  - ase
+
   # RDKit test depends
   - rdkit
 
   # Psi test depends
-  - psi4 >= 1.6.1
-  - qcengine >= 0.24
+  - psi4 >= 1.3
+  - qcengine >= 0.15
 
   # OpenMM test depends
   - openmm
 
   # geomeTRIC base depends
-  - python=3.9
   - numpy
   - networkx
 
