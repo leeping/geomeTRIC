@@ -20,7 +20,7 @@ Authors: Lee-Ping Wang, Chenchen Song
 Contributors: Yudong Qiu (Psi4 engine, error handling); Daniel G. A. Smith (Testing framework, QCEngine JSON API);
 Sebastian Lee (Molpro engine); Chaya Stern (Travis, Conda); Qiming Sun (Custom engine);
 Alberto Gobbi (Batch energy/gradient, logging); Josh Horton (Convergence criteria, Gaussian engine);
-Tamas K. Stenczel (GitHub Actions)
+Tamas K. Stenczel (GitHub Actions, ASE engine)
 
 Contact Email: leeping [at] ucdavis [dot] edu
 
