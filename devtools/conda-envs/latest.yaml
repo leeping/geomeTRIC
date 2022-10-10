@@ -12,8 +12,8 @@ dependencies:
   - rdkit
 
   # Psi test depends
-  - psi4 >= 1.3
-  - qcengine >= 0.15
+  - psi4 >= 1.6.1
+  - qcengine >= 0.24
 
   # OpenMM test depends
   - openmm
