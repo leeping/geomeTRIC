@@ -2,7 +2,7 @@
 
 Copyright 2022 Tamas K. Stenczel
 
-Test teh following:
+Test the following:
 - using ASE internal calculator class
 - results are consistent with the ASE calc results
 - import of class from string & import error
