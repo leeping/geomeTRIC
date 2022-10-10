@@ -28,7 +28,7 @@ jobs:
         run: conda config --set channel_priority flexible
 
       - name: Install Dependencies from Conda
-        run: conda env update --file=devtools/conda-envs/latest.yaml --name=base
+        run: conda env update --file=devtools/conda-envs/latest.yaml --name=base --debug
 
       - name: pytest
         run: pytest -v --cov=geometric  geometric/tests/
