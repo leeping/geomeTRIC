@@ -1,0 +1,5 @@
+3
+Properties=species:S:1:pos:R:3 pbc="F F F" comment="Written for XTB+ASE test"
+C  0.00 0.00 0.00
+N  0.60 0.00 1.10
+H -0.60 0.00 0.80

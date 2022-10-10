@@ -3,7 +3,14 @@
 
 name: Tests with Pip
 
-on: [ push ]
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    # The branches below must be a subset of the branches above
+    branches: [ master ]
+  schedule:
+    - cron: '36 21 * * 6'
 
 jobs:
   build-linux:
@@ -23,7 +30,7 @@ jobs:
       # most of the dependencies
       - name: Install dependencies with PIP
         run: |
-          pip install numpy networkx six pytest pytest-cov
+          pip install numpy networkx six pytest pytest-cov ase
 
       # rdkit: PyPi only supplies it for 3.7 and above
       - name: Install rdkit

@@ -3,7 +3,14 @@
 
 name: Tests with Conda
 
-on: [ push ]
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    # The branches below must be a subset of the branches above
+    branches: [ master ]
+  schedule:
+    - cron: '36 21 * * 6'
 
 jobs:
   build-linux:
@@ -16,6 +23,9 @@ jobs:
         run: |
           # $CONDA is an environment variable pointing to the root of the miniconda directory
           echo $CONDA/bin >> $GITHUB_PATH
+
+      # - name: Configure Conda
+      #   run: conda config --set channel_priority flexible
 
       - name: Install Dependencies from Conda
         run: conda env update --file=devtools/conda-envs/latest.yaml --name=base
