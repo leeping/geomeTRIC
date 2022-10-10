@@ -20,6 +20,7 @@ dependencies:
   - openmm
 
   # geomeTRIC base depends
+  - python=3.9
   - numpy
   - networkx
 
