@@ -7,14 +7,14 @@ Copyright 2021-2022 Tamas K. Stenczel
 # python 2 madness
 try:
     ModuleNotFoundError
-except NameError:
+except NameError: # pragma: no cover
     ModuleNotFoundError = ImportError
 
 try:
     from ase.calculators.calculator import Calculator
     from ase import Atoms
     from ase import units
-except (ModuleNotFoundError, ImportError):
+except (ModuleNotFoundError, ImportError): # pragma: no cover
     Calculator = None
     Atoms = None
     units = None
