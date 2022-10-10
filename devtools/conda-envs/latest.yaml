@@ -2,7 +2,6 @@ name: test
 channels:
   - defaults
   - psi4
-  - omnia
   - rdkit
   - conda-forge
 dependencies:
