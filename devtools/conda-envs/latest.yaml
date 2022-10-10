@@ -5,10 +5,6 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  # ASE tests
-  - ase
-  - xtb-python
-
   # RDKit test depends
   - rdkit
 
