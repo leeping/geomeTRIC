@@ -41,7 +41,6 @@ import json
 import traceback
 import pkg_resources
 import tempfile
-import numpy as np
 
 try:
     from cStringIO import StringIO      # Python 2

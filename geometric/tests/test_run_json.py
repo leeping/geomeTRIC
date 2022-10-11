@@ -2,9 +2,8 @@
 A set of tests for using the QCEngine project
 """
 
-import copy
 import numpy as np
-import json, os, sys, shutil
+import json, os, sys
 from . import addons
 import geometric
 import pytest
@@ -130,7 +129,7 @@ def test_run_json_scan_rejection(localizer):
         json.dump(in_json_dict, handle, indent=2)
 
     with pytest.raises(KeyError) as excinfo:
-        out_json = geometric.run_json.geometric_run_json(in_json_dict)
+        out_json = geometric_run_json(in_json_dict)
         print(out_json['stdout'])
 
     assert "'scan' keyword" in str(excinfo.value)
@@ -153,7 +152,7 @@ def test_run_json_rdkit_water(localizer):
 
     with open('in.json', 'w') as handle:
         json.dump(in_json_dict, handle, indent=2)
-    out_json = geometric.run_json.geometric_run_json(in_json_dict)
+    out_json = geometric_run_json(in_json_dict)
     print(out_json['stdout'])
 
     with open('out.json', 'w') as handle:
@@ -187,7 +186,7 @@ def test_run_json_rdkit_hooh_constraint(localizer):
 
     with open('in.json', 'w') as handle:
         json.dump(in_json_dict, handle, indent=2)
-    out_json = geometric.run_json.geometric_run_json(in_json_dict)
+    out_json = geometric_run_json(in_json_dict)
     print(out_json['stdout'])
 
     with open('out.json', 'w') as handle:
@@ -221,7 +220,7 @@ def test_run_json_distance_constraint(localizer):
     with open('in.json', 'w') as handle:
         json.dump(in_json_dict, handle, indent=2)
 
-    out_json = geometric.run_json.geometric_run_json(in_json_dict)
+    out_json = geometric_run_json(in_json_dict)
     print(out_json['stdout'])
 
     with open('out.json', 'w') as handle:
@@ -250,7 +249,7 @@ def test_run_json_psi4_hydrogen(localizer):
     with open('in.json', 'w') as handle:
         json.dump(in_json_dict, handle, indent=2)
 
-    out_json = geometric.run_json.geometric_run_json(in_json_dict)
+    out_json = geometric_run_json(in_json_dict)
     print(out_json['stdout'])
 
     with open('out.json', 'w') as handle:
@@ -294,7 +293,7 @@ def test_run_json_psi4_hcn_ts(localizer):
         json.dump(in_json_dict, handle, indent=2)
 
     # Test without providing Hessian (calculate the Hessian from a scratch)
-    out_json = geometric.run_json.geometric_run_json(in_json_dict)
+    out_json = geometric_run_json(in_json_dict)
     with open('out.json', 'w') as handle:
         json.dump(out_json, handle, indent=2)
     assert out_json["success"], out_json["error"]
@@ -343,7 +342,7 @@ def test_rdkit_run_error(localizer):
     } # yapf: disable
     in_json_dict = _build_input(molecule, method="cookiemonster")
     # an error should be caught in the ret
-    ret = geometric.run_json.geometric_run_json(in_json_dict)
+    ret = geometric_run_json(in_json_dict)
     print(ret['stdout'])
     assert ret["success"] == False
     assert "UFF" in ret["error"]["error_message"]
