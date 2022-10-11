@@ -41,7 +41,7 @@ Dependencies
 
 The required packages for geomeTRIC are as follows. Older versions of packages may work, no guarantees.
 
-* Python : Versions 2.7, 3.5, 3.6, 3.7 are supported. Presumably it will work with version 3.8 and above.
+* Python : Versions 2.7, 3.5, 3.6, 3.7 are supported. Basic functionalities tested on 3.6 to 3.10.
 * NumPy: Version 1.15 or above
 * NetworkX : Version 2.2 or above
 
@@ -54,7 +54,7 @@ Supported QM packages are as follows. Older versions of packages may work, no gu
 * Psi4 : Version 1.2 or above
 * Molpro : Version 2015 or 2019
 * Gaussian : Version 09 or 16
-  
+
 Supported MM packages are:
 
 * OpenMM : Version 6.3 or above
@@ -67,7 +67,7 @@ A testing environment can be set up using ``conda`` which includes OpenMM, Psi4,
     cd geomeTRIC
     python devtools/scripts/create_conda_env.py -n=geo_test -p=3.7 devtools/conda-envs/omm_psi4_rdkit.yaml
 
-  
+
 Testing
 -------
 
@@ -85,6 +85,6 @@ Installation of cctools
 
 The Work Queue library in the `CCTools <https://github.com/cooperative-computing-lab/cctools>`_ package is utilized to provide distributed computing features in geomeTRIC, primarily the computation of numerical Hessian matrices.
 
-Installation of ``cctools`` can be done easily via conda as follows:
+Installation of ``cctools`` can be done easily via conda as follows ::
 
     conda install -c conda-forge ndcctools

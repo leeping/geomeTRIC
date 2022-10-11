@@ -1,6 +1,6 @@
 ![geomeTRIC](https://user-images.githubusercontent.com/1441560/56555299-600d1980-6549-11e9-9f05-b1e8b899a292.png)
 
-[![Build Status](https://travis-ci.org/leeping/geomeTRIC.svg?branch=master)](https://travis-ci.org/leeping/geomeTRIC)
+[![Build Status](https://github.com/leeping/geomeTRIC/actions/workflows/test-conda.yml/badge.svg)](https://github.com/leeping/geomeTRIC/actions/workflows/test-conda.yml)
 [![codecov](https://codecov.io/gh/leeping/geometric/branch/master/graph/badge.svg)](https://codecov.io/gh/leeping/geometric)
 
 This is a geometry optimization code for molecular structures.

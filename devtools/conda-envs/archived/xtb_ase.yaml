@@ -1,23 +1,13 @@
+# Conda environment with XTB and ASE packages, you can execute the
+# associatedexamples of using an ASE-compatible calculator.
 name: test
 channels:
-  - psi4
-  - rdkit
   - defaults
   - conda-forge
 dependencies:
-  # ASE tests
+  # ASE tests require
   - ase
   - xtb-python
-
-  # RDKit test depends
-  - rdkit
-
-  # Psi test depends
-  - psi4 >= 1.6.1
-  - qcengine >= 0.24
-
-  # OpenMM test depends
-  - openmm
 
   # geomeTRIC base depends
   - numpy
@@ -25,5 +15,4 @@ dependencies:
 
   # Testing
   - pytest
-  - codecov
   - pytest-cov

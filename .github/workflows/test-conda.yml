@@ -1,0 +1,43 @@
+# Testing with conda - heavier than the PIP version,
+# this includes different engines and plugins
+
+name: Tests with Conda
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    # The branches below must be a subset of the branches above
+    branches: [ master ]
+  schedule:
+    - cron: '36 21 * * 6'
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Add conda to system path
+        run: |
+          # $CONDA is an environment variable pointing to the root of the miniconda directory
+          echo $CONDA/bin >> $GITHUB_PATH
+
+      # - name: Configure Conda
+      #   run: conda config --set channel_priority flexible
+
+      - name: Install Dependencies from Conda
+        run: conda env update --file=devtools/conda-envs/latest.yaml --name=base
+
+      - name: pytest
+        run: pytest -v --cov=geometric  geometric/tests/
+
+      # LPW 2022-10-03 Commenting out because GH Actions cannot test or cover Engine interfaces to commercial packages.
+      # Enabling Codecov upload for GH Actions would undercount the lines actually covered.
+      # - name: Codecov upload
+      #   uses: codecov/codecov-action@v1
+      #   with:
+      #     flags: unittests-conda
+      #     fail_ci_if_error: true
+      #     verbose: true

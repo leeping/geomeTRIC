@@ -322,7 +322,7 @@ class Optimizer(object):
                     raise HessianExit
                     # sys.exit(0)
             elif hasattr(self.params, 'hess_data'):
-                logger.info("Hessian was provided\n")
+                logger.info(">> Using Hessian data provided via params...\n")
                 self.Hx0 = self.params.hess_data.copy()
                 logger.info(">> Initial Cartesian Hessian Eigenvalues\n")
                 self.SortedEigenvalues(self.Hx0)
