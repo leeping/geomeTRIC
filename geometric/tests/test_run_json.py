@@ -280,7 +280,8 @@ def test_run_json_psi4_hcn_ts(localizer):
         "symbols": ["C","N","H"],
     } # yapf: disable
 
-    hessian = np.loadtxt(os.path.join(datad, "hcn_tsguess_hessian.txt"))
+    # Passing Hessian from QCFractal to geomeTRIC won't work due the a SQL's memory problem.
+    #hessian = np.loadtxt(os.path.join(datad, "hcn_tsguess_hessian.txt"))
 
     in_json_dict = _build_input(molecule, program="psi4", method="HF", basis="3-21g")
     kws = in_json_dict.pop('keywords')
@@ -293,41 +294,40 @@ def test_run_json_psi4_hcn_ts(localizer):
         json.dump(in_json_dict, handle, indent=2)
 
     # Test without providing Hessian (calculate the Hessian from a scratch)
-    # out_json = geometric.run_json.geometric_run_json(in_json_dict)
-    # with open('out.json', 'w') as handle:
-    #     json.dump(out_json, handle, indent=2)
-    # assert out_json["success"], out_json["error"]
-    # result_geo = out_json['final_molecule']['geometry']
-    # # The results here are in Bohr
-    ref = geometric.molecule.Molecule(os.path.join(datad, "hcn_ts_optim.xyz")).xyzs[0]*ang2bohr
-    # assert pytest.approx(out_json["energies"][-1], 1.e-4) == -92.24601961
-    # rmsd, maxd = geometric.optimize.calc_drms_dmax(np.array(result_geo), ref, align=True)
-    # assert rmsd < 0.001 and maxd < 0.002
-    # assert out_json["schema_name"] == "qc_schema_optimization_output"
-    # assert "Converged" in out_json["stdout"]
-    # assert "Valid Hessian data not found" in out_json["stdout"]
-
-    # Providing the Hessian
-    kws["hessian"] = hessian.tolist()
-    in_json_dict["keywords"] = kws
-    with open('in.json', 'w') as handle:
-        json.dump(in_json_dict, handle, indent=2)
-
     out_json = geometric.run_json.geometric_run_json(in_json_dict)
-
     with open('out.json', 'w') as handle:
         json.dump(out_json, handle, indent=2)
-
     assert out_json["success"], out_json["error"]
-
     result_geo = out_json['final_molecule']['geometry']
+    # The results here are in Bohr
+    ref = geometric.molecule.Molecule(os.path.join(datad, "hcn_ts_optim.xyz")).xyzs[0]*ang2bohr
     assert pytest.approx(out_json["energies"][-1], 1.e-4) == -92.24601961
     rmsd, maxd = geometric.optimize.calc_drms_dmax(np.array(result_geo), ref, align=True)
     assert rmsd < 0.001 and maxd < 0.002
     assert out_json["schema_name"] == "qc_schema_optimization_output"
     assert "Converged" in out_json["stdout"]
-    assert "Using Hessian data provided" in out_json["stdout"]
-    print(out_json["stdout"])
+    assert "Valid Hessian data not found" in out_json["stdout"]
+
+    #kws["hessian"] = hessian.tolist()
+    #in_json_dict["keywords"] = kws
+    #with open('in.json', 'w') as handle:
+    #    json.dump(in_json_dict, handle, indent=2)
+
+    #out_json = geometric.run_json.geometric_run_json(in_json_dict)
+
+    #with open('out.json', 'w') as handle:
+    #    json.dump(out_json, handle, indent=2)
+
+    #assert out_json["success"], out_json["error"]
+
+    #result_geo = out_json['final_molecule']['geometry']
+    #assert pytest.approx(out_json["energies"][-1], 1.e-4) == -92.24601961
+    #rmsd, maxd = geometric.optimize.calc_drms_dmax(np.array(result_geo), ref, align=True)
+    #assert rmsd < 0.001 and maxd < 0.002
+    #assert out_json["schema_name"] == "qc_schema_optimization_output"
+    #assert "Converged" in out_json["stdout"]
+    #assert "Using Hessian data provided" in out_json["stdout"]
+    #print(out_json["stdout"])
 
 
 @addons.using_qcengine
