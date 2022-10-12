@@ -822,16 +822,30 @@ class Gaussian(Engine):
                 elif line.startswith('#'):
                     self.route_line = line
 
-                    if "force=nostep" in line.lower():
-                        found_force = True
+                    found_force_nostep = "force=nostep" in line.lower()
+                    found_force = "force=" in line.lower()
+                    found_symmetry_none = "symmetry=none" in line.lower()
+                    found_symmetry_nosymm = "symmetry=nosymm" in line.lower()
+                    found_symmetry = "symmetry=" in line.lower()
+
                     gauss_temp.append("$!route@here")
 
                 else:
                     gauss_temp.append(line)
 
+        # If force= is not present in line, add Force=NoStep.
         if not found_force:
-            raise RuntimeError("Gaussian inputfile %s should have force=nostep in route line." % gaussian_input)
-
+            self.route_line = self.route_line.replace('\n','') + " Force=NoStep\n"
+        elif not found_force_nostep:
+            raise GaussianEngineError("Gaussian inputfile %s should have force=nostep "
+                                      "in route line." % gaussian_input)
+        # If symmetry= is not present in line, add Symmetry=None.
+        if not found_symmetry:
+            self.route_line = self.route_line.replace('\n','') + " Symmetry=None\n"
+        elif not (found_symmetry_none or found_symmetry_nosymm):
+            raise GaussianEngineError("Gaussian inputfile %s should have symmetry=nosymm"
+                                      "or none in route line." % gaussian_input)
+            
         # now we need to make sure the chk point file and threads were set
         if not any("%chk" in command.lower() for command in gauss_temp):
             # insert at the top

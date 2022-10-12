@@ -86,8 +86,11 @@ def get_molecule_engine(**kwargs):
 
     ## MECI calculations create a custom engine that contains multiple engines.
     if kwargs.get('meci', None):
-        if engine_str.lower() in ['psi4', 'gmx', 'molpro', 'qcengine', 'openmm', 'gaussian'] or customengine:
-            logger.warning("MECI optimizations are not tested with engines: psi4, gmx, molpro, qcengine, openmm, gaussian, customengine. Be Careful!")
+        if engine_str is not None:
+            if engine_str.lower() in ['psi4', 'gmx', 'molpro', 'qcengine', 'openmm', 'gaussian']:
+                logger.warning("MECI optimizations are not tested with engines: psi4, gmx, molpro, qcengine, openmm, gaussian. Be Careful!")
+        elif customengine:
+            logger.warning("MECI optimizations are not tested with customengine. Be Careful!")
         ## If 'engine' is provided as the argument to 'meci', then we assume the engine is
         # directly returning the MECI objective function and gradient.
         if len(kwargs['meci']) == 1 and kwargs['meci'][0].lower() == 'engine':
@@ -104,7 +107,10 @@ def get_molecule_engine(**kwargs):
             for alt_state in range(len(kwargs['meci'])+1):
                 sub_kwargs = kwargs.copy()
                 if alt_state > 0:
-                    sub_kwargs['input'] = kwargs['meci'][alt_state-1]
+                    if customengine:
+                        sub_kwargs['customengine'] = kwargs['meci'][alt_state-1]
+                    else:
+                        sub_kwargs['input'] = kwargs['meci'][alt_state-1]
                 sub_kwargs['meci'] = None
                 M, sub_engine = get_molecule_engine(**sub_kwargs)
                 sub_engines.append(sub_engine)
