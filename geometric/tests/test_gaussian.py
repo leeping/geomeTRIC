@@ -53,14 +53,14 @@ def test_find_gaussian_missing():
             _ = get_molecule_engine(**kwargs)
 
 
-def test_missing_force_input():
+def test_wrong_force_input():
     """
-    Make sure an error is raised if we do not request the force in the input file.
+    Make sure an error is raised if force= is present in the input file but is not force=nostep.
     """
-    molecule = Molecule(os.path.join(datad, "no_force.com"))
+    molecule = Molecule(os.path.join(datad, "force_restart.com"))
     engine = Gaussian(molecule=molecule, exe="g09")
-    with pytest.raises(RuntimeError):
-        engine.load_gaussian_input(os.path.join(datad, "no_force.com"))
+    with pytest.raises(GaussianEngineError):
+        engine.load_gaussian_input(os.path.join(datad, "force_restart.com"))
 
 
 def test_gaussian_template():
