@@ -183,7 +183,7 @@ def get_molecule_engine(**kwargs):
             M.mult = tcin.get('spinmult',1)
             # The TeraChem engine needs to write rst7 files before calling TC
             # and also make sure the prmtop and qmindices.txt files are present.
-            engine = TeraChem(M, tcin, dirname=dirname)
+            engine = TeraChem(M[-1], tcin, dirname=dirname)
         elif engine_str == 'qchem':
             logger.info("Q-Chem engine selected. Expecting Q-Chem input for gradient calculation.\n")
             # The file from which we make the Molecule object
@@ -330,7 +330,19 @@ def get_molecule_engine(**kwargs):
     arg_coords = kwargs.get('coords', None)
     if arg_coords is not None:
         M.load_frames(arg_coords)
-        M = M[-1]
+        if kwargs.get('neb', False):
+            images = kwargs.get('images', 11)
+            charge = M.charge
+            mult = M.mult
+            M1 = M
+            print("Input coordinates have %i frames. The following will be used to initialize NEB images:" % len(M1))
+            print(', '.join(["%i" % (int(round(i))) for i in np.linspace(0, len(M1)-1, images)]))
+            for i in range(len(M1)):
+                M1[i].charge = charge
+                M1[i].mult = mult
+            M = M1[np.array([int(round(i)) for i in np.linspace(0, len(M1)-1, images)])]
+        else:
+            M = M[-1]
         # 2022-09-13: If extra coordinates are provided, the topology may be rebuilt. This decision can be revisited later.
         M.build_topology()
 

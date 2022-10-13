@@ -2051,7 +2051,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                 isolates = [list(m.nodes())[0] for m in molecule.molecules if len(m.nodes()) == 1]
                 for i in isolates:
                     j = molecule.get_closest_atom(i, pbc=False)[0]
-                    logger.info("Creating artifical bond to isolated atom: %i-%i\n" % (i+1, j+1))
+                    logger.info("Creating artificial bond to isolated atom: %i-%i\n" % (i+1, j+1))
                     molecule.bonds.append((i, j))
                 old_read_bonds = molecule.top_settings['read_bonds']
                 molecule.top_settings['read_bonds'] = True
