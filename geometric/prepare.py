@@ -332,14 +332,9 @@ def get_molecule_engine(**kwargs):
         M.load_frames(arg_coords)
         if kwargs.get('neb', False):
             images = kwargs.get('images', 11)
-            charge = M.charge
-            mult = M.mult
             M1 = M
             print("Input coordinates have %i frames. The following will be used to initialize NEB images:" % len(M1))
             print(', '.join(["%i" % (int(round(i))) for i in np.linspace(0, len(M1)-1, images)]))
-            for i in range(len(M1)):
-                M1[i].charge = charge
-                M1[i].mult = mult
             M = M1[np.array([int(round(i)) for i in np.linspace(0, len(M1)-1, images)])]
         else:
             M = M[-1]
