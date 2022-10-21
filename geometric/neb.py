@@ -2880,7 +2880,7 @@ def prepare(prev):
         "old_coord": chaintocoords(chain, True),
         "result": result,
     }
-    prev = prev | temp
+    prev.update(temp)
     return newcoords, prev
 
 
@@ -3106,7 +3106,7 @@ def nextchain(prev):
             "quality": Quality,
             "result": result,
         }
-        prev = prev | temp
+        prev.update(temp)
         print('Size of nebinfo dict respaced %f Gb' %(sys.getsizeof(dict_to_binary(prev))*1e-9))
         return newcoords, prev
 
@@ -3183,7 +3183,7 @@ def nextchain(prev):
             "climbset": chain.climbSet,
             "result": result,
         }
-        prev = prev | temp
+        prev.update(temp)
         return newcoords, prev
     # If minimum eigenvalues of HW is lower than epsilon, GP, GW are same as their previous values.
     chain, Y, GW, GP, HP, HW, Y_prev, GP_prev, GW_prev, H_reset = updatehessian(
@@ -3253,7 +3253,7 @@ def nextchain(prev):
         "result": result,
     }
     newcoords = chaintocoords(chain)
-    prev = prev | temp
+    prev.update(temp)
     for k, v in prev.items():
         if k == "HW":
             print('%s shape: %s' %(k, np.array(v).shape))
