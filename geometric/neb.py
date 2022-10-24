@@ -3107,7 +3107,6 @@ def nextchain(prev):
             "result": result,
         }
         prev.update(temp)
-        print('Size of nebinfo dict respaced %f Gb' %(sys.getsizeof(dict_to_binary(prev))*1e-9))
         return newcoords, prev
 
     if converged(
@@ -3147,7 +3146,6 @@ def nextchain(prev):
             GP_prev,
             respaced,
             _,
-        # chain = old_chain
         ) = takestep(
             chain,
             old_chain,
@@ -3255,10 +3253,8 @@ def nextchain(prev):
     newcoords = chaintocoords(chain)
     prev.update(temp)
     for k, v in prev.items():
-        if k == "HW":
-            print('%s shape: %s' %(k, np.array(v).shape))
         mem_size = sys.getsizeof(dict_to_binary({k: v}))*1e-9
-        if mem_size > 1e-5:
+        if mem_size > 1e-1:
             print('Size of %s : %f Gb' %(k, mem_size))
     return newcoords, prev
 
