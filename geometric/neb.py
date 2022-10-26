@@ -1,8 +1,7 @@
 from __future__ import print_function
 from __future__ import division
 
-import argparse
-import os
+import os, sys
 import numpy as np
 from scipy.linalg import sqrtm
 from .prepare import get_molecule_engine
@@ -25,7 +24,6 @@ from .nifty import (
     kcal2au,
     au2kcal,
     au2evang,
-    ev2au,
 )
 from .molecule import Molecule, EqualSpacing
 from .errors import (
@@ -2257,10 +2255,13 @@ def qualitycheck(
         # LPW 2017-04-08: Removed deepcopy to save memory.
         # If unexpected behavior appears, check here.
         chain = old_chain
+        good = False
         print("Reducing trust radius to %.1e and rejecting step" % trust)
-        return chain, trust, trustprint, Y, GW, GP, False
+    else:
+        chain = new_chain
+        good = True
 
-    return new_chain, trust, trustprint, Y, GW, GP, True
+    return chain, trust, trustprint, Y, GW, GP, good
 
 
 def compare(
@@ -2787,7 +2788,7 @@ def prepare(prev):
     gradients = prev.pop("gradients")
 
     params = {
-    "neb": True,
+        "neb": True,
         "images": args_dict.get("images"),
         "maxg": args_dict.get("maximum_force"),
         "avgg": args_dict.get("average_force"),
@@ -2950,7 +2951,6 @@ def nextchain(prev):
     """
     Generate a next chain's Cartesian coordinate for QCFractal.
     """
-    import sys
     coords_bohr = prev.pop("geometry")
     coords_ang = np.array(coords_bohr) * bohr2ang
     args_dict = prev.pop("params")
