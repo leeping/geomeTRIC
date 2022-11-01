@@ -1,6 +1,7 @@
 from __future__ import print_function
 from __future__ import division
 
+import copy
 import os, sys
 import numpy as np
 from scipy.linalg import sqrtm
@@ -2667,26 +2668,8 @@ class nullengine(object):
     Fake engine for QCFractal.
     """
 
-    def __init__(self, charge, mult, elems, coords):
-        self.elems = elems
-        self.coords = np.array(coords).flatten()
-        self.na = len(elems)
-        self.nm = int(self.coords.size / (3 * self.na))
-        M1 = Molecule()
-
-        for i in range(self.nm):
-            interval = 3 * self.na
-            start = interval * i
-            M2 = Molecule()
-            M2.elem = self.elems
-            M2.charge = charge
-            M2.mult = mult
-            M2.xyzs = [self.coords[start : start + self.na * 3].reshape(-1, 3)]
-            if i == 0:
-                M1 = M2
-            else:
-                M1 += M2
-        self.M = M1
+    def __init__(self, M):
+        self.M = M
 
 
 def chaintocoords(chain, ang=False):
@@ -2801,12 +2784,17 @@ def prepare(prev):
         "epsilon": args_dict.get("epsilon"),
         "coordsys": "cart",
     }
+    M = Molecule()
+    M.elem = elems
+    M.charge = charge
+    M.mult = mult
+    M.xyzs = [coords.reshape(-1,3) for coords in coords_ang]
 
     print("Spring Force: %.2f kcal/mol/Ang^2" % params.get("nebk"))
     if params.get("nebew") is not None:
         print("Energey weighted NEB will be performed.")
     opt_param = OptParams(**params)
-    opt_param.customengine = nullengine(charge, mult, elems, coords_ang)
+    opt_param.customengine = nullengine(M)
 
     result = []
     for i in range(len(energies)):
@@ -2985,14 +2973,19 @@ def nextchain(prev):
         "epsilon": args_dict.get("epsilon"),
         "coordsys": "cart",
     }
+    M = Molecule()
+    M.elem = elems
+    M.charge = charge
+    M.mult = mult
+    M.xyzs = [coords.reshape(-1, 3) for coords in coords_ang]
 
+    M_old = copy.deepcopy(M)
+    M_old.xyzs = [coords.reshape(-1, 3) for coords in np.array(prev.get("old_coord"))]
     params = OptParams(**params_dict)
-    params.customengine = nullengine(charge, mult, elems, coords_ang)
+    params.customengine = nullengine(M)
 
     params2 = OptParams(**params_dict)
-    params2.customengine = nullengine(
-        charge, mult, elems, np.array(prev.get("old_coord"))
-    )
+    params2.customengine = nullengine(M_old)
 
     M_old, engine = get_molecule_engine(**{"customengine": params2.customengine})
     M, engine = get_molecule_engine(**{"customengine": params.customengine})
