@@ -1,8 +1,7 @@
 from __future__ import print_function
 from __future__ import division
 
-import copy
-import os, sys
+import os, sys, tempfile
 import numpy as np
 from scipy.linalg import sqrtm
 from .prepare import get_molecule_engine
@@ -2140,8 +2139,9 @@ def BFGSUpdate(Y, Yprev, G, Gprev, H, params):
         return False
     Mat1 = np.dot(Dg, Dg.T) / np.dot(Dg.T, Dy)[0, 0]
     Mat2 = np.dot(np.dot(H, Dy), np.dot(H, Dy).T) / np.dot(np.dot(Dy.T, H), Dy)[0, 0]
-    Eig = np.linalg.eigh(H)[0]
-    Eig.sort()
+    if verbose:
+        Eig = np.linalg.eigh(H)[0]
+        Eig.sort()
     ndy = np.array(Dy).flatten() / np.linalg.norm(np.array(Dy))
     ndg = np.array(Dg).flatten() / np.linalg.norm(np.array(Dg))
     nhdy = np.array(H * Dy).flatten() / np.linalg.norm(np.array(H * Dy))
@@ -2283,7 +2283,7 @@ def compare(
     Quality_old=None,
 ):
     """
-    This function was part of the 'while' loop in OptimizeChain(). Two chain objects are being compared.
+    This function was a part of the 'while' loop in OptimizeChain(). Two chain objects are being compared.
     """
     Y = new_chain.get_internal_all()
     GW = new_chain.get_global_grad("total", "working")
@@ -2319,7 +2319,7 @@ def compare(
         )
         HW = (
             new_chain.guess_hessian_working.copy()
-        )  #Comment this out to keep the hessian
+        )  # Comment this out to keep the hessian
         HP = new_chain.guess_hessian_plain.copy()
         c_hist = [new_chain]
         return (
@@ -2452,9 +2452,9 @@ def takestep(
     else:
         LastForce = 0
     # Before updating any of our variables, copy current variables to "previous"
-    Y_prev = Y.copy()
-    GW_prev = GW.copy()
-    GP_prev = GP.copy()
+    old_Y = Y.copy()
+    old_GW = GW.copy()
+    old_GP = GP.copy()
     # Cartesian norm of the step
     # Whether the Cartesian norm comes close to the trust radius
     # Update the internal coordinates
@@ -2468,9 +2468,9 @@ def takestep(
         expectG,
         ForceRebuild,
         LastForce,
-        Y_prev,
-        GW_prev,
-        GP_prev,
+        old_Y,
+        old_GW,
+        old_GP,
         respaced,
         optCycle,
     )
@@ -2672,207 +2672,6 @@ class nullengine(object):
         self.M = M
 
 
-def chaintocoords(chain, ang=False):
-    """
-    Extracts Cartesian coordinates from an ElasticBand object.
-    Parameters
-    ----------
-    chain: ElasticBand object
-    ang: Bool
-        True will return Cartesian coordinates in Ang (False in Bohr).
-
-    Returns
-    -------
-    newcoords: list
-        Cartesian coordinates in list. It is not numpy array because neb record socket in QCF can't process nparray.
-    """
-    newcoords = []
-    if ang:
-        factor = 1
-    else:
-        factor = bohr2ang
-    for i in range(len(chain)):
-        M_obj = chain.Structures[i].M
-        coord = np.round(M_obj.xyzs[0] / factor, 8)
-        newcoords.append(coord.tolist())
-    return newcoords
-
-
-def arrange(qcel_mols, align):
-    """
-    This function will align and respace a chain.
-    Parameters
-    ----------
-    qcel_mols: [QCElemental Molecule object]
-        QCElemental Molecule objects in a list that needs to be aligned.
-
-    align: bool
-        True will align the chain
-
-    Returns
-    -------
-    aligned_chain: [QCElemental Molecule object]
-        Aligned molecule objects
-    """
-    from qcelemental.models import Molecule as qcmol
-
-    aligned_chain = []
-    sym = qcel_mols[0].symbols.tolist()
-    chg = qcel_mols[0].molecular_charge
-    mult = qcel_mols[0].molecular_multiplicity
-    M = Molecule()
-    for i, mol in enumerate(qcel_mols):
-        M1 = Molecule()
-        xyzs = np.round(mol.geometry * bohr2ang, 8)
-        M1.elem = sym
-        M1.xyzs = [xyzs]
-        if i == 0:
-            M = M1
-        else:
-            M += M1
-
-    opt_param = OptParams(**{"neb": True})
-    chain = ElasticBand(
-        M, engine=None, tmpdir="tmp", coordtype="cart", params=opt_param, plain=0
-    )
-
-    chain.respace(0.01)
-    chain.delete_insert(1.0)
-    if align:
-        print("Aligning chain")
-        chain.align(qcf=True)
-    newcoords = chaintocoords(chain)
-    for coords in newcoords:
-        aligned_chain.append(
-            qcmol(
-                symbols=sym,
-                geometry=coords,
-                molecular_charge=chg,
-                molecular_multiplicity=mult,
-            )
-        )
-
-    return aligned_chain
-
-
-def prepare(prev):
-    """
-    This function is for QCFractal. Takes a dictionary with parameters and prepare for the NEB calculation loops.
-    """
-
-    print("\n-=# Chain optimization cycle 0 #=-")
-
-    coords_ang = np.array(prev.pop("geometry")) * bohr2ang
-    args_dict = prev.get("params")
-    elems = prev.get("elems")
-    charge = prev.get("charge")
-    mult = prev.get("mult")
-    energies = prev.get("energies")
-    gradients = prev.pop("gradients")
-
-    params = {
-        "neb": True,
-        "images": args_dict.get("images"),
-        "maxg": args_dict.get("maximum_force"),
-        "avgg": args_dict.get("average_force"),
-        "nebew": args_dict.get("energy_weighted"),
-        "nebk": args_dict.get("spring_constant"),
-        "maxcyc": args_dict.get("maximum_cycle"),
-        "plain": args_dict.get("spring_type"),
-        "reset": args_dict.get("hessian_reset"),
-        "skip": not args_dict.get("hessian_reset"),
-        "epsilon": args_dict.get("epsilon"),
-        "coordsys": "cart",
-    }
-    M = Molecule()
-    M.elem = elems
-    M.charge = charge
-    M.mult = mult
-    M.xyzs = [coords.reshape(-1,3) for coords in coords_ang]
-
-    print("Spring Force: %.2f kcal/mol/Ang^2" % params.get("nebk"))
-    if params.get("nebew") is not None:
-        print("Energey weighted NEB will be performed.")
-    opt_param = OptParams(**params)
-    opt_param.customengine = nullengine(M)
-
-    result = []
-    for i in range(len(energies)):
-        result.append({"energy": energies[i], "gradient": gradients[i]})
-
-    M, engine = get_molecule_engine(**{"customengine": opt_param.customengine})
-    tmpdir = "NEB.tmp"
-
-    chain = ElasticBand(
-        M,
-        engine=engine,
-        tmpdir=tmpdir,
-        coordtype="cart",
-        params=opt_param,
-        plain=opt_param.plain,
-    )
-
-    trust = opt_param.trust
-    chain.ComputeMetric()
-    chain.ComputeChain(result=result)
-    chain.ComputeGuessHessian(full=False, blank=isinstance(engine, Blank))
-    chain.PrintStatus()
-
-    print("-= Chain Properties =-")
-    print(
-        "@%13s %13s %13s %13s %11s %13s %13s"
-        % (
-            "GAvg(eV/Ang)",
-            "GMax(eV/Ang)",
-            "Length(Ang)",
-            "DeltaE(kcal)",
-            "RMSD(Ang)",
-            "TrustRad(Ang)",
-            "Step Quality",
-        )
-    )
-    print(
-        "@%13s %13s %13s"
-        % (
-            "% 8.4f  " % chain.avgg,
-            "% 8.4f  " % chain.maxg,
-            "% 8.4f  " % sum(chain.calc_spacings()),
-        )
-    )
-
-    #Y = chain.get_internal_all()
-    GW = chain.get_global_grad("total", "working")
-    GP = chain.get_global_grad("total", "plain")
-    HW = chain.guess_hessian_working.copy()
-    HP = chain.guess_hessian_plain.copy()
-    dy, expect, expectG, ForceRebuild = chain.CalcInternalStep(trust, HW, HP)
-    new_chain = chain.TakeStep(dy, printStep=False)
-    respaced = new_chain.delete_insert(1.5)
-    newcoords = chaintocoords(new_chain)
-    new_attrs = check_attr(new_chain)
-    old_attrs = check_attr(chain)
-
-    temp = {
-        "GW": GW.tolist(),
-        "GP": GP.tolist(),
-        "HW": HW.tolist(),
-        "HP": HP.tolist(),
-        "new_attrs": new_attrs,
-        "old_attrs": old_attrs,
-        "trust": trust,
-        "expect": expect,
-        "expectG": expectG.tolist(),
-        "respaced": respaced,
-        "trustprint": "=",
-        "frocerebuild": False,
-        "lastforce": 0,
-        "old_coord": chaintocoords(chain, True),
-        "result": result,
-    }
-    prev.update(temp)
-    return newcoords, prev
-
-
 def switch(array, numpy=False):
     """
     Switches between numpy and list.
@@ -2907,7 +2706,7 @@ def add_attr(chain, attrs):
     if attrs.get("climbSet", False):
         chain.climbSet = True
         chain.climbers = attrs.get("climbers")
-        chain.locks = attrs.get('locks')
+        chain.locks = attrs.get("locks")
     return chain
 
 
@@ -2925,39 +2724,103 @@ def check_attr(chain):
     if chain.climbSet:
         attrs["climbSet"] = True
         attrs["climbers"] = [int(i) for i in chain.climbers]
-        attrs['locks'] = chain.locks
+        attrs["locks"] = chain.locks
     attrs["TotBandEnergy"] = chain.TotBandEnergy
 
     return attrs
 
+
 def dict_to_binary(the_dict):
     import msgpack
+
     bin = msgpack.dumps(the_dict)
     return bin
 
-def nextchain(prev):
+
+def chaintocoords(chain, ang=False):
     """
-    Generate a next chain's Cartesian coordinate for QCFractal.
+    Extracts Cartesian coordinates from an ElasticBand object.
+    Parameters
+    ----------
+    chain: ElasticBand object (in Ang)
+    ang: Bool
+        True will return Cartesian coordinates in Ang (False in Bohr).
+
+    Returns
+    -------
+    newcoords: list
+        Cartesian coordinates in list. It is not numpy array because neb record socket in QCF can't process nparray.
     """
-    coords_bohr = prev.pop("geometry")
-    coords_ang = np.array(coords_bohr) * bohr2ang
-    args_dict = prev.pop("params")
-    elems = prev.get("elems")
-    charge = prev.get("charge")
-    mult = prev.get("mult")
-    energies = prev.pop("energies")
-    gradients = prev.pop("gradients")
-    iteration = int(args_dict.get("iteration")) - 1
+    newcoords = []
+    for i in range(len(chain)):
+        M_obj = chain.Structures[i].M
+        if ang:
+            coord = np.round(M_obj.xyzs[0], 8)
+        else:
+            coord = np.round(M_obj.xyzs[0] / bohr2ang, 8)
+        newcoords.append(coord.tolist())
+    return newcoords
 
-    result = []
-    for i in range(len(energies)):
-        result.append({"energy": energies[i], "gradient": gradients[i]})
 
-    ThreLQ = 0.0
-    ThreHQ = 0.5
-    ThreRJ = 0.001
+def arrange(qcel_mols, align):
+    """
+    This function will align and respace a chain.
+    Parameters
+    ----------
+    qcel_mols: [QCElemental Molecule object]
+        QCElemental Molecule objects in a list that needs to be aligned.
 
-    print("\n-=# Chain optimization cycle %i #=-" % iteration)
+    align: bool
+        True will align the chain
+
+    Returns
+    -------
+    aligned_chain: [QCElemental Molecule object]
+        Aligned molecule objects
+    """
+    from qcelemental.models import Molecule as qcmol
+
+    aligned_chain = []
+    sym = qcel_mols[0].symbols.tolist()
+    chg = qcel_mols[0].molecular_charge
+    mult = qcel_mols[0].molecular_multiplicity
+    M = Molecule()
+    M.elem = sym
+    xyzs = []
+    for i, mol in enumerate(qcel_mols):
+        xyzs.append(np.round(mol.geometry * bohr2ang, 8))
+    M.xyzs = xyzs
+
+    opt_param = OptParams(**{"neb": True})
+    chain = ElasticBand(
+        M, engine=None, tmpdir="tmp", coordtype="cart", params=opt_param, plain=0
+    )
+
+    chain.respace(0.01)
+    chain.delete_insert(1.0)
+    if align:
+        print("Aligning chain")
+        chain.align(qcf=True)
+    newcoords = chaintocoords(chain)
+    for coords in newcoords:
+        aligned_chain.append(
+            qcmol(
+                symbols=sym,
+                geometry=coords,
+                molecular_charge=chg,
+                molecular_multiplicity=mult,
+            )
+        )
+
+    return aligned_chain
+
+
+def get_basic_info(info_dict, old=False):
+    coords_bohr = np.array(info_dict.get("geometry"))
+    coords_ang = coords_bohr * bohr2ang
+    args_dict = info_dict.get("params")
+    energies = info_dict.get("energies")
+    gradients = info_dict.get("gradients")
 
     params_dict = {
         "neb": True,
@@ -2973,32 +2836,48 @@ def nextchain(prev):
         "epsilon": args_dict.get("epsilon"),
         "coordsys": "cart",
     }
-    M = Molecule()
-    M.elem = elems
-    M.charge = charge
-    M.mult = mult
-    M.xyzs = [coords.reshape(-1, 3) for coords in coords_ang]
-
-    M_old = copy.deepcopy(M)
-    M_old.xyzs = [coords.reshape(-1, 3) for coords in np.array(prev.get("old_coord"))]
+    iteration = args_dict.get("iteration")
     params = OptParams(**params_dict)
+
+    M = Molecule()
+    M.elem = info_dict.get("elems")
+    M.charge = info_dict.get("charge")
+    M.mult = info_dict.get("mult")
+    if old:
+        M.xyzs = [
+            coords.reshape(-1, 3) for coords in np.array(info_dict.get("old_coord_ang"))
+        ]
+    else:
+        M.xyzs = [coords.reshape(-1, 3) for coords in coords_ang]
+
     params.customengine = nullengine(M)
-
-    params2 = OptParams(**params_dict)
-    params2.customengine = nullengine(M_old)
-
-    M_old, engine = get_molecule_engine(**{"customengine": params2.customengine})
     M, engine = get_molecule_engine(**{"customengine": params.customengine})
 
-    tmpdir = "NEB.tmp"
-    old_chain = ElasticBand(
-        M_old,
-        engine=engine,
-        tmpdir=tmpdir,
-        coordtype="cart",
-        params=params2,
-        plain=params2.plain,
-    )
+    result = []
+    for i in range(len(energies)):
+        if old:
+            result = info_dict.get("old_result")
+        else:
+            result.append({"energy": energies[i], "gradient": gradients[i]})
+
+    return params, M, engine, result, iteration - 1
+
+
+def prepare(info_dict):
+    """
+    This function is for QCFractal. Takes a dictionary with parameters and prepare for the NEB calculation loops.
+    """
+
+    print("\n-=# Chain optimization cycle 0 #=-")
+    params, M, engine, result, _ = get_basic_info(info_dict)
+
+    print("Spring Force: %.2f kcal/mol/Ang^2" % params.nebk)
+
+    if params.nebew is not None:
+        print("Energey weighted NEB will be performed.")
+
+    tmpdir = tempfile.mkdtemp()
+
     chain = ElasticBand(
         M,
         engine=engine,
@@ -3008,28 +2887,118 @@ def nextchain(prev):
         plain=params.plain,
     )
 
-    trust = prev.get("trust")
-    trustprint = prev.get("trustprint", "=")
+    trust = params.trust
+    chain.ComputeMetric()
+    chain.ComputeChain(result=result)
+    chain.ComputeGuessHessian(full=False, blank=isinstance(engine, Blank))
+    chain.PrintStatus()
+
+    print("-= Chain Properties =-")
+    print(
+        "@%13s %13s %13s %13s %11s %13s %13s"
+        % (
+            "GAvg(eV/Ang)",
+            "GMax(eV/Ang)",
+            "Length(Ang)",
+            "DeltaE(kcal)",
+            "RMSD(Ang)",
+            "TrustRad(Ang)",
+            "Step Quality",
+        )
+    )
+    print(
+        "@%13s %13s %13s"
+        % (
+            "% 8.4f  " % chain.avgg,
+            "% 8.4f  " % chain.maxg,
+            "% 8.4f  " % sum(chain.calc_spacings()),
+        )
+    )
+
+    GW = chain.get_global_grad("total", "working")
+    GP = chain.get_global_grad("total", "plain")
+    HW = chain.guess_hessian_working.copy()
+    HP = chain.guess_hessian_plain.copy()
+    dy, expect, expectG, ForceRebuild = chain.CalcInternalStep(trust, HW, HP)
+    new_chain = chain.TakeStep(dy, printStep=False)
+    respaced = new_chain.delete_insert(1.5)
+    newcoords = chaintocoords(new_chain)
+    new_attrs = check_attr(new_chain)
+    old_attrs = check_attr(chain)
+
+    temp = {
+        "old_GW": GW.tolist(),
+        "old_GP": GP.tolist(),
+        "old_HW": HW.tolist(),
+        "old_HP": HP.tolist(),
+        "new_attrs": new_attrs,
+        "old_attrs": old_attrs,
+        "trust": trust,
+        "expect": expect,
+        "expectG": expectG.tolist(),
+        "respaced": respaced,
+        "trustprint": "=",
+        "frocerebuild": False,
+        "lastforce": 0,
+        "old_coord_ang": chaintocoords(chain, True),
+        "old_result": result,
+        "geometry": [],
+    }
+    info_dict.update(temp)
+    return newcoords, info_dict
+
+
+def nextchain(info_dict):
+    """
+    Generate next chain's Cartesian coordinate for QCFractal.
+    """
+    params, M, engine, result, iteration = get_basic_info(info_dict)
+    old_params, old_M, old_engine, old_result, _ = get_basic_info(info_dict, old=True)
+
+    ThreLQ = 0.0
+    ThreHQ = 0.5
+    ThreRJ = 0.001
+
+    print("\n-=# Chain optimization cycle %i #=-" % iteration)
+    tmpdir = tempfile.mkdtemp()
+    chain = ElasticBand(
+        M,
+        engine=engine,
+        tmpdir=tmpdir,
+        coordtype="cart",
+        params=params,
+        plain=params.plain,
+    )
+
+    old_chain = ElasticBand(
+        old_M,
+        engine=engine,
+        tmpdir=tmpdir,
+        coordtype="cart",
+        params=old_params,
+        plain=old_params.plain,
+    )
+
+    trust = info_dict.get("trust")
+    trustprint = info_dict.get("trustprint", "=")
     Y = chain.get_internal_all()
-    Y_prev = old_chain.get_internal_all()
+    old_Y = old_chain.get_internal_all()
 
-    HW = prev.get("HW")
-    HP = prev.get("HP")
-    respaced = prev.get("respaced")
-    expect = prev.get("expect")
-    expectG = prev.get("expectG")
-    Quality = prev.get("quality")
-    LastForce = prev.get("lastforce", 0)
-    ForceBuild = prev.get("forcerebuild", False)
+    old_HW = info_dict.get("old_HW")
+    old_HP = info_dict.get("old_HP")
+    respaced = info_dict.get("respaced")
+    expect = info_dict.get("expect")
+    expectG = info_dict.get("expectG")
+    Quality = info_dict.get("quality")
+    LastForce = info_dict.get("lastforce", 0)
+    ForceBuild = info_dict.get("forcerebuild", False)
 
-    chain = add_attr(chain, prev.get("new_attrs"))
-    old_chain = add_attr(old_chain, prev.get("old_attrs"))
+    chain = add_attr(chain, info_dict.get("new_attrs"))
+    old_chain = add_attr(old_chain, info_dict.get("old_attrs"))
     chain.ComputeGuessHessian(full=False, blank=isinstance(engine, Blank))
     old_chain.ComputeGuessHessian(full=False, blank=isinstance(engine, Blank))
-    GW = np.array(prev.get("GW"))
-    GP = np.array(prev.get("GP"))
-    GW_prev = np.array(prev.get("GW_prev", GW.copy()))
-    GP_prev = np.array(prev.get("GP_prev", GP.copy()))
+    old_GW = np.array(info_dict.get("old_GW"))
+    old_GP = np.array(info_dict.get("old_GP"))
 
     chain.ComputeChain(result=result)
 
@@ -3038,9 +3007,9 @@ def nextchain(prev):
         chain,
         ThreHQ,
         ThreLQ,
-        GW, #GW prev
-        HW,
-        HP,
+        old_GW,
+        old_HW,
+        old_HP,
         respaced,
         iteration,
         expect,
@@ -3058,9 +3027,9 @@ def nextchain(prev):
             expectG,
             ForceRebuild,
             LastForce,
-            Y_prev,
-            GW_prev,
-            GP_prev,
+            old_Y,
+            old_GW,
+            old_GP,
             respaced,
             _,
         ) = takestep(
@@ -3076,18 +3045,16 @@ def nextchain(prev):
             GP,
             HW,
             HP,
-            prev.get('result', result),
+            old_result,
         )
         new_attrs = check_attr(chain)
         old_attrs = check_attr(old_chain)
         newcoords = chaintocoords(chain)
         temp = {
-            "GW": GW.tolist(),
-            "GW_prev": GW_prev.tolist(),
-            "GP": GP.tolist(),
-            "GP_prev": GP_prev.tolist(),
-            "HW": HW.tolist(),
-            "HP": HP.tolist(),
+            "old_GW": GW.tolist(),
+            "old_GP": GP.tolist(),
+            "old_HW": HW.tolist(),
+            "old_HP": HP.tolist(),
             "new_attrs": new_attrs,
             "old_attrs": old_attrs,
             "expect": expect,
@@ -3095,12 +3062,13 @@ def nextchain(prev):
             "respaced": respaced,
             "forcerebuild": ForceRebuild,
             "lastforce": LastForce,
-            "old_coord":chaintocoords(old_chain, True),
+            "old_coord_ang": chaintocoords(old_chain, True),
             "quality": Quality,
-            "result": result,
+            "old_result": result,
+            "geometry": [],
         }
-        prev.update(temp)
-        return newcoords, prev
+        info_dict.update(temp)
+        return newcoords, info_dict
 
     if converged(
         chain.maxg, chain.avgg, params.maxg, params.avgg, iteration, params.maxcyc
@@ -3119,14 +3087,14 @@ def nextchain(prev):
         Y,
         GW,
         GP,
-        Y_prev,
-        GW_prev,
-        GP_prev,
+        old_Y,
+        old_GW,
+        old_GP,
         params.tmax,
     )
     if not good:
         # chain here is old_chain
-        chain.ComputeChain(result=prev.get("result"))
+        chain.ComputeChain(result=old_result)
         (
             chain,
             old_chain,
@@ -3134,9 +3102,9 @@ def nextchain(prev):
             expectG,
             ForceRebuild,
             LastForce,
-            Y_prev,
-            GW_prev,
-            GP_prev,
+            old_Y,
+            old_GW,
+            old_GP,
             respaced,
             _,
         ) = takestep(
@@ -3152,17 +3120,15 @@ def nextchain(prev):
             GP,
             HW,
             HP,
-            prev.get("result"),
+            info_dict.get("old_result"),
         )
         new_attrs = check_attr(chain)
         old_attrs = check_attr(old_chain)
         newcoords = chaintocoords(chain)
-        # Here GW, GP and their previous values should be same.
+
         temp = {
-            "GW": GW.tolist(),
-            "GW_prev": GW_prev.tolist(),
-            "GP": GP.tolist(),
-            "GP_prev": GP_prev.tolist(),
+            "old_GW": GW.tolist(),
+            "old_GP": GP.tolist(),
             "new_attrs": new_attrs,
             "old_attrs": old_attrs,
             "trust": trust,
@@ -3170,30 +3136,31 @@ def nextchain(prev):
             "expectG": expectG.tolist(),
             "quality": Quality,
             "respaced": respaced,
-            "old_coord": chaintocoords(old_chain, True),
+            "old_coord_ang": chaintocoords(old_chain, True),
             "climbset": chain.climbSet,
-            "result": result,
+            "old_result": result,
+            "geometry": [],
         }
-        prev.update(temp)
-        return newcoords, prev
+        info_dict.update(temp)
+        return newcoords, info_dict
     # If minimum eigenvalues of HW is lower than epsilon, GP, GW are same as their previous values.
-    chain, Y, GW, GP, HP, HW, Y_prev, GP_prev, GW_prev, H_reset = updatehessian(
+    chain, Y, GW, GP, HP, HW, old_Y, old_GP, old_GW, H_reset = updatehessian(
         chain,
         old_chain,
         HP,
         HW,
         Y,
-        Y_prev,
+        old_Y,
         GW,
-        GW_prev,
+        old_GW,
         GP,
-        GP_prev,
+        old_GP,
         LastForce,
         params,
-        prev.get("result", result),
+        info_dict.get("old_result", result),
     )
     if H_reset:
-        result = prev.get("result", result)
+        result = info_dict.get("old_result", result)
     (
         chain,
         old_chain,
@@ -3201,9 +3168,9 @@ def nextchain(prev):
         expectG,
         ForceRebuild,
         LastForce,
-        Y_prev,
-        GW_prev,
-        GP_prev,
+        old_Y,
+        old_GW,
+        old_GP,
         respaced,
         _,
     ) = takestep(
@@ -3219,17 +3186,15 @@ def nextchain(prev):
         GP,
         HW,
         HP,
-        prev.get("result", result),
+        info_dict.get("old_result", result),
     )
     new_attrs = check_attr(chain)
     old_attrs = check_attr(old_chain)
     temp = {
-        "GW": GW.tolist(),
-        "GW_prev": GW_prev.tolist(),
-        "GP": GP.tolist(),
-        "GP_prev": GP_prev.tolist(),
-        "HW": HW.tolist(),
-        "HP": HP.tolist(),
+        "old_GW": GW.tolist(),
+        "old_GP": GP.tolist(),
+        "old_HW": HW.tolist(),
+        "old_HP": HP.tolist(),
         "new_attrs": new_attrs,
         "old_attrs": old_attrs,
         "trust": trust,
@@ -3238,18 +3203,19 @@ def nextchain(prev):
         "expectG": expectG.tolist(),
         "quality": Quality,
         "respaced": respaced,
-        "old_coord": chaintocoords(old_chain, True),
+        "old_coord_ang": chaintocoords(old_chain, True),
         "lastforce": LastForce,
         "forcerebuild": ForceRebuild,
-        "result": result,
+        "old_result": result,
+        "geometry": [],
     }
     newcoords = chaintocoords(chain)
-    prev.update(temp)
-    for k, v in prev.items():
-        mem_size = sys.getsizeof(dict_to_binary({k: v}))*1e-9
+    info_dict.update(temp)
+    for k, v in info_dict.items():
+        mem_size = sys.getsizeof(dict_to_binary({k: v})) * 1e-9
         if mem_size > 1e-1:
-            print('Size of %s : %f Gb' %(k, mem_size))
-    return newcoords, prev
+            print("Size of %s : %f Gb" % (k, mem_size))
+    return newcoords, info_dict
 
 
 def main():
