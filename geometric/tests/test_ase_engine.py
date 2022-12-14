@@ -10,7 +10,6 @@ Test the following:
 - geometry optimisation w/ ASE internal calc
 """
 import numpy as np
-from ase.calculators.lj import LennardJones
 from pytest import fixture, raises
 
 from geometric.ase_engine import EngineASE
@@ -37,6 +36,8 @@ def molecule_h2o() -> Molecule:
 
 @using_ase
 def test_construction(molecule_h2o):
+    from ase.calculators.lj import LennardJones
+
     lj_calc = LennardJones()
     engine = EngineASE(molecule_h2o, lj_calc)
     assert engine.calculator == lj_calc
@@ -44,6 +45,8 @@ def test_construction(molecule_h2o):
 
 @using_ase
 def test_from_args(molecule_h2o):
+    from ase.calculators.lj import LennardJones
+
     lj_calc = LennardJones(sigma=1.4, epsilon=3.0)
 
     # create equivalent engines in two ways
@@ -68,6 +71,8 @@ def test_from_args(molecule_h2o):
 
 @using_ase
 def test_from_string(molecule_h2o):
+    from ase.calculators.lj import LennardJones
+
     engine = EngineASE.from_calculator_string(
         molecule_h2o, calculator_import="ase.calculators.lj.LennardJones"
     )
