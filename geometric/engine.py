@@ -874,7 +874,7 @@ class Gaussian(Engine):
                         outfile.write(self.route_line)
                 elif line == '$!geometry@here':
                     for i, (e, c) in enumerate(zip(self.M.elem, self.M.xyzs[0])):
-                        outfile.write("%-7s %13.7f %13.7f %13.7f\n" % (e, c[0], c[1], c[2]))
+                        outfile.write("%-7s %16.10f %16.10f %16.10f\n" % (e, c[0], c[1], c[2]))
                 else:
                     outfile.write(line)
         try:
@@ -893,28 +893,27 @@ class Gaussian(Engine):
         if check_coord is not None:
             raise CheckCoordError("Coordinate checking not implemented")
         energy, gradient = None, None
-        # first get the energy from the formatted checkpoint file, works for all methods
+        # Get the energy and gradient from the formatted checkpoint file.
         fchk_out = os.path.join(dirname, "ligand.fchk")
+        found_energy = False
+        found_grad = False
+        grad_complete = False
+        gradient = []
         with open(fchk_out) as fchk:
             for line in fchk:
-                if "Total Energy" in line:
+                if found_energy and grad_complete: break
+                elif "Total Energy" in line and not found_energy:
                     energy = float(line.split()[-1])
-                    break
-        # now we get the gradient from the output in Hartrees/Bohr
-        gaussian_out = os.path.join(dirname, 'gaussian.log')
-        with open(gaussian_out) as outfile:
-            found_grad = False
-            for line in outfile:
-                line_strip = line.strip()
-                if " Forces (Hartrees/Bohr)" in line_strip:
+                    found_energy = True
+                elif "Cartesian Gradient" in line:
+                    grad_n_components = int(line.split()[-1])
                     found_grad = True
-                    gradient = []
                 elif found_grad:
-                    ls = line_strip.split()
-                    if len(ls) == 5 and ls[0].isdigit() and ls[1].isdigit():
-                        gradient.append([-float(g) for g in ls[2:]])
-                    elif "Cartesian Forces:  Max" in line:
-                        found_grad = False
+                    gradient += [float(i) for i in line.replace('E','e').split()]
+                    if len(gradient) == grad_n_components:
+                        grad_complete = True
+                    elif len(gradient) > grad_n_components:
+                        raise IOError("Gaussian .fchk reader encountered error - too many grad components")
         if energy is None:
             raise RuntimeError("Gaussian energy is not found in %s, please check." % fchk_out)
         if gradient is None:
@@ -1014,7 +1013,7 @@ class Psi4(Engine):
                     for i, (e, c) in enumerate(zip(self.M.elem, self.M.xyzs[0])):
                         if i in self.fragn:
                             outfile.write('--\n')
-                        outfile.write("%-7s %13.7f %13.7f %13.7f\n" % (e, c[0], c[1], c[2]))
+                        outfile.write("%-7s %16.10f %16.10f %16.10f\n" % (e, c[0], c[1], c[2]))
                 else:
                     outfile.write(line)
         try:
@@ -1038,7 +1037,7 @@ class Psi4(Engine):
                     for i, (e, c) in enumerate(zip(self.M.elem, self.M.xyzs[0])):
                         if i in self.fragn:
                             outfile.write('--\n')
-                        outfile.write("%-7s %13.7f %13.7f %13.7f\n" % (e, c[0], c[1], c[2]))
+                        outfile.write("%-7s %16.10f %16.10f %16.10f\n" % (e, c[0], c[1], c[2]))
                 else:
                     outfile.write(line)
 
@@ -1227,7 +1226,11 @@ class QChem(Engine):
         # In the case of multi-stage jobs, the last energy and gradient is what we want.
         energy = M1.qm_energies[-1]
         # Parse gradient from Q-Chem binary file. (Written by default without -save)
-        gradient = np.fromfile('%s/run.d/131.0' % dirname)
+        try:
+            gradient = np.fromfile('%s/run.d/131.0' % dirname)
+        except FileNotFoundError:
+            logger.info("Reading gradient from Q-Chem output instead of run.d/131.0 because the latter cannot be found. Please report this to the developer.\n")
+            gradient = M1.qm_grads[-1]
         # Assume that the last occurence of "S^2" is what we want.
         s2 = 0.0
         # The 'iso-8859-1' prevents some strange errors that show up when reading the Archival summary line
@@ -1357,7 +1360,7 @@ class Molpro(Engine): # pragma: no cover
             for line in self.molpro_temp:
                 if line == '$!geometry@here':
                     for e, lab, c in zip(self.M.elem, self.labels, self.M.xyzs[0]):
-                        outfile.write("%s%-7s %13.7f %13.7f %13.7f\n" % (e, lab, c[0], c[1], c[2]))
+                        outfile.write("%s%-7s %16.10f %16.10f %16.10f\n" % (e, lab, c[0], c[1], c[2]))
                 else:
                     outfile.write(line)
         try:
