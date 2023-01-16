@@ -5,6 +5,10 @@ channels:
   - defaults
   - conda-forge
 dependencies:
+  # LPW 2023-1-23: Added this line because
+  # conda would otherwise report lots of conflicts.
+  - python=3.9
+
   # ASE tests
   - ase
   - xtb-python
@@ -13,8 +17,8 @@ dependencies:
   - rdkit
 
   # Psi test depends
-  - psi4 >= 1.6.1
-  - qcengine >= 0.24
+  - psi4>=1.6.1
+  - qcengine>=0.24
 
   # OpenMM test depends
   - openmm
