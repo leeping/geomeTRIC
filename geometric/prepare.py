@@ -46,7 +46,7 @@ import os
 from .ase_engine import EngineASE
 from .errors import EngineError
 from .internal import Distance, Angle, Dihedral, CartesianX, CartesianY, CartesianZ, TranslationX, TranslationY, TranslationZ, RotationA, RotationB, RotationC
-from .engine import set_tcenv, load_tcin, TeraChem, ConicalIntersection, Psi4, QChem, Gromacs, Molpro, OpenMM, QCEngineAPI, Gaussian
+from .engine import set_tcenv, load_tcin, TeraChem, ConicalIntersection, Psi4, QChem, Gromacs, Molpro, OpenMM, QCEngineAPI, Gaussian, QUICK
 from .molecule import Molecule, Elements
 from .nifty import logger, isint, uncommadash, bohr2ang, ang2bohr
 from .rotate import calc_fac_dfac
@@ -87,8 +87,8 @@ def get_molecule_engine(**kwargs):
     ## MECI calculations create a custom engine that contains multiple engines.
     if kwargs.get('meci', None):
         if engine_str is not None:
-            if engine_str.lower() in ['psi4', 'gmx', 'molpro', 'qcengine', 'openmm', 'gaussian']:
-                logger.warning("MECI optimizations are not tested with engines: psi4, gmx, molpro, qcengine, openmm, gaussian. Be Careful!")
+            if engine_str.lower() in ['psi4', 'gmx', 'molpro', 'qcengine', 'openmm', 'gaussian','quick']:
+                logger.warning("MECI optimizations are not tested with engines: psi4, gmx, molpro, qcengine, openmm, gaussian, quick. Be Careful!")
         elif customengine:
             logger.warning("MECI optimizations are not tested with customengine. Be Careful!")
         ## If 'engine' is provided as the argument to 'meci', then we assume the engine is
@@ -133,7 +133,7 @@ def get_molecule_engine(**kwargs):
         engine_str = engine_str.lower()
         if engine_str[:4] == 'tera':
             engine_str = 'tera'
-        implemented_engines = ('tera', 'qchem', 'psi4', 'gmx', 'molpro', 'openmm', 'qcengine', "gaussian", "ase")
+        implemented_engines = ('tera', 'qchem', 'psi4', 'gmx', 'molpro', 'openmm', 'qcengine', "gaussian", "ase", "quick")
         if engine_str not in implemented_engines:
             raise RuntimeError("Valid values of engine are: " + ", ".join(implemented_engines))
         if customengine:
@@ -271,6 +271,25 @@ def get_molecule_engine(**kwargs):
             logger.info("The gaussian engine exe is set as %s\n" % engine.gaussian_exe)
             # load the template into the engine
             engine.load_gaussian_input(inputf)
+        elif engine_str == "quick":
+            logger.info("QUICK engine selected. Expecting QUICK input for gradient calculation. \n")
+            M = Molecule(inputf, radii=radii, fragment=frag)
+            # now work out which quick version we have
+            if shutil.which("quick.cuda.MPI") is not None:
+                exe = "quick.cuda.MPI"
+            elif shutil.which("quick.cuda") is not None:
+                exe = "quick.cuda"
+            elif shutil.which("quick") is not None:
+                exe = "quick.MPI"
+            elif shutil.which("quick") is not None:
+                exe = "quick"
+            else:
+                raise ValueError("Neither quick.cuda.MPI, quick.cuda, quick.MPI or quick was found, please check the environment.")
+            engine = QUICK(molecule=M, exe=exe, threads=threads)
+            threads_enabled = True
+            logger.info("The quick engine exe is set as %s" % engine.quick_exe)
+            # load the template into the engine
+            engine.load_quick_input(inputf)
         elif engine_str == 'qcengine':
             logger.info("QCEngine selected.\n")
             schema = kwargs.get('qcschema', None)
