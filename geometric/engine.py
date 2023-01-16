@@ -928,6 +928,152 @@ class Gaussian(Engine):
                 return True
         return False
 
+
+class QUICK(Engine):
+    """
+    Run a QUICK energy and gradient calculation.
+    """
+    def __init__(self, molecule, exe=None, threads=None):
+        super(QUICK, self).__init__(molecule)
+        self.threads = threads
+        if exe.lower() in ("quick", "quick.cuda", "quick.mpi", "quick.cuda.mpi"):
+            self.quick_exe = exe.lower()
+        else:
+            raise ValueError("Only quick.cuda and quick are supported.")
+
+    def load_quick_input(self, quick_input):
+        """
+        We can read the .com files using molecule but we can not write them so use the template method.
+
+        Note only QUICK cartesian coordinates are supported.
+        We also edit the checkpoint file name and change the processors flag if not present.
+
+        Example input file:
+
+        DFT B3LYP BASIS=6-31G cutoff=1.0e-9 denserms=1.0e-6 GRADIENT 
+        0   1
+        O  -0.464   0.177   0.0
+        H  -0.464   1.137   0.0
+        H   0.441  -0.143   0.0
+
+
+        """
+        reading_molecule, found_geo, found_gradient = False, False, False
+        quick_temp = []  # store a template of the input file for generating new ones
+        with open(quick_input) as quick_in:
+            for line in quick_in:
+                match = re.search(r"^ *[A-Z][a-z]?(.*[-+]?([0-9]*\.)?[0-9]+){3}$", line)
+                if match is not None:
+                    reading_molecule = True
+                    if not found_geo:
+                        found_geo = True
+                        quick_temp.append("$!geometry@here")
+
+                elif reading_molecule:
+                    if line.strip() == '':
+                        reading_molecule = False
+                        quick_temp.append(line)
+
+                else:
+                    quick_temp.append(line)
+                line_strip = line.strip()
+                if  'gradient' in line_strip.lower():
+                    found_gradient = True
+
+        if not found_gradient:
+            raise RuntimeError("QUICK inputfile %s should have gradient command." % quick_input)
+
+        self.quick_temp = quick_temp
+
+    def calc_new(self, coords, dirname):
+        """
+        Run the quick single point calculation using the given exe.
+        """
+        if not os.path.exists(dirname): os.makedirs(dirname)
+        # Convert coordinates back to the xyz file
+        self.M.xyzs[0] = coords.reshape(-1, 3) * bohr2ang
+        # Write QUICK com file
+        with open(os.path.join(dirname, 'quick.in'), 'w') as outfile:
+            for line in self.quick_temp:
+                if line == '$!geometry@here':
+                    for i, (e, c) in enumerate(zip(self.M.elem, self.M.xyzs[0])):
+                        outfile.write("%-7s %13.7f %13.7f %13.7f\n" % (e, c[0], c[1], c[2]))
+                else:
+                    outfile.write(line)
+        try:
+            # Run QUICK
+            subprocess.check_call('quick quick.in > quick.out', cwd=dirname, shell=True)
+            # Read energy and gradients from QUICK output
+            result = self.read_result(dirname)
+        except (OSError, IOError, RuntimeError, subprocess.CalledProcessError):
+            raise QUICKEngineError
+        return result
+
+    def read_result(self, dirname, check_coord=None):
+        """
+        Read the result of the output file to get the gradient and energy.
+        """
+        if check_coord is not None:
+            raise CheckCoordError("Coordinate checking not implemented")
+        energy, gradient = None, None
+        # first get the energy from the formatted checkpoint file, works for all methods
+        # now we get the gradient from the output in Hartrees/Bohr
+        quick_out = os.path.join(dirname, 'quick.out')
+
+
+        with open(quick_out) as f:
+            lines = f.readlines()
+        geom_index = [x for x in range(len(lines)) if 'ANALYTICAL GRADIENT: ' in lines[x]][0] + 4
+        energy_index  = [x for x in range(len(lines)) if 'TOTAL ENERGY' in lines[x]][0]
+        # record elements and atomic charges
+        for line in lines:
+            if ' TOTAL ATOM NUMBER       =' in line:
+                line_strip=line.strip()
+                ls=line_strip.split()
+                if ls[4].isdigit():
+                    natm=int(ls[4])
+
+        # record coordinates and gradients
+        gradient = np.zeros([natm, 3])
+        i = 0
+        readindex = geom_index + i
+        while '----------------------------------------' not in lines[readindex]:
+            lab, c, g = lines[readindex].split()
+            atom_index = i // 3
+            axis_index = i % 3
+            gradient[atom_index, axis_index] = float(g)
+            i += 1
+            readindex = geom_index + i
+        
+        energy=float(lines[energy_index].split()[-1]) 
+
+        """
+        with open(quick_out) as outfile:
+            found_grad = False
+            for line in outfile:
+                print(line)
+                if " TOTAL ENERGY         =" in line:
+                   enregy = float(line.split()[-1])
+                   print(energy, float(line.split()[-1]))
+
+                line_strip = line.strip()
+                if "GRADIENT" in line_strip:
+                    found_grad = True
+                    gradient = []
+                elif found_grad:
+                    ls = line_strip.split()
+                    if len(ls) == 3 and ls[0].isalnum() and ls[1].isfloat():
+                        gradient.append([float(ls[2])])
+                    else:
+                        found_grad = False"""
+        print(energy, gradient)
+        if energy is None:
+            raise RuntimeError("QUICK energy is not found in %s, please check." % quick_out)
+        if gradient is None:
+            raise RuntimeError("QUICK gradient is not found in %s, please check." % quick_out)
+        gradient = np.array(gradient, dtype=np.float64).ravel()
+        return {'energy':energy, 'gradient':gradient}
+
 class Psi4(Engine):
     """
     Run a Psi4 energy and gradient calculation.
