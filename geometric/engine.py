@@ -949,8 +949,8 @@ class QUICK(Engine):
 
         Example input file:
 
-        DFT B3LYP BASIS=6-31G cutoff=1.0e-9 denserms=1.0e-6 GRADIENT 
-        0   1
+        DFT B3LYP BASIS=6-31G cutoff=1.0e-9 denserms=1.0e-6 GRADIENT CHARGE=0 MULT=1
+        
         O  -0.464   0.177   0.0
         H  -0.464   1.137   0.0
         H   0.441  -0.143   0.0
@@ -991,7 +991,7 @@ class QUICK(Engine):
         if not os.path.exists(dirname): os.makedirs(dirname)
         # Convert coordinates back to the xyz file
         self.M.xyzs[0] = coords.reshape(-1, 3) * bohr2ang
-        # Write QUICK com file
+        # Write QUICK .qkin file
         with open(os.path.join(dirname, 'quick.qkin'), 'w') as outfile:
             for line in self.quick_temp:
                 if line == '$!geometry@here':

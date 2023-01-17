@@ -3311,6 +3311,17 @@ class Molecule(object):
             line = line.strip().expandtabs()
             # Everything after exclamation point is a comment
             sline = line.split('!')[0].split()
+            if ln == 0:
+                comms=[line]
+                print(comms)
+                print(sline)
+                mult = 1
+                charge = 0
+                for keywrd in sline:
+                    if 'MULT' in keywrd:
+                        mult = int(keywrd.split('=')[1])
+                    if 'CHARGE' in keywrd:
+                        charge = int(keywrd.split('=')[1])
             if re.match(r"^ *[A-Z][a-z]?(.*[-+]?([0-9]*\.)?[0-9]+){3}$", line) is not None:
                 inxyz = 1
                 if sline[0].capitalize() in PeriodicTable and isfloat(sline[1]) and isfloat(sline[2]) and isfloat(
@@ -3322,14 +3333,11 @@ class Molecule(object):
                 break
             ln += 1
             absln += 1
-            charge = 0
-            mult = 1
-            title_ln = ln - 2
         print(elem)
         print(xyz)
         Answer = {'xyzs'   : [np.array(xyz)],
                   'elem'   : elem,
-                  'comms'  : [comfile[title_ln].strip()],
+                  'comms'  : comms,
                   'charge' : charge,
                   'mult'   : mult}
         print(Answer)
