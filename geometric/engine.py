@@ -992,7 +992,7 @@ class QUICK(Engine):
         # Convert coordinates back to the xyz file
         self.M.xyzs[0] = coords.reshape(-1, 3) * bohr2ang
         # Write QUICK com file
-        with open(os.path.join(dirname, 'quick.in'), 'w') as outfile:
+        with open(os.path.join(dirname, 'quick.qkin'), 'w') as outfile:
             for line in self.quick_temp:
                 if line == '$!geometry@here':
                     for i, (e, c) in enumerate(zip(self.M.elem, self.M.xyzs[0])):
@@ -1001,7 +1001,7 @@ class QUICK(Engine):
                     outfile.write(line)
         try:
             # Run QUICK
-            subprocess.check_call('quick quick.in > quick.out', cwd=dirname, shell=True)
+            subprocess.check_call('quick quick.qkin > quick.out', cwd=dirname, shell=True)
             # Read energy and gradients from QUICK output
             result = self.read_result(dirname)
         except (OSError, IOError, RuntimeError, subprocess.CalledProcessError):
