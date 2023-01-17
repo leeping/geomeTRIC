@@ -53,6 +53,8 @@ os.environ["TMPDIR"] = "/tmp/"
 # Add flags
 using_psi4 = pytest.mark.skipif(
     _plugin_import("psi4") is False, reason="could not find psi4. please install the package to enable tests")
+using_quick = pytest.mark.skipif(
+    _plugin_import("quick") is False, reason="could not find quick. please install the package to enable tests")
 using_rdkit = pytest.mark.skipif(
     _plugin_import("rdkit") is False, reason="could not find rdkit. please install the package to enable tests")
 using_qcengine = pytest.mark.skipif(

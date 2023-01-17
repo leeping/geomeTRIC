@@ -10,6 +10,7 @@ import numpy as np
 from . import addons
 
 datad = addons.datad
+exampled = addons.exampled
 localizer = addons.in_folder
 
 def test_blank_molecule():
@@ -346,6 +347,25 @@ def test_gaussian_input_single():
     assert molecule.Data["comms"] == ["ethane"]
     assert molecule.Data["elem"] == ['C', 'H', 'H', 'H', 'C', 'H', 'H', 'H']
     assert molecule.Data["bonds"] == [(0, 1), (0, 2), (0, 3), (0, 4), (4, 5), (4, 6), (4, 7)]
+
+def test_quick_input():
+    """
+    Test reading a quick input
+    """
+    molecule = geometric.molecule.Molecule(os.path.join(exampled, "1-simple-examples","water2_quick","Water2.qkin"))
+    assert molecule.Data["charge"] == 0
+    assert molecule.Data["mult"] == 1
+    assert molecule.Data["ftype"] == "qkin"
+    assert len(molecule.molecules) == 1
+    xyz = np.array([[ 0.85591, -1.38236,  0.31746],
+           [ 1.67524, -1.84774,  0.4858 ],
+           [ 1.11761, -0.46843,  0.20575],
+           [-1.09863, -0.85837,  2.17319],
+           [-0.4031 , -1.14608,  1.58184],
+           [-1.08511,  0.09683,  2.11282]])
+    assert molecule.xyzs[0].tolist() == xyz.tolist()
+    assert molecule.Data["comms"] == ['HF BASIS=STO-3G cutoff=1.0e-9 denserms=1.0e-6 GRADIENT'] 
+    assert molecule.Data["elem"] == ['O', 'H', 'H', 'O', 'H', 'H'] 
 
 def test_gaussian_input_multiple():
     """
