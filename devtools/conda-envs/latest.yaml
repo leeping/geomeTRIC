@@ -31,3 +31,15 @@ dependencies:
   - pytest
   - codecov
   - pytest-cov
+
+# LPW 2023-1-23: This doesn't work - tried channel orders p, c, d and c, d, p.
+# It will work if any one of the three is removed.
+#
+# channels:
+#   - psi4
+#   - defaults
+#   - conda-forge
+# dependencies:
+#   - python=3.10
+#   - psi4>=1.6.1
+#   - openmm>=7.7.0
