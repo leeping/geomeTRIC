@@ -334,7 +334,7 @@ def test_gaussian_input_single():
     assert molecule.Data["charge"] == 0
     assert molecule.Data["mult"] == 1
     assert molecule.Data["ftype"] == "com"
-    assert len(molecule.molecules) == 1
+    assert len(molecule.molecules) == 2
     xyz = np.array([[-4.13498124, 0.70342204, 0.],
            [-3.53650966, -0.1651672, -0.17967886],
            [-4.07172084, 1.36057017, -0.84205371],
