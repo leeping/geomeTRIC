@@ -37,7 +37,7 @@ License
 
                            BSD 3-clause (aka BSD 2.0) License
 
-    Copyright 2016-2022 Regents of the University of California and the Authors
+    Copyright 2016-2023 Regents of the University of California and the Authors
 
     Authors: Lee-Ping Wang, Chenchen Song
 
