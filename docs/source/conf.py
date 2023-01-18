@@ -18,11 +18,11 @@ import sys
 # -- Project information -----------------------------------------------------
 
 project = 'geomeTRIC'
-copyright = '2016-2022, Regents of the University of California and the Authors'
+copyright = '2016-2023, Regents of the University of California and the Authors'
 author = 'Lee-Ping Wang, Chenchen Song'
 
 # The full version, including alpha/beta/rc tags
-release = '1.0 alpha'
+release = '1.0'
 
 
 # -- General configuration ---------------------------------------------------
