@@ -3313,8 +3313,6 @@ class Molecule(object):
             sline = line.split('!')[0].split()
             if ln == 0:
                 comms=[line]
-                print(comms)
-                print(sline)
                 mult = 1
                 charge = 0
                 for keywrd in sline:
@@ -3333,14 +3331,11 @@ class Molecule(object):
                 break
             ln += 1
             absln += 1
-        print(elem)
-        print(xyz)
         Answer = {'xyzs'   : [np.array(xyz)],
                   'elem'   : elem,
                   'comms'  : comms,
                   'charge' : charge,
                   'mult'   : mult}
-        print(Answer)
         return Answer
 
     def read_arc(self, fnm, **kwargs):

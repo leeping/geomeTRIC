@@ -1065,7 +1065,6 @@ class QUICK(Engine):
                         gradient.append([float(ls[2])])
                     else:
                         found_grad = False"""
-        print(energy, gradient)
         if energy is None:
             raise RuntimeError("QUICK energy is not found in %s, please check." % quick_out)
         if gradient is None:
