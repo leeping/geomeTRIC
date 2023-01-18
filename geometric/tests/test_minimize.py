@@ -28,3 +28,16 @@ def test_hcccn_minimize_psi4(localizer):
     assert progress.qm_energies[-1] < (e_ref + 1e-5)
     # Check that the optimization converged in less than 10 steps
     assert len(progress) < 10
+
+@addons.using_quick
+def test_water2_minimize_quick(localizer):
+    """
+    Optimize a water dimer 
+    """
+    shutil.copy2(os.path.join(exampled, "1-simple-examples","water2_quick","Water2.qkin"), os.path.join(os.getcwd(), "Water2.qkin"))
+    progress = geometric.optimize.run_optimizer(engine='quick', input='Water2.qkin', converge=['gmax', '1.0e-5'],
+                                                nt=4, reset=False, trust=0.1, tmax=0.3)
+    e_ref = -149.9412443430
+    assert progress.qm_energies[-1] < (e_ref + 1e-5)
+    # Check that the optimization converged in less than 25 steps (took 20 steps in LPW's local test.)
+    assert len(progress) < 25

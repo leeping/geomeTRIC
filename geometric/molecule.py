@@ -1176,6 +1176,7 @@ class Molecule(object):
                          'qcout'    : self.read_qcout,
                          'qcesp'    : self.read_qcesp,
                          'qdata'    : self.read_qdata,
+                         'quick'    : self.read_quick,
                          'tinker'   : self.read_arc}
         ## The table of file writers
         self.Write_Tab = {'gromacs' : self.write_gro,
@@ -1199,6 +1200,7 @@ class Molecule(object):
                           'qcin'    : 'qcin',
                           'com'     : 'gaussian',
                           'gjf'     : 'gaussian',
+                          'qkin'    : 'quick',
                           'rst'     : 'inpcrd',
                           'out'     : 'qcout',
                           'esp'     : 'qcesp',
@@ -3284,6 +3286,54 @@ class Molecule(object):
         Answer = {'xyzs'   : [np.array(xyz)],
                   'elem'   : elem,
                   'comms'  : [comfile[title_ln].strip()],
+                  'charge' : charge,
+                  'mult'   : mult}
+        return Answer
+
+    def read_quick(self, fnm, **kwargs):
+        """ Parse a QUICK .in file and return a SINGLE-ELEMENT list of xyz coordinates (no multiple file support)
+
+        @param[in] fnm The input file name
+        @return elem   A list of chemical elements in the XYZ file
+        @return comms  A single-element list for the comment.
+        @return xyzs   A single-element list for the  XYZ coordinates.
+        @return charge The total charge of the system.
+        @return mult   The spin multiplicity of the system.
+
+        """
+        elem    = []
+        xyz     = []
+        ln      = 0
+        absln   = 0
+        comfile = open(fnm).readlines()
+        inxyz = 0
+        for line in comfile:
+            line = line.strip().expandtabs()
+            # Everything after exclamation point is a comment
+            sline = line.split('!')[0].split()
+            if ln == 0:
+                comms=[line]
+                mult = 1
+                charge = 0
+                for keywrd in sline:
+                    if 'MULT' in keywrd:
+                        mult = int(keywrd.split('=')[1])
+                    if 'CHARGE' in keywrd:
+                        charge = int(keywrd.split('=')[1])
+            if re.match(r"^ *[A-Z][a-z]?(.*[-+]?([0-9]*\.)?[0-9]+){3}$", line) is not None:
+                inxyz = 1
+                if sline[0].capitalize() in PeriodicTable and isfloat(sline[1]) and isfloat(sline[2]) and isfloat(
+                        sline[3]):
+                    elem.append(sline[0])
+                    xyz.append(np.array([float(sline[1]), float(sline[2]), float(sline[3])]))
+
+            elif inxyz:
+                break
+            ln += 1
+            absln += 1
+        Answer = {'xyzs'   : [np.array(xyz)],
+                  'elem'   : elem,
+                  'comms'  : comms,
                   'charge' : charge,
                   'mult'   : mult}
         return Answer
