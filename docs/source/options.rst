@@ -53,7 +53,7 @@ Internal coordinate (IC) system to be used. Valid values for this argument are:
 
 ``--engine [tera]``
 
-The "engine" is the software to be used for computing energies and gradients. Also see :ref:`Engines <engines>`.
+The "engine" is the software to be used for computing energies and gradients, which needs to be installed separately. Also see :ref:`Engines <engines>`.
 
 - ``tera`` (**default**) : Use TeraChem. Provide a TeraChem input file. A .xyz coordinate file must also be present (name should match the ``coords`` option in the input file).
 - ``qchem`` : Use Q-Chem. Provide a Q-Chem input file with Cartesian coordinates.
@@ -61,6 +61,8 @@ The "engine" is the software to be used for computing energies and gradients. Al
 - ``psi4`` : Use Psi4. Provide a Psi4 input file with Cartesian coordinates.
 - ``gaussian`` : Use Gaussian (version 09 or 16). Provide a Gaussian job file with Cartesian coordinates.
 - ``openmm`` : Use OpenMM. Provide an OpenMM force field or system ``.xml`` file and a PDB file using ``--pdb`` for the initial structure and topology.
+- ``ase`` : Use ASE. Also requires the ``--ase-class`` and ``--ase-kwargs`` options to be specified.
+- ``quick`` : Use QUICK. Provide a QUICK input file with Cartesian coordinates.
 - ``gmx`` : Use Gromacs (experimental). Provide a Gromacs ``.gro`` file. A topology file ``topol.top`` and run parameters ``shot.mdp`` are required, with those exact names.
 
 ``--nt [1]``
