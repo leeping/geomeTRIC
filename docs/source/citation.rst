@@ -20,7 +20,7 @@ Authors: Lee-Ping Wang, Chenchen Song
 Contributors: Yudong Qiu (Psi4 engine, error handling); Daniel G. A. Smith (Testing framework, QCEngine JSON API);
 Sebastian Lee (Molpro engine); Chaya Stern (Travis, Conda); Qiming Sun (Custom engine);
 Alberto Gobbi (Batch energy/gradient, logging); Josh Horton (Convergence criteria, Gaussian engine);
-Tamas K. Stenczel (GitHub Actions, ASE engine)
+Tamas K. Stenczel (GitHub Actions, ASE engine); Akhil Shajan (QUICK engine)
 
 Contact Email: leeping [at] ucdavis [dot] edu
 
@@ -28,7 +28,7 @@ Funding: UC Davis Department of Chemistry
 
 NIH/NIAID Award R01 AI130684
 
-Open Force Field Consortium
+Open Force Field Consortium (2019-2020)
 
 License
 -------
@@ -42,7 +42,7 @@ License
     Authors: Lee-Ping Wang, Chenchen Song
 
     Contributors: Yudong Qiu, Daniel G. A. Smith, Sebastian Lee, Chaya Stern, Qiming Sun,
-    Alberto Gobbi, Josh Horton
+    Alberto Gobbi, Josh Horton, Tamas K. Stenczel, Akhil Shajan
 
     Redistribution and use in source and binary forms, with or without modification,
     are permitted provided that the following conditions are met:
