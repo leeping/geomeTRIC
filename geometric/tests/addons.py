@@ -53,8 +53,6 @@ os.environ["TMPDIR"] = "/tmp/"
 # Add flags
 using_psi4 = pytest.mark.skipif(
     _plugin_import("psi4") is False, reason="could not find psi4. please install the package to enable tests")
-using_quick = pytest.mark.skipif(
-    _plugin_import("quick") is False, reason="could not find quick. please install the package to enable tests")
 using_rdkit = pytest.mark.skipif(
     _plugin_import("rdkit") is False, reason="could not find rdkit. please install the package to enable tests")
 using_qcengine = pytest.mark.skipif(
@@ -67,6 +65,8 @@ using_terachem = pytest.mark.skipif(
     not geometric.nifty.which("terachem"), reason="could not find terachem. please make sure TeraChem is installed for these tests")
 using_qchem = pytest.mark.skipif(
     not geometric.nifty.which("qchem"), reason="could not find qchem. please make sure Q-Chem is installed for these tests")
+using_quick = pytest.mark.skipif(
+    not geometric.nifty.which("quick"), reason="could not find quick. please install the package to enable tests")
 using_gaussian = pytest.mark.skipif(
     get_gaussian_version() is None,
     reason="could not find Gaussian. please make sure Gaussian is installed for these tests",
