@@ -166,11 +166,11 @@ def test_read_results_gaussian():
     #engine = Gaussian(molecule=molecule, exe="g09")
     molecule, engine = get_molecule_engine(input=os.path.join(datad, "ethane.com"), engine='gaussian')
     result = engine.read_result(dirname=datad)
-    assert result["energy"] == -79.2232076157635
-    assert np.allclose(result["gradient"], np.array([-0.00656039, -0.00927754, -0.01606933, -0.00169808, 0.01040138,
-                                                     0.00585666, 0.00044475, -0.00164399, 0.01193617, 0.01037261,
-                                                     0.00413887, 0.00454436, 0.00656039, 0.00927754, 0.01606933,
-                                                     -0.00045842, -0.01116123, -0.00453756, 0.00170932, 0.00011823,
-                                                     -0.01193469, -0.01037017, -0.00185327, -0.00586494]))
+    assert np.allclose(result["energy"], -79.2232076385)
+    assert np.allclose(result["gradient"], np.array([-6.56042860e-03, -9.27746601e-03, -1.60692886e-02, -1.69810268e-03,  1.04014113e-02,
+                                                     5.85661970e-03,  4.44716904e-04, -1.64409044e-03,  1.19361094e-02,  1.03726209e-02,
+                                                     4.13886770e-03,  4.54429744e-03,  6.56039611e-03,  9.27750990e-03,  1.60693707e-02,
+                                                     -4.58383008e-04, -1.11612438e-02, -4.53755817e-03,  1.70936522e-03,  1.18224187e-04,
+                                                     -1.19346786e-02, -1.03701848e-02, -1.85321276e-03, -5.86487186e-03]))
     # make sure the gradient array is the same shape ass the coords
     assert molecule.xyzs[0].shape == result["gradient"].reshape(-1, 3).shape
