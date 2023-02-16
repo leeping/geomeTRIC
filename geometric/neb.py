@@ -2144,8 +2144,9 @@ def BFGSUpdate(Y, Yprev, G, Gprev, H, params):
         Eig.sort()
     ndy = np.array(Dy).flatten() / np.linalg.norm(np.array(Dy))
     ndg = np.array(Dg).flatten() / np.linalg.norm(np.array(Dg))
-    nhdy = np.array(H * Dy).flatten() / np.linalg.norm(np.array(H * Dy))
+    nhdy = np.dot(H, Dy).flatten() / np.linalg.norm(np.dot(H, Dy))
     if verbose:
+        #HP: 2023-2-15: Not sure what is nhdy is for. I changed np.array(H*dy) to np.dot(H, dy)
         print("Denoms: %.3e %.3e" % ((Dg.T * Dy)[0, 0], (Dy.T * H * Dy)[0, 0]), end=" ")
         print("Dots: %.3e %.3e" % (np.dot(ndg, ndy), np.dot(ndy, nhdy)), end=" ")
     H += Mat1 - Mat2
