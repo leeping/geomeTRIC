@@ -22,7 +22,9 @@ dependencies:
 
   # OpenMM test depends
   # LPW 2023-02-19: Using OpenMM 8 causes GLIBCXX_3.4.30 not found error to be thrown during CI tests
-  - openmm<=7.7.0
+  # LPW 2023-02-20: Attempt to install a newer version of GCC as suggested on StackOverflow
+  - openmm
+  - gcc>=12.1.0
 
   # geomeTRIC base depends
   - numpy
