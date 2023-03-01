@@ -577,7 +577,7 @@ class Chain(object):
         expectG = flat(np.dot(np.array(H), col(dy))) + G
         return dy, expect, expectG, ForceRebuild
 
-    def align(self, qcf=False):
+    def align(self):
         self.M.align()
         self.Structures = [
             Structure(
@@ -588,8 +588,7 @@ class Chain(object):
             )
             for i in range(len(self))
         ]
-        if not qcf:
-            self.clearCalcs()
+        #self.clearCalcs()
 
     def TakeStep(self, dy, verbose=False, printStep=False):
         """
@@ -727,7 +726,6 @@ class Chain(object):
             left_ins = np.argmax(spac_nn)
             spac_ins = spac_nn[left_ins]
             if thresh * spac_del < spac_ins:
-                thresh = 1.0
                 # The space (j) -- (j+1) is greater than (i) -- (i+2) times a threshold
                 xyzs = [self.Structures[i].M.xyzs[0].copy() for i in range(len(self))]
                 deli = left_del + 1
@@ -2462,6 +2460,7 @@ def takestep(
     # Obtain a new chain with the step applied
     new_chain = chain.TakeStep(dy, printStep=False)
     respaced = new_chain.delete_insert(1.5)
+    if params.align: chain.align()
     return (
         new_chain,
         chain,
@@ -2493,9 +2492,6 @@ def OptimizeChain(chain, engine, params):
     print("Optimizing the chain.")
     chain.respace(0.01)
     chain.delete_insert(1.0)
-    if params.align:
-        print("Aligning Chain")
-        chain.align()
     if params.nebew is not None:
         print("Energy weighted NEB will be performed.")
     chain.ComputeMetric()
@@ -2763,9 +2759,9 @@ def chaintocoords(chain, ang=False):
     return newcoords
 
 
-def arrange(qcel_mols, align):
+def arrange(qcel_mols):
     """
-    This function will align and respace a chain.
+    This function will respace a chain.
     Parameters
     ----------
     qcel_mols: [QCElemental Molecule object]
@@ -2799,9 +2795,6 @@ def arrange(qcel_mols, align):
 
     chain.respace(0.01)
     chain.delete_insert(1.0)
-    if align:
-        print("Aligning chain")
-        chain.align(qcf=True)
     newcoords = chaintocoords(chain)
     for coords in newcoords:
         aligned_chain.append(
@@ -2836,6 +2829,7 @@ def get_basic_info(info_dict, old=False):
         "skip": not args_dict.get("hessian_reset"),
         "epsilon": args_dict.get("epsilon"),
         "coordsys": "cart",
+        "align": args_dict.get("align_chain")
     }
     iteration = args_dict.get("iteration")
     params = OptParams(**params_dict)
