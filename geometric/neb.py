@@ -2460,7 +2460,6 @@ def takestep(
     # Obtain a new chain with the step applied
     new_chain = chain.TakeStep(dy, printStep=False)
     respaced = new_chain.delete_insert(1.5)
-    if params.align: chain.align()
     return (
         new_chain,
         chain,
@@ -2765,19 +2764,15 @@ def arrange(qcel_mols):
     Parameters
     ----------
     qcel_mols: [QCElemental Molecule object]
-        QCElemental Molecule objects in a list that needs to be aligned.
-
-    align: bool
-        True will align the chain
+        QCElemental Molecule objects in a list.
 
     Returns
     -------
-    aligned_chain: [QCElemental Molecule object]
-        Aligned molecule objects
+    respaced_chain: [QCElemental Molecule object]
+        list of molecule objects
     """
     from qcelemental.models import Molecule as qcmol
 
-    aligned_chain = []
     sym = qcel_mols[0].symbols.tolist()
     chg = qcel_mols[0].molecular_charge
     mult = qcel_mols[0].molecular_multiplicity
@@ -2793,11 +2788,12 @@ def arrange(qcel_mols):
         M, engine=None, tmpdir="tmp", coordtype="cart", params=opt_param, plain=0
     )
 
+    respaced_chain = []
     chain.respace(0.01)
     chain.delete_insert(1.0)
     newcoords = chaintocoords(chain)
     for coords in newcoords:
-        aligned_chain.append(
+        respaced_chain.append(
             qcmol(
                 symbols=sym,
                 geometry=coords,
@@ -2806,7 +2802,7 @@ def arrange(qcel_mols):
             )
         )
 
-    return aligned_chain
+    return respaced_chain
 
 
 def get_basic_info(info_dict, old=False):
@@ -2829,7 +2825,6 @@ def get_basic_info(info_dict, old=False):
         "skip": not args_dict.get("hessian_reset"),
         "epsilon": args_dict.get("epsilon"),
         "coordsys": "cart",
-        "align": args_dict.get("align_chain")
     }
     iteration = args_dict.get("iteration")
     params = OptParams(**params_dict)

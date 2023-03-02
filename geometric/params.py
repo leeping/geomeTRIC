@@ -65,7 +65,7 @@ class OptParams(object):
             self.maxcyc = kwargs.get('maxcyc', 100)
             self.climb = kwargs.get('climb', 0.5)
             self.ncimg = kwargs.get('ncimg', 1)
-            self.align = kwargs.get('align', False)
+            #self.align = kwargs.get('align', False) #HP 3/2/2023: I removed align as it does not help with the performace.
             self.optep = kwargs.get('optep', False)
             self.skip = kwargs.get('skip', False)
             self.tcguess = kwargs.get('tcguess', [])
@@ -330,7 +330,7 @@ def parse_optimizer_args(*args):
     grp_nebparam.add_argument('--ncimg', type=int, help='Number of climbing images to expect (default 1).\n ')
     grp_nebparam.add_argument('--images', type=int, help='Number of NEB images to use (default 11).\n ')
     grp_nebparam.add_argument('--plain', type=int, help='1: Use plain elastic band for spring force. 2: Use plain elastic band for spring AND potential (default 0).\n ')
-    grp_nebparam.add_argument('--align', type=str2bool, help='Align images based on the first frame (experimental).\n ')
+    #grp_nebparam.add_argument('--align', type=str2bool, help='Align images based on the first frame (experimental).\n ')
     grp_nebparam.add_argument('--optep', type=str2bool, help='Provide "yes" to optimize two end points of the initial input chain.\n ')
     grp_nebparam.add_argument('--tcguess', type=str, default=[], nargs="+", help='Provide MO guess files for TC as c0, c1, .. or ca0, cb0, ca1, cb1 ..')
     # grp_nebparam.add_argument('--nogenguess', action='store_true', help='When MO guess files are provided, skip calculation that generates the guess')
