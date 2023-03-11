@@ -49,7 +49,7 @@ import os
 from .molecule import Molecule
 from .nifty import bak, au2ev, eqcgmx, fqcgmx, bohr2ang, logger, getWorkQueue, queue_up_src_dest, rootdir, copy_tree_over
 from .errors import EngineError, CheckCoordError, Psi4EngineError, QChemEngineError, TeraChemEngineError, \
-    ConicalIntersectionEngineError, OpenMMEngineError, GromacsEngineError, MolproEngineError, QCEngineAPIEngineError, GaussianEngineError
+    ConicalIntersectionEngineError, OpenMMEngineError, GromacsEngineError, MolproEngineError, QCEngineAPIEngineError, GaussianEngineError, QUICKEngineError
 
 # Strings matching common DFT functionals
 # exclude "pw", "scan" because they might cause false positives
@@ -1004,7 +1004,7 @@ class QUICK(Engine):
             subprocess.check_call('%s quick.qkin > quick.out' % self.quick_exe, cwd=dirname, shell=True)
             # Read energy and gradients from QUICK output
             result = self.read_result(dirname)
-        except (OSError, IOError, RuntimeError, subprocess.CalledProcessError):
+        except (OSError, IOError, RuntimeError, subprocess.CalledProcessError): # pragma: no cover
             raise QUICKEngineError
         return result
 

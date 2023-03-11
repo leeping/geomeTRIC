@@ -35,6 +35,8 @@ Different engines have different features available.  Here is a simple summary:
 +-------------+--------------+-----------------+---------+---------------+------------+
 | ASE         | No           | No              | No      | No            | No         |
 +-------------+--------------+-----------------+---------+---------------+------------+
+| QUICK       | No           | No              | No      | No            | No         |
++-------------+--------------+-----------------+---------+---------------+------------+
 
 In what follows, all examples can be found in the ``[root]/examples/`` folder of the source distribution.
 
@@ -207,3 +209,15 @@ Usage:
 * Selected using ``--engine ase``
 * set the class of your calculator with ``--ase-class``, eg. ``--ase-class=xtb.ase.calculator.XTB``, ``--ase-class=quippy.potential.Potential``
 * set any initialisation keyword arguments for the calculator class with ``--ase-kwargs``, where the given argument is parsed as a JSON string. Note, this requires correct quoting, eg. ``--ase-kwargs='{"method":"GFN2-xTB"}'``.
+
+QUICK
+-----
+
+This is an interface to the QUICK GPU-accelerated electronic structure software.  Selected using ``--engine quick``.  
+Make sure input files use the `.qkin` file extension.
+
+Make sure `QUICK <https://github.com/merzlab/QUICK/>`_ is installed and
+environment variables are properly set.
+The input file should contain the molecular structure in Cartesian coordinates.
+
+An example is provided in the ``[root]/examples/1-simple-examples/water2_quick`` folder.
