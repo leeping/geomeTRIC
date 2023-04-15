@@ -2190,29 +2190,13 @@ def updatehessian(
                 "Eigenvalues below %.4e (%.4e) - will reset the Hessian"
                 % (params.epsilon, np.min(Eig1))
             )
-            #Y_1 = old_chain.get_internal_all()
-            #GW_1 = old_chain.get_global_grad("total", "working")
-            #GP_1 = old_chain.get_global_grad("total", "plain")
-
             chain, Y, GW, GP, HW, HP = recover([old_chain], params, LastForce, result)
-            #Y_2 = chain.get_internal_all()
-            #GW_2 = chain.get_global_grad("total", "working")
-            #GP_2 = chain.get_global_grad("total", "plain")
 
-            #print(np.isclose(Y_1, Y_2))
-            #print(np.isclose(GW_1, GW_2))
-            #print(np.isclose(GP_1, GP_2))
-            #Y_prev = Y.copy()
-            #GP_prev = GP.copy()
-            #GW_prev = GW.copy()
         elif params.skip:
             print(
                 "Eigenvalues below %.4e (%.4e) - skipping Hessian update"
                 % (params.epsilon, np.min(Eig1))
             )
-            #Y_prev = Y.copy()
-            #GP_prev = GP.copy()
-            #GW_prev = GW.copy()
             HP = HP_bak.copy()
             HW = HW_bak.copy()
     del HP_bak
@@ -2452,7 +2436,7 @@ def takestep(
         params.reset = True
         chain, Y, GW, GP, HW, HP = recover(
             c_hist, params, LastForce == 2, result
-        )  # TODO: c_hist and params aren't being passed
+        )
         params.reset = r0
         print("\x1b[1;93mSkipping optimization step\x1b[0m")
         optCycle -= 1
@@ -2928,9 +2912,6 @@ def prepare(info_dict):
         "Ys": [chain.get_internal_all().tolist()],
         "GWs": [GW.tolist()],
         "GPs": [GP.tolist()],
-        "Y_prev": chain.get_internal_all().tolist(),
-        "HW_prev": HW.tolist(),
-        "HP_prev": HP.tolist(),
         "attrs_new": attrs_new,
         "attrs_prev": attrs_prev,
         "trust": trust,
@@ -2982,15 +2963,12 @@ def nextchain(info_dict):
     trust = info_dict.get("trust")
     trustprint = info_dict.get("trustprint", "=")
 
-    HW_prev = info_dict.get("HW_prev")
-    HP_prev = info_dict.get("HP_prev")
     respaced = info_dict.get("respaced")
     expect = info_dict.get("expect")
     expectG = info_dict.get("expectG")
     Quality = info_dict.get("quality")
     LastForce = info_dict.get("lastforce", 0)
     ForceBuild = info_dict.get("forcerebuild", False)
-
     chain = add_attr(chain, info_dict.get("attrs_new"))
     chain_prev = add_attr(chain_prev, info_dict.get("attrs_prev"))
     chain.ComputeGuessHessian(full=False, blank=isinstance(engine, Blank))
@@ -3000,8 +2978,7 @@ def nextchain(info_dict):
     GPs = info_dict.get("GPs")
     Ys = info_dict.get("Ys")
 
-    #Y = chain.get_internal_all()
-    Y_prev = np.array(Ys[-1])#info_dict.get("prev_Y")
+    Y_prev = np.array(Ys[-1])
     GW_prev = np.array(GWs[-1])
     GP_prev = np.array(GPs[-1])
 
@@ -3010,16 +2987,24 @@ def nextchain(info_dict):
     HW0 = chain.guess_hessian_working.copy()
     HP0 = chain.guess_hessian_plain.copy()
 
-    GWs.append(chain.get_global_grad("total", "working").tolist())
-    GPs.append(chain.get_global_grad("total", "plain").tolist())
-    Ys.append(chain.get_internal_all().tolist())
+    GW = chain.get_global_grad("total", "working")
+    GP = chain.get_global_grad("total", "plain")
+    Y = chain.get_internal_all()
 
+    # Building the Hessian up to the previous iteration
     for i in range(len(Ys)-1):
-        BFGSUpdate(np.array(Ys[i+1]), np.array(Ys[i]), np.array(GWs[i+1]), np.array(GWs[i]), HW0, params, Eig=False)
         BFGSUpdate(np.array(Ys[i+1]), np.array(Ys[i]), np.array(GPs[i+1]), np.array(GPs[i]), HP0, params, Eig=False)
+        BFGSUpdate(np.array(Ys[i+1]), np.array(Ys[i]), np.array(GWs[i+1]), np.array(GWs[i]), HW0, params, Eig=False)
 
-    #HW_prev = HW0
-    #HP_prev = HP0
+    HW_bak = deepcopy(HW0)
+    HP_bak = deepcopy(HP0)
+
+    # Updating the Hessian for the current iteration
+    BFGSUpdate(Y, np.array(Ys[-1]), GP, np.array(GPs[-1]), HP0, params, Eig=False)
+    BFGSUpdate(Y, np.array(Ys[-1]), GW, np.array(GWs[-1]), HW0, params, Eig=False)
+
+    HW_prev = HW0
+    HP_prev = HP0
 
     chain, Y, GW, GP, HW, HP, c_hist, Quality = compare(
         chain_prev,
@@ -3070,12 +3055,9 @@ def nextchain(info_dict):
         attrs_prev = check_attr(chain_prev)
         newcoords = chaintocoords(chain)
         temp = {
-            "Ys" : [Ys[-1]],
-            "GWs": [GWs[-1]],
-            "GPs": [GPs[-1]],
-            "Y_prev": chain_prev.get_internal_all().tolist(),
-            "HW_prev": HW.tolist(),
-            "HP_prev": HP.tolist(),
+            "Ys" : [Y_prev],
+            "GWs": [GW_prev],
+            "GPs": [GP_prev],
             "attrs_new": attrs_new,
             "attrs_prev": attrs_prev,
             "expect": expect,
@@ -3139,20 +3121,17 @@ def nextchain(info_dict):
             Y,
             GW,
             GP,
-            HW,
-            HP,
-            info_dict.get("result_prev"),
+            HW_bak,
+            HP_bak,
+            result_prev,
         )
         attrs_new = check_attr(chain)
         attrs_prev = check_attr(chain_prev)
         newcoords = chaintocoords(chain)
         temp = {
-            "Ys": Ys[:-1],
-            "GWs": GWs[:-1],
-            "GPs": GPs[:-1],
-            "Y_prev": chain_prev.get_internal_all().tolist(),
-            "HW_prev": HW.tolist(),
-            "HP_prev": HP.tolist(),
+            "Ys": Ys,
+            "GWs": GWs,
+            "GPs": GPs,
             "attrs_new": attrs_new,
             "attrs_prev": attrs_prev,
             "trust": trust,
@@ -3164,33 +3143,33 @@ def nextchain(info_dict):
             "coord_ang_prev": chaintocoords(chain_prev, True),
             "lastforce": LastForce,
             "forcerebuild": ForceRebuild,
-            "result_prev": info_dict.get("result_prev"),
+            "result_prev": result_prev,
             "geometry": [],
         }
         info_dict.update(temp)
         return newcoords, info_dict
-    # If minimum eigenvalues of HW is lower than epsilon, GP, GW are same as their previous values.
-    chain, Y, GW, GP, HP, HW, Y_prev, GP_prev, GW_prev, H_reset = updatehessian(
-        chain_prev,
-        chain,
-        HP,
-        HW,
-        Y,
-        Y_prev,
-        GW,
-        GW_prev,
-        GP,
-        GP_prev,
-        LastForce,
-        params,
-        info_dict.get("result_prev"),
-    )
 
-    if H_reset:
-        result = info_dict.get("result_prev")
-        Ys[-1] = Y.tolist()
-        GWs[-1] = GW.tolist()
-        GPs[-1] = GP.tolist()
+    # Checking to see whether the Hessian's eignvalue is too small
+    Eig = np.linalg.eigh(HW)[0]
+    Eig.sort()
+    if np.min(Eig) <= params.epsilon:
+        if params.reset:
+            print(
+                "Eigenvalues below %.4e (%.4e) - will reset the Hessian"
+                % (params.epsilon, np.min(Eig))
+            )
+
+            chain, Y, GW, GP, HW, HP = recover([chain_prev], params, LastForce, result_prev)
+            Ys = [Y.tolist()]
+            GWs = [GW.tolist()]
+            GPs = [GP.tolist()]
+            result = result_prev
+
+        elif params.skip:
+               print(
+                   "Eigenvalues below %.4e (%.4e) - skipping Hessian update"
+                   % (params.epsilon, np.min(Eig))
+               )
 
     (
         chain_prev,
@@ -3217,17 +3196,18 @@ def nextchain(info_dict):
         GP,
         HW,
         HP,
-        info_dict.get("result_prev"),
+        result_prev,
     )
     attrs_new = check_attr(chain)
     attrs_prev = check_attr(chain_prev)
+    Ys.append(Y.tolist())
+    GWs.append(GW.tolist())
+    GPs.append(GP.tolist())
+
     temp = {
         "Ys" : Ys,
         "GWs": GWs,
         "GPs": GPs,
-        "Y_prev": chain_prev.get_internal_all().tolist(),
-        "HW_prev": HW.tolist(),
-        "HP_prev": HP.tolist(),
         "attrs_new": attrs_new,
         "attrs_prev": attrs_prev,
         "trust": trust,
