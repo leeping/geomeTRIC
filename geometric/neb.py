@@ -108,9 +108,7 @@ def CoordinateSystem(M, coordtype, chain=False, ic_displace=False, guessw=0.1):
 
 
 class Structure(object):
-    """
-    Class representing a single structure.
-    """
+    """Class representing a single structure in a chain."""
 
     def __init__(self, molecule, engine, tmpdir, coordtype, coords=None):
         """
@@ -243,7 +241,7 @@ class Structure(object):
 
     def ComputeEnergyGradient(self, result=None):
         """Compute energies and Cartesian gradients for the current structure."""
-        # If the result (energy and gradient in a dictionary) is provided, skip calculations
+        # If the result (energy and gradient in a dictionary) is provided, skip the calculations.
         if result is None:
             result = self.engine.calc(self.cartesians, self.tmpdir)
         self.energy = result["energy"]
@@ -254,6 +252,7 @@ class Structure(object):
         self.engine.calc_wq(self.cartesians, self.tmpdir)
 
     def GetEnergyGradient(self):
+        """Add energy and gradient attributes"""
         result = self.engine.read_wq(self.cartesians, self.tmpdir)
         self.energy = result["energy"]
         self.grad_cartesian = result["gradient"]
@@ -273,7 +272,7 @@ class Structure(object):
 
         optProg = Optimize(
             self.cartesians, self.M, self.IC, self.engine, self.tmpdir, opt_params
-        )  # , xyzout=os.path.join(self.tmpdir,'optimize.xyz'))
+        )
 
         self.cartesians = np.array(optProg[-1].xyzs).flatten()
         self.M = optProg[-1]
@@ -604,7 +603,7 @@ class Chain(object):
         Returns
         -------
         NEB
-            A new NEB object containing the updated coordinates
+            A new Chain object containing the updated coordinates
         """
         currvar = 0
         # LPW 2017-04-08: Because we're creating a new Chain object that represents the step taken, this copy operation is deemed necessary
@@ -792,6 +791,7 @@ class Chain(object):
 
 
 class ElasticBand(Chain):
+    """Using the Chain class to define a band object. Total force varies based on the band types."""
     def __init__(
         self,
         molecule,
@@ -2128,6 +2128,7 @@ def recover(chain_hist, params, forceCart, result=None):
 
 
 def BFGSUpdate(Y, old_Y, G, old_G, H, params, Eig = True):
+    """Update a Hessian using the BFGS method"""
     verbose = params.verbose
     # BFGS Hessian update
     Dy = col(Y - old_Y)
@@ -2176,7 +2177,7 @@ def updatehessian(
     result,
 ):
     """
-    This function was part of the 'while' loop in OptimizeChain(). It updates hessian.
+    This function updates the Hessians and check their eigenvalues.
     """
     H_reset = False
     HP_bak = HP.copy()
@@ -2221,7 +2222,7 @@ def qualitycheck(
     params_tmax,
 ):
     """
-    This function was part of the 'while' loop in OptimizeChain(). This function checks quality of the step.
+    This function checks quality of the step and rejects (decreases stepsize) a step with poor quality.
     """
     rejectOk = trust > ThreRJ and new_chain.TotBandEnergy - old_chain.TotBandEnergy
     if Quality <= ThreLQ:
@@ -2233,7 +2234,7 @@ def qualitycheck(
     elif Quality >= ThreHQ:
         if trust < params_tmax:
             # For good steps, the trust radius is increased
-            trust = min(2 * trust, params_tmax)
+            trust = min(2 * trust, params_tmax) # HP: I increased the factor here from sqrt(2) to 2.
             trustprint = "\x1b[92m+\x1b[0m"
         else:
             trustprint = "="
@@ -2278,7 +2279,7 @@ def compare(
     Quality_old=None,
 ):
     """
-    This function was a part of the 'while' loop in OptimizeChain(). Two chain objects are being compared.
+    Two chain objects are compared here to see the quality of the next step.
     """
     Y = new_chain.get_internal_all()
     GW = new_chain.get_global_grad("total", "working")
@@ -2382,7 +2383,7 @@ def converged(
     chain_maxg, chain_avgg, params_maxg, params_avgg, optCycle, params_maxcyc
 ):
     """
-    This function was part of the 'while' loop in OptimizeChain(). Checking to see whether the chain is converged.
+    Checking to see whether the chain is converged.
     """
     if chain_maxg < params_maxg and chain_avgg < params_avgg:
         print("--== Optimization Converged. ==--")
@@ -2409,7 +2410,7 @@ def takestep(
     result,
 ):
     """
-    This function was part of the 'while' loop in OptimizeChain(). Take step to move the chain.
+    Take a step to move the chain based on the gradients and Hessians.
     """
     LastForce += ForceRebuild
     dy, expect, expectG, ForceRebuild = chain.CalcInternalStep(trust, HW, HP)
@@ -2653,16 +2654,15 @@ def OptimizeChain(chain, engine, params):
 
 class nullengine(object):
     """
-    Fake engine for QCFractal.
+    Fake engine for QCFractal
     """
-
     def __init__(self, M):
         self.M = M
 
 
 def switch(array, numpy=False):
     """
-    Switches between numpy and list.
+    Switches between numpy and list
     """
     new = []
     if not numpy:
@@ -2682,7 +2682,7 @@ def switch(array, numpy=False):
 
 def add_attr(chain, attrs):
     """
-    Add chain attributes to a given chain.
+    Add chain attributes to a given chain
     """
     chain.TotBandEnergy = attrs.get("TotBandEnergy")
     if attrs.get("haveMetric", False):
@@ -2700,7 +2700,7 @@ def add_attr(chain, attrs):
 
 def check_attr(chain):
     """
-    Check a chain's attributes and extract them.
+    Check a chain's attributes and extract them
     """
     attrs = {}
     if chain.haveMetric:
@@ -2718,21 +2718,14 @@ def check_attr(chain):
     return attrs
 
 
-def dict_to_binary(the_dict):
-    import msgpack
-
-    bin = msgpack.dumps(the_dict)
-    return bin
-
-
 def chaintocoords(chain, ang=False):
     """
-    Extracts Cartesian coordinates from an ElasticBand object.
+    Extracts Cartesian coordinates from an ElasticBand object
     Parameters
     ----------
     chain: ElasticBand object (in Ang)
     ang: Bool
-        True will return Cartesian coordinates in Ang (False in Bohr).
+        True will return Cartesian coordinates in Ang (False in Bohr)
 
     Returns
     -------
@@ -2752,7 +2745,7 @@ def chaintocoords(chain, ang=False):
 
 def arrange(qcel_mols):
     """
-    This function will respace a chain.
+    This function will respace a chain if images are too close to each other.
     Parameters
     ----------
     qcel_mols: [QCElemental Molecule object]
@@ -2765,6 +2758,7 @@ def arrange(qcel_mols):
     """
     from qcelemental.models import Molecule as qcmol
 
+    # Getting molecular information
     sym = qcel_mols[0].symbols.tolist()
     chg = qcel_mols[0].molecular_charge
     mult = qcel_mols[0].molecular_multiplicity
@@ -2775,11 +2769,13 @@ def arrange(qcel_mols):
         xyzs.append(np.round(mol.geometry * bohr2ang, 8))
     M.xyzs = xyzs
 
+    # Getting parameters and the chain
     opt_param = OptParams(**{"neb": True})
     chain = ElasticBand(
         M, engine=None, tmpdir="tmp", coordtype="cart", params=opt_param, plain=0
     )
 
+    # Respacing the chain
     respaced_chain = []
     chain.respace(0.01)
     chain.delete_insert(1.0)
@@ -2798,6 +2794,9 @@ def arrange(qcel_mols):
 
 
 def get_basic_info(info_dict, previous=False):
+    """
+    Extracting parameters and other basic objects from info_dict.
+    """
     coords_bohr = np.array(info_dict.get("geometry"))
     coords_ang = coords_bohr * bohr2ang
     args_dict = info_dict.get("params")
@@ -2847,7 +2846,7 @@ def get_basic_info(info_dict, previous=False):
 
 def prepare(info_dict):
     """
-    This function is for QCFractal. Takes a dictionary with parameters and prepare for the NEB calculation loops.
+    This function is for QCFractal. It takes a dictionary and prepares for the NEB calculation loops.
     """
 
     print("\n-=# Chain optimization cycle 0 #=-")
@@ -2860,6 +2859,7 @@ def prepare(info_dict):
 
     tmpdir = tempfile.mkdtemp()
 
+    # Getting the initial chain.
     chain = ElasticBand(
         M,
         engine=engine,
@@ -2933,6 +2933,8 @@ def nextchain(info_dict):
     """
     Generate next chain's Cartesian coordinate for QCFractal.
     """
+
+    # Extracting information from the given dictionary.
     params, M, engine, result, iteration = get_basic_info(info_dict)
     params_prev, M_prev, engine_prev, result_prev, _ = get_basic_info(info_dict, previous=True)
 
@@ -2942,6 +2944,8 @@ def nextchain(info_dict):
 
     print("\n-=# Chain optimization cycle %i #=-" % iteration)
     tmpdir = tempfile.mkdtemp()
+
+    # Define two chain objects for the previous and current iteration.
     chain = ElasticBand(
         M,
         engine=engine,
@@ -2960,9 +2964,9 @@ def nextchain(info_dict):
         plain=params_prev.plain,
     )
 
+    # Getting other information up to the previous iteration.
     trust = info_dict.get("trust")
     trustprint = info_dict.get("trustprint", "=")
-
     respaced = info_dict.get("respaced")
     expect = info_dict.get("expect")
     expectG = info_dict.get("expectG")
@@ -2973,29 +2977,31 @@ def nextchain(info_dict):
     chain_prev = add_attr(chain_prev, info_dict.get("attrs_prev"))
     chain.ComputeGuessHessian(full=False, blank=isinstance(engine, Blank))
     chain_prev.ComputeGuessHessian(full=False, blank=isinstance(engine, Blank))
-
     GWs = info_dict.get("GWs")
     GPs = info_dict.get("GPs")
     Ys = info_dict.get("Ys")
-
     Y_prev = np.array(Ys[-1])
     GW_prev = np.array(GWs[-1])
     GP_prev = np.array(GPs[-1])
 
+    # Calculating the chain gradients.
     chain.ComputeChain(result=result)
 
+    # Initial guess of the Hessians.
     HW0 = chain.guess_hessian_working.copy()
     HP0 = chain.guess_hessian_plain.copy()
 
+    # Current chain's gradients and coordinates.
     GW = chain.get_global_grad("total", "working")
     GP = chain.get_global_grad("total", "plain")
     Y = chain.get_internal_all()
 
-    # Building the Hessian up to the previous iteration
+    # Building the Hessian up to the previous iteration.
     for i in range(len(Ys)-1):
         BFGSUpdate(np.array(Ys[i+1]), np.array(Ys[i]), np.array(GPs[i+1]), np.array(GPs[i]), HP0, params, Eig=False)
         BFGSUpdate(np.array(Ys[i+1]), np.array(Ys[i]), np.array(GWs[i+1]), np.array(GWs[i]), HW0, params, Eig=False)
 
+    # Saving the Hessians for special cases such as rejecting a step.
     HW_bak = deepcopy(HW0)
     HP_bak = deepcopy(HP0)
 
@@ -3006,6 +3012,7 @@ def nextchain(info_dict):
     HW_prev = HW0
     HP_prev = HP0
 
+    # 1) First, compare two chains and determine the quality of the next step.
     chain, Y, GW, GP, HW, HP, c_hist, Quality = compare(
         chain_prev,
         chain,
@@ -3024,6 +3031,7 @@ def nextchain(info_dict):
         Quality,
     )
     if respaced:
+        # 1-1) If the chain was respaced, take a new step using the gussed Hessians.
         (
             chain_prev,
             chain,
@@ -3073,12 +3081,13 @@ def nextchain(info_dict):
         info_dict.update(temp)
         return newcoords, info_dict
 
+    # 2) If the chain is converged, return None to QCFractal. This will end an NEB service.
     if converged(
         chain.maxg, chain.avgg, params.maxg, params.avgg, iteration, params.maxcyc
     ):
         return None, {}
 
-    # qualitycheck returns chain_prev and smaller trust if quality is not good.
+    # 2) Checking the quality and increase/decrease the stepsize
     chain, trust, trustprint, Y, GW, GP, good = qualitycheck(
         chain_prev,
         chain,
@@ -3095,8 +3104,9 @@ def nextchain(info_dict):
         GP_prev,
         params.tmax,
     )
+
     if not good:
-        # chain here is the chain from previous iteration
+        # 2-1) If the quality is bad, reject the step and take a new step with a decreased stepsize.
         chain.ComputeChain(result=result_prev)
         (
             chain_prev,
@@ -3149,7 +3159,7 @@ def nextchain(info_dict):
         info_dict.update(temp)
         return newcoords, info_dict
 
-    # Checking to see whether the Hessian's eignvalue is too small
+    # 3) Reset the Hessians in case the eigenvalues are too small.
     Eig = np.linalg.eigh(HW)[0]
     Eig.sort()
     if np.min(Eig) <= params.epsilon:
@@ -3171,6 +3181,7 @@ def nextchain(info_dict):
                    % (params.epsilon, np.min(Eig))
                )
 
+    # 4) Take the step based on the current Hessians and gradients. Pass the result Cartesian coordinates to QCFractal.
     (
         chain_prev,
         chain,
@@ -3224,10 +3235,6 @@ def nextchain(info_dict):
     }
     newcoords = chaintocoords(chain)
     info_dict.update(temp)
-    for k, v in info_dict.items():
-        mem_size = sys.getsizeof(dict_to_binary({k: v})) * 1e-9
-        if mem_size > 1e-1:
-            print("Size of %s : %f Gb" % (k, mem_size))
     return newcoords, info_dict
 
 
