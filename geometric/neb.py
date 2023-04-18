@@ -2321,8 +2321,8 @@ def compare(
             Y,
             GW,
             GP,
-            np.array(HW),
-            np.array(HP),
+            HW,
+            HP,
             c_hist,
             Quality_old,
         )
@@ -3031,7 +3031,7 @@ def nextchain(info_dict):
         Quality,
     )
     if respaced:
-        # 1-1) If the chain was respaced, take a new step using the gussed Hessians.
+        # 1-1) If the chain was respaced, take a new step using the guessed Hessians.
         (
             chain_prev,
             chain,
