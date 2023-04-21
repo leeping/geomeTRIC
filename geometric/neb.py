@@ -2234,7 +2234,7 @@ def qualitycheck(
     elif Quality >= ThreHQ:
         if trust < params_tmax:
             # For good steps, the trust radius is increased
-            trust = min(2 * trust, params_tmax) # HP: I increased the factor here from sqrt(2) to 2.
+            trust = min(np.sqrt(2) * trust, params_tmax)
             trustprint = "\x1b[92m+\x1b[0m"
         else:
             trustprint = "="
@@ -2736,9 +2736,9 @@ def chaintocoords(chain, ang=False):
     for i in range(len(chain)):
         M_obj = chain.Structures[i].M
         if ang:
-            coord = np.round(M_obj.xyzs[0], 8)
+            coord = M_obj.xyzs[0]
         else:
-            coord = np.round(M_obj.xyzs[0] / bohr2ang, 8)
+            coord = M_obj.xyzs[0] / bohr2ang
         newcoords.append(coord.tolist())
     return newcoords
 
@@ -2766,7 +2766,7 @@ def arrange(qcel_mols):
     M.elem = sym
     xyzs = []
     for i, mol in enumerate(qcel_mols):
-        xyzs.append(np.round(mol.geometry * bohr2ang, 8))
+        xyzs.append(mol.geometry * bohr2ang)
     M.xyzs = xyzs
 
     # Getting parameters and the chain
