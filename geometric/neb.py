@@ -42,7 +42,7 @@ from .errors import (
 )
 from copy import deepcopy
 
-
+# fmt: off
 def rms_gradient(gradx):
     """Return the RMS of a Cartesian gradient."""
     atomgrad = np.sqrt(np.sum((gradx.reshape(-1, 3)) ** 2, axis=1))
@@ -75,34 +75,13 @@ def CoordinateSystem(M, coordtype, chain=False, ic_displace=False, guessw=0.1):
     }  # Primitive TRIC, i.e. not delocalized
     CoordClass, connect, addcart = CoordSysDict[coordtype]
     if CoordClass is DelocalizedInternalCoordinates:
-        IC = CoordClass(
-            M,
-            build=True,
-            connect=connect,
-            addcart=addcart,
-            cartesian=(coordtype == "cart"),
-            chain=chain,
-            ic_displace=ic_displace,
-            guessw=guessw,
-        )
+        IC = CoordClass(M, build=True, connect=connect, addcart=addcart, cartesian=(coordtype == "cart"),
+                        chain=chain, ic_displace=ic_displace, guessw=guessw)
     elif chain:
-        IC = ChainCoordinates(
-            M,
-            connect=connect,
-            addcart=addcart,
-            cartesian=(coordtype == "cart"),
-            ic_displace=ic_displace,
-            guessw=guessw,
-        )
+        IC = ChainCoordinates(M, connect=connect, addcart=addcart, cartesian=(coordtype == "cart"),
+                              ic_displace=ic_displace, guessw=guessw)
     else:
-        IC = CoordClass(
-            M,
-            build=True,
-            connect=connect,
-            addcart=addcart,
-            chain=False,
-            ic_displace=ic_displace,
-        )
+        IC = CoordClass(M, build=True, connect=connect, addcart=addcart, chain=False, ic_displace=ic_displace)
     IC.coordtype = coordtype
     return IC
 
@@ -270,9 +249,7 @@ class Structure(object):
         else:
             self.IC = CoordinateSystem(self.M, self.coordtype)
 
-        optProg = Optimize(
-            self.cartesians, self.M, self.IC, self.engine, self.tmpdir, opt_params
-        )
+        optProg = Optimize(self.cartesians, self.M, self.IC, self.engine, self.tmpdir, opt_params)
 
         self.cartesians = np.array(optProg[-1].xyzs).flatten()
         self.M = optProg[-1]
@@ -282,17 +259,7 @@ class Structure(object):
 
 class Chain(object):
     """Class representing a chain of states."""
-
-    def __init__(
-        self,
-        molecule,
-        engine,
-        tmpdir,
-        coordtype,
-        params,
-        coords=None,
-        ic_displace=False,
-    ):
+    def __init__(self, molecule, engine, tmpdir, coordtype, params, coords=None, ic_displace=False):
         """
         Create a Chain object.
 
@@ -328,15 +295,8 @@ class Chain(object):
                 self.M.xyzs[i] = coords[i, :].reshape(-1, 3) * bohr2ang
         self.na = self.M.na
         # The Structures are what store the individual Cartesian coordinates for each frame.
-        self.Structures = [
-            Structure(
-                self.M[i],
-                engine,
-                os.path.join(self.tmpdir, "struct_%%0%ii" % len(str(len(self))) % i),
-                self.coordtype,
-            )
-            for i in range(len(self))
-        ]
+        self.Structures = [Structure(self.M[i], engine, os.path.join(self.tmpdir, "struct_%%0%ii" % len(str(len(self))) % i),
+                self.coordtype) for i in range(len(self))]
         # The total number of variables being optimized
         # self.nvars = sum([self.Structures[n].nICs for n in range(1, len(self)-1)])
         # Locked images (those having met the convergence criteria) are not updated
@@ -344,28 +304,17 @@ class Chain(object):
         self.haveCalcs = False
         ### Test ###
         # print("Starting Test")
-        self.GlobalIC = CoordinateSystem(
-            self.M,
-            self.coordtype,
-            chain=True,
-            ic_displace=self.ic_displace,
-            guessw=self.params.guessw,
-        )
+        self.GlobalIC = CoordinateSystem(self.M, self.coordtype, chain=True, ic_displace=self.ic_displace, guessw=self.params.guessw)
         # print xyz.shape
         # self.GlobalIC.checkFiniteDifference(self.get_cartesian_all(endpts=True))
         self.nvars = len(self.GlobalIC.Internals)
         # raw_input()
-
     def UpdateTempDir(self, iteration):
-        self.tmpdir = os.path.join(
-            os.path.split(self.tmpdir)[0], "chain_%04i" % iteration
-        )
+        self.tmpdir = os.path.join(os.path.split(self.tmpdir)[0], "chain_%04i" % iteration)
         if not os.path.exists(self.tmpdir):
             os.makedirs(self.tmpdir)
         for i, s in enumerate(self.Structures):
-            s.tmpdir = os.path.join(
-                self.tmpdir, "struct_%%0%ii" % len(str(len(self))) % i
-            )
+            s.tmpdir = os.path.join(self.tmpdir, "struct_%%0%ii" % len(str(len(self))) % i)
 
     def __len__(self):
         """Return the length of the chain."""
@@ -395,30 +344,20 @@ class Chain(object):
     def CopyEnergyGradient(self, other):
         for i in range(len(self)):
             self.Structures[i].energy = other.Structures[i].energy
-            self.Structures[i].grad_cartesian = other.Structures[
-                i
-            ].grad_cartesian.copy()
+            self.Structures[i].grad_cartesian = other.Structures[i].grad_cartesian.copy()
             self.Structures[i].grad_internal = other.Structures[i].grad_internal.copy()
         self.haveCalcs = True
 
     def get_cartesian_all(self, endpts=False):
         """Return the internal coordinates of images 1 .. N-2."""
         if endpts:
-            return np.hstack(
-                tuple([self.Structures[i].cartesians for i in range(len(self))])
-            )
+            return np.hstack(tuple([self.Structures[i].cartesians for i in range(len(self))]))
         else:
-            return np.hstack(
-                tuple([self.Structures[i].cartesians for i in range(1, len(self) - 1)])
-            )
+            return np.hstack(tuple([self.Structures[i].cartesians for i in range(1, len(self) - 1)]))
 
     def get_internal_all(self):
         """Return the internal coordinates of images 1 .. N-2."""
-        return self.GlobalIC.calculate(
-            np.hstack(
-                [self.Structures[i].cartesians for i in range(len(self))]
-            ).flatten()
-        )
+        return self.GlobalIC.calculate(np.hstack([self.Structures[i].cartesians for i in range(len(self))]).flatten())
 
     def getCartesianNorm(self, dy, verbose=False):
         """
@@ -519,15 +458,7 @@ class Chain(object):
             froot.stores[inorm] = cnorm
             # Find the internal coordinate norm that matches the desired
             # Cartesian coordinate norm
-            iopt = brent_wiki(
-                froot.evaluate,
-                0.0,
-                inorm,
-                trust,
-                cvg=0.1,
-                obj=froot,
-                verbose=self.params.verbose,
-            )
+            iopt = brent_wiki(froot.evaluate, 0.0, inorm, trust, cvg=0.1, obj=froot, verbose=self.params.verbose)
             # Check failure modes
             if froot.brentFailed and froot.stored_arg is not None:
                 # 1) Brent optimization failed to converge,
@@ -547,14 +478,7 @@ class Chain(object):
                     if self.params.verbose:
                         print("\x1b[93mReducing target to %.3e\x1b[0m" % froot.target)
                     froot.above_flag = True
-                    iopt = brent_wiki(
-                        froot.evaluate,
-                        0.0,
-                        iopt,
-                        froot.target,
-                        cvg=0.1,
-                        verbose=self.params.verbose,
-                    )
+                    iopt = brent_wiki(froot.evaluate, 0.0, iopt, froot.target, cvg=0.1, verbose=self.params.verbose)
                     if not self.anybork():
                         break
             if self.anybork():
@@ -576,18 +500,11 @@ class Chain(object):
         expectG = flat(np.dot(np.array(H), col(dy))) + G
         return dy, expect, expectG, ForceRebuild
 
-    def align(self):
-        self.M.align()
-        self.Structures = [
-            Structure(
-                self.M[i],
-                self.engine,
-                os.path.join(self.tmpdir, "struct_%%0%ii" % len(str(len(self))) % i),
-                self.coordtype,
-            )
-            for i in range(len(self))
-        ]
-        #self.clearCalcs()
+    #def align(self):
+    #    self.M.align()
+    #    self.Structures = [Structure(self.M[i], self.engine, os.path.join(self.tmpdir, "struct_%%0%ii" % len(str(len(self))) % i),
+    #                        self.coordtype) for i in range(len(self))]
+        # self.clearCalcs()
 
     def TakeStep(self, dy, verbose=False, printStep=False):
         """
@@ -739,14 +656,8 @@ class Chain(object):
                 for i in range(len(self)):
                     Mtmp = deepcopy(self.Structures[0].M)
                     Mtmp.xyzs = [xyzs[i]]
-                    self.Structures[i] = Structure(
-                        Mtmp,
-                        self.engine,
-                        os.path.join(
-                            self.tmpdir, "struct_%%0%ii" % len(str(len(self))) % i
-                        ),
-                        self.coordtype,
-                    )
+                    self.Structures[i] = Structure(Mtmp, self.engine, os.path.join(self.tmpdir, "struct_%%0%ii" % len(str(len(self))) % i
+                        ), self.coordtype)
                 print(
                     "Evening out spacings: Deleted image %2i and added a new image between %2i and %2i"
                     % (deli, insi, insj)
@@ -792,26 +703,8 @@ class Chain(object):
 
 class ElasticBand(Chain):
     """Using the Chain class to define a band object. Total force varies based on the band types."""
-    def __init__(
-        self,
-        molecule,
-        engine,
-        tmpdir,
-        coordtype,
-        params,
-        coords=None,
-        plain=0,
-        ic_displace=False,
-    ):
-        super(ElasticBand, self).__init__(
-            molecule,
-            engine,
-            tmpdir,
-            coordtype,
-            params,
-            coords=coords,
-            ic_displace=ic_displace,
-        )
+    def __init__(self, molecule, engine, tmpdir, coordtype, params, coords=None, plain=0, ic_displace=False):
+        super(ElasticBand, self).__init__(molecule, engine, tmpdir, coordtype, params, coords=coords, ic_displace=ic_displace)
         # convert kcal/mol/Ang^2 to Hartree/Bohr^2
         self.k = self.params.nebk * kcal2au * (bohr2ang**2)
         # Number of atoms
@@ -842,16 +735,7 @@ class ElasticBand(Chain):
         self.haveMetric = False
 
     def RebuildIC(self, coordtype, result=None):
-        Cnew = ElasticBand(
-            self.M,
-            self.engine,
-            self.tmpdir,
-            coordtype,
-            self.params,
-            None,
-            plain=self.plain,
-            ic_displace=self.ic_displace,
-        )
+        Cnew = ElasticBand(self.M, self.engine, self.tmpdir, coordtype, self.params, None, plain=self.plain, ic_displace=self.ic_displace)
         Cnew.ComputeChain(result=result)
         return Cnew
 
@@ -1131,23 +1015,12 @@ class ElasticBand(Chain):
             raise RuntimeError(
                 "Please set the projection argument to plain, projected, or working"
             )
-        return np.hstack(
-            tuple(
-                [
-                    self.get_grad(i, component, projection)
-                    for i in range(1, len(self) - 1)
-                ]
-            )
-        )
+        return np.hstack(tuple([self.get_grad(i, component, projection) for i in range(1, len(self) - 1)]))
 
     def calc_spacings(self):
         rmsds = []
         for i in range(1, len(self)):
-            rmsd, maxd = calc_drms_dmax(
-                self.Structures[i].cartesians,
-                self.Structures[i - 1].cartesians,
-                align=False,
-            )
+            rmsd, maxd = calc_drms_dmax(self.Structures[i].cartesians, self.Structures[i - 1].cartesians, align=False)
             rmsds.append(rmsd)
         return rmsds
 
@@ -1212,22 +1085,14 @@ class ElasticBand(Chain):
         for i in range(1, len(self) - 1):
             if enes[i - 1] == enes[i]:
                 if enes[i] == enes[i + 1]:
-                    symbols.append(
-                        "  =  "
-                    )  # This may be used when all energies are zero
+                    symbols.append("  =  ")  # This may be used when all energies are zero
                 elif enes[i] < enes[i + 1]:
-                    symbols.append(
-                        "= -->"
-                    )  # This symbol should pretty much never be used
+                    symbols.append("= -->")  # This symbol should pretty much never be used
                 else:
-                    symbols.append(
-                        "= <--"
-                    )  # This symbol should pretty much never be used
+                    symbols.append("= <--")  # This symbol should pretty much never be used
             elif enes[i - 1] < enes[i]:
                 if enes[i] == enes[i + 1]:
-                    symbols.append(
-                        "--> ="
-                    )  # This symbol should pretty much never be used
+                    symbols.append("--> =")  # This symbol should pretty much never be used
                 elif enes[i] < enes[i + 1]:
                     symbols.append("---->")
                 else:
@@ -1237,9 +1102,7 @@ class ElasticBand(Chain):
                         symbols.append("(max)")
             else:
                 if enes[i] == enes[i + 1]:
-                    symbols.append(
-                        "<-- ="
-                    )  # This symbol should pretty much never be used
+                    symbols.append("<-- =")  # This symbol should pretty much never be used
                 elif enes[i] > enes[i + 1]:
                     symbols.append("<----")
                 else:
@@ -1843,16 +1706,10 @@ class ElasticBand(Chain):
             if self.plain == 0:
                 self.guess_hessian_working[i, :] = (gplus_proj - gminus_proj) / (2 * h)
             elif self.plain == 1:
-                self.guess_hessian_working[i, :] = (
-                    vgrad_plus_proj
-                    + spgrad_plus_plain
-                    - vgrad_minus_proj
-                    - spgrad_minus_plain
-                ) / (2 * h)
+                self.guess_hessian_working[i, :] = (vgrad_plus_proj + spgrad_plus_plain - vgrad_minus_proj -
+                                                    spgrad_minus_plain) / (2 * h)
             elif self.plain == 2:
-                self.guess_hessian_working[i, :] = (gplus_plain - gminus_plain) / (
-                    2 * h
-                )
+                self.guess_hessian_working[i, :] = (gplus_plain - gminus_plain) / (2 * h)
 
         # Symmetrize
         self.guess_hessian_plain = 0.5 * (
@@ -2106,7 +1963,7 @@ def recover(chain_hist, params, forceCart, result=None):
     newchain = chain_hist[-1].RebuildIC(
         "cart" if forceCart else chain_hist[-1].coordtype, result=result
     )
-    #for ic, c in enumerate(chain_hist):
+    # for ic, c in enumerate(chain_hist):
     #    # Copy operations here may allow old chains to be properly erased when dereferenced
     #    c.kmats = deepcopy(newchain.kmats)
     #    c.metrics = deepcopy(newchain.metrics)
@@ -2127,7 +1984,7 @@ def recover(chain_hist, params, forceCart, result=None):
     return newchain, Y, GW, GP, HW, HP
 
 
-def BFGSUpdate(Y, old_Y, G, old_G, H, params, Eig = True):
+def BFGSUpdate(Y, old_Y, G, old_G, H, params, Eig=True):
     """Update a Hessian using the BFGS method"""
     verbose = params.verbose
     # BFGS Hessian update
@@ -2145,7 +2002,7 @@ def BFGSUpdate(Y, old_Y, G, old_G, H, params, Eig = True):
     ndg = np.array(Dg).flatten() / np.linalg.norm(np.array(Dg))
     nhdy = np.dot(H, Dy).flatten() / np.linalg.norm(np.dot(H, Dy))
     if verbose:
-        #HP: 2023-2-15: Not sure what is nhdy is for. I changed np.array(H*dy) to np.dot(H, dy)
+        # HP: 2023-2-15: Not sure what is nhdy is for. I changed np.array(H*dy) to np.dot(H, dy)
         print("Denoms: %.3e %.3e" % ((Dg.T * Dy)[0, 0], (Dy.T * H * Dy)[0, 0]), end=" ")
         print("Dots: %.3e %.3e" % (np.dot(ndg, ndy), np.dot(ndy, nhdy)), end=" ")
     H += Mat1 - Mat2
@@ -2161,21 +2018,7 @@ def BFGSUpdate(Y, old_Y, G, old_G, H, params, Eig = True):
     # Then it's on to the next loop iteration!
 
 
-def updatehessian(
-    old_chain,
-    chain,
-    HP,
-    HW,
-    Y,
-    old_Y,
-    GW,
-    old_GW,
-    GP,
-    old_GP,
-    LastForce,
-    params,
-    result,
-):
+def updatehessian(old_chain, chain, HP, HW, Y, old_Y, GW, old_GW, GP, old_GP, LastForce, params, result):
     """
     This function updates the Hessians and check their eigenvalues.
     """
@@ -2205,22 +2048,7 @@ def updatehessian(
     return chain, Y, GW, GP, HP, HW, old_Y, old_GP, old_GW, H_reset
 
 
-def qualitycheck(
-    old_chain,
-    new_chain,
-    trust,
-    Quality,
-    ThreLQ,
-    ThreRJ,
-    ThreHQ,
-    Y,
-    GW,
-    GP,
-    old_Y,
-    old_GW,
-    old_GP,
-    params_tmax,
-):
+def qualitycheck(old_chain, new_chain, trust, Quality, ThreLQ, ThreRJ, ThreHQ, Y, GW, GP, old_Y, old_GW, old_GP, params_tmax):
     """
     This function checks quality of the step and rejects (decreases stepsize) a step with poor quality.
     """
@@ -2261,23 +2089,8 @@ def qualitycheck(
     return chain, trust, trustprint, Y, GW, GP, good
 
 
-def compare(
-    old_chain,
-    new_chain,
-    ThreHQ,
-    ThreLQ,
-    old_GW,
-    HW,
-    HP,
-    respaced,
-    optCycle,
-    expect,
-    expectG,
-    trust,
-    trustprint,
-    params_avgg,
-    Quality_old=None,
-):
+def compare(old_chain, new_chain, ThreHQ, ThreLQ, old_GW, HW, HP, respaced, optCycle, expect, expectG, trust, trustprint,
+    params_avgg, Quality_old=None):
     """
     Two chain objects are compared here to see the quality of the next step.
     """
@@ -2316,16 +2129,7 @@ def compare(
         HW = new_chain.guess_hessian_working.copy()
         HP = new_chain.guess_hessian_plain.copy()
         c_hist = [new_chain]
-        return (
-            new_chain,
-            Y,
-            GW,
-            GP,
-            HW,
-            HP,
-            c_hist,
-            Quality_old,
-        )
+        return (new_chain, Y, GW, GP, HW, HP, c_hist, Quality_old)
 
     dE = new_chain.TotBandEnergy - old_chain.TotBandEnergy
     if dE > 0.0 and expect > 0.0 and dE > expect:
@@ -2367,21 +2171,10 @@ def compare(
             "% 6.2f (%s)" % (Quality, Describe),
         )
     )
-    return (
-        new_chain,
-        Y,
-        GW,
-        GP,
-        np.array(HW),
-        np.array(HP),
-        [old_chain],
-        Quality,
-    )
+    return (new_chain, Y, GW, GP, np.array(HW), np.array(HP), [old_chain], Quality)
 
 
-def converged(
-    chain_maxg, chain_avgg, params_maxg, params_avgg, optCycle, params_maxcyc
-):
+def converged(chain_maxg, chain_avgg, params_maxg, params_avgg, optCycle, params_maxcyc):
     """
     Checking to see whether the chain is converged.
     """
@@ -2394,21 +2187,7 @@ def converged(
     return False
 
 
-def takestep(
-    c_hist,
-    chain,
-    params,
-    optCycle,
-    LastForce,
-    ForceRebuild,
-    trust,
-    Y,
-    GW,
-    GP,
-    HW,
-    HP,
-    result,
-):
+def takestep(c_hist, chain, params, optCycle, LastForce, ForceRebuild, trust, Y, GW, GP, HW, HP, result):
     """
     Take a step to move the chain based on the gradients and Hessians.
     """
@@ -2435,9 +2214,7 @@ def takestep(
         CoordCounter = 0
         r0 = params.reset
         params.reset = True
-        chain, Y, GW, GP, HW, HP = recover(
-            c_hist, params, LastForce == 2, result
-        )
+        chain, Y, GW, GP, HW, HP = recover(c_hist, params, LastForce == 2, result)
         params.reset = r0
         print("\x1b[1;93mSkipping optimization step\x1b[0m")
         optCycle -= 1
@@ -2453,19 +2230,7 @@ def takestep(
     # Obtain a new chain with the step applied
     new_chain = chain.TakeStep(dy, printStep=False)
     respaced = new_chain.delete_insert(1.5)
-    return (
-        chain,
-        new_chain,
-        expect,
-        expectG,
-        ForceRebuild,
-        LastForce,
-        old_Y,
-        old_GW,
-        old_GP,
-        respaced,
-        optCycle,
-    )
+    return (chain, new_chain, expect, expectG, ForceRebuild, LastForce, old_Y, old_GW, old_GP, respaced, optCycle)
 
 
 def OptimizeChain(chain, engine, params):
@@ -2551,53 +2316,13 @@ def OptimizeChain(chain, engine, params):
         # |    and update Cartesian coordinates |#
         # =======================================#
         print("Time since last ComputeChain: %.3f s" % (time.time() - t0))
-        (
-            chain_prev,
-            chain,
-            expect,
-            expectG,
-            ForceRebuild,
-            LastForce,
-            Y_prev,
-            GW_prev,
-            GP_prev,
-            respaced,
-            optCycle,
-        ) = takestep(
-            c_hist,
-            chain,
-            params,
-            optCycle,
-            LastForce,
-            ForceRebuild,
-            trust,
-            Y,
-            GW,
-            GP,
-            HW,
-            HP,
-            None,
-        )
+        (chain_prev, chain, expect, expectG, ForceRebuild, LastForce, Y_prev, GW_prev, GP_prev, respaced, optCycle) \
+        = takestep(c_hist, chain, params, optCycle, LastForce, ForceRebuild, trust, Y, GW, GP, HW, HP, None)
         chain.ComputeChain(cyc=optCycle)
         t0 = time.time()
         # ----------------------------------------------------------
-        chain, Y, GW, GP, HW, HP, c_hist, Quality = compare(
-            chain_prev,
-            chain,
-            ThreHQ,
-            ThreLQ,
-            GW,
-            HW,
-            HP,
-            respaced,
-            optCycle,
-            expect,
-            expectG,
-            trust,
-            trustprint,
-            params.avgg,
-            Quality,
-        )
+        chain, Y, GW, GP, HW, HP, c_hist, Quality = compare(chain_prev, chain, ThreHQ, ThreLQ, GW, HW, HP, respaced,
+            optCycle, expect, expectG, trust, trustprint, params.avgg, Quality)
         if respaced:
             chain.SaveToDisk(fout="chain_%04i.xyz" % optCycle)
             continue
@@ -2612,22 +2337,8 @@ def OptimizeChain(chain, engine, params):
         # =======================================#
         # |  Adjust Trust Radius / Reject Step  |#
         # =======================================#
-        chain, trust, trustprint, Y, GW, GP, good = qualitycheck(
-            chain_prev,
-            chain,
-            trust,
-            Quality,
-            ThreLQ,
-            ThreRJ,
-            ThreHQ,
-            Y,
-            GW,
-            GP,
-            Y_prev,
-            GW_prev,
-            GP_prev,
-            params.tmax,
-        )
+        chain, trust, trustprint, Y, GW, GP, good = qualitycheck(chain_prev, chain,trust, Quality, ThreLQ, ThreRJ,
+            ThreHQ, Y, GW, GP, Y_prev, GW_prev, GP_prev, params.tmax)
         if not good:
             continue
         c_hist.append(chain)
@@ -2635,27 +2346,15 @@ def OptimizeChain(chain, engine, params):
         # =======================================#
         # |      Update the Hessian Matrix      |#
         # =======================================#
-        chain, Y, GW, GP, HP, HW, Y_prev, GP_prev, GW_prev, _ = updatehessian(
-            chain_prev,
-            chain,
-            HP,
-            HW,
-            Y,
-            Y_prev,
-            GW,
-            GW_prev,
-            GP,
-            GP_prev,
-            LastForce,
-            params,
-            None,
-        )
+        chain, Y, GW, GP, HP, HW, Y_prev, GP_prev, GW_prev, _ = updatehessian(chain_prev, chain, HP, HW, Y, Y_prev, GW,
+                                                                 GW_prev, GP, GP_prev, LastForce, params, None)
 
 
 class nullengine(object):
     """
     Fake engine for QCFractal
     """
+
     def __init__(self, M):
         self.M = M
 
@@ -2803,20 +2502,11 @@ def get_basic_info(info_dict, previous=False):
     energies = info_dict.get("energies")
     gradients = info_dict.get("gradients")
 
-    params_dict = {
-        "neb": True,
-        "images": args_dict.get("images"),
-        "maxg": args_dict.get("maximum_force"),
-        "avgg": args_dict.get("average_force"),
-        "nebew": args_dict.get("energy_weighted"),
-        "nebk": args_dict.get("spring_constant"),
-        "maxcyc": args_dict.get("maximum_cycle"),
-        "plain": args_dict.get("spring_type"),
-        "reset": args_dict.get("hessian_reset"),
-        "skip": not args_dict.get("hessian_reset"),
-        "epsilon": args_dict.get("epsilon"),
-        "coordsys": "cart",
-    }
+    params_dict = {"neb": True, "images": args_dict.get("images"), "maxg": args_dict.get("maximum_force"),
+        "avgg": args_dict.get("average_force"), "nebew": args_dict.get("energy_weighted"),
+        "nebk": args_dict.get("spring_constant"), "maxcyc": args_dict.get("maximum_cycle"),
+        "plain": args_dict.get("spring_type"), "reset": args_dict.get("hessian_reset"),
+        "skip": not args_dict.get("hessian_reset"), "epsilon": args_dict.get("epsilon"), "coordsys": "cart"}
     iteration = args_dict.get("iteration")
     params = OptParams(**params_dict)
 
@@ -2825,9 +2515,7 @@ def get_basic_info(info_dict, previous=False):
     M.charge = info_dict.get("charge")
     M.mult = info_dict.get("mult")
     if previous:
-        M.xyzs = [
-            coords.reshape(-1, 3) for coords in np.array(info_dict.get("coord_ang_prev"))
-        ]
+        M.xyzs = [coords.reshape(-1, 3) for coords in np.array(info_dict.get("coord_ang_prev"))]
     else:
         M.xyzs = [coords.reshape(-1, 3) for coords in coords_ang]
 
@@ -2860,14 +2548,7 @@ def prepare(info_dict):
     tmpdir = tempfile.mkdtemp()
 
     # Getting the initial chain.
-    chain = ElasticBand(
-        M,
-        engine=engine,
-        tmpdir=tmpdir,
-        coordtype="cart",
-        params=params,
-        plain=params.plain,
-    )
+    chain = ElasticBand(M, engine=engine, tmpdir=tmpdir, coordtype="cart", params=params, plain=params.plain)
 
     trust = params.trust
     chain.ComputeMetric()
@@ -2908,23 +2589,10 @@ def prepare(info_dict):
     attrs_new = check_attr(new_chain)
     attrs_prev = check_attr(chain)
 
-    temp = {
-        "Ys": [chain.get_internal_all().tolist()],
-        "GWs": [GW.tolist()],
-        "GPs": [GP.tolist()],
-        "attrs_new": attrs_new,
-        "attrs_prev": attrs_prev,
-        "trust": trust,
-        "expect": expect,
-        "expectG": expectG.tolist(),
-        "respaced": respaced,
-        "trustprint": "=",
-        "frocerebuild": False,
-        "lastforce": 0,
-        "coord_ang_prev": chaintocoords(chain, True),
-        "result_prev": result,
-        "geometry": [],
-    }
+    temp = {"Ys": [chain.get_internal_all().tolist()], "GWs": [GW.tolist()], "GPs": [GP.tolist()], "attrs_new": attrs_new,
+        "attrs_prev": attrs_prev, "trust": trust, "expect": expect, "expectG": expectG.tolist(), "respaced": respaced,
+        "trustprint": "=", "frocerebuild": False,"lastforce": 0, "coord_ang_prev": chaintocoords(chain, True),
+        "result_prev": result, "geometry": []}
     info_dict.update(temp)
     return newcoords, info_dict
 
@@ -2936,7 +2604,9 @@ def nextchain(info_dict):
 
     # Extracting information from the given dictionary.
     params, M, engine, result, iteration = get_basic_info(info_dict)
-    params_prev, M_prev, engine_prev, result_prev, _ = get_basic_info(info_dict, previous=True)
+    params_prev, M_prev, engine_prev, result_prev, _ = get_basic_info(
+        info_dict, previous=True
+    )
 
     ThreLQ = 0.0
     ThreHQ = 0.5
@@ -2946,23 +2616,10 @@ def nextchain(info_dict):
     tmpdir = tempfile.mkdtemp()
 
     # Define two chain objects for the previous and current iteration.
-    chain = ElasticBand(
-        M,
-        engine=engine,
-        tmpdir=tmpdir,
-        coordtype="cart",
-        params=params,
-        plain=params.plain,
-    )
+    chain = ElasticBand(M, engine=engine, tmpdir=tmpdir, coordtype="cart", params=params, plain=params.plain)
 
-    chain_prev = ElasticBand(
-        M_prev,
-        engine=engine,
-        tmpdir=tmpdir,
-        coordtype="cart",
-        params=params_prev,
-        plain=params_prev.plain,
-    )
+    chain_prev = ElasticBand(M_prev, engine=engine, tmpdir=tmpdir, coordtype="cart",
+                             params=params_prev, plain=params_prev.plain)
 
     # Getting other information up to the previous iteration.
     trust = info_dict.get("trust")
@@ -2997,9 +2654,9 @@ def nextchain(info_dict):
     Y = chain.get_internal_all()
 
     # Building the Hessian up to the previous iteration.
-    for i in range(len(Ys)-1):
-        BFGSUpdate(np.array(Ys[i+1]), np.array(Ys[i]), np.array(GPs[i+1]), np.array(GPs[i]), HP0, params, Eig=False)
-        BFGSUpdate(np.array(Ys[i+1]), np.array(Ys[i]), np.array(GWs[i+1]), np.array(GWs[i]), HW0, params, Eig=False)
+    for i in range(len(Ys) - 1):
+        BFGSUpdate(np.array(Ys[i + 1]), np.array(Ys[i]), np.array(GPs[i + 1]), np.array(GPs[i]), HP0, params, Eig=False)
+        BFGSUpdate(np.array(Ys[i + 1]), np.array(Ys[i]), np.array(GWs[i + 1]), np.array(GWs[i]), HW0, params, Eig=False)
 
     # Saving the Hessians for special cases such as rejecting a step.
     HW_bak = deepcopy(HW0)
@@ -3013,71 +2670,19 @@ def nextchain(info_dict):
     HP_prev = HP0
 
     # 1) First, compare two chains and determine the quality of the next step.
-    chain, Y, GW, GP, HW, HP, c_hist, Quality = compare(
-        chain_prev,
-        chain,
-        ThreHQ,
-        ThreLQ,
-        GW_prev,
-        HW_prev,
-        HP_prev,
-        respaced,
-        iteration,
-        expect,
-        expectG,
-        trust,
-        trustprint,
-        params.avgg,
-        Quality,
-    )
+    chain, Y, GW, GP, HW, HP, c_hist, Quality = compare(chain_prev, chain, ThreHQ, ThreLQ, GW_prev, HW_prev, HP_prev,
+                                        respaced, iteration, expect, expectG, trust, trustprint, params.avgg, Quality)
     if respaced:
         # 1-1) If the chain was respaced, take a new step using the guessed Hessians.
-        (
-            chain_prev,
-            chain,
-            expect,
-            expectG,
-            ForceRebuild,
-            LastForce,
-            Y_prev,
-            GW_prev,
-            GP_prev,
-            respaced,
-            _,
-        ) = takestep(
-            chain_prev,
-            chain,
-            params,
-            iteration,
-            LastForce,
-            ForceBuild,
-            trust,
-            Y,
-            GW,
-            GP,
-            HW,
-            HP,
-            result_prev,
-        )
+        (chain_prev, chain, expect, expectG, ForceRebuild, LastForce, Y_prev, GW_prev, GP_prev, respaced, _) \
+            = takestep(chain_prev, chain, params, iteration, LastForce, ForceBuild, trust, Y, GW, GP, HW, HP, result_prev)
         attrs_new = check_attr(chain)
         attrs_prev = check_attr(chain_prev)
         newcoords = chaintocoords(chain)
-        temp = {
-            "Ys" : [Y_prev],
-            "GWs": [GW_prev],
-            "GPs": [GP_prev],
-            "attrs_new": attrs_new,
-            "attrs_prev": attrs_prev,
-            "expect": expect,
-            "expectG": expectG.tolist(),
-            "respaced": respaced,
-            "forcerebuild": ForceRebuild,
-            "lastforce": LastForce,
-            "coord_ang_prev": chaintocoords(chain_prev, True),
-            "quality": Quality,
-            "result_prev": result,
-            "geometry": [],
-        }
+        temp = {"Ys": [Y_prev], "GWs": [GW_prev], "GPs": [GP_prev], "attrs_new": attrs_new, "attrs_prev": attrs_prev,
+            "expect": expect, "expectG": expectG.tolist(), "respaced": respaced, "forcerebuild": ForceRebuild,
+            "lastforce": LastForce, "coord_ang_prev": chaintocoords(chain_prev, True), "quality": Quality,
+            "result_prev": result, "geometry": []}
         info_dict.update(temp)
         return newcoords, info_dict
 
@@ -3088,74 +2693,21 @@ def nextchain(info_dict):
         return None, {}
 
     # 2) Checking the quality and increase/decrease the stepsize
-    chain, trust, trustprint, Y, GW, GP, good = qualitycheck(
-        chain_prev,
-        chain,
-        trust,
-        Quality,
-        ThreLQ,
-        ThreRJ,
-        ThreHQ,
-        Y,
-        GW,
-        GP,
-        Y_prev,
-        GW_prev,
-        GP_prev,
-        params.tmax,
-    )
+    chain, trust, trustprint, Y, GW, GP, good = qualitycheck(chain_prev, chain, trust, Quality, ThreLQ, ThreRJ, ThreHQ,
+                                                            Y, GW, GP, Y_prev, GW_prev, GP_prev, params.tmax)
 
     if not good:
         # 2-1) If the quality is bad, reject the step and take a new step with a decreased stepsize.
         chain.ComputeChain(result=result_prev)
-        (
-            chain_prev,
-            chain,
-            expect,
-            expectG,
-            ForceRebuild,
-            LastForce,
-            Y_prev,
-            GW_prev,
-            GP_prev,
-            respaced,
-            _,
-        ) = takestep(
-            chain_prev,
-            chain,
-            params,
-            iteration,
-            LastForce,
-            ForceBuild,
-            trust,
-            Y,
-            GW,
-            GP,
-            HW_bak,
-            HP_bak,
-            result_prev,
-        )
+        (chain_prev, chain, expect, expectG, ForceRebuild, LastForce, Y_prev, GW_prev, GP_prev, respaced, _) \
+        = takestep(chain_prev, chain, params, iteration, LastForce, ForceBuild, trust, Y, GW, GP, HW_bak, HP_bak, result_prev)
         attrs_new = check_attr(chain)
         attrs_prev = check_attr(chain_prev)
         newcoords = chaintocoords(chain)
-        temp = {
-            "Ys": Ys,
-            "GWs": GWs,
-            "GPs": GPs,
-            "attrs_new": attrs_new,
-            "attrs_prev": attrs_prev,
-            "trust": trust,
-            "trustprint": trustprint,
-            "expect": expect,
-            "expectG": expectG.tolist(),
-            "quality": Quality,
-            "respaced": respaced,
-            "coord_ang_prev": chaintocoords(chain_prev, True),
-            "lastforce": LastForce,
-            "forcerebuild": ForceRebuild,
-            "result_prev": result_prev,
-            "geometry": [],
-        }
+        temp = {"Ys": Ys, "GWs": GWs, "GPs": GPs, "attrs_new": attrs_new, "attrs_prev": attrs_prev, "trust": trust,
+            "trustprint": trustprint, "expect": expect, "expectG": expectG.tolist(), "quality": Quality, "respaced": respaced,
+            "coord_ang_prev": chaintocoords(chain_prev, True), "lastforce": LastForce, "forcerebuild": ForceRebuild,
+            "result_prev": result_prev, "geometry": []}
         info_dict.update(temp)
         return newcoords, info_dict
 
@@ -3176,63 +2728,24 @@ def nextchain(info_dict):
             result = result_prev
 
         elif params.skip:
-               print(
-                   "Eigenvalues below %.4e (%.4e) - skipping Hessian update"
-                   % (params.epsilon, np.min(Eig))
-               )
+            print(
+                "Eigenvalues below %.4e (%.4e) - skipping Hessian update"
+                % (params.epsilon, np.min(Eig))
+            )
 
     # 4) Take the step based on the current Hessians and gradients. Pass the result Cartesian coordinates to QCFractal.
-    (
-        chain_prev,
-        chain,
-        expect,
-        expectG,
-        ForceRebuild,
-        LastForce,
-        Y_prev,
-        GW_prev,
-        GP_prev,
-        respaced,
-        _,
-    ) = takestep(
-        chain_prev,
-        chain,
-        params,
-        iteration,
-        LastForce,
-        ForceBuild,
-        trust,
-        Y,
-        GW,
-        GP,
-        HW,
-        HP,
-        result_prev,
-    )
+    (chain_prev, chain, expect, expectG, ForceRebuild, LastForce, Y_prev, GW_prev, GP_prev, respaced, _) \
+        = takestep(chain_prev, chain, params, iteration, LastForce, ForceBuild, trust, Y, GW, GP, HW, HP, result_prev)
     attrs_new = check_attr(chain)
     attrs_prev = check_attr(chain_prev)
     Ys.append(Y.tolist())
     GWs.append(GW.tolist())
     GPs.append(GP.tolist())
 
-    temp = {
-        "Ys" : Ys,
-        "GWs": GWs,
-        "GPs": GPs,
-        "attrs_new": attrs_new,
-        "attrs_prev": attrs_prev,
-        "trust": trust,
-        "trustprint": trustprint,
-        "expect": expect,
-        "expectG": expectG.tolist(),
-        "quality": Quality,
-        "respaced": respaced,
-        "coord_ang_prev": chaintocoords(chain_prev, True),
-        "lastforce": LastForce,
-        "forcerebuild": ForceRebuild,
-        "result_prev": result,
-        "geometry": [],
-    }
+    temp = {"Ys": Ys, "GWs": GWs, "GPs": GPs, "attrs_new": attrs_new, "attrs_prev": attrs_prev, "trust": trust,
+        "trustprint": trustprint, "expect": expect, "expectG": expectG.tolist(), "quality": Quality, "respaced": respaced,
+        "coord_ang_prev": chaintocoords(chain_prev, True), "lastforce": LastForce, "forcerebuild": ForceRebuild,
+        "result_prev": result, "geometry": []}
     newcoords = chaintocoords(chain)
     info_dict.update(temp)
     return newcoords, info_dict
@@ -3258,14 +2771,7 @@ def main():
         os.mkdir(tmpdir)
 
     # Make the initial chain
-    chain = ElasticBand(
-        M,
-        engine=engine,
-        tmpdir=tmpdir,
-        coordtype=params.coordsys,
-        params=params,
-        plain=params.plain,
-    )
+    chain = ElasticBand(M, engine=engine, tmpdir=tmpdir, coordtype=params.coordsys, params=params, plain=params.plain)
     OptimizeChain(chain, engine, params)
 
 
