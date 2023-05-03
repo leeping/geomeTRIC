@@ -2005,6 +2005,7 @@ class InternalCoordinates(object):
 class PrimitiveInternalCoordinates(InternalCoordinates):
     def __init__(self, molecule, connect=False, addcart=False, constraints=None, cvals=None, **kwargs):
         super(PrimitiveInternalCoordinates, self).__init__()
+        if kwargs.get('chain', False): return
         self.connect = connect
         self.addcart = addcart
         self.Internals = []
@@ -3436,8 +3437,15 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
     def second_derivatives(self, coords):
         """ Obtain the second derivatives of the DLCs with respect to the Cartesian coordinates. """
         PrimDers = self.Prims.second_derivatives(coords)
-        return np.tensordot(self.Vecs, PrimDers, axes=(0, 0))
-    
+        Answer2 = np.tensordot(self.Vecs, PrimDers, axes=(0, 0))
+        return np.array(Answer2)
+
+    def calcDisplacement(self, xyz, imgDisp, imgRef):
+        return self.Prims.calcDisplacement(xyz, imgDisp, imgRef)
+
+    def applyCartesianGrad(self, xyz, gradq, imgApply, imgRef):
+        return self.Prims.applyCartesianGrad(xyz, gradq, imgApply, imgRef)   
+ 
     def GInverse(self, xyz):
         return self.GInverse_SVD(xyz)
 
@@ -3467,7 +3475,7 @@ class CartesianCoordinates(PrimitiveInternalCoordinates):
     primitive internal coordinates.
     """
     def __init__(self, molecule, **kwargs):
-        super(CartesianCoordinates, self).__init__(molecule)
+        super(CartesianCoordinates, self).__init__(molecule, **kwargs)
         self.Internals = []
         self.cPrims = []
         self.cVals = []
@@ -3482,4 +3490,214 @@ class CartesianCoordinates(PrimitiveInternalCoordinates):
             raise RuntimeError('Do not use constraints with Cartesian coordinates')
 
     def guess_hessian(self, xyz):
-        return 0.5*np.eye(len(xyz.flatten()))
+        return np.eye(len(xyz.flatten()))
+
+class ImagePrim(PrimitiveCoordinate):
+    def __init__(self, ic, na, nr):
+        self.ic = ic
+        self.na = na
+        self.nr = nr
+        self.isAngular = ic.isAngular
+        self.isPeriodic = ic.isPeriodic
+
+    def get_type(self):
+        # Because type(ImagePrim) always returns ImagePrim,
+        # it would be nice to get the type of the IC that it contains.
+        return type(self.ic)
+        
+    def __repr__(self):
+        return "Image %i %s" % (self.nr, repr(self.ic))
+        
+    def __eq__(self, other):
+        if type(self) is not type(other): return False
+        if self.nr != other.nr: return False
+        return self.ic == other.ic
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+        
+    def value(self, xyz):
+        xyz = xyz.reshape(-1,self.na,3)
+        return self.ic.value(xyz[self.nr])
+        
+    def derivative(self, xyz):
+        xyz = xyz.reshape(-1,self.na,3)
+        derivatives = np.zeros_like(xyz)
+        derivatives[self.nr, :, :] = self.ic.derivative(xyz[self.nr])
+        derivatives = derivatives.reshape(-1,3)
+        return derivatives
+    
+
+class RMSDisplacement(PrimitiveCoordinate):
+    def __init__(self, Prims, na, imgDisp, imgRef, w=1.0, head=None, tail=None):
+        self.Prims = Prims
+        self.na = na
+        self.imgDisp = imgDisp
+        self.imgRef = imgRef
+        self.w = w
+        self.isAngular = False
+        self.isPeriodic = False
+        self.head = head.copy() if head is not None else None
+        self.tail = tail.copy() if head is not None else None
+
+    def get_type(self):
+        # Because type(ImagePrim) always returns ImagePrim,
+        # it would be nice to get the type of the IC that it contains.
+        return type(self)
+
+    def __repr__(self):
+        return "RMSD between Images %i-%i (Using IC %i)" % (self.imgDisp, self.imgRef, self.imgRef)
+
+    def __eq__(self, other):
+        if type(self) is not type(other): return False
+        if self.imgDisp != other.imgDisp: return False
+        if self.imgRef != other.imgRef: return False
+        if len(self.Prims.Internals) != len(other.Prims.Internals): return False
+        if self.w != other.w: return False
+        if self.na != other.na: return False
+        for i, j in zip(self.Prims.Internals, other.Prims.Internals):
+            if i != j:
+                return False
+        return True
+    
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    def value(self, xyz):
+        xyz = xyz.reshape(-1,self.na,3)
+        if self.head is not None: xyz[0]  = self.head.copy()
+        if self.tail is not None: xyz[-1] = self.tail.copy()
+        PMDiff = self.Prims.calcDiff(xyz[self.imgDisp], xyz[self.imgRef])
+        return self.w*np.sqrt(np.dot(PMDiff, PMDiff))
+
+    def derivative(self, xyz):
+        xyz = xyz.reshape(-1,self.na,3)
+        if self.head is not None: xyz[0]  = self.head.copy()
+        if self.tail is not None: xyz[-1] = self.tail.copy()
+        nimg = xyz.shape[0]
+        val = self.value(xyz)
+        derivatives = np.zeros_like(xyz)
+        PMDiff = self.Prims.calcDiff(xyz[self.imgDisp], xyz[self.imgRef])
+        for i, ic in enumerate(self.Prims.Internals):
+            if self.imgDisp > 0 and self.imgDisp < (nimg-1):
+                derivatives[self.imgDisp, :, :] += PMDiff[i]*ic.derivative(xyz[self.imgDisp])
+            derivatives[self.imgRef, :, :]  -= PMDiff[i]*ic.derivative(xyz[self.imgRef])
+        derivatives = derivatives.reshape(-1,3)
+        derivatives /= val
+        return self.w**2*derivatives
+ 
+
+class EmptyCoordinates(object):
+    def __init__(self, molecule, connect=False, addcart=False, constraints=None, cvals=None, **kwargs):
+        super(EmptyCoordinates, self).__init__()
+        self.na = molecule.na
+        self.connect = connect
+        self.addcart = addcart
+        self.Internals = []
+        self.cPrims = []
+        self.cVals = []
+        self.Rotators = OrderedDict()
+        self.elem = molecule.elem
+    
+
+class ChainCoordinates(PrimitiveInternalCoordinates):
+    """
+
+    Global internal coordinate system for a chain of states.
+    Comprised of internal coordinates for each image (excluding
+    initial and final), also contains mean squared displacement
+    between pairs of images as a coordinate (experimental).
+
+    """
+    def __init__(self, molecule, connect=False, addcart=False, **kwargs):
+        self.stored_wilsonB = OrderedDict()
+        self.connect = connect
+        self.addcart = addcart
+        self.nim = len(molecule)
+        self.na = molecule.na
+        self.Internals = []
+        self.cPrims = []
+        self.cVals = []
+        if 'constraints' in kwargs and kwargs['constraints'] is not None:
+            raise RuntimeError('Do not use constraints with Cartesian coordinates')
+        self.elem = molecule.elem
+        self.ImageICs = [EmptyCoordinates(molecule[0], **kwargs)]
+        for i in range(1, len(molecule)-1):
+            self.ImageICs.append(CartesianCoordinates(molecule[i], **kwargs))
+        self.ImageICs.append(EmptyCoordinates(molecule[-1], **kwargs))
+        for i, imageIC in self.ICIter():
+            for ic in imageIC.Internals:
+                self.Internals.append(ImagePrim(ic, self.na, i))
+        guessw = kwargs.get('guessw', 0.1)
+        for i, imageIC in self.ICIter():
+            self.Internals.append(RMSDisplacement(imageIC, self.na, i-1, i, head=molecule.xyzs[0]*ang2bohr, tail=molecule.xyzs[-1]*ang2bohr, w=guessw))
+        self.Internals.append(RMSDisplacement(imageIC, self.na, i+1, i, head=molecule.xyzs[0]*ang2bohr, tail=molecule.xyzs[-1]*ang2bohr, w=guessw))
+
+    def __repr__(self):
+        lines = ["Internal coordinate system (atoms numbered from 1):"]
+        typedict = OrderedDict()
+        for Internal in self.Internals:
+            lines.append(Internal.__repr__())
+            if str(Internal.get_type()) not in typedict:
+                typedict[str(Internal.get_type())] = 1
+            else:
+                typedict[str(Internal.get_type())] += 1
+        if len(lines) > 100:
+            # Print only summary if too many
+            lines = []
+        for k, v in list(typedict.items()):
+            lines.append("%s : %i" % (k, v))
+        return '\n'.join(lines)
+
+    def clearCache(self):
+        super(ChainCoordinates, self).clearCache()
+        for i, c in self.ICIter():
+            c.clearCache()
+
+    def ICIter(self):
+        answer = []
+        for i, imageIC in enumerate(self.ImageICs):
+            if i > 0 and i < (len(self.ImageICs)-1):
+                answer.append((i, imageIC))
+        return iter(answer)
+
+    def calcDisplacement(self, xyz, imgDisp, imgRef):
+        xyz = xyz.reshape(-1,self.na,3)
+        PMDiff = self.ImageICs[imgRef].calcDiff(xyz[imgDisp], xyz[imgRef])
+        return PMDiff
+
+    def makeConstraints(self, molecule, constraints, cvals):
+        raise RuntimeError("Not implemented for ChainCoordinates")
+
+    def remove_TR(self, xyz):
+        raise RuntimeError("Not implemented for ChainCoordinates")
+
+    def derivatives(self, xyz):
+        self.calculate(xyz)
+        answer = []
+        for Internal in self.Internals:
+            answer.append(Internal.derivative(xyz))
+        #     print Internal, np.linalg.norm(Internal.derivative(xyz))
+        # raw_input()
+        # This array has dimensions:
+        # 1) Number of internal coordinates
+        # 2) Number of atoms
+        # 3) 3
+        return np.array(answer)
+
+    def guess_hessian(self, coords, k=1.0):
+        """
+        Build a guess Hessian that roughly follows Schlegel's guidelines. 
+        """
+        coords = coords.reshape(self.nim,-1)
+        totvar = len(self.Internals)
+        H = np.zeros((totvar, totvar), dtype=float)
+        curr = 0
+        for i, imageIC in self.ICIter():
+            nvar = len(imageIC.Internals)
+            H[curr:curr+nvar, curr:curr+nvar] = imageIC.guess_hessian(coords[i])
+            curr += nvar
+        for i in range(curr, len(self.Internals)):
+            H[i,i] = k
+            curr += 1
+        return H

@@ -325,20 +325,30 @@ def get_molecule_engine(**kwargs):
     else:
         raise RuntimeError("Neither engine name nor customengine object was provided.\n")
 
-    # If --coords is provided via command line, use final coordinate set in the provided file
-    # to override all previously provided coordinates.
-    arg_coords = kwargs.get('coords', None)
-    if arg_coords is not None:
-        M.load_frames(arg_coords)
-        if kwargs.get('neb', False):
-            images = kwargs.get('images', 11)
-            M1 = M
-            print("Input coordinates have %i frames. The following will be used to initialize NEB images:" % len(M1))
-            print(', '.join(["%i" % (int(round(i))) for i in np.linspace(0, len(M1)-1, images)]))
-            M = M1[np.array([int(round(i)) for i in np.linspace(0, len(M1)-1, images)])]
-        else:
-            M = M[-1]
-        # 2022-09-13: If extra coordinates are provided, the topology may be rebuilt. This decision can be revisited later.
+    # When --coords is provided, it will overwrite the previous coordinate.
+    # For the NEB calculation, --chain_coords will be used.
+
+    NEB = kwargs.get('neb', False)
+
+    if not NEB and kwargs.get('coords', None) is not None:
+        M.load_frames(kwargs.get('coords'))
+        M = M[-1]
+        M.build_topology()
+
+    if NEB:
+        chain_coord = kwargs.get('chain_coords', None)
+        if chain_coord is None:
+            raise RuntimeError("Please provide an initial chain coordinate for NEB (--chain_coords input.xyz).\n")
+        M.load_frames(chain_coord)
+        images = kwargs.get('images', 11)
+        if images > len(M):
+            # HP 5/3/2023 : We can interpolate here if len(M) == 2.
+            print("WARNING: The input chain does not have enough number of images. All images will be used.\n")
+            images = len(M)
+        M1 = M
+        print("Input coordinates have %i frames. The following will be used to initialize NEB images:" % len(M1))
+        print(', '.join(["%i" % (int(round(i))) for i in np.linspace(0, len(M1) - 1, images)]))
+        M = M1[np.array([int(round(i)) for i in np.linspace(0, len(M1) - 1, images)])]
         M.build_topology()
 
     # Perform some sanity checks on arguments

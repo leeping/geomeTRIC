@@ -6,7 +6,7 @@ import numpy as np
 from scipy.linalg import sqrtm
 from .prepare import get_molecule_engine
 from .optimize import Optimize
-from .params import OptParams, parse_optimizer_args
+from .params import OptParams, NEBParams, parse_neb_args
 from .step import get_delta_prime_trm, brent_wiki, trust_step, calc_drms_dmax
 from .engine import (
     Blank,
@@ -49,7 +49,7 @@ def rms_gradient(gradx):
     return np.sqrt(np.mean(atomgrad**2))
 
 
-def CoordinateSystem(M, coordtype, chain=False, ic_displace=False, guessw=0.1):
+def CoordinateSystem(M, coordtype, chain=False, guessw=0.1):
     """
     Parameters
     ----------
@@ -75,13 +75,12 @@ def CoordinateSystem(M, coordtype, chain=False, ic_displace=False, guessw=0.1):
     }  # Primitive TRIC, i.e. not delocalized
     CoordClass, connect, addcart = CoordSysDict[coordtype]
     if CoordClass is DelocalizedInternalCoordinates:
-        IC = CoordClass(M, build=True, connect=connect, addcart=addcart, cartesian=(coordtype == "cart"),
-                        chain=chain, ic_displace=ic_displace, guessw=guessw)
+        IC = CoordClass(M, build=True, connect=connect, addcart=addcart)
     elif chain:
         IC = ChainCoordinates(M, connect=connect, addcart=addcart, cartesian=(coordtype == "cart"),
-                              ic_displace=ic_displace, guessw=guessw)
+                               guessw=guessw)
     else:
-        IC = CoordClass(M, build=True, connect=connect, addcart=addcart, chain=False, ic_displace=ic_displace)
+        IC = CoordClass(M, build=True, connect=connect, addcart=addcart, chain=False)
     IC.coordtype = coordtype
     return IC
 
@@ -198,26 +197,6 @@ class Structure(object):
             internals = self.IC.calculate(coords)
         return internals
 
-    def ConvertICGradToCart(self, gradq, xyz=None):
-        """
-        Given a gradient in internal coordinates, convert it back to a Cartesian gradient.
-        Unfortunate "reversal" in the interface with respect to IC.calcGrad which takes xyz first!
-        """
-        if xyz is None:
-            xyz = self.cartesians
-        Bmat = self.IC.wilsonB(xyz)
-        Gx = np.dot(Bmat.T, np.array(gradq).T).flatten()
-        return Gx
-
-    def ConvertCartGradToIC(self, gradx, xyz=None):
-        """
-        Given a gradient in Cartesian coordinates, convert it back to an internal gradient.
-        Unfortunate "reversal" in the interface with respect to IC.calcGrad which takes xyz first!
-        """
-        if xyz is None:
-            xyz = self.cartesians
-        return self.IC.calcGrad(self.cartesians, gradx)
-
     def ComputeEnergyGradient(self, result=None):
         """Compute energies and Cartesian gradients for the current structure."""
         # If the result (energy and gradient in a dictionary) is provided, skip the calculations.
@@ -243,11 +222,8 @@ class Structure(object):
         if gtol != None and opt_params.Convergence_grms * au2evang > gtol:
             opt_params.Convergence_grms = gtol / au2evang
             opt_params.Convergence_gmax = 1.5 * gtol / au2evang
-        force_tric = True
-        if force_tric:
-            self.IC = CoordinateSystem(self.M, "tric")
-        else:
-            self.IC = CoordinateSystem(self.M, self.coordtype)
+
+        self.IC = CoordinateSystem(self.M, "tric")
 
         optProg = Optimize(self.cartesians, self.M, self.IC, self.engine, self.tmpdir, opt_params)
 
@@ -259,7 +235,7 @@ class Structure(object):
 
 class Chain(object):
     """Class representing a chain of states."""
-    def __init__(self, molecule, engine, tmpdir, coordtype, params, coords=None, ic_displace=False):
+    def __init__(self, molecule, engine, tmpdir, params, coords=None):
         """
         Create a Chain object.
 
@@ -274,16 +250,14 @@ class Chain(object):
         coords : np.ndarray, optional
             Array in a.u. containing coordinates (will overwrite what we have in molecule)
             Pass either an array with shape (len(M), 3*M.na), or a flat array with the same number of elements.
-        coordtype : string, optional
-            Choice of coordinate system (Either cart, prim, dlc, hdlc, or tric) ; defaults to Cartesian
         """
         self.params = params
         # LPW: This copy operation is checked and deemed necessary
         self.M = deepcopy(molecule)
         self.engine = engine
         self.tmpdir = tmpdir
-        self.coordtype = coordtype
-        self.ic_displace = ic_displace
+        # HP 5/2/2023: coordtype is set to 'cart' here.
+        self.coordtype='cart'
         # coords is a 2D array with dimensions (N_image, N_atomx3) in atomic units
         if coords is not None:
             # Reshape the array if we passed in a flat array
@@ -302,19 +276,9 @@ class Chain(object):
         # Locked images (those having met the convergence criteria) are not updated
         self.locks = [True] + [False for n in range(1, len(self) - 1)] + [True]
         self.haveCalcs = False
-        ### Test ###
-        # print("Starting Test")
-        self.GlobalIC = CoordinateSystem(self.M, self.coordtype, chain=True, ic_displace=self.ic_displace, guessw=self.params.guessw)
-        # print xyz.shape
-        # self.GlobalIC.checkFiniteDifference(self.get_cartesian_all(endpts=True))
+        self.GlobalIC = CoordinateSystem(self.M, self.coordtype, chain=True, guessw=self.params.guessw)
         self.nvars = len(self.GlobalIC.Internals)
         # raw_input()
-    def UpdateTempDir(self, iteration):
-        self.tmpdir = os.path.join(os.path.split(self.tmpdir)[0], "chain_%04i" % iteration)
-        if not os.path.exists(self.tmpdir):
-            os.makedirs(self.tmpdir)
-        for i, s in enumerate(self.Structures):
-            s.tmpdir = os.path.join(self.tmpdir, "struct_%%0%ii" % len(str(len(self))) % i)
 
     def __len__(self):
         """Return the length of the chain."""
@@ -500,13 +464,7 @@ class Chain(object):
         expectG = flat(np.dot(np.array(H), col(dy))) + G
         return dy, expect, expectG, ForceRebuild
 
-    #def align(self):
-    #    self.M.align()
-    #    self.Structures = [Structure(self.M[i], self.engine, os.path.join(self.tmpdir, "struct_%%0%ii" % len(str(len(self))) % i),
-    #                        self.coordtype) for i in range(len(self))]
-        # self.clearCalcs()
-
-    def TakeStep(self, dy, verbose=False, printStep=False):
+    def TakeStep(self, dy, verbose=False):
         """
         Return a new Chain object that contains the internal coordinate step.
 
@@ -535,35 +493,6 @@ class Chain(object):
                 Cnew.Structures[n].cartesians = Xnew[n]
         Cnew.clearCalcs(clearEngine=False)
         Cnew.haveMetric = True
-        if printStep:
-            Xold = self.get_cartesian_all(endpts=True)
-            if hasattr(Cnew.GlobalIC, "Prims"):
-                plist = Cnew.GlobalIC.Prims.Internals
-                prim = Cnew.GlobalIC.Prims
-            else:
-                plist = Cnew.GlobalIC.Internals
-                prim = Cnew.GlobalIC
-            icdiff = prim.calcDiff(Xnew, Xold)
-            sorter = icdiff**2
-            if hasattr(Cnew.GlobalIC, "Prims"):
-                dsort = np.argsort(dy**2)[::-1]
-                print("Largest components of step (%i DLC total):" % len(dsort))
-                print(" ".join(["%6i" % d for d in dsort[:10]]))
-                print(" ".join(["%6.3f" % dy[d] for d in dsort[:10]]))
-                for d in dsort[:3]:
-                    print("Largest components of DLC %i (coeff % .3f):" % (d, dy[d]))
-                    for i in np.argsort(
-                        np.array(self.GlobalIC.Vecs[:, d]).flatten() ** 2
-                    )[::-1][:5]:
-                        p = plist[i]
-                        print("%40s % .4f" % (p, self.GlobalIC.Vecs[i, d]))
-            print("Largest Displacements:")
-            for i in np.argsort(sorter)[::-1][:10]:
-                p = plist[i]
-                print(
-                    "%40s % .3e % .3e % .3e"
-                    % (p, p.value(Xnew), p.value(Xold), icdiff[i])
-                )
         return Cnew
 
     def respace(self, thresh):
@@ -695,7 +624,7 @@ class Chain(object):
         # enes *= au2kcal
         Mout.comms = [
             "Image %i/%i, Energy = % 16.10f (%+.3f kcal/mol)"
-            % (i, len(enes), enes[i], eneKcal[i])
+            % (i+1, len(enes), enes[i], eneKcal[i])
             for i in range(len(enes))
         ]
         Mout.write(os.path.join(self.tmpdir, fout))
@@ -703,9 +632,10 @@ class Chain(object):
 
 class ElasticBand(Chain):
     """Using the Chain class to define a band object. Total force varies based on the band types."""
-    def __init__(self, molecule, engine, tmpdir, coordtype, params, coords=None, plain=0, ic_displace=False):
-        super(ElasticBand, self).__init__(molecule, engine, tmpdir, coordtype, params, coords=coords, ic_displace=ic_displace)
+    def __init__(self, molecule, engine, tmpdir, params, coords=None, plain=0):
+        super(ElasticBand, self).__init__(molecule, engine, tmpdir, params, coords=coords)
         # convert kcal/mol/Ang^2 to Hartree/Bohr^2
+        self.coordtype = 'cart'
         self.k = self.params.nebk * kcal2au * (bohr2ang**2)
         # Number of atoms
         self.na = molecule.na
@@ -734,8 +664,8 @@ class ElasticBand(Chain):
         self._global_grads = OrderedDict()
         self.haveMetric = False
 
-    def RebuildIC(self, coordtype, result=None):
-        Cnew = ElasticBand(self.M, self.engine, self.tmpdir, coordtype, self.params, None, plain=self.plain, ic_displace=self.ic_displace)
+    def RebuildIC(self, result=None):
+        Cnew = ElasticBand(self.M, self.engine, self.tmpdir, self.params, None, plain=self.plain)
         Cnew.ComputeChain(result=result)
         return Cnew
 
@@ -1029,25 +959,8 @@ class ElasticBand(Chain):
         xyz.flags.writeable = False
         straight = [1.0]
         for n in range(1, len(self) - 1):
-            if self.ic_displace:
-                drplus = self.GlobalIC.calcDisplacement(xyz, n + 1, n)
-                drminus = self.GlobalIC.calcDisplacement(xyz, n - 1, n)
-                if analyze:
-                    ndrplus = drplus / np.linalg.norm(drplus)
-                    ndrminus = drminus / np.linalg.norm(drminus)
-                    vsum = ndrplus + ndrminus
-                    dsum = drplus + drminus
-                    dsort = np.argsort(vsum**2)[::-1]
-                    if hasattr(self.GlobalIC, "Prims"):
-                        plist = self.GlobalIC.Prims.ImageICs[n].Internals
-                    else:
-                        plist = self.GlobalIC.ImageICs[n].Internals
-                    print("Image %i Kink:" % n)
-                    for d in dsort[:5]:
-                        print("%40s % .4f" % (plist[d], dsum[d]))
-            else:
-                drplus = xyz[n + 1] - xyz[n]
-                drminus = xyz[n - 1] - xyz[n]
+            drplus = xyz[n + 1] - xyz[n]
+            drminus = xyz[n - 1] - xyz[n]
             drplus /= np.linalg.norm(drplus)
             drminus /= np.linalg.norm(drminus)
             straight.append(np.dot(drplus, -drminus))
@@ -1293,21 +1206,14 @@ class ElasticBand(Chain):
         if not self.haveCalcs:
             raise RuntimeError("Calculate energies before tangents")
         enes = [s.energy for s in self.Structures]
-        if self.ic_displace:
-            grads = [s.grad_internal for s in self.Structures]
-        else:
-            grads = [s.grad_cartesian for s in self.Structures]
+        grads = [s.grad_cartesian for s in self.Structures]
         xyz = self.get_cartesian_all(endpts=True)
         for n in range(1, len(self) - 1):
-            if self.ic_displace:
-                drplus = self.GlobalIC.calcDisplacement(xyz, n + 1, n)
-                drminus = -self.GlobalIC.calcDisplacement(xyz, n - 1, n)
-            else:
-                cc_next = self.Structures[n + 1].cartesians
-                cc_curr = self.Structures[n].cartesians
-                cc_prev = self.Structures[n - 1].cartesians
-                drplus = cc_next - cc_curr
-                drminus = cc_curr - cc_prev
+            cc_next = self.Structures[n + 1].cartesians
+            cc_curr = self.Structures[n].cartesians
+            cc_prev = self.Structures[n - 1].cartesians
+            drplus = cc_next - cc_curr
+            drminus = cc_curr - cc_prev
             # Energy differences along the band
             dvplus = enes[n + 1] - enes[n]
             dvminus = enes[n] - enes[n - 1]
@@ -1344,15 +1250,11 @@ class ElasticBand(Chain):
         energies = np.array([self.Structures[n].energy for n in range(len(self))])
 
         for n in range(1, len(self) - 1):
-            if self.ic_displace:
-                drplus = self.GlobalIC.calcDisplacement(xyz, n + 1, n)
-                drminus = self.GlobalIC.calcDisplacement(xyz, n - 1, n)
-            else:
-                cc_next = self.Structures[n + 1].cartesians
-                cc_curr = self.Structures[n].cartesians
-                cc_prev = self.Structures[n - 1].cartesians
-                ndrplus = np.linalg.norm(cc_next - cc_curr)
-                ndrminus = np.linalg.norm(cc_curr - cc_prev)
+            cc_next = self.Structures[n + 1].cartesians
+            cc_curr = self.Structures[n].cartesians
+            cc_prev = self.Structures[n - 1].cartesians
+            ndrplus = np.linalg.norm(cc_next - cc_curr)
+            ndrminus = np.linalg.norm(cc_curr - cc_prev)
             # The spring constant connecting each pair of images
             # should have the same strength.  This rather confusing "if"
             # statement ensures the spring constant is not incorrectly
@@ -1375,110 +1277,14 @@ class ElasticBand(Chain):
                     k_new = k_min
             else:
                 k_new = self.k
-            if self.ic_displace:
-                self.SprBandEnergy += fplus * k_new * np.dot(drplus, drplus)
-                self.SprBandEnergy += fminus * k_new * np.dot(drminus, drminus)
-            else:
-                self.SprBandEnergy += fplus * k_new * ndrplus**2
-                self.SprBandEnergy += fminus * k_new * ndrminus**2
+            self.SprBandEnergy += fplus * k_new * ndrplus**2
+            self.SprBandEnergy += fminus * k_new * ndrminus**2
             self.PotBandEnergy += self.Structures[n].energy
         self.TotBandEnergy = self.SprBandEnergy + self.PotBandEnergy
 
     def ComputeProjectedGrad(self):
-        if self.ic_displace:
-            self.ComputeProjectedGrad_IC()
-        else:
-            self.ComputeProjectedGrad_CC()
-
-    def ComputeProjectedGrad_IC(self):
-        xyz = self.get_cartesian_all(endpts=True).reshape(len(self), -1)
-        grad_v_c = np.array(
-            [self.Structures[n].grad_cartesian for n in range(len(self))]
-        )
-        energies = np.array([self.Structures[n].energy for n in range(len(self))])
-        print("energies in Projected Grad", energies)
-        grad_v_i = self.GlobalIC.calcGrad(xyz, grad_v_c.flatten())
-        grad_v_p_c = np.zeros_like(grad_v_c)
-        force_s_c = np.zeros_like(grad_v_c)
-        force_s_p_c = np.zeros_like(grad_v_c)
-        straight = self.calc_straightness(xyz)
-
-        for n in range(1, len(self) - 1):
-            fplus = 1.0 if n == (len(self) - 2) else 0.5
-            fminus = 1.0 if n == 1 else 0.5
-            drplus = self.GlobalIC.calcDisplacement(xyz, n + 1, n)
-            drminus = self.GlobalIC.calcDisplacement(xyz, n - 1, n)
-            if self.params.nebew:
-                # HP: Energy weighted NEB
-                E_i = energies[n]
-                E_ref = min(
-                    energies[0], energies[-1]
-                )  # Reference energy can be either reactant or product. Lower energy is picked here.
-                E_max = max(energies)
-                k_max = self.k
-                k_min = self.k / 2
-                a = (E_max - energies[n]) / (E_max - E_ref)
-                if E_i > E_ref:
-                    k_new = (1 - a) * k_max + a * k_min
-                else:
-                    k_new = k_min
-            else:
-                k_new = self.k
-            force_s_Plus = fplus * k_new * drplus
-            force_s_Minus = fminus * k_new * drminus
-            factor = 1.0 + 16 * (1.0 - straight[n]) ** 2
-            force_s_c[n] += self.GlobalIC.applyCartesianGrad(
-                xyz, factor * (force_s_Plus + force_s_Minus), n, n
-            )
-            tau = self.get_tangent(n)
-            # Force from the spring in the tangent direction
-            ndrplus = np.linalg.norm(drplus)
-            ndrminus = np.linalg.norm(drminus)
-            force_s_p_c[n] = self.GlobalIC.applyCartesianGrad(
-                xyz, k_new * (ndrplus - ndrminus) * tau, n, n
-            )
-            # Now get the perpendicular component of the force from the potential
-            grad_v_im = self.GlobalIC.ImageICs[n].calcGrad(xyz[n], grad_v_c[n])
-            grad_v_p_c[n] = self.GlobalIC.applyCartesianGrad(
-                xyz, grad_v_im - np.dot(grad_v_im, tau) * tau, n, n
-            )
-
-            if self.climbSet and n in self.climbers:
-                # The force in the direction of the tangent is reversed
-                grad_v_p_c[n] = self.GlobalIC.applyCartesianGrad(
-                    xyz, grad_v_im - 2 * np.dot(grad_v_im, tau) * tau, n, n
-                )
-
-            if n > 1:
-                force_s_c[n - 1] -= self.GlobalIC.applyCartesianGrad(
-                    xyz, force_s_Minus, n - 1, n
-                )
-            if n < len(self) - 2:
-                force_s_c[n + 1] -= self.GlobalIC.applyCartesianGrad(
-                    xyz, force_s_Plus, n + 1, n
-                )
-
-        for n in range(1, len(self) - 1):
-            if self.climbSet and n in self.climbers:
-                # The climbing image feels no spring forces at all,
-                # Note: We make the choice to change both the plain and the
-                # projected spring force.
-                force_s_c[n] *= 0.0
-                force_s_p_c[n] *= 0.0
-
-        xyz = self.get_cartesian_all(endpts=True).reshape(len(self), -1)
-        grad_v_c = np.array(
-            [self.Structures[n].grad_cartesian for n in range(len(self))]
-        )
-        grad_v_i = self.GlobalIC.calcGrad(xyz, grad_v_c.flatten())
-        grad_s_i = self.GlobalIC.calcGrad(xyz, -force_s_c.flatten())
-        grad_v_p_i = self.GlobalIC.calcGrad(xyz, grad_v_p_c.flatten())
-        grad_s_p_i = self.GlobalIC.calcGrad(xyz, -force_s_p_c.flatten())
-
-        self.set_global_grad(grad_v_i, "potential", "plain")
-        self.set_global_grad(grad_v_p_i, "potential", "projected")
-        self.set_global_grad(grad_s_i, "spring", "plain")
-        self.set_global_grad(grad_s_p_i, "spring", "projected")
+        # HP 5/3/2023: ComputeProjectedGrad_IC was deleted
+        self.ComputeProjectedGrad_CC()
 
     def ComputeProjectedGrad_CC(self):
         xyz = self.get_cartesian_all(endpts=True).reshape(len(self), -1)
@@ -1555,162 +1361,27 @@ class ElasticBand(Chain):
         self.set_global_grad(grad_s_i, "spring", "plain")
         self.set_global_grad(grad_s_p_i, "spring", "projected")
 
-    def FiniteDifferenceTest(self):
-        self.ComputeChain()
-        E = self.TotBandEnergy
-        G = self.get_global_grad("total", "plain")
-        h = 1e-5
-        for i in range(self.nvars):
-            dy = np.zeros(self.nvars, dtype=float)
-            dy[i] += h
-            cplus = self.TakeStep(dy, verbose=False)
-            cplus.ComputeChain(order=0)
-            eplus = cplus.TotBandEnergy
-            dy[i] -= 2 * h
-            cminus = self.TakeStep(dy, verbose=False)
-            cminus.ComputeChain(order=0)
-            eminus = cminus.TotBandEnergy
-            fdiff = (eplus - eminus) / (2 * h)
-            print(
-                "\r%30s%5i : % .6e % .6e % .6e                   "
-                % (repr(self.GlobalIC.Internals[i]), i, G[i], fdiff, G[i] - fdiff)
+    def ComputeGuessHessian(self, blank=False):
+        # self.ComputeSpringHessian()
+        self.spring_hessian_plain = np.zeros((self.nvars, self.nvars), dtype=float)
+        self.spring_hessian_projected = np.zeros(
+            (self.nvars, self.nvars), dtype=float
+        )
+        if not blank:
+            guess_hessian_potential = self.GlobalIC.guess_hessian(
+                self.get_cartesian_all(endpts=True), k=self.params.guessk
             )
-
-    def ComputeSpringHessian(self):
-        # Compute both the plain and projected spring Hessian.
-        self.spring_hessian_plain = np.zeros((self.nvars, self.nvars))
-        self.spring_hessian_projected = np.zeros((self.nvars, self.nvars))
-        h = 1e-6
-        t0 = time.time()
-        for i in range(self.nvars):
-            dy = np.zeros(self.nvars, dtype=float)
-            dy[i] += h
-            cplus = self.TakeStep(dy, verbose=False)
-            # An error will be thrown if grad_cartesian does not exist
-            cplus.CopyEnergyGradient(self)
-            cplus.ComputeTangent()
-            cplus.ComputeProjectedGrad()
-            gplus_plain = cplus.get_global_grad("spring", "plain")
-            gplus_proj = cplus.get_global_grad("spring", "projected")
-            dy[i] -= 2 * h
-            cminus = self.TakeStep(dy, verbose=False)
-            cminus.CopyEnergyGradient(self)
-            cminus.ComputeTangent()
-            cminus.ComputeProjectedGrad()
-            gminus_plain = cminus.get_global_grad("spring", "plain")
-            gminus_proj = cminus.get_global_grad("spring", "projected")
-            self.spring_hessian_plain[i, :] = (gplus_plain - gminus_plain) / (2 * h)
-            self.spring_hessian_projected[i, :] = (gplus_proj - gminus_proj) / (2 * h)
-        print("Spring Hessian took %.3f seconds" % (time.time() - t0))
-
-    def ComputeGuessHessian(self, full=False, blank=False):
-        if full:
-            # Compute both the plain and projected spring Hessian.
-            self.guess_hessian_plain = np.zeros((self.nvars, self.nvars))
-            self.guess_hessian_working = np.zeros((self.nvars, self.nvars))
-            h = 1e-5
-            t0 = time.time()
-            for i in range(self.nvars):
-                print("\rCoordinate %i/%i" % (i, self.nvars) + " " * 100)
-                dy = np.zeros(self.nvars, dtype=float)
-                dy[i] += h
-                cplus = self.TakeStep(dy, verbose=False)
-                # An error will be thrown if grad_cartesian does not exist
-                cplus.ComputeChain()
-                gplus_plain = cplus.get_global_grad("total", "plain")
-                gplus_work = cplus.get_global_grad("total", "working")
-                dy[i] -= 2 * h
-                cminus = self.TakeStep(dy, verbose=False)
-                cminus.ComputeChain()
-                gminus_plain = cminus.get_global_grad("total", "plain")
-                gminus_work = cminus.get_global_grad("total", "working")
-                self.guess_hessian_plain[i, :] = (gplus_plain - gminus_plain) / (2 * h)
-                self.guess_hessian_working[i, :] = (gplus_work - gminus_work) / (2 * h)
-            self.guess_hessian_plain = 0.5 * (
-                self.guess_hessian_plain + self.guess_hessian_plain.T
-            )
-            self.guess_hessian_working = 0.5 * (
-                self.guess_hessian_working + self.guess_hessian_working.T
-            )
-            print("Full Hessian took %.3f seconds" % (time.time() - t0))
         else:
-            # self.ComputeSpringHessian()
-            self.spring_hessian_plain = np.zeros((self.nvars, self.nvars), dtype=float)
-            self.spring_hessian_projected = np.zeros(
-                (self.nvars, self.nvars), dtype=float
+            # guess_hessian_potential *= 0.0
+            guess_hessian_potential = (
+                np.eye(self.spring_hessian_plain.shape[0]) * self.params.guessk
             )
-            if not blank:
-                guess_hessian_potential = self.GlobalIC.guess_hessian(
-                    self.get_cartesian_all(endpts=True), k=self.params.guessk
-                )
-            else:
-                # guess_hessian_potential *= 0.0
-                guess_hessian_potential = (
-                    np.eye(self.spring_hessian_plain.shape[0]) * self.params.guessk
-                )
-            self.guess_hessian_plain = (
-                guess_hessian_potential + self.spring_hessian_plain
-            )
-            self.guess_hessian_projected = (
-                guess_hessian_potential + self.spring_hessian_projected
-            )
-            # Symmetrize
-            self.guess_hessian_plain = 0.5 * (
-                self.guess_hessian_plain + self.guess_hessian_plain.T
-            )
-            self.guess_hessian_projected = 0.5 * (
-                self.guess_hessian_projected + self.guess_hessian_projected.T
-            )
-            self.guess_hessian_plain.flags.writeable = False
-            self.guess_hessian_projected.flags.writeable = False
-            # When plain is set to 1 or 2, we do not project out the perpendicular component of the spring force.
-            if self.plain >= 1:
-                self.guess_hessian_working = self.guess_hessian_plain
-            else:
-                self.guess_hessian_working = self.guess_hessian_projected
-
-    def ComputeGuessHessian_full(self):
-        # Compute both the plain and projected spring Hessian.
-        self.guess_hessian_plain = np.zeros((self.nvars, self.nvars))
-        self.guess_hessian_projected = np.zeros((self.nvars, self.nvars))
-        self.guess_hessian_working = np.zeros((self.nvars, self.nvars))
-        h = 1e-5
-        t0 = time.time()
-        for i in range(self.nvars):
-            dy = np.zeros(self.nvars, dtype=float)
-            dy[i] += h
-            cplus = self.TakeStep(dy, verbose=False)
-            # An error will be thrown if grad_cartesian does not exist
-            cplus.ComputeChain()
-            cplus.ComputeProjectedGrad()
-            spgrad_plus_plain = cplus.get_global_grad("spring", "plain")
-            spgrad_plus_proj = cplus.get_global_grad("spring", "projected")
-            vgrad_plus_plain = cplus.get_global_grad("potential", "plain")
-            vgrad_plus_proj = cplus.get_global_grad("potential", "projected")
-            dy[i] -= 2 * h
-            cminus = self.TakeStep(dy, verbose=False)
-            cminus.ComputeChain()
-            cminus.ComputeProjectedGrad()
-            spgrad_minus_plain = cminus.get_global_grad("spring", "plain")
-            spgrad_minus_proj = cminus.get_global_grad("spring", "projected")
-            vgrad_minus_plain = cminus.get_global_grad("potential", "plain")
-            vgrad_minus_proj = cminus.get_global_grad("potential", "projected")
-
-            gplus_plain = spgrad_plus_plain + vgrad_plus_plain
-            gplus_proj = spgrad_plus_proj + vgrad_plus_proj
-            gminus_plain = spgrad_minus_plain + vgrad_minus_plain
-            gminus_proj = spgrad_minus_proj + vgrad_minus_proj
-
-            self.guess_hessian_plain[i, :] = (gplus_plain - gminus_plain) / (2 * h)
-            self.guess_hessian_projected[i, :] = (gplus_proj - gminus_proj) / (2 * h)
-            if self.plain == 0:
-                self.guess_hessian_working[i, :] = (gplus_proj - gminus_proj) / (2 * h)
-            elif self.plain == 1:
-                self.guess_hessian_working[i, :] = (vgrad_plus_proj + spgrad_plus_plain - vgrad_minus_proj -
-                                                    spgrad_minus_plain) / (2 * h)
-            elif self.plain == 2:
-                self.guess_hessian_working[i, :] = (gplus_plain - gminus_plain) / (2 * h)
-
+        self.guess_hessian_plain = (
+            guess_hessian_potential + self.spring_hessian_plain
+        )
+        self.guess_hessian_projected = (
+            guess_hessian_potential + self.spring_hessian_projected
+        )
         # Symmetrize
         self.guess_hessian_plain = 0.5 * (
             self.guess_hessian_plain + self.guess_hessian_plain.T
@@ -1718,11 +1389,13 @@ class ElasticBand(Chain):
         self.guess_hessian_projected = 0.5 * (
             self.guess_hessian_projected + self.guess_hessian_projected.T
         )
-        self.guess_hessian_working = 0.5 * (
-            self.guess_hessian_working + self.guess_hessian_working.T
-        )
-
-        print("Guess Hessian took %.3f seconds" % (time.time() - t0))
+        self.guess_hessian_plain.flags.writeable = False
+        self.guess_hessian_projected.flags.writeable = False
+        # When plain is set to 1 or 2, we do not project out the perpendicular component of the spring force.
+        if self.plain >= 1:
+            self.guess_hessian_working = self.guess_hessian_plain
+        else:
+            self.guess_hessian_working = self.guess_hessian_projected
 
     def ComputeMetric(self):
         if self.haveMetric:
@@ -1763,7 +1436,7 @@ class ElasticBand(Chain):
     def OptimizeEndpoints(self, gtol=None):
         self.Structures[0].OptimizeGeometry(gtol)
         self.Structures[-1].OptimizeGeometry(gtol)
-        print("Optimizing End Points are done.")
+        print("Optimizing the endpoints are done.")
         self.M.xyzs[0] = self.Structures[0].M.xyzs[0]
         self.M.xyzs[-1] = self.Structures[-1].M.xyzs[0]
         # The Structures are what store the individual Cartesian coordinates for each frame.
@@ -1865,71 +1538,6 @@ class Froot(object):
             return cnorm - self.target
 
 
-def RebuildHessian(H, chain, chain_hist, params, projection):
-    """
-    Rebuild the Hessian after making a change to the internal coordinate system.
-
-    Parameters
-    ----------
-    H : np.ndarray
-        Initial guess Hessian matrix. LPW 2017-04-08: THIS VARIABLE IS MODIFIED
-    chain : Chain
-        The current chain of states
-    chain_hist : list
-        List of previous Chain objects
-    params : OptParams object
-        Uses trust, epsilon, and reset
-        trust : Only recover using previous geometries within the trust radius
-        epsilon : Small eigenvalue threshold
-        reset : Revert to the guess Hessian if eigenvalues smaller than threshold
-    projection : str
-        Either "plain", "projected" or "working".  Choose which gradient projection to use
-        for rebuilding the Hessian.
-
-    Returns
-    -------
-    np.ndarray
-        Internal coordinate Hessian updated with series of internal coordinate gradients
-    """
-    history = 0
-    for i in range(2, len(chain_hist) + 1):
-        rmsd = ChainRMSD(chain_hist[-i], chain_hist[-1])
-        if rmsd > params.trust:
-            break
-        history += 1
-    if history < 1:
-        return
-    print("Rebuilding Hessian using %i gradients" % history)
-
-    y_seq = [c.get_internal_all() for c in chain_hist[-history - 1 :]]
-    g_seq = [c.get_global_grad("total", projection) for c in chain_hist[-history - 1 :]]
-
-    Yprev = y_seq[0]
-    Gprev = g_seq[0]
-    H0 = H.copy()
-    for i in range(1, len(y_seq)):
-        Y = y_seq[i]
-        G = g_seq[i]
-        Yprev = y_seq[i - 1]
-        Gprev = g_seq[i - 1]
-        Dy = col(Y - Yprev)
-        Dg = col(G - Gprev)
-        Mat1 = np.dot(Dg, Dg.T) / np.dot(Dg.T, Dy)[0, 0]
-        Mat2 = (
-            np.dot(np.dot(np.array(H), Dy), np.dot(np.array(H), Dy).T)
-            / np.dot((np.dot(Dy.T, np.array(H)), Dy))[0, 0]
-        )
-        print("Mats in RebuildHessian", Mat1, Mat2)
-        # Hstor = H.copy()
-        H += Mat1 - Mat2
-    if np.min(np.linalg.eigh(H)[0]) < params.epsilon and params.reset:
-        print(
-            "Eigenvalues below %.4e (%.4e) - returning guess"
-            % (params.epsilon, np.min(np.linalg.eigh(H)[0]))
-        )
-        H = H0.copy()
-
-
 def recover(chain_hist, params, forceCart, result=None):
     """
     Recover from a failed optimization.
@@ -1939,7 +1547,7 @@ def recover(chain_hist, params, forceCart, result=None):
     chain_hist : list
         List of previous Chain objects;
         the last element is the current chain
-    params : ChainOptParams
+    params : NEBParams
         Job parameters
     forceCart : bool
         Whether to use Cartesian coordinates or
@@ -1963,21 +1571,10 @@ def recover(chain_hist, params, forceCart, result=None):
     newchain = chain_hist[-1].RebuildIC(
         "cart" if forceCart else chain_hist[-1].coordtype, result=result
     )
-    # for ic, c in enumerate(chain_hist):
-    #    # Copy operations here may allow old chains to be properly erased when dereferenced
-    #    c.kmats = deepcopy(newchain.kmats)
-    #    c.metrics = deepcopy(newchain.metrics)
-    #    c.GlobalIC = deepcopy(newchain.GlobalIC)
-    #    for i in range(len(newchain)):
-    #        c.Structures[i].IC = deepcopy(newchain.Structures[i].IC)
-    #    c.ComputeChain(result=result)
     newchain.SetFlags()
     newchain.ComputeGuessHessian()
     HW = newchain.guess_hessian_working.copy()
     HP = newchain.guess_hessian_plain.copy()
-    if not params.reset:
-        RebuildHessian(HW, newchain, chain_hist, params, "working")
-        RebuildHessian(HP, newchain, chain_hist, params, "plain")
     Y = newchain.get_internal_all()
     GW = newchain.get_global_grad("total", "working")
     GP = newchain.get_global_grad("total", "plain")
@@ -2028,7 +1625,15 @@ def updatehessian(old_chain, chain, HP, HW, Y, old_Y, GW, old_GW, GP, old_GP, La
     BFGSUpdate(Y, old_Y, GP, old_GP, HP, params)
     Eig1 = BFGSUpdate(Y, old_Y, GW, old_GW, HW, params)
     if np.min(Eig1) <= params.epsilon:
-        if params.reset:
+
+        if params.skip:
+            print(
+                "Eigenvalues below %.4e (%.4e) - skipping Hessian update"
+                % (params.epsilon, np.min(Eig1))
+            )
+            HP = HP_bak.copy()
+            HW = HW_bak.copy()
+        else:
             H_reset = True
             print(
                 "Eigenvalues below %.4e (%.4e) - will reset the Hessian"
@@ -2036,13 +1641,6 @@ def updatehessian(old_chain, chain, HP, HW, Y, old_Y, GW, old_GW, GP, old_GP, La
             )
             chain, Y, GW, GP, HW, HP = recover([old_chain], params, LastForce, result)
 
-        elif params.skip:
-            print(
-                "Eigenvalues below %.4e (%.4e) - skipping Hessian update"
-                % (params.epsilon, np.min(Eig1))
-            )
-            HP = HP_bak.copy()
-            HW = HW_bak.copy()
     del HP_bak
     del HW_bak
     return chain, Y, GW, GP, HP, HW, old_Y, old_GP, old_GW, H_reset
@@ -2203,7 +1801,6 @@ def takestep(c_hist, chain, params, optCycle, LastForce, ForceRebuild, trust, Y,
                 "\x1b[1;91mFailed twice in a row to rebuild the coordinate system\x1b[0m"
             )
             print("\x1b[93mResetting Hessian\x1b[0m")
-            params.reset = True
         elif LastForce == 2:
             print(
                 "\x1b[1;91mFailed three times to rebuild the coordinate system\x1b[0m"
@@ -2211,11 +1808,7 @@ def takestep(c_hist, chain, params, optCycle, LastForce, ForceRebuild, trust, Y,
             print("\x1b[93mContinuing in Cartesian coordinates\x1b[0m")
         else:
             raise RuntimeError("Coordinate system has failed too many times")
-        CoordCounter = 0
-        r0 = params.reset
-        params.reset = True
         chain, Y, GW, GP, HW, HP = recover(c_hist, params, LastForce == 2, result)
-        params.reset = r0
         print("\x1b[1;93mSkipping optimization step\x1b[0m")
         optCycle -= 1
     else:
@@ -2228,7 +1821,7 @@ def takestep(c_hist, chain, params, optCycle, LastForce, ForceRebuild, trust, Y,
     # Whether the Cartesian norm comes close to the trust radius
     # Update the internal coordinates
     # Obtain a new chain with the step applied
-    new_chain = chain.TakeStep(dy, printStep=False)
+    new_chain = chain.TakeStep(dy)
     respaced = new_chain.delete_insert(1.5)
     return (chain, new_chain, expect, expectG, ForceRebuild, LastForce, old_Y, old_GW, old_GP, respaced, optCycle)
 
@@ -2256,7 +1849,7 @@ def OptimizeChain(chain, engine, params):
     t0 = time.time()
     # chain.SetFlags(params.gtol, params.climb)
     # Obtain the guess Hessian matrix
-    chain.ComputeGuessHessian(full=False, blank=isinstance(engine, Blank))
+    chain.ComputeGuessHessian(blank=isinstance(engine, Blank))
     # Print the status of the zeroth iteration
     print("-=# Chain optimization cycle 0 #=-")
     print("Spring Force: %.2f kcal/mol/Ang^2" % params.nebk)
@@ -2305,49 +1898,61 @@ def OptimizeChain(chain, engine, params):
     respaced = False
     Quality = None
     while True:
+
         # ======================================================#
         # | At the top of the loop, our coordinates, energies, |#
         # | gradients, and Hessians are synchronized.          |#
         # ======================================================#
+
         optCycle += 1
         print("-=# Chain optimization cycle %i #=-" % (optCycle))
+
         # =======================================#
         # |    Obtain an optimization step      |#
         # |    and update Cartesian coordinates |#
         # =======================================#
+
         print("Time since last ComputeChain: %.3f s" % (time.time() - t0))
+
         (chain_prev, chain, expect, expectG, ForceRebuild, LastForce, Y_prev, GW_prev, GP_prev, respaced, optCycle) \
         = takestep(c_hist, chain, params, optCycle, LastForce, ForceRebuild, trust, Y, GW, GP, HW, HP, None)
+
         chain.ComputeChain(cyc=optCycle)
         t0 = time.time()
         # ----------------------------------------------------------
         chain, Y, GW, GP, HW, HP, c_hist, Quality = compare(chain_prev, chain, ThreHQ, ThreLQ, GW, HW, HP, respaced,
             optCycle, expect, expectG, trust, trustprint, params.avgg, Quality)
+
         if respaced:
             chain.SaveToDisk(fout="chain_%04i.xyz" % optCycle)
             continue
         chain.SaveToDisk(fout="chain_%04i.xyz" % optCycle)
+
         # =======================================#
         # |    Check convergence criteria       |#
         # =======================================#
-        if converged(
-            chain.maxg, chain.avgg, params.maxg, params.avgg, optCycle, params.maxcyc
-        ):
+
+        if converged(chain.maxg, chain.avgg, params.maxg, params.avgg, optCycle, params.maxcyc):
             break
+
         # =======================================#
         # |  Adjust Trust Radius / Reject Step  |#
         # =======================================#
+
         chain, trust, trustprint, Y, GW, GP, good = qualitycheck(chain_prev, chain,trust, Quality, ThreLQ, ThreRJ,
             ThreHQ, Y, GW, GP, Y_prev, GW_prev, GP_prev, params.tmax)
         if not good:
             continue
         c_hist.append(chain)
         c_hist = c_hist[-params.history :]
+
         # =======================================#
         # |      Update the Hessian Matrix      |#
         # =======================================#
+
         chain, Y, GW, GP, HP, HW, Y_prev, GP_prev, GW_prev, _ = updatehessian(chain_prev, chain, HP, HW, Y, Y_prev, GW,
                                                                  GW_prev, GP, GP_prev, LastForce, params, None)
+    return chain, optCycle
 
 
 class nullengine(object):
@@ -2363,19 +1968,10 @@ def switch(array, numpy=False):
     """
     Switches between numpy and list
     """
-    new = []
     if not numpy:
-        for i in array:
-            if i is not None:
-                new.append(i.tolist())
-            else:
-                new.append(None)
+        new = [i.tolist() if i is not None else None for i in array]
     else:
-        for i in array:
-            if i is not None:
-                new.append(np.array(i))
-            else:
-                new.append(None)
+        new = [np.array(i) if i is not None else None for i in array]
     return new
 
 
@@ -2463,31 +2059,21 @@ def arrange(qcel_mols):
     mult = qcel_mols[0].molecular_multiplicity
     M = Molecule()
     M.elem = sym
-    xyzs = []
-    for i, mol in enumerate(qcel_mols):
-        xyzs.append(mol.geometry * bohr2ang)
-    M.xyzs = xyzs
+    M.xyzs = [mol.geometry*bohr2ang for mol in qcel_mols]
 
     # Getting parameters and the chain
-    opt_param = OptParams(**{"neb": True})
+    neb_param = NEBParams()
     chain = ElasticBand(
-        M, engine=None, tmpdir="tmp", coordtype="cart", params=opt_param, plain=0
+        M, engine=None, tmpdir="tmp", params=neb_param, plain=0
     )
 
     # Respacing the chain
-    respaced_chain = []
     chain.respace(0.01)
     chain.delete_insert(1.0)
     newcoords = chaintocoords(chain)
-    for coords in newcoords:
-        respaced_chain.append(
-            qcmol(
-                symbols=sym,
-                geometry=coords,
-                molecular_charge=chg,
-                molecular_multiplicity=mult,
-            )
-        )
+
+    respaced_chain = [qcmol(symbols=sym, geometry=coords, molecular_charge=chg, molecular_multiplicity=mult)
+                      for coords in newcoords]
 
     return respaced_chain
 
@@ -2502,13 +2088,13 @@ def get_basic_info(info_dict, previous=False):
     energies = info_dict.get("energies")
     gradients = info_dict.get("gradients")
 
-    params_dict = {"neb": True, "images": args_dict.get("images"), "maxg": args_dict.get("maximum_force"),
+    params_dict = {"images": args_dict.get("images"), "maxg": args_dict.get("maximum_force"),
         "avgg": args_dict.get("average_force"), "nebew": args_dict.get("energy_weighted"),
-        "nebk": args_dict.get("spring_constant"), "maxcyc": args_dict.get("maximum_cycle"),
-        "plain": args_dict.get("spring_type"), "reset": args_dict.get("hessian_reset"),
-        "skip": not args_dict.get("hessian_reset"), "epsilon": args_dict.get("epsilon"), "coordsys": "cart"}
+        "nebk": args_dict.get("spring_constant"), "neb_maxcyc": args_dict.get("maximum_cycle"),
+        "plain": args_dict.get("spring_type"), "skip": not args_dict.get("hessian_reset"),
+        "epsilon": args_dict.get("epsilon")}
     iteration = args_dict.get("iteration")
-    params = OptParams(**params_dict)
+    params = NEBParams(**params_dict)
 
     M = Molecule()
     M.elem = info_dict.get("elems")
@@ -2548,12 +2134,12 @@ def prepare(info_dict):
     tmpdir = tempfile.mkdtemp()
 
     # Getting the initial chain.
-    chain = ElasticBand(M, engine=engine, tmpdir=tmpdir, coordtype="cart", params=params, plain=params.plain)
+    chain = ElasticBand(M, engine=engine, tmpdir=tmpdir, params=params, plain=params.plain)
 
     trust = params.trust
     chain.ComputeMetric()
     chain.ComputeChain(result=result)
-    chain.ComputeGuessHessian(full=False, blank=isinstance(engine, Blank))
+    chain.ComputeGuessHessian(blank=isinstance(engine, Blank))
     chain.PrintStatus()
 
     print("-= Chain Properties =-")
@@ -2583,7 +2169,7 @@ def prepare(info_dict):
     HW = chain.guess_hessian_working.copy()
     HP = chain.guess_hessian_plain.copy()
     dy, expect, expectG, ForceRebuild = chain.CalcInternalStep(trust, HW, HP)
-    new_chain = chain.TakeStep(dy, printStep=False)
+    new_chain = chain.TakeStep(dy)
     respaced = new_chain.delete_insert(1.5)
     newcoords = chaintocoords(new_chain)
     attrs_new = check_attr(new_chain)
@@ -2616,9 +2202,9 @@ def nextchain(info_dict):
     tmpdir = tempfile.mkdtemp()
 
     # Define two chain objects for the previous and current iteration.
-    chain = ElasticBand(M, engine=engine, tmpdir=tmpdir, coordtype="cart", params=params, plain=params.plain)
+    chain = ElasticBand(M, engine=engine, tmpdir=tmpdir, params=params, plain=params.plain)
 
-    chain_prev = ElasticBand(M_prev, engine=engine, tmpdir=tmpdir, coordtype="cart",
+    chain_prev = ElasticBand(M_prev, engine=engine, tmpdir=tmpdir,
                              params=params_prev, plain=params_prev.plain)
 
     # Getting other information up to the previous iteration.
@@ -2632,8 +2218,8 @@ def nextchain(info_dict):
     ForceBuild = info_dict.get("forcerebuild", False)
     chain = add_attr(chain, info_dict.get("attrs_new"))
     chain_prev = add_attr(chain_prev, info_dict.get("attrs_prev"))
-    chain.ComputeGuessHessian(full=False, blank=isinstance(engine, Blank))
-    chain_prev.ComputeGuessHessian(full=False, blank=isinstance(engine, Blank))
+    chain.ComputeGuessHessian(blank=isinstance(engine, Blank))
+    chain_prev.ComputeGuessHessian(blank=isinstance(engine, Blank))
     GWs = info_dict.get("GWs")
     GPs = info_dict.get("GPs")
     Ys = info_dict.get("Ys")
@@ -2715,7 +2301,14 @@ def nextchain(info_dict):
     Eig = np.linalg.eigh(HW)[0]
     Eig.sort()
     if np.min(Eig) <= params.epsilon:
-        if params.reset:
+        if params.skip:
+            print(
+                "Eigenvalues below %.4e (%.4e) - skipping Hessian update"
+                % (params.epsilon, np.min(Eig))
+            )
+
+
+        else:
             print(
                 "Eigenvalues below %.4e (%.4e) - will reset the Hessian"
                 % (params.epsilon, np.min(Eig))
@@ -2726,12 +2319,6 @@ def nextchain(info_dict):
             GWs = [GW.tolist()]
             GPs = [GP.tolist()]
             result = result_prev
-
-        elif params.skip:
-            print(
-                "Eigenvalues below %.4e (%.4e) - skipping Hessian update"
-                % (params.epsilon, np.min(Eig))
-            )
 
     # 4) Take the step based on the current Hessians and gradients. Pass the result Cartesian coordinates to QCFractal.
     (chain_prev, chain, expect, expectG, ForceRebuild, LastForce, Y_prev, GW_prev, GP_prev, respaced, _) \
@@ -2753,9 +2340,9 @@ def nextchain(info_dict):
 
 def main():
 
-    args = parse_optimizer_args(sys.argv[1:])
+    args = parse_neb_args(sys.argv[1:])
     args["neb"] = True
-    params = OptParams(**args)
+    params = NEBParams(**args)
 
     M, engine = get_molecule_engine(**args)
 
@@ -2771,7 +2358,7 @@ def main():
         os.mkdir(tmpdir)
 
     # Make the initial chain
-    chain = ElasticBand(M, engine=engine, tmpdir=tmpdir, coordtype=params.coordsys, params=params, plain=params.plain)
+    chain = ElasticBand(M, engine=engine, tmpdir=tmpdir, params=params, plain=params.plain)
     OptimizeChain(chain, engine, params)
 
 
