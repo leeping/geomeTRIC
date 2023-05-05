@@ -1317,7 +1317,7 @@ class LinearAngle(PrimitiveCoordinate):
         # result = 3 or above: failure of the IC system is imminent
         # result = 2: IC may fail for small perturbations from the provided geometry
         # result = 1: IC is unsuitable for the provided geometry, should pay attention
-        LinThres = [0.5, 0.3, 0.1]
+        LinThres = [0.8, 0.6, 0.4]
         descrips = ["close to nonlinear", "very nonlinear", "extremely nonlinear"]
         a = self.a
         b = self.b
@@ -1967,8 +1967,8 @@ class InternalCoordinates(object):
         for i in range(Der.shape[0]):
             WilsonB.append(Der[i].flatten())
         self.stored_wilsonB[xhash] = np.array(WilsonB)
-        if len(self.stored_wilsonB) > 1000 and not CacheWarning:
-            logger.warning("\x1b[91mWarning: more than 1000 B-matrices stored, memory leaks likely\x1b[0m\n")
+        if len(self.stored_wilsonB) > 10000 and not CacheWarning:
+            logger.warning("\x1b[91mWarning: more than 10000 B-matrices stored, memory leaks likely\x1b[0m\n")
             CacheWarning = True
         ans = np.array(WilsonB)
         return ans
@@ -3075,7 +3075,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         newSync = []
         for cPrim in self.cPrims:
             newPrims.append(cPrim)
-        for typ in [Distance, DistanceDifference, ReducedDistance, Exponential, Angle, LinearAngle, MultiAngle, OutOfPlane, Dihedral, MultiDihedral, CartesianX, CartesianY, CartesianZ, TranslationX, TranslationY, TranslationZ, RotationA, RotationB, RotationC]:
+        for typ in [Distance, DistanceDifference, ReducedDistance, Angle, LinearAngle, MultiAngle, OutOfPlane, Dihedral, MultiDihedral, CartesianX, CartesianY, CartesianZ, TranslationX, TranslationY, TranslationZ, RotationA, RotationB, RotationC]:
             for i, p in enumerate(self.Internals):
                 if type(p) is typ and p not in self.cPrims:
                     newPrims.append(p)
