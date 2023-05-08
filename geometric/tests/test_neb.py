@@ -7,7 +7,6 @@ from . import addons
 import geometric
 import tempfile
 import numpy as np
-from qcelemental.models import Molecule as qcmol
 
 localizer = addons.in_folder
 datad = addons.datad
@@ -89,6 +88,8 @@ def test_hcn_neb_service(localizer):
     """
     Testing QCFractal NEB service
     """
+    from qcelemental.models import Molecule as qcmol
+
     chain_M = geometric.molecule.Molecule(os.path.join(datad, 'hcn_neb_service.xyz'))
     coords = [M.xyzs for M in chain_M]
     qcel_mols = [qcmol(symbols=chain_M[0].elem, geometry=coord, molecular_charge=0, molecular_multiplicity=1)
