@@ -497,7 +497,7 @@ class Chain(object):
 
     def respace(self, thresh):
         """
-        Space-out NEB images that have merged.
+        Space-out NEB images that are closer than the threshold.
         """
         respaced = False
         OldSpac = " ".join(["%6.3f " % i for i in self.calc_spacings()])
@@ -1688,7 +1688,7 @@ def qualitycheck(old_chain, new_chain, trust, Quality, ThreLQ, ThreRJ, ThreHQ, Y
 
 
 def compare(old_chain, new_chain, ThreHQ, ThreLQ, old_GW, HW, HP, respaced, optCycle, expect, expectG, trust, trustprint,
-    params_avgg, Quality_old=None):
+    params_avgg, Quality):
     """
     Two chain objects are compared here to see the quality of the next step.
     """
@@ -1727,7 +1727,7 @@ def compare(old_chain, new_chain, ThreHQ, ThreLQ, old_GW, HW, HP, respaced, optC
         HW = new_chain.guess_hessian_working.copy()
         HP = new_chain.guess_hessian_plain.copy()
         c_hist = [new_chain]
-        return (new_chain, Y, GW, GP, HW, HP, c_hist, Quality_old)
+        return (new_chain, Y, GW, GP, HW, HP, c_hist, Quality)
 
     dE = new_chain.TotBandEnergy - old_chain.TotBandEnergy
     if dE > 0.0 and expect > 0.0 and dE > expect:
@@ -1738,7 +1738,7 @@ def compare(old_chain, new_chain, ThreHQ, ThreLQ, old_GW, HW, HP, respaced, optC
     eGC = new_chain.CalcRMSCartGrad(expectG)
     GPC = new_chain.CalcRMSCartGrad(old_GW)
     QualityG = 2.0 - GC / max(eGC, GPC / 2, params_avgg / 2)
-    Quality = QualityG
+    Quality = max(Quality, QualityG)
     Describe = (
         "Good"
         if Quality > ThreHQ
