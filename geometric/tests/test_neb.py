@@ -84,9 +84,9 @@ def test_hcn_neb_optimize_ew(localizer):
     assert final_chain.avgg < params.avgg
 
 @addons.using_qcelemental
-def test_hcn_neb_service(localizer):
+def test_hcn_neb_service_arrange(localizer):
     """
-    Testing QCFractal NEB service
+    Testing neb.arrange() function for QCFractal NEB service
     """
     from qcelemental.models import Molecule as qcmol
 
@@ -95,14 +95,17 @@ def test_hcn_neb_service(localizer):
     qcel_mols = [qcmol(symbols=chain_M[0].elem, geometry=coord, molecular_charge=0, molecular_multiplicity=1)
                       for coord in coords]
 
-    # 1) neb.arrange()
-
     new_qcel_mols = geometric.neb.arrange(qcel_mols)
     count = sum([1 if not np.allclose(i.geometry, j.geometry) else 0 for i, j in zip(qcel_mols, new_qcel_mols)])
     # 5 images should change from the arrange().
     assert count == 5
 
-    # 2) neb.prepare()
+def test_hcn_neb_service_rest(localizer):
+    """
+    Testing neb.prepare() and neb.nextchain() function for QCFractal NEB service
+    """
+
+    # 1) neb.prepare()
     with open(os.path.join(datad, 'prepare_json_in.json')) as prepare_in:
         in_dict = json.load(prepare_in)
 
@@ -123,7 +126,7 @@ def test_hcn_neb_service(localizer):
     for i in range(len(input_grad)):
         assert np.allclose(input_grad[i], out_dict['result_prev'][i]['gradient'])
 
-    # 3) neb.nextchain()
+    # 2-1) neb.nextchain() usual case test
     with open(os.path.join(datad, 'nextchain_json_in.json')) as prepare_in:
         in_dict = json.load(prepare_in)
 
@@ -134,8 +137,6 @@ def test_hcn_neb_service(localizer):
     old_coords_ang = out_dict['coord_ang_prev'][0]
 
     assert np.allclose(new_coords_ang, old_coords_ang)
-    print(in_dict['Ys'])
-    print(out_dict['Ys'])
 
     # Output dictionary should have one more Ys, GWs, and GPs than input
     assert len(in_dict['Ys']) + 1 == len(out_dict['Ys'])
@@ -151,6 +152,36 @@ def test_hcn_neb_service(localizer):
     for i in range(len(input_grad)):
         assert np.allclose(input_grad[i], out_dict['result_prev'][i]['gradient'])
 
+    # Output should not have any numpy array
+    for k, v in out_dict.items():
+        if isinstance(v, list):
+            for i in v:
+                assert not isinstance(i, np.ndarray)
+
+
+    # 2-2) neb.nextchain() respaced case test
+    input_dict = copy.deepcopy(in_dict)
+    input_dict['respaced'] = True
+    new_coords, out_dict = geometric.neb.nextchain(input_dict)
+
+    new_coords_ang = np.array(new_coords[0]) * geometric.nifty.bohr2ang
+    old_coords_ang = out_dict['coord_ang_prev'][0]
+
+    assert np.allclose(new_coords_ang, old_coords_ang)
+
+    # Output dictionary should have just one Ys, GWs, and GPs
+    assert 1 == len(out_dict['Ys'])
+    assert 1 == len(out_dict['GWs'])
+    assert 1 == len(out_dict['GPs'])
+
+    # geometry needs to be emptied.
+    assert len(out_dict['geometry']) == 0
+
+    # Output should not have any numpy array
+    for k, v in out_dict.items():
+        if isinstance(v, list):
+            for i in v:
+                assert not isinstance(i, np.ndarray)
 
 
 

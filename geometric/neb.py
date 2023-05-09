@@ -2265,10 +2265,10 @@ def nextchain(info_dict):
         attrs_new = check_attr(chain)
         attrs_prev = check_attr(chain_prev)
         newcoords = chaintocoords(chain)
-        temp = {"Ys": [Y_prev], "GWs": [GW_prev], "GPs": [GP_prev], "attrs_new": attrs_new, "attrs_prev": attrs_prev,
-            "expect": expect, "expectG": expectG.tolist(), "respaced": respaced, "forcerebuild": ForceRebuild,
-            "lastforce": LastForce, "coord_ang_prev": chaintocoords(chain_prev, True), "quality": Quality,
-            "result_prev": result, "geometry": []}
+        temp = {"Ys": [Y_prev.tolist()], "GWs": [GW_prev.tolist()], "GPs": [GP_prev.tolist()], "attrs_new": attrs_new,
+                "attrs_prev": attrs_prev, "expect": expect, "expectG": expectG.tolist(), "respaced": respaced,
+                "forcerebuild": ForceRebuild, "lastforce": LastForce, "coord_ang_prev": chaintocoords(chain_prev, True),
+                "quality": Quality, "result_prev": result, "geometry": []}
         info_dict.update(temp)
         return newcoords, info_dict
 
