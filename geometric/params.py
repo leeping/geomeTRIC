@@ -228,7 +228,6 @@ class NEBParams(object):
         self.guessk = kwargs.get('guessk', 0.05)
         self.guessw = kwargs.get('guessw', 0.1)
         self.nebk = kwargs.get('nebk', 1.0)
-        self.nebew = kwargs.get('nebew', None)
         self.history = kwargs.get('neb_history', 1)
         self.maxcyc = kwargs.get('neb_maxcyc', 100)
         self.climb = kwargs.get('climb', 0.5)
@@ -467,8 +466,6 @@ def parse_neb_args(*args):
     grp_nebparam.add_argument('--guessk', type=float, help='Guess Hessian eigenvalue for displacements (default 0.05).\n ')
     grp_nebparam.add_argument('--guessw', type=float, help='Guess weight for chain coordinates (default 0.1).\n ')
     grp_nebparam.add_argument('--nebk', type=float, help='NEB spring constant in units of kcal/mol/Ang^2 (default 1.0).\n ')
-    grp_nebparam.add_argument('--nebew', type=int, help='Provide an integer value to vary spring forces based on image\'s energy (energy weighted NEB).\n' 
-                                                        'The range of spring force will be nebk/nebew - nebk \n ')
     grp_nebparam.add_argument('--neb_history', type=int, help='Chain history to keep in memory; note chains are very memory intensive, >1 GB each (default 1).\n ')
     grp_nebparam.add_argument('--neb_maxcyc', type=int, help='Maximum number of chain optimization cycles to perform (default 100).\n ')
     grp_nebparam.add_argument('--climb', type=float, help='Activate climbing image for max-energy points when max gradient falls below this threshold (default 0.5).\n ')

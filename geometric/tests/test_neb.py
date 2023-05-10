@@ -62,27 +62,6 @@ def test_hcn_neb_optimize(localizer):
     assert final_chain.maxg < params.maxg
     assert final_chain.avgg < params.avgg
 
-@addons.using_psi4
-def test_hcn_neb_optimize_ew(localizer):
-    """
-    Optimize a HCN energy weighted chain.
-    """
-    M, engine = geometric.prepare.get_molecule_engine(
-        input=os.path.join(datad, 'hcn_neb_input.psi4in'),
-        chain_coords=os.path.join(datad, 'hcn_neb_input.xyz'),
-        images=11,
-        neb=True,
-        engine='psi4'
-    )
-
-    params = geometric.params.NEBParams(**{'nebew': 10})
-    chain = geometric.neb.ElasticBand(M, engine=engine, tmpdir=tempfile.mkdtemp(), params=params, plain=0)
-    final_chain, optCycle = geometric.neb.OptimizeChain(chain, engine, params)
-
-    assert optCycle < 10
-    assert final_chain.maxg < params.maxg
-    assert final_chain.avgg < params.avgg
-
 @addons.using_qcelemental
 def test_hcn_neb_service_arrange(localizer):
     """
@@ -182,7 +161,3 @@ def test_hcn_neb_service_rest(localizer):
         if isinstance(v, list):
             for i in v:
                 assert not isinstance(i, np.ndarray)
-
-
-
-

@@ -53,8 +53,14 @@ def CoordinateSystem(M, coordtype, chain=False, guessw=0.1):
     """
     Parameters
     ----------
+    M : Molecule object
+        Contains all structures of the input chain
     coordtype : string
-    Pass in 'cart', 'prim', 'dlc', 'hdlc', or 'tric'
+        Pass in 'cart', 'prim', 'dlc', 'hdlc', or 'tric'
+    chain : bool
+        True will return a chain object
+    guessw : float
+        Guessed value for initial Hessians
 
     Returns
     -------
@@ -247,6 +253,8 @@ class Chain(object):
             Wrapper around quantum chemistry code (currently not a ForceBalance engine)
         tmpdir : string
             Temporary directory (relative to root) that the calculation temporary files will be written to.
+        parmas : NEB parameter object
+            params.NEBparams()
         coords : np.ndarray, optional
             Array in a.u. containing coordinates (will overwrite what we have in molecule)
             Pass either an array with shape (len(M), 3*M.na), or a flat array with the same number of elements.
@@ -1261,22 +1269,7 @@ class ElasticBand(Chain):
             # doubled for non-end springs
             fplus = 0.5 if n == (len(self) - 2) else 0.25
             fminus = 0.5 if n == 1 else 0.25
-            if self.params.nebew:
-                # HP: Energy weighted NEB
-                E_i = energies[n]
-                E_ref = min(
-                    energies[0], energies[-1]
-                )  # Reference energy can be either reactant or product. Lower energy is picked here.
-                E_max = max(energies)
-                k_max = self.k
-                k_min = self.k / 2
-                a = (E_max - energies[n]) / (E_max - E_ref)
-                if E_i > E_ref:
-                    k_new = (1 - a) * k_max + a * k_min
-                else:
-                    k_new = k_min
-            else:
-                k_new = self.k
+            k_new = self.k
             self.SprBandEnergy += fplus * k_new * ndrplus**2
             self.SprBandEnergy += fminus * k_new * ndrminus**2
             self.PotBandEnergy += self.Structures[n].energy
@@ -1310,24 +1303,7 @@ class ElasticBand(Chain):
             ndrplus = np.linalg.norm(cc_next - cc_curr)
             ndrminus = np.linalg.norm(cc_curr - cc_prev)
             # Plain elastic band force
-
-            if self.params.nebew is not None:
-                # HP: Energy weighted NEB
-                E_i = energies[n]
-                E_ref = min(
-                    energies[0], energies[-1]
-                )  # Reference energy can be either reactant or product. Lower energy is picked here.
-                E_max = max(energies)
-                k_max = self.k
-                k_min = self.k / self.params.nebew
-                a = (E_max - energies[n]) / (E_max - E_ref)
-                if E_i > E_ref:
-                    k_new = (1 - a) * k_max + a * k_min
-                else:
-                    k_new = k_min
-            else:
-                k_new = self.k
-
+            k_new = self.k
             force_s = k_new * (cc_prev + cc_next - 2 * cc_curr)
             force_s_para = np.dot(force_s, tau) * tau
             force_s_ortho = force_s - force_s_para
@@ -1538,7 +1514,7 @@ class Froot(object):
             return cnorm - self.target
 
 
-def recover(chain_hist, params, forceCart, result=None):
+def recover(chain_hist, forceCart, result=None):
     """
     Recover from a failed optimization.
 
@@ -1547,8 +1523,6 @@ def recover(chain_hist, params, forceCart, result=None):
     chain_hist : list
         List of previous Chain objects;
         the last element is the current chain
-    params : NEBParams
-        Job parameters
     forceCart : bool
         Whether to use Cartesian coordinates or
         adopt the IC system of the current chain
@@ -1568,9 +1542,7 @@ def recover(chain_hist, params, forceCart, result=None):
     HP : np.ndarray
         New internal "plain" Hessian
     """
-    newchain = chain_hist[-1].RebuildIC(
-        "cart" if forceCart else chain_hist[-1].coordtype, result=result
-    )
+    newchain = chain_hist[-1].RebuildIC(result=result)
     newchain.SetFlags()
     newchain.ComputeGuessHessian()
     HW = newchain.guess_hessian_working.copy()
@@ -1625,7 +1597,6 @@ def updatehessian(old_chain, chain, HP, HW, Y, old_Y, GW, old_GW, GP, old_GP, La
     BFGSUpdate(Y, old_Y, GP, old_GP, HP, params)
     Eig1 = BFGSUpdate(Y, old_Y, GW, old_GW, HW, params)
     if np.min(Eig1) <= params.epsilon:
-
         if params.skip:
             print(
                 "Eigenvalues below %.4e (%.4e) - skipping Hessian update"
@@ -1639,7 +1610,7 @@ def updatehessian(old_chain, chain, HP, HW, Y, old_Y, GW, old_GW, GP, old_GP, La
                 "Eigenvalues below %.4e (%.4e) - will reset the Hessian"
                 % (params.epsilon, np.min(Eig1))
             )
-            chain, Y, GW, GP, HW, HP = recover([old_chain], params, LastForce, result)
+            chain, Y, GW, GP, HW, HP = recover([old_chain], LastForce, result)
 
     del HP_bak
     del HW_bak
@@ -1683,7 +1654,6 @@ def qualitycheck(old_chain, new_chain, trust, Quality, ThreLQ, ThreRJ, ThreHQ, Y
     else:
         chain = new_chain
         good = True
-
     return chain, trust, trustprint, Y, GW, GP, good
 
 
@@ -1785,7 +1755,7 @@ def converged(chain_maxg, chain_avgg, params_maxg, params_avgg, optCycle, params
     return False
 
 
-def takestep(c_hist, chain, params, optCycle, LastForce, ForceRebuild, trust, Y, GW, GP, HW, HP, result):
+def takestep(c_hist, chain, optCycle, LastForce, ForceRebuild, trust, Y, GW, GP, HW, HP, result):
     """
     Take a step to move the chain based on the gradients and Hessians.
     """
@@ -1808,7 +1778,7 @@ def takestep(c_hist, chain, params, optCycle, LastForce, ForceRebuild, trust, Y,
             print("\x1b[93mContinuing in Cartesian coordinates\x1b[0m")
         else:
             raise RuntimeError("Coordinate system has failed too many times")
-        chain, Y, GW, GP, HW, HP = recover(c_hist, params, LastForce == 2, result)
+        chain, Y, GW, GP, HW, HP = recover(c_hist, LastForce == 2, result)
         print("\x1b[1;93mSkipping optimization step\x1b[0m")
         optCycle -= 1
     else:
@@ -1842,8 +1812,6 @@ def OptimizeChain(chain, engine, params):
     print("Optimizing the chain.")
     chain.respace(0.01)
     chain.delete_insert(1.0)
-    if params.nebew is not None:
-        print("Energy weighted NEB will be performed.")
     chain.ComputeMetric()
     chain.ComputeChain(cyc=0)
     t0 = time.time()
@@ -1915,7 +1883,7 @@ def OptimizeChain(chain, engine, params):
         print("Time since last ComputeChain: %.3f s" % (time.time() - t0))
 
         (chain_prev, chain, expect, expectG, ForceRebuild, LastForce, Y_prev, GW_prev, GP_prev, respaced, optCycle) \
-        = takestep(c_hist, chain, params, optCycle, LastForce, ForceRebuild, trust, Y, GW, GP, HW, HP, None)
+        = takestep(c_hist, chain, optCycle, LastForce, ForceRebuild, trust, Y, GW, GP, HW, HP, None)
 
         chain.ComputeChain(cyc=optCycle)
         t0 = time.time()
@@ -2089,10 +2057,9 @@ def get_basic_info(info_dict, previous=False):
     gradients = info_dict.get("gradients")
 
     params_dict = {"images": args_dict.get("images"), "maxg": args_dict.get("maximum_force"),
-        "avgg": args_dict.get("average_force"), "nebew": args_dict.get("energy_weighted"),
-        "nebk": args_dict.get("spring_constant"), "neb_maxcyc": args_dict.get("maximum_cycle"),
-        "plain": args_dict.get("spring_type"), "skip": not args_dict.get("hessian_reset"),
-        "epsilon": args_dict.get("epsilon")}
+        "avgg": args_dict.get("average_force"), "nebk": args_dict.get("spring_constant"),
+        "neb_maxcyc": args_dict.get("maximum_cycle"), "plain": args_dict.get("spring_type"),
+        "skip": not args_dict.get("hessian_reset"), "epsilon": args_dict.get("epsilon")}
     iteration = args_dict.get("iteration")
     params = NEBParams(**params_dict)
 
@@ -2127,9 +2094,6 @@ def prepare(info_dict):
     params, M, engine, result, _ = get_basic_info(info_dict)
 
     print("Spring Force: %.2f kcal/mol/Ang^2" % params.nebk)
-
-    if params.nebew is not None:
-        print("Energy weighted NEB will be performed.")
 
     tmpdir = tempfile.mkdtemp()
 
@@ -2261,7 +2225,7 @@ def nextchain(info_dict):
     if respaced:
         # 1-1) If the chain was respaced, take a new step using the guessed Hessians.
         (chain_prev, chain, expect, expectG, ForceRebuild, LastForce, Y_prev, GW_prev, GP_prev, respaced, _) \
-            = takestep(chain_prev, chain, params, iteration, LastForce, ForceBuild, trust, Y, GW, GP, HW, HP, result_prev)
+            = takestep(chain_prev, chain, iteration, LastForce, ForceBuild, trust, Y, GW, GP, HW, HP, result_prev)
         attrs_new = check_attr(chain)
         attrs_prev = check_attr(chain_prev)
         newcoords = chaintocoords(chain)
@@ -2286,7 +2250,7 @@ def nextchain(info_dict):
         # 2-1) If the quality is bad, reject the step and take a new step with a decreased stepsize.
         chain.ComputeChain(result=result_prev)
         (chain_prev, chain, expect, expectG, ForceRebuild, LastForce, Y_prev, GW_prev, GP_prev, respaced, _) \
-        = takestep(chain_prev, chain, params, iteration, LastForce, ForceBuild, trust, Y, GW, GP, HW_bak, HP_bak, result_prev)
+        = takestep(chain_prev, chain, iteration, LastForce, ForceBuild, trust, Y, GW, GP, HW_bak, HP_bak, result_prev)
         attrs_new = check_attr(chain)
         attrs_prev = check_attr(chain_prev)
         newcoords = chaintocoords(chain)
@@ -2306,15 +2270,13 @@ def nextchain(info_dict):
                 "Eigenvalues below %.4e (%.4e) - skipping Hessian update"
                 % (params.epsilon, np.min(Eig))
             )
-
-
         else:
             print(
                 "Eigenvalues below %.4e (%.4e) - will reset the Hessian"
                 % (params.epsilon, np.min(Eig))
             )
 
-            chain, Y, GW, GP, HW, HP = recover([chain_prev], params, LastForce, result_prev)
+            chain, Y, GW, GP, HW, HP = recover([chain_prev], LastForce, result_prev)
             Ys = [Y.tolist()]
             GWs = [GW.tolist()]
             GPs = [GP.tolist()]
@@ -2322,7 +2284,7 @@ def nextchain(info_dict):
 
     # 4) Take the step based on the current Hessians and gradients. Pass the result Cartesian coordinates to QCFractal.
     (chain_prev, chain, expect, expectG, ForceRebuild, LastForce, Y_prev, GW_prev, GP_prev, respaced, _) \
-        = takestep(chain_prev, chain, params, iteration, LastForce, ForceBuild, trust, Y, GW, GP, HW, HP, result_prev)
+        = takestep(chain_prev, chain, iteration, LastForce, ForceBuild, trust, Y, GW, GP, HW, HP, result_prev)
     attrs_new = check_attr(chain)
     attrs_prev = check_attr(chain_prev)
     Ys.append(Y.tolist())
