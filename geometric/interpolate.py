@@ -57,31 +57,37 @@ def find_transfers_common_bonds(molecule, allow_larger=False):
     M_reac.build_topology()
     M_prod.build_topology()
 
+    # Adding atoms
     for i in range(natom):
         reac.add_node(i)
         prod.add_node(i)
         common.add_node(i)
-    
+
+    # Adding bonds for the reactant and product
     for (i, j) in M_reac.bonds:
         reac.add_edge(i, j)
 
     for (i, j) in M_prod.bonds:
         prod.add_edge(i, j)
-    
+
+    # Adding common bonds
     for edge in reac.edges:
         if prod.has_edge(*edge):
             common.add_edge(*edge)
 
+    # Sizes of the fragments that are intact throughout the reaction
     atom_to_fragment_size = {}
     for c in nx.connected_components(common):
         for i in c:
             atom_to_fragment_size[i] = len(c)
 
+    # Detecting bond donors and acceptors
     for i in range(natom):
         bonds_init = set(nx.neighbors(reac, i))
         bonds_final = set(nx.neighbors(prod, i))
         potential_donors = bonds_init - bonds_final
         potential_acceptors = bonds_final - bonds_init
+        # If one bond breaks and one bond forms:
         if len(potential_donors) == 1 and len(potential_acceptors) == 1:
             don = list(potential_donors)[0]
             acc = list(potential_acceptors)[0]
@@ -98,11 +104,15 @@ def find_nonbonded_pairs(molecule):
     nbpairs = []
     elem = M.elem
     natom = len(elem)
+
+    # Detecting all bonds
     for i in [0, -1]:
         Mi = M[i]
         Mi.build_topology()
         for i, j in Mi.bonds:
             union_bonds.add((i, j))
+
+    # Saving the bonds that weren't detected (non-bonded pairs)
     for i in range(natom):
         for j in range(i+1, natom):
             if (i, j) not in union_bonds:
@@ -110,6 +120,7 @@ def find_nonbonded_pairs(molecule):
     return sorted(nbpairs), sorted(list(union_bonds))
 
 def find_blocks(mtx, thre=1):
+    # This is for the diagnostic map
     blocks = []
     block_rights = []
     for i in range(mtx.shape[0]):
@@ -130,11 +141,13 @@ def find_path(mtx, thre=1):
     # These should be overlapping segments of frame numbers
     # where a single IC is known to describe them all well.
     n = mtx.shape[0]
+    # Making a matrix that is an "IC maze"
     okay = (mtx <= thre).astype(int)
     start_ic = 0
     allowed_IC = [[] for i in range(n)]
     mtx_tried = np.zeros_like(mtx)
 
+    # If the starting point or end point is blocked, we can't escape.
     if not okay[n-1, n-1] or not okay[0, 0]:
         raise RuntimeError("Spoo!")
 
@@ -1170,7 +1183,7 @@ class Interpolator(object):
 
 def main():
     M0 = Molecule(sys.argv[1])
-    interpolator = Interpolator(M0, align_system=True, do_prealign=True)
+    interpolator = Interpolator(M0, align_system=True, do_prealign=False)
     interpolator.run_workflow()
     
 if __name__ == "__main__":
