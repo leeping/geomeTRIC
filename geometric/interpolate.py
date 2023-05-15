@@ -158,7 +158,7 @@ def find_path(mtx, thre=1):
                     okay2[ic, ix] = 0
                 elif (ic>0 and not okay[ic-1, ix]) and (ix>0 and not okay[ic, ix-1]):
                     okay2[ic, ix] = 0
-        ndiff = sum(okay2 != okay)
+        ndiff = np.sum(okay2 != okay)
         okay = okay2.copy()
         if ndiff == 0: break
 
@@ -1170,7 +1170,8 @@ class Interpolator(object):
 
 def main():
     M0 = Molecule(sys.argv[1])
-    interpolator = Interpolator(M0, align_system=True, do_prealign=True)
+    #interpolator = Interpolator(M0, use_midframes=True, n_frames=0, align_system=True, do_prealign=False)
+    interpolator = Interpolator(M0, align_system=True, do_prealign=False)
     interpolator.run_workflow()
     
 if __name__ == "__main__":

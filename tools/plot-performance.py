@@ -107,9 +107,17 @@ with PdfPages('plot-performance.pdf') as pdf:
         ax1.set_title('Energy change, from start (kcal/mol)')
         df_energy_kcal.plot(ax=ax1, legend=False)
         labels = []
+        final_es = []
         for col in df_energy_kcal.columns:
             labels.append("%s %s N=%i" % (col, status[col], df_energy_kcal[col].last_valid_index()))
+            final_es.append(df_energy_kcal[col][df_energy_kcal[col].last_valid_index()])
+        final_es = np.array(final_es)
         fig.legend(labels, loc='center', bbox_to_anchor=(0.5, 0.05), ncol=2)
+        ax1in = ax1.inset_axes([0.3, 0.3, 0.68, 0.68])
+        ymin = np.min(final_es) - 1
+        ymax = np.max(final_es) + 1
+        ax1in.set_ylim(ymin, ymax)
+        df_energy_kcal.plot(ax=ax1in, legend=False)
 
         ax5.set_xlabel('Optimization Cycle')
         titles = ['RMS Gradient (a.u.)', 'Max Gradient (a.u.)', 'Energy change per step (a.u.)', 'RMS Displacement (a.u.)', 'Max Displacement (a.u.)']
