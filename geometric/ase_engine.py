@@ -19,11 +19,15 @@ except (ModuleNotFoundError, ImportError): # pragma: no cover
     Atoms = None
     units = None
 
+import os,sys
 import importlib
+import json
+import numpy as np
 
 from .engine import Engine, EngineError
+from .errors import CheckCoordError
 from .molecule import Molecule
-
+from .nifty import ang2bohr, bohr2ang, getWorkQueue, queue_up_src_dest
 
 class EngineASE(Engine):
     def __init__(self, molecule: Molecule, calculator: Calculator):
@@ -35,7 +39,11 @@ class EngineASE(Engine):
 
     @classmethod
     def from_calculator_constructor(cls, molecule: Molecule, calculator, *args, **kwargs):
-        return cls(molecule, calculator(*args, **kwargs))
+        obj = cls(molecule, calculator(*args, **kwargs))
+        # This stores the needed information to re-create the Engine from strings (for example when using Work Queue)
+        obj.calculator_import_path = calculator.__module__+'.'+calculator.__name__
+        obj.calculator_kwargs = kwargs
+        return obj
 
     @classmethod
     def from_calculator_string(cls, molecule: Molecule, calculator_import: str, *args, **kwargs):
@@ -104,8 +112,61 @@ class EngineASE(Engine):
         }
 
     def calc_wq_new(self, coords, dirname):
-        raise NotImplementedError
+        # Set up Work Queue object
+        wq = getWorkQueue()
+        if not os.path.exists(dirname): os.makedirs(dirname)
+        # Convert coordinates back to the xyz file
+        self.M.xyzs[0] = coords.reshape(-1, 3) * bohr2ang
+        self.M[0].write(os.path.join(dirname, "start.xyz"))
+        # Specify WQ input and output files
+        in_files = [('%s/start.xyz' % dirname, 'start.xyz')]
+        out_files = [('%s/ase_energy.txt' % dirname, 'ase_energy.txt'),
+                     ('%s/ase_gradient.txt' % dirname, 'ase_gradient.txt')]
+        cmd="run-ase --ase-class=%s --ase-kwargs='%s' start.xyz" % (self.calculator_import_path, json.dumps(self.calculator_kwargs))
+        queue_up_src_dest(wq, cmd, in_files, out_files, verbose=False, print_time=600)
+
+    def read_result(self, dirname, check_coord=None):
+        """ Read ASE calculation output. """
+        if check_coord is not None:
+            raise CheckCoordError("Coordinate checking not implemented")
+        result = {}
+        result["energy"] = float(os.path.join(dirname, "ase_energy.txt").readlines()[0].strip())
+        result["gradient"] = np.loadtxt(os.path.join(dirname, "ase_gradient.txt")).flatten()
+        return result
 
     def copy_scratch(self, src, dest):
         # this does nothing for ASE for now
         return
+
+def parse_args(*args):
+    import argparse
+    parser = argparse.ArgumentParser(add_help=False, formatter_class=argparse.RawTextHelpFormatter, fromfile_prefix_chars='@')
+    grp_univ = parser.add_argument_group('universal', 'Relevant to every job')
+    grp_univ.add_argument('input', type=str, help='REQUIRED positional argument: Quantum chemistry or MM input file for calculation\n ')
+    grp_univ.add_argument('--nt', type=int, default=1, help='Specify number of threads for running in parallel\n(for TeraChem this should be number of GPUs)')
+    grp_software = parser.add_argument_group('software', 'Options specific for certain software packages')
+    grp_software.add_argument('--ase-class', type=str, default='xtb.ase.calculator.XTB', help='ASE calculator import path, eg. "ase.calculators.lj.LennardJones"')
+    grp_software.add_argument('--ase-kwargs', type=str, default='{"method":"GFN2-xTB"}', help='ASE calculator keyword args, as JSON dictionary, eg. {"param_filename":"path/to/file.xml"}')
+    grp_help = parser.add_argument_group('help', 'Get help')
+    grp_help.add_argument('-h', '--help', action='help', help='Show this help message and exit')
+    args_dict = {}
+    for k, v in vars(parser.parse_args(*args)).items():
+        if v is not None:
+            args_dict[k] = v
+    return args_dict
+
+def main():
+    args = parse_args(sys.argv[1:])
+    M = Molecule(args["input"])[0]
+    ase_class_name = args["ase_class"]
+    ase_kwargs = args["ase_kwargs"]
+    os.environ["OMP_NUM_THREADS"] = "%i" % args["nt"]
+    engine = EngineASE.from_calculator_string(M, ase_class_name, **json.loads(ase_kwargs))
+    coords = M.xyzs[0].flatten()*ang2bohr
+    result = engine.calc_new(coords, '.')
+    with open("ase_energy.txt", "w") as f:
+        print("% 18.12e\n" % result['energy'], file=f)
+    np.savetxt("ase_gradient.txt", result['gradient'].reshape(-1, 3), fmt="% 18.12e")
+        
+if __name__ == '__main__':
+    main()
