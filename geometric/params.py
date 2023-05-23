@@ -48,6 +48,8 @@ class OptParams(object):
     def __init__(self, **kwargs):
         # Whether we are optimizing for a transition state. This changes a number of default parameters.
         self.transition = kwargs.get('transition', False)
+        # Intrinsic Reaction Coordinate method. This changes a number of default parameters.
+        self.irc = kwargs.get('irc', False)
         # CI optimizations sometimes require tiny steps
         self.meci = kwargs.get('meci', False)
         # Handle convergence criteria; this edits the kwargs
@@ -61,9 +63,9 @@ class OptParams(object):
         # More verbose printout
         self.verbose = kwargs.get('verbose', False)
         # Starting value of the trust radius
-        # Because TS optimization is experimental, use conservative trust radii
+        # Because TS optimization and IRC are experimental, use conservative trust radii
         self.trust = kwargs.get('trust', 0.01 if self.transition else 0.1)
-        # Maximum value of trust radius
+        # Maximum value of trust radius (HP: I don't think self.irc is needed inside the if statement)
         self.tmax = kwargs.get('tmax', 0.03 if self.transition else 0.3)
         # Minimum value of the trust radius
         # Also sets the maximum step size that can be rejected
@@ -87,7 +89,7 @@ class OptParams(object):
         self.trust = min(self.tmax, self.trust)
         self.trust = max(self.tmin, self.trust)
         # Maximum number of optimization cycles
-        self.maxiter = kwargs.get('maxiter', 300)
+        self.maxiter = kwargs.get('maxiter', 500 if self.irc else 300)
         # Use updated constraint algorithm implemented 2019-03-20
         self.conmethod = kwargs.get('conmethod', 0)
         # Write Hessian matrix at optimized structure to text file
@@ -106,7 +108,7 @@ class OptParams(object):
         if self.hessian is None:
             # Default is to calculate Hessian in the first step if searching for a transition state.
             # Otherwise the default is to never calculate the Hessian.
-            if self.transition: self.hessian = 'first'
+            if self.transition or self.irc: self.hessian = 'first'
             else: self.hessian = 'never'
         elif self.hessian.startswith('file:'):
             if os.path.exists(self.hessian[5:]):
@@ -173,13 +175,14 @@ class OptParams(object):
                             'TURBOMOLE': [1e-6, 5e-4, 1e-3, 5.0e-4, 1e-3],
                             'INTERFRAG_TIGHT': [1e-6, 1e-5, 1.5e-5, 4.0e-4, 6.0e-4],
                             'GAU_TIGHT': [1e-6, 1e-5, 1.5e-5, 4e-5, 6e-5],
-                            'GAU_VERYTIGHT': [1e-6, 1e-6, 2e-6, 4e-6, 6e-6]}
+                            'GAU_VERYTIGHT': [1e-6, 1e-6, 2e-6, 4e-6, 6e-6],
+                            'IRC': [5e-4, 2e-2, 4e-2, 1e-2, 2e-2]}
         # Q-Chem style convergence criteria (i.e. gradient and either energy or displacement)
         self.qccnv = kwargs.get('qccnv', False)
         # Molpro style convergence criteria (i.e. gradient and either energy or displacement, with different defaults)
         self.molcnv = kwargs.get('molcnv', False)
         # Check if there is a convergence set passed else use the default
-        set_name = kwargs.get('convergence_set', 'GAU').upper()
+        set_name = 'IRC' if self.irc else kwargs.get('convergence_set', 'GAU').upper()
         # If we have extra keywords apply them here else use the set
         # Convergence criteria in a.u. and Angstrom
         self.Convergence_energy = kwargs.get('convergence_energy', convergence_sets[set_name][0])
@@ -321,6 +324,7 @@ def parse_optimizer_args(*args):
 
     grp_jobtype = parser.add_argument_group('jobtype', 'Control the type of optimization job')
     grp_jobtype.add_argument('--transition', type=str2bool, help='Provide "yes" to Search for a first order saddle point / transition state.\n ')
+    grp_jobtype.add_argument('--irc', type=str2bool, help='Provide "yes" to perform the IRC method.\n ')
     grp_jobtype.add_argument('--meci', type=str, nargs="+", help='Provide second input file and search for minimum-energy conical\n '
                              'intersection or crossing point between two SCF solutions (TeraChem and Q-Chem supported).\n'
                              'Or, provide "engine" if the engine directly provides the MECI objective function and gradient.\n')

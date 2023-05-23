@@ -331,7 +331,7 @@ def update_hessian(IC, H0, xyz_seq, gradx_seq, params, trust_limit=False, max_up
         if history == max_updates: break
         history += 1
 
-    if (trust_limit and history >= 1) or history > 1:
+    if ((trust_limit and history >= 1) or history > 1) and not params.irc:
         logger.info("Updating Hessian using %i steps from history\n" % history)
 
     # If history=2, thisFrame and prevFrame should be (-3, -2) and (-2, -1)
@@ -375,7 +375,7 @@ def update_hessian(IC, H0, xyz_seq, gradx_seq, params, trust_limit=False, max_up
             logger.info(msg+'\n')
             
     # Return the guess Hessian if performing energy minimization and eigenvalues become negative.
-    if not params.transition:
+    if not params.transition and not params.irc:
         Eig = sorted_eigh(H, asc=True)[0]
         if np.min(Eig) <= params.epsilon and params.reset:
             logger.info("Eigenvalues below %.4e (%.4e) - returning guess\n" % (params.epsilon, np.min(Eig)))
