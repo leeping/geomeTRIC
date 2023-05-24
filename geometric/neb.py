@@ -1377,7 +1377,7 @@ class ElasticBand(Chain):
     def OptimizeEndpoints(self, gtol=None):
         self.Structures[0].OptimizeGeometry(gtol)
         self.Structures[-1].OptimizeGeometry(gtol)
-        logger.info("Optimizing the endpoints are done. \n")
+        logger.info("Endpoints were optimized. \n")
         self.M.xyzs[0] = self.Structures[0].M.xyzs[0]
         self.M.xyzs[-1] = self.Structures[-1].M.xyzs[0]
         # The Structures are what store the individual Cartesian coordinates for each frame.
@@ -1641,7 +1641,7 @@ def compare(old_chain, new_chain, ThreHQ, ThreLQ, old_GW, HW, HP, respaced, optC
         avgg_print, maxg_print = print_forces(new_chain, params_avgg, params_maxg)
         logger.info("Respaced images - skipping trust radius update \n")
         logger.info(
-            "@%13s %13s %13s %13s %11s %13s %13s \n"
+            "\n@%13s %13s %13s %13s %11s %13s %13s \n"
             % ("GAvg(eV/Ang)", "GMax(eV/Ang)", "Length(Ang)", "DeltaE(kcal)", "RMSD(Ang)", "TrustRad(Ang)", "Step Quality")
         )
         logger.info(
@@ -1674,7 +1674,7 @@ def compare(old_chain, new_chain, ThreHQ, ThreLQ, old_GW, HW, HP, respaced, optC
     )
     avgg_print, maxg_print = print_forces(new_chain, params_avgg, params_maxg)
     logger.info(
-        "%13s %13s %13s %13s %11s %14s %13s \n"
+        "\n%13s %13s %13s %13s %11s %14s %13s \n"
         % ("GAvg(eV/Ang)", "GMax(eV/Ang)", "Length(Ang)", "DeltaE(kcal)", "RMSD(Ang)", "TrustRad(Ang)", "Step Quality")
     )
     logger.info(
@@ -1758,9 +1758,9 @@ def OptimizeChain(chain, engine, params):
     ThreRJ = 0.001
     # Optimize the endpoints of the chain
     if params.optep:
-        logger.info("First, optimizing endpoint images \n")
+        logger.info("Optimizing endpoint images \n")
         chain.OptimizeEndpoints(params.maxg)
-    logger.info("Optimizing the chain \n")
+    logger.info("Optimizing the input chain \n")
     chain.respace(0.01)
     chain.delete_insert(1.0)
     chain.ComputeMetric()
@@ -1775,7 +1775,7 @@ def OptimizeChain(chain, engine, params):
     chain.PrintStatus()
 
     avgg_print, maxg_print = print_forces(chain, params.avgg, params.maxg)
-    logger.info("-= Chain Properties =- \n")
+    logger.info("\n-= Chain Properties =- \n")
     logger.info(
         "%13s %13s %13s %13s %11s %13s %13s \n"
         % ("GAvg(eV/Ang)", "GMax(eV/Ang)", "Length(Ang)", "DeltaE(kcal)", "RMSD(Ang)", "TrustRad(Ang)", "Step Quality")
@@ -2054,7 +2054,7 @@ def prepare(info_dict):
     avgg_print, maxg_print = print_forces(chain, params.avgg, params.maxg)
     logger.info("-= Chain Properties =- \n")
     logger.info(
-        "@%13s %13s %13s %13s %11s %13s %13s \n"
+        "@\n%13s %13s %13s %13s %11s %13s %13s \n"
         % ("GAvg(eV/Ang)", "GMax(eV/Ang)", "Length(Ang)", "DeltaE(kcal)", "RMSD(Ang)", "TrustRad(Ang)", "Step Quality")
     )
     logger.info(
