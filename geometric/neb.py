@@ -19,7 +19,27 @@ from .nifty import flat, row, col, createWorkQueue, getWorkQueue, wq_wait, ang2b
 from .molecule import Molecule, EqualSpacing
 from .errors import NEBStructureError, NEBChainShapeError, NEBChainRespaceError, NEBBandTangentError, NEBBandGradientError
 
+def print_forces(chain, avgg, maxg):
+    """Check average and maximum chain forces and return color coded string"""
+    avgg_print = "%.4f" %chain.avgg
+    maxg_print = "%.4f" %chain.maxg
 
+    # Else statements were added to ensure the same string lengths
+    if chain.avgg < avgg:
+        avgg_print = "\x1b[92m%s\x1b[0m" % avgg_print
+    elif chain.avgg > 100*avgg:
+        avgg_print = "\x1b[91m%s\x1b[0m" % avgg_print
+    else:
+        avgg_print = "\x1b[0m%s" % avgg_print
+
+    if chain.maxg < maxg:
+        maxg_print = "\x1b[92m%s\x1b[0m" % maxg_print
+    elif chain.maxg > 100*maxg:
+        maxg_print = "\x1b[91m%s\x1b[0m" % maxg_print
+    else:
+        maxg_print = "\x1b[0m%s" % maxg_print
+
+    return avgg_print, maxg_print
 
 def rms_gradient(gradx):
     """Return the RMS of a Cartesian gradient."""
@@ -363,19 +383,17 @@ class Chain(object):
         else:
             v0 = 0.0
 
-        log_str = "Hessian Eigenvalues (Working) :"+" ".join(["% .4e" % i for i in Eig[:5]]) + \
+        logger.info("Hessian Eigenvalues (Working) :"+" ".join(["% .4e" % i for i in Eig[:5]]) + \
             "..." + \
-            " ".join(["% .4e" % i for i in Eig[-5:]])
-        logger.info(log_str + '\n')
+            " ".join(["% .4e" % i for i in Eig[-5:]])+ '\n')
 
         if np.sum(np.array(Eig) < 0.0) > 5:
             logger.info("%i Negative Eigenvalues \n" % (np.sum(np.array(Eig) < 0.0)))
 
         if Eig[0] != EigP[0]:
-            log_str = "Hessian Eigenvalues (Plain)   :"+" ".join(["% .4e" % i for i in EigP[:5]]) + \
+            logger.info("Hessian Eigenvalues (Plain)   :"+" ".join(["% .4e" % i for i in EigP[:5]]) + \
                 "..." +\
-                " ".join(["% .4e" % i for i in EigP[-5:]])
-            logger.info(log_str + '\n')
+                " ".join(["% .4e" % i for i in EigP[-5:]])+'\n')
             if np.sum(np.array(EigP) < 0.0) > 5:
                 logger.info("%i Negative Eigenvalues \n" % (np.sum(np.array(EigP) < 0.0)))
         if finish:
@@ -522,11 +540,9 @@ class Chain(object):
         if len(merge_segments) > 0:
             respaced = True
             self.clearCalcs(clearEngine=False)
-            log_str = "Image Number          :"+" ".join(["  %3i  " % i for i in range(len(self))])
-            logger.info(log_str + ' \n')
-            logger.info("Spacing (Ang)     Old :" + " " * 4 + OldSpac + '\n')
-            log_str = "                  New :"+" " * 4+" ".join(["%6.3f " % i for i in self.calc_spacings()])
-            logger.info(log_str + '\n')
+            logger.info("Image Number          :"+" ".join(["  %3i  " % i for i in range(len(self))])+'\n')
+            logger.info("Spacing (Ang)     Old :"+" " * 5+OldSpac+'\n')
+            logger.info("                  New :"+" " * 5+" ".join(["%6.3f " % i for i in self.calc_spacings()])+'\n')
         return respaced
 
     def delete_insert(self, thresh):
@@ -577,11 +593,9 @@ class Chain(object):
                 )
         if respaced:
             self.clearCalcs(clearEngine=False)
-            log_str ="Image Number          :"+" ".join(["  %3i  " % i for i in range(len(self))])
-            logger.info(log_str + '\n')
-            logger.info("Spacing (Ang)     Old :"+" " * 4+OldSpac+'\n')
-            log_str ="                  New :"+" " * 4+" ".join(["%6.3f " % i for i in self.calc_spacings()])
-            logger.info(log_str+'\n')
+            logger.info("Image Number          :"+" ".join(["  %3i  " % i for i in range(len(self))])+'\n')
+            logger.info("Spacing (Ang)     Old :"+" " * 5+OldSpac+'\n')
+            logger.info("                  New :"+" " * 5+" ".join(["%6.3f " % i for i in self.calc_spacings()])+'\n')
         return respaced
 
     def SaveToDisk(self, fout="chain.xyz"):
@@ -998,18 +1012,16 @@ class ElasticBand(Chain):
                 symcolors.append(("\x1b[94m", "\x1b[0m"))
             else:
                 symcolors.append(("", ""))
-        log_str="Image Number          :"+" ".join(["  %3i  " % i for i in range(len(self))])
-        logger.info(log_str+'\n')
-        log_str="                       "+" ".join(
+        logger.info("Image Number          :"+" ".join(["  %3i  " % i for i in range(len(self))])+'\n')
+        logger.info("                       "+" ".join(
                 [
                     "%s%7s%s" % (symcolors[i][0], s, symcolors[i][1])
                     for i, s in enumerate(symbols)
                 ]
-            )
-        logger.info(log_str+'\n')
-        logger.info("Energies  (kcal/mol)  : ")
+            )+'\n')
+        logger.info("Energies  (kcal/mol)  :")
         logger.info(" ".join(["%7.3f" % n for n in enes]) + '\n')
-        logger.info("Spacing (Ang)         : ")
+        logger.info("Spacing   (Ang)       :")
         logger.info(" " * 4+" ".join(["%6.3f " % i for i in self.calc_spacings()])+'\n')
 
         xyz = self.get_cartesian_all(endpts=True)
@@ -1611,7 +1623,7 @@ def qualitycheck(old_chain, new_chain, trust, Quality, ThreLQ, ThreRJ, ThreHQ, Y
 
 
 def compare(old_chain, new_chain, ThreHQ, ThreLQ, old_GW, HW, HP, respaced, optCycle, expect, expectG, trust, trustprint,
-    params_avgg, Quality):
+    params_avgg, params_maxg, Quality):
     """
     Two chain objects are compared here to see the quality of the next step.
     """
@@ -1626,24 +1638,17 @@ def compare(old_chain, new_chain, ThreHQ, ThreLQ, old_GW, HW, HP, respaced, optC
     except:
         pass  # When the NEB ran by QCFractal, it can't (does not need to) save the climbing images in disk.
     if respaced:
+        avgg_print, maxg_print = print_forces(new_chain, params_avgg, params_maxg)
         logger.info("Respaced images - skipping trust radius update \n")
         logger.info(
             "@%13s %13s %13s %13s %11s %13s %13s \n"
-            % (
-                "GAvg(eV/Ang)",
-                "GMax(eV/Ang)",
-                "Length(Ang)",
-                "DeltaE(kcal)",
-                "RMSD(Ang)",
-                "TrustRad(Ang)",
-                "Step Quality",
-            )
+            % ("GAvg(eV/Ang)", "GMax(eV/Ang)", "Length(Ang)", "DeltaE(kcal)", "RMSD(Ang)", "TrustRad(Ang)", "Step Quality")
         )
         logger.info(
             "@%13s %13s %13s \n"
             % (
-                "% 8.4f  " % new_chain.avgg,
-                "% 8.4f  " % new_chain.maxg,
+                "   %s  " %avgg_print,
+                "     %s  " %maxg_print,
                 "% 8.4f  " % sum(new_chain.calc_spacings()),
             )
         )
@@ -1667,26 +1672,19 @@ def compare(old_chain, new_chain, ThreHQ, ThreLQ, old_GW, HW, HP, respaced, optC
         if Quality > ThreHQ
         else ("Okay" if Quality > ThreLQ else ("Poor" if Quality > -1.0 else "Reject"))
     )
+    avgg_print, maxg_print = print_forces(new_chain, params_avgg, params_maxg)
     logger.info(
         "%13s %13s %13s %13s %11s %14s %13s \n"
-        % (
-            "GAvg(eV/Ang)",
-            "GMax(eV/Ang)",
-            "Length(Ang)",
-            "DeltaE(kcal)",
-            "RMSD(Ang)",
-            "TrustRad(Ang)",
-            "Step Quality",
-        )
+        % ("GAvg(eV/Ang)", "GMax(eV/Ang)", "Length(Ang)", "DeltaE(kcal)", "RMSD(Ang)", "TrustRad(Ang)", "Step Quality")
     )
     logger.info(
         "@%13s %13s %13s %13s %11s  %8.4f (%s)  %13s \n"
         % (
-            "% 8.4f  " % new_chain.avgg,
-            "% 8.4f  " % new_chain.maxg,
+            "   %s  " % avgg_print,
+            "     %s  " % maxg_print,
             "% 8.4f  " % sum(new_chain.calc_spacings()),
             "% 8.4f  " % (au2kcal * dE / len(new_chain)),
-            "% 8.4f  " % (ChainRMSD(new_chain, old_chain)),
+            "% 10.4f  " % (ChainRMSD(new_chain, old_chain)),
             trust,
             trustprint,
             "% 6.2f (%s)" % (Quality, Describe),
@@ -1695,7 +1693,7 @@ def compare(old_chain, new_chain, ThreHQ, ThreLQ, old_GW, HW, HP, respaced, optC
     return (new_chain, Y, GW, GP, np.array(HW), np.array(HP), [old_chain], Quality)
 
 
-def converged(chain_maxg, chain_avgg, params_maxg, params_avgg, optCycle, params_maxcyc):
+def converged(chain_maxg, chain_avgg, params_avgg, params_maxg, optCycle, params_maxcyc):
     """
     Checking to see whether the chain is converged.
     """
@@ -1772,19 +1770,21 @@ def OptimizeChain(chain, engine, params):
     # Obtain the guess Hessian matrix
     chain.ComputeGuessHessian(blank=isinstance(engine, Blank))
     # Print the status of the zeroth iteration
-    logger.info("-=# Chain optimization cycle 0 #=- \n")
+    logger.info("\n-=# Chain optimization cycle 0 #=- \n")
     logger.info("Spring Force: %.2f kcal/mol/Ang^2 \n" % params.nebk)
     chain.PrintStatus()
+
+    avgg_print, maxg_print = print_forces(chain, params.avgg, params.maxg)
     logger.info("-= Chain Properties =- \n")
     logger.info(
-        "@%13s %13s %13s %13s %11s %13s %13s \n"
+        "%13s %13s %13s %13s %11s %13s %13s \n"
         % ("GAvg(eV/Ang)", "GMax(eV/Ang)", "Length(Ang)", "DeltaE(kcal)", "RMSD(Ang)", "TrustRad(Ang)", "Step Quality")
     )
     logger.info(
         "@%13s %13s %13s \n"
         % (
-            "% 8.4f  " % chain.avgg,
-            "% 8.4f  " % chain.maxg,
+            "   %s  " % avgg_print,
+            "     %s  " % maxg_print,
             "% 8.4f  " % sum(chain.calc_spacings()),
         )
     )
@@ -1818,7 +1818,7 @@ def OptimizeChain(chain, engine, params):
         # ======================================================#
 
         optCycle += 1
-        logger.info("-=# Chain optimization cycle %i #=- \n" % (optCycle))
+        logger.info("\n-=# Chain optimization cycle %i #=- \n" % (optCycle))
 
         # =======================================#
         # |    Obtain an optimization step      |#
@@ -1834,7 +1834,7 @@ def OptimizeChain(chain, engine, params):
         t0 = time.time()
         # ----------------------------------------------------------
         chain, Y, GW, GP, HW, HP, c_hist, Quality = compare(chain_prev, chain, ThreHQ, ThreLQ, GW, HW, HP, respaced,
-            optCycle, expect, expectG, trust, trustprint, params.avgg, Quality)
+            optCycle, expect, expectG, trust, trustprint, params.avgg, params.maxg, Quality)
 
         if respaced:
             chain.SaveToDisk(fout="chain_%04i.xyz" % optCycle)
@@ -1845,7 +1845,7 @@ def OptimizeChain(chain, engine, params):
         # |    Check convergence criteria       |#
         # =======================================#
 
-        if converged(chain.maxg, chain.avgg, params.maxg, params.avgg, optCycle, params.maxcyc):
+        if converged(chain.maxg, chain.avgg, params.avgg, params.maxg, optCycle, params.maxcyc):
             break
 
         # =======================================#
@@ -2051,24 +2051,17 @@ def prepare(info_dict):
     chain.ComputeGuessHessian(blank=isinstance(engine, Blank))
     chain.PrintStatus()
 
+    avgg_print, maxg_print = print_forces(chain, params.avgg, params.maxg)
     logger.info("-= Chain Properties =- \n")
     logger.info(
         "@%13s %13s %13s %13s %11s %13s %13s \n"
-        % (
-            "GAvg(eV/Ang)",
-            "GMax(eV/Ang)",
-            "Length(Ang)",
-            "DeltaE(kcal)",
-            "RMSD(Ang)",
-            "TrustRad(Ang)",
-            "Step Quality",
-        )
+        % ("GAvg(eV/Ang)", "GMax(eV/Ang)", "Length(Ang)", "DeltaE(kcal)", "RMSD(Ang)", "TrustRad(Ang)", "Step Quality")
     )
     logger.info(
         "@%13s %13s %13s \n"
         % (
-            "% 8.4f  " % chain.avgg,
-            "% 8.4f  " % chain.maxg,
+            "   %s  " % avgg_print,
+            "     %s  " % maxg_print,
             "% 8.4f  " % sum(chain.calc_spacings()),
         )
     )
@@ -2166,7 +2159,7 @@ def nextchain(info_dict):
 
     # 1) First, compare two chains and determine the quality of the next step.
     chain, Y, GW, GP, HW, HP, c_hist, Quality = compare(chain_prev, chain, ThreHQ, ThreLQ, GW_prev, HW_prev, HP_prev,
-                                        respaced, iteration, expect, expectG, trust, trustprint, params.avgg, Quality)
+                                        respaced, iteration, expect, expectG, trust, trustprint, params.avgg, params.maxg, Quality)
     if respaced:
         # 1-1) If the chain was respaced, take a new step using the guessed Hessians.
         (chain_prev, chain, expect, expectG, ForceRebuild, LastForce, Y_prev, GW_prev, GP_prev, respaced, _) \
@@ -2183,7 +2176,7 @@ def nextchain(info_dict):
 
     # 2) If the chain is converged, return None to QCFractal. This will end an NEB service.
     if converged(
-        chain.maxg, chain.avgg, params.maxg, params.avgg, iteration, params.maxcyc
+        chain.maxg, chain.avgg, params.avgg, params.maxg, iteration, params.maxcyc
     ):
         return None, {}
 

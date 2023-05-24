@@ -44,7 +44,7 @@ import shutil
 import os
 
 from .ase_engine import EngineASE
-from .errors import EngineError
+from .errors import EngineError, InputError
 from .internal import Distance, Angle, Dihedral, CartesianX, CartesianY, CartesianZ, TranslationX, TranslationY, TranslationZ, RotationA, RotationB, RotationC
 from .engine import set_tcenv, load_tcin, TeraChem, ConicalIntersection, Psi4, QChem, Gromacs, Molpro, OpenMM, QCEngineAPI, Gaussian, QUICK
 from .molecule import Molecule, Elements
@@ -335,9 +335,8 @@ def get_molecule_engine(**kwargs):
         M.build_topology()
 
     if NEB:
+        logger.info("\nNudged Elastic Band calculation will be performed.\n")
         chain_coord = kwargs.get('chain_coords', None)
-        if chain_coord is None:
-            raise RuntimeError("Please provide an initial chain coordinate for NEB (--chain_coords input.xyz).\n")
         M.load_frames(chain_coord)
         images = kwargs.get('images', 11)
         if images > len(M):
