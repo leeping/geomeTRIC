@@ -122,15 +122,24 @@ class EngineASE(Engine):
         in_files = [('%s/start.xyz' % dirname, 'start.xyz')]
         out_files = [('%s/ase_energy.txt' % dirname, 'ase_energy.txt'),
                      ('%s/ase_gradient.txt' % dirname, 'ase_gradient.txt')]
-        cmd="run-ase --ase-class=%s --ase-kwargs='%s' start.xyz" % (self.calculator_import_path, json.dumps(self.calculator_kwargs))
+        cmd="run-ase --nt 1 --ase-class=%s --ase-kwargs='%s' start.xyz" % (self.calculator_import_path, json.dumps(self.calculator_kwargs))
         queue_up_src_dest(wq, cmd, in_files, out_files, verbose=False, print_time=600)
 
     def read_result(self, dirname, check_coord=None):
         """ Read ASE calculation output. """
         if check_coord is not None:
-            raise CheckCoordError("Coordinate checking not implemented")
+            read_xyz_success = False
+            if os.path.exists(os.path.join(dirname, "start.xyz")):
+                try:
+                    read_xyz = Molecule(os.path.join(dirname, "start.xyz"), build_topology=False).xyzs[0].flatten()/bohr2ang
+                    # print("Successfully read xyz coordinates from", os.path.join(dirname, "start.xyz"))
+                    read_xyz_success = True
+                except: pass
+            if not read_xyz_success or np.linalg.norm(check_coord - read_xyz) > 1e-8:
+                # print("Raising CheckCoordError")
+                raise CheckCoordError
         result = {}
-        result["energy"] = float(os.path.join(dirname, "ase_energy.txt").readlines()[0].strip())
+        result["energy"] = float(open(os.path.join(dirname, "ase_energy.txt")).readlines()[0].strip())
         result["gradient"] = np.loadtxt(os.path.join(dirname, "ase_gradient.txt")).flatten()
         return result
 

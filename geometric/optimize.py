@@ -594,6 +594,10 @@ class Optimizer(object):
         prev_trust = self.trust
         # logger.info(" Check force/torque: rmsd = %.5f rmsd_noalign = %.5f ratio = %.5f\n" %
         #             (rms_displacement, rms_displacement_noalign, rms_displacement_noalign / rms_displacement))
+        # LPW 2023-05-24: Hack for caterpillar. Enable via CLI later.
+        # if step_state in (StepState.Okay, StepState.Poor, StepState.Reject) and params.transition:
+        #     logger.info("LPW: Recalculating Hessian\n")
+        #     self.recalcHess = True
         if step_state in (StepState.Poor, StepState.Reject):
             new_trust = max(params.tmin, min(self.trust, self.cnorm)/2)
             # if (Converged_grms or Converged_gmax) or (params.molcnv and Converged_molpro_gmax):
