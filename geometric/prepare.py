@@ -326,7 +326,6 @@ def get_molecule_engine(**kwargs):
         raise RuntimeError("Neither engine name nor customengine object was provided.\n")
 
     # When --coords is provided, it will overwrite the previous coordinate.
-    # For the NEB calculation, --chain_coords will be used.
 
     NEB = kwargs.get('neb', False)
 
@@ -343,11 +342,11 @@ def get_molecule_engine(**kwargs):
         images = kwargs.get('images', 11)
         if images > len(M):
             # HP 5/3/2023 : We can interpolate here if len(M) == 2.
-            print("WARNING: The input chain does not have enough number of images. All images will be used.\n")
+            logger.info("WARNING: The input chain does not have enough number of images. All images will be used.\n")
             images = len(M)
         M1 = M
-        print("Input coordinates have %i frames. The following will be used to initialize NEB images:" % len(M1))
-        print(', '.join(["%i" % (int(round(i))) for i in np.linspace(0, len(M1) - 1, images)]))
+        logger.info("Input coordinates have %i frames. The following will be used to initialize NEB images: \n" % len(M1))
+        logger.info(', '.join(["%i" % (int(round(i))) for i in np.linspace(0, len(M1) - 1, images)]) + "\n")
         M = M1[np.array([int(round(i)) for i in np.linspace(0, len(M1) - 1, images)])]
         M.build_topology()
 
