@@ -1,53 +1,25 @@
 from __future__ import print_function
 from __future__ import division
 
-import os, sys, tempfile
+import os, sys, tempfile, time
+from collections import OrderedDict
 import numpy as np
 from scipy.linalg import sqrtm
 from .prepare import get_molecule_engine
 from .optimize import Optimize
 from .params import OptParams, NEBParams, parse_neb_args
 from .step import get_delta_prime_trm, brent_wiki, trust_step, calc_drms_dmax
-from .engine import (
-    Blank,
-)
-from .internal import *
-from .nifty import (
-    flat,
-    row,
-    col,
-    createWorkQueue,
-    getWorkQueue,
-    wq_wait,
-    ang2bohr,
-    bohr2ang,
-    kcal2au,
-    au2kcal,
-    au2evang,
-)
+from .engine import Blank
+from .internal import CartesianCoordinates, PrimitiveInternalCoordinates, DelocalizedInternalCoordinates, ChainCoordinates
+from .nifty import flat, row, col, createWorkQueue, getWorkQueue, wq_wait, ang2bohr, bohr2ang, kcal2au, au2kcal, au2evang, logger
 from .molecule import Molecule, EqualSpacing
-from .errors import (
-    EngineError,
-    CheckCoordError,
-    Psi4EngineError,
-    QChemEngineError,
-    TeraChemEngineError,
-    ConicalIntersectionEngineError,
-    OpenMMEngineError,
-    GromacsEngineError,
-    MolproEngineError,
-    QCEngineAPIEngineError,
-    GaussianEngineError,
-    QCAIOptimizationError,
-)
+from .errors import NEBStructureError, NEBChainShapeError, NEBChainRespaceError, NEBBandTangentError, NEBBandGradientError
 from copy import deepcopy
 
-# fmt: off
 def rms_gradient(gradx):
     """Return the RMS of a Cartesian gradient."""
     atomgrad = np.sqrt(np.sum((gradx.reshape(-1, 3)) ** 2, axis=1))
     return np.sqrt(np.mean(atomgrad**2))
-
 
 def CoordinateSystem(M, coordtype, chain=False, guessw=0.1):
     """
@@ -116,7 +88,7 @@ class Structure(object):
         # LPW: This copy operation is checked and deemed necessary
         self.M = deepcopy(molecule)
         if len(self.M) != 1:
-            raise RuntimeError("Please pass in a Molecule object with just one frame")
+            raise NEBStructureError("Please pass in a Molecule object with just one frame")
         # Overwrite coordinates if we are passing in new ones
         if coords is not None:
             self.M.xyzs[0] = coords.reshape(-1, 3) * bohr2ang
@@ -154,11 +126,11 @@ class Structure(object):
 
     def set_cartesians(self, value):
         if not isinstance(value, np.ndarray):
-            raise RuntimeError("Please pass in a flat NumPy array in a.u.")
+            raise NEBStructureError("Please pass in a flat NumPy array in a.u.")
         if len(value.shape) != 1:
-            raise RuntimeError("Please pass in a flat NumPy array in a.u.")
+            raise NEBStructureError("Please pass in a flat NumPy array in a.u.")
         if value.shape[0] != (3 * self.M.na):
-            raise RuntimeError("Input array dimensions should be 3x number of atoms")
+            raise NEBStructureError("Input array dimensions should be 3x number of atoms")
         # Multiplying by bohr2ang copies it
         self.M.xyzs[0] = value.reshape(-1, 3) * bohr2ang
         # LPW: This copy operation is checked and deemed necessary
@@ -272,7 +244,7 @@ class Chain(object):
             if len(coords.shape) == 1:
                 coords = coords.reshape(len(self), 3 * self.M.na)
             if coords.shape != (len(self), 3 * self.M.na):
-                raise RuntimeError("Coordinates do not have the right shape")
+                raise NEBChainShapeError("Coordinates do not have the right shape")
             for i in range(len(self)):
                 self.M.xyzs[i] = coords[i, :].reshape(-1, 3) * bohr2ang
         self.na = self.M.na
@@ -385,29 +357,29 @@ class Chain(object):
             v0 = self.params.epsilon - Emin
         else:
             v0 = 0.0
-        print(
+        logger.info(
             "Hessian Eigenvalues (Working) :",
             " ".join(["% .4e" % i for i in Eig[:5]]),
             "...",
             " ".join(["% .4e" % i for i in Eig[-5:]]),
         )
         if np.sum(np.array(Eig) < 0.0) > 5:
-            print("%i Negative Eigenvalues" % (np.sum(np.array(Eig) < 0.0)))
+            logger.info("%i Negative Eigenvalues" % (np.sum(np.array(Eig) < 0.0)))
         if Eig[0] != EigP[0]:
-            print(
+            logger.info(
                 "Hessian Eigenvalues (Plain)   :",
                 " ".join(["% .4e" % i for i in EigP[:5]]),
                 "...",
                 " ".join(["% .4e" % i for i in EigP[-5:]]),
             )
             if np.sum(np.array(EigP) < 0.0) > 5:
-                print("%i Negative Eigenvalues" % (np.sum(np.array(EigP) < 0.0)))
+                logger.info("%i Negative Eigenvalues" % (np.sum(np.array(EigP) < 0.0)))
         if finish:
             return
 
         if Eig[0] < 0.0:
             dy, expect, _ = get_delta_prime_trm(0.0, X, G, np.eye(len(G)), None, False)
-            print(
+            logger.info(
                 "\x1b[95mTaking steepest descent rather than Newton-Raphson step\x1b[0m"
             )
             ForceRebuild = True
@@ -421,7 +393,7 @@ class Chain(object):
         cnorm = self.getCartesianNorm(dy, self.params.verbose)
         # Flag that determines whether internal coordinates need to be rebuilt
         if self.params.verbose:
-            print("dy(i): %.4f dy(c) -> target: %.4f -> %.4f" % (inorm, cnorm, trust))
+            logger.info("dy(i): %.4f dy(c) -> target: %.4f -> %.4f" % (inorm, cnorm, trust))
         if cnorm > 1.1 * trust:
             # This is the function f(inorm) = cnorm-target that we find a root
             # for obtaining a step with the desired Cartesian step size.
@@ -436,7 +408,7 @@ class Chain(object):
                 # 1) Brent optimization failed to converge,
                 # but we stored a solution below the trust radius
                 if self.params.verbose:
-                    print(
+                    logger.info(
                         "\x1b[93mUsing stored solution at %.3e\x1b[0m"
                         % froot.stored_val
                     )
@@ -448,18 +420,18 @@ class Chain(object):
                 for i in range(3):
                     froot.target /= 2
                     if self.params.verbose:
-                        print("\x1b[93mReducing target to %.3e\x1b[0m" % froot.target)
+                        logger.info("\x1b[93mReducing target to %.3e\x1b[0m" % froot.target)
                     froot.above_flag = True
                     iopt = brent_wiki(froot.evaluate, 0.0, iopt, froot.target, cvg=0.1, verbose=self.params.verbose)
                     if not self.anybork():
                         break
             if self.anybork():
-                print("\x1b[91mInverse iteration for Cartesians failed\x1b[0m")
+                logger.info("\x1b[91mInverse iteration for Cartesians failed\x1b[0m")
                 # This variable is added because IC.bork is unset later.
                 ForceRebuild = True
             else:
                 if self.params.verbose:
-                    print(
+                    logger.info(
                         "\x1b[93mBrent algorithm requires %i evaluations\x1b[0m"
                         % froot.counter
                     )
@@ -545,16 +517,16 @@ class Chain(object):
                     ),
                     self.coordtype,
                 )
-            print("Respaced images %s" % (list(range(s[0], s[1] + 1))))
+            logger.info("Respaced images %s" % (list(range(s[0], s[1] + 1))))
         if len(merge_segments) > 0:
             respaced = True
             self.clearCalcs(clearEngine=False)
-            print(
+            logger.info(
                 "Image Number          :",
                 " ".join(["  %3i  " % i for i in range(len(self))]),
             )
-            print("Spacing (Ang)     Old :", " " * 4, OldSpac)
-            print(
+            logger.info("Spacing (Ang)     Old :", " " * 4, OldSpac)
+            logger.info(
                 "                  New :",
                 " " * 4,
                 " ".join(["%6.3f " % i for i in self.calc_spacings()]),
@@ -595,7 +567,7 @@ class Chain(object):
                     Mtmp.xyzs = [xyzs[i]]
                     self.Structures[i] = Structure(Mtmp, self.engine, os.path.join(self.tmpdir, "struct_%%0%ii" % len(str(len(self))) % i
                         ), self.coordtype)
-                print(
+                logger.info(
                     "Evening out spacings: Deleted image %2i and added a new image between %2i and %2i"
                     % (deli, insi, insj)
                 )
@@ -604,17 +576,17 @@ class Chain(object):
                 break
             nloop += 1
             if nloop > len(self):
-                raise RuntimeError(
+                raise NEBChainRespaceError(
                     "Stuck in a loop, bug likely! Try again with more number of images."
                 )
         if respaced:
             self.clearCalcs(clearEngine=False)
-            print(
+            logger.info(
                 "Image Number          :",
                 " ".join(["  %3i  " % i for i in range(len(self))]),
             )
-            print("Spacing (Ang)     Old :", " " * 4, OldSpac)
-            print(
+            logger.info("Spacing (Ang)     Old :", " " * 4, OldSpac)
+            logger.info(
                 "                  New :",
                 " " * 4,
                 " ".join(["%6.3f " % i for i in self.calc_spacings()]),
@@ -679,14 +651,14 @@ class ElasticBand(Chain):
 
     def set_tangent(self, i, value):
         if i < 1 or i > (len(self) - 2):
-            raise RuntimeError(
+            raise NEBBandTangentError(
                 "Tangents are only defined for 1 .. N-2 (in a chain indexed from 0 .. N-1)"
             )
         self._tangents[i] = value
 
     def get_tangent(self, i):
         if i < 1 or i > (len(self) - 2):
-            raise RuntimeError(
+            raise NEBBandTangentError(
                 "Tangents are only defined for 1 .. N-2 (in a chain indexed from 0 .. N-1)"
             )
         return self._tangents[i]
@@ -704,7 +676,7 @@ class ElasticBand(Chain):
         i : int
             Index of the image for which the gradient is being set
         value : np.ndarray
-            1D array containing
+            1D array containing gradient to be added
         component : str
             Choose "potential", "spring", "total" referring to the
             corresponding energy component
@@ -714,22 +686,22 @@ class ElasticBand(Chain):
             to the NEB method, or the "working" gradient being used for optimization
         """
         if value.ndim != 1:
-            raise RuntimeError("Please pass a 1D array")
+            raise NEBBandGradientError("Please pass a 1D array")
         if i < 1 or i > (len(self) - 2):
-            raise RuntimeError(
+            raise NEBBandGradientError(
                 "Spring_Grads are only defined for 1 .. N-2 (in a chain indexed from 0 .. N-1)"
             )
         if value.shape[0] != self.Structures[i].nICs:
-            raise RuntimeError(
+            raise NEBBandGradientError(
                 "Dimensions of array being passed are wrong (%i ICs expected for image %i)"
                 % (self.Structures[i].nICs, i)
             )
         if component not in ["potential", "spring", "total"]:
-            raise RuntimeError(
+            raise NEBBandGradientError(
                 "Please set the component argument to potential, spring, or total"
             )
         if projection not in ["plain", "projected", "working"]:
-            raise RuntimeError(
+            raise NEBBandGradientError(
                 "Please set the projection argument to plain, projected, or working"
             )
         self._grads.setdefault(
@@ -739,18 +711,18 @@ class ElasticBand(Chain):
 
     def set_global_grad(self, value, component, projection):
         if value.ndim != 1:
-            raise RuntimeError("Please pass a 1D array")
+            raise NEBBandGradientError("Please pass a 1D array")
         if value.shape[0] != len(self.GlobalIC.Internals):
-            raise RuntimeError(
+            raise NEBBandGradientError(
                 "Dimensions of array being passed are wrong (%i ICs expected)"
                 % (len(self.GlobalIC.Internals))
             )
         if component not in ["potential", "spring", "total"]:
-            raise RuntimeError(
+            raise NEBBandGradientError(
                 "Please set the component argument to potential, spring, or total"
             )
         if projection not in ["plain", "projected", "working"]:
-            raise RuntimeError(
+            raise NEBBandGradientError(
                 "Please set the projection argument to plain, projected, or working"
             )
         self._global_grads[(component, projection)] = value.copy()
@@ -775,22 +747,22 @@ class ElasticBand(Chain):
             to the NEB method, or the "working" gradient being used for optimization
         """
         if value.ndim != 1:
-            raise RuntimeError("Please pass a 1D array")
+            raise NEBBandGradientError("Please pass a 1D array")
         if i < 1 or i > (len(self) - 2):
-            raise RuntimeError(
+            raise NEBBandGradientError(
                 "Spring_Grads are only defined for 1 .. N-2 (in a chain indexed from 0 .. N-1)"
             )
         if value.shape[0] != self.Structures[i].nICs:
-            raise RuntimeError(
+            raise NEBBandGradientError(
                 "Dimensions of array being passed are wrong (%i ICs expected for image %i)"
                 % (self.Structures[i].nICs, i)
             )
         if component not in ["potential", "spring", "total"]:
-            raise RuntimeError(
+            raise NEBBandGradientError(
                 "Please set the component argument to potential, spring, or total"
             )
         if projection not in ["plain", "projected", "working"]:
-            raise RuntimeError(
+            raise NEBBandGradientError(
                 "Please set the projection argument to plain, projected, or working"
             )
         if (component, projection) not in self._grads or self._grads[
@@ -827,15 +799,15 @@ class ElasticBand(Chain):
             1D array containing the requested gradient in units of a.u.
         """
         if i < 1 or i > (len(self) - 2):
-            raise RuntimeError(
+            raise NEBBandGradientError(
                 "Spring_Grads are only defined for 1 .. N-2 (in a chain indexed from 0 .. N-1)"
             )
         if component not in ["potential", "spring", "total"]:
-            raise RuntimeError(
+            raise NEBBandGradientError(
                 "Please set the component argument to potential, spring, or total"
             )
         if projection not in ["plain", "projected", "working"]:
-            raise RuntimeError(
+            raise NEBBandGradientError(
                 "Please set the projection argument to plain, projected, or working"
             )
         if projection == "working":
@@ -872,18 +844,18 @@ class ElasticBand(Chain):
         if (component, projection) not in self._grads or self._grads[
             (component, projection)
         ][i] is None:
-            raise RuntimeError("Gradient has not been set")
+            raise NEBBandGradientError("Gradient has not been set")
         # print "Getting gradient for image", i, component, projection
         # LPW 2017-04-08: Removed copy operation, hope flags.writeable = False prevents unwanted edits
         return self._grads[(component, projection)][i]
 
     def get_global_grad(self, component, projection):
         if component not in ["potential", "spring", "total"]:
-            raise RuntimeError(
+            raise NEBBandGradientError(
                 "Please set the component argument to potential, spring, or total"
             )
         if projection not in ["plain", "projected", "working"]:
-            raise RuntimeError(
+            raise NEBBandGradientError(
                 "Please set the projection argument to plain, projected, or working"
             )
         if projection == "working":
@@ -920,7 +892,7 @@ class ElasticBand(Chain):
         if (component, projection) not in self._global_grads or self._global_grads[
             (component, projection)
         ] is None:
-            raise RuntimeError("Gradient has not been set")
+            raise NEBBandGradientError("Gradient has not been set")
         # print "Getting gradient for image", i, component, projection
         # LPW 2017-04-08: Removed copy operation, hope flags.writeable = False prevents unwanted edits
         return self._global_grads[(component, projection)]
@@ -946,11 +918,11 @@ class ElasticBand(Chain):
             (leading index is the image number)
         """
         if component not in ["potential", "spring", "total"]:
-            raise RuntimeError(
+            raise NEBBandGradientError(
                 "Please set the component argument to potential, spring, or total"
             )
         if projection not in ["plain", "projected", "working"]:
-            raise RuntimeError(
+            raise NEBBandGradientError(
                 "Please set the projection argument to plain, projected, or working"
             )
         return np.hstack(tuple([self.get_grad(i, component, projection) for i in range(1, len(self) - 1)]))
@@ -1035,11 +1007,11 @@ class ElasticBand(Chain):
                 symcolors.append(("\x1b[94m", "\x1b[0m"))
             else:
                 symcolors.append(("", ""))
-        print(
+        logger.ingo(
             "Image Number          :",
             " ".join(["  %3i  " % i for i in range(len(self))]),
         )
-        print(
+        logger.info(
             "                       ",
             " ".join(
                 [
@@ -1048,12 +1020,10 @@ class ElasticBand(Chain):
                 ]
             ),
         )
-        print("Energies  (kcal/mol)  :", end=" ")
-        print(" ".join(["%7.3f" % n for n in enes]))
-        print("Spacing (Ang)         :", end=" ")
-        print(" " * 4, " ".join(["%6.3f " % i for i in self.calc_spacings()]))
-        # print "Angles                :",
-        # print " "*13, ' '.join(["%5.2f  " % (180.0/np.pi*np.arccos(np.dot(taus[n], taus[n+1]))) for n in range(len(taus)-1)])
+        logger.info("Energies  (kcal/mol)  :", end=" ")
+        logger.info(" ".join(["%7.3f" % n for n in enes]))
+        logger.info("Spacing (Ang)         :", end=" ")
+        logger.info(" " * 4, " ".join(["%6.3f " % i for i in self.calc_spacings()]))
 
         xyz = self.get_cartesian_all(endpts=True)
         Bmat = self.GlobalIC.wilsonB(xyz)
@@ -1083,8 +1053,8 @@ class ElasticBand(Chain):
             np.max([rms_gradient(totGrad[n]) for n in range(1, len(totGrad) - 1)])
             * au2evang
         )
-        print("Gradients (eV/Ang)    :", end=" ")  # % avgg
-        print(
+        logger.info("Gradients (eV/Ang)    :", end=" ")  # % avgg
+        logger.info(
             " ".join(
                 [
                     "%7.3f" % (rms_gradient(totGrad[n]) * au2evang)
@@ -1092,12 +1062,8 @@ class ElasticBand(Chain):
                 ]
             )
         )
-        # print("Potential Gradient    :", end=' ')
-        # print(' '.join(["%7.3f" % (rms_gradient(vGrad[n]) * au2evang) for n in range(len(vGrad))]))
-        # print("Spring Gradient       :", end=' ')
-        # print(' '.join(["%7.3f" % (rms_gradient(spGrad[n]) * au2evang) for n in range(len(spGrad))]))
-        print("Straightness          :", end=" ")  # % avgg
-        print(" ".join(["%7.3f" % (straight[n]) for n in range(len(totGrad))]))
+        logger.info("Straightness          :", end=" ")  # % avgg
+        logger.info(" ".join(["%7.3f" % (straight[n]) for n in range(len(totGrad))]))
         self.avgg = avgg
         self.maxg = maxg
         printDiffs = False
@@ -1107,18 +1073,18 @@ class ElasticBand(Chain):
             ICP = self.GlobalIC.ImageICs[n].Internals
             drplus = self.GlobalIC.calcDisplacement(xyz, n + 1, n)
             drminus = self.GlobalIC.calcDisplacement(xyz, n - 1, n)
-            print(
+            logger.info(
                 "Largest IC devs (%i - %i); norm % 8.4f"
                 % (n + 1, n, np.linalg.norm(drplus))
             )
             for i in np.argsort(np.abs(drplus))[::-1][:5]:
-                print("%30s % 8.4f" % (repr(ICP[i]), (drplus)[i]))
-            print(
+                logger.info("%30s % 8.4f" % (repr(ICP[i]), (drplus)[i]))
+            logger.info(
                 "Largest IC devs (%i - %i); norm % 8.4f"
                 % (n - 1, n, np.linalg.norm(drminus))
             )
             for i in np.argsort(np.abs(drminus))[::-1][:5]:
-                print("%30s % 8.4f" % (repr(ICP[i]), (drminus)[i]))
+                logger.info("%30s % 8.4f" % (repr(ICP[i]), (drminus)[i]))
 
     def CalcRMSCartGrad(self, igrad):
         xyz = self.get_cartesian_all(endpts=True)
@@ -1177,7 +1143,7 @@ class ElasticBand(Chain):
                 # Note: Climbers may turn on or off over the course of the optimization - look out
                 if not self.climbSet or climbers != self.climbers:
                     recompute = True
-                    print(
+                    logger.info(
                         "--== Images set to Climbing Mode: %s ==--"
                         % (",".join([str(i) for i in climbers]))
                     )
@@ -1198,7 +1164,7 @@ class ElasticBand(Chain):
                 newLocks[n] = True
         if False not in newLocks:
             # HP: In case all of the images are locked before NEB converges, unlock a few.
-            print(
+            logger.info(
                 "All the images got locked, unlocking some images with tighter average gradient value."
             )
             factor = 1.0
@@ -1212,7 +1178,7 @@ class ElasticBand(Chain):
 
     def ComputeTangent(self):
         if not self.haveCalcs:
-            raise RuntimeError("Calculate energies before tangents")
+            raise NEBBandTangentError("Calculate energies before tangents")
         enes = [s.energy for s in self.Structures]
         grads = [s.grad_cartesian for s in self.Structures]
         xyz = self.get_cartesian_all(endpts=True)
@@ -1389,7 +1355,7 @@ class ElasticBand(Chain):
                     np.abs(np.dot(self.metrics[n], self.metrics[n]) - self.kmats[n])
                 )
             )
-        print(
+        logger.info(
             "Metric completed in %.3f seconds, maxerr = %.3e"
             % (time.time() - t0, max(errs))
         )
@@ -1412,7 +1378,7 @@ class ElasticBand(Chain):
     def OptimizeEndpoints(self, gtol=None):
         self.Structures[0].OptimizeGeometry(gtol)
         self.Structures[-1].OptimizeGeometry(gtol)
-        print("Optimizing the endpoints are done.")
+        logger.info("Optimizing the endpoints are done.")
         self.M.xyzs[0] = self.Structures[0].M.xyzs[0]
         self.M.xyzs[-1] = self.Structures[-1].M.xyzs[0]
         # The Structures are what store the individual Cartesian coordinates for each frame.
@@ -1507,7 +1473,7 @@ class Froot(object):
                     self.stored_arg = trial
                     self.stored_val = cnorm
             if self.params.verbose:
-                print(
+                logger.info(
                     "dy(i): %.4f dy(c) -> target: %.4f -> %.4f%s"
                     % (trial, cnorm, self.target, " (done)" if self.from_above else "")
                 )
@@ -1572,14 +1538,14 @@ def BFGSUpdate(Y, old_Y, G, old_G, H, params, Eig=True):
     nhdy = np.dot(H, Dy).flatten() / np.linalg.norm(np.dot(H, Dy))
     if verbose:
         # HP: 2023-2-15: Not sure what is nhdy is for. I changed np.array(H*dy) to np.dot(H, dy)
-        print("Denoms: %.3e %.3e" % ((Dg.T * Dy)[0, 0], (Dy.T * H * Dy)[0, 0]), end=" ")
-        print("Dots: %.3e %.3e" % (np.dot(ndg, ndy), np.dot(ndy, nhdy)), end=" ")
+        logger.info("Denoms: %.3e %.3e" % ((Dg.T * Dy)[0, 0], (Dy.T * H * Dy)[0, 0]), end=" ")
+        logger.info("Dots: %.3e %.3e" % (np.dot(ndg, ndy), np.dot(ndy, nhdy)), end=" ")
     H += Mat1 - Mat2
     if Eig:
         Eig1 = np.linalg.eigh(H)[0]
         Eig1.sort()
         if verbose:
-            print(
+            logger.info(
                 "Eig-ratios: %.5e ... %.5e"
                 % (np.min(Eig1) / np.min(Eig), np.max(Eig1) / np.max(Eig))
             )
@@ -1598,7 +1564,7 @@ def updatehessian(old_chain, chain, HP, HW, Y, old_Y, GW, old_GW, GP, old_GP, La
     Eig1 = BFGSUpdate(Y, old_Y, GW, old_GW, HW, params)
     if np.min(Eig1) <= params.epsilon:
         if params.skip:
-            print(
+            logger.info(
                 "Eigenvalues below %.4e (%.4e) - skipping Hessian update"
                 % (params.epsilon, np.min(Eig1))
             )
@@ -1606,7 +1572,7 @@ def updatehessian(old_chain, chain, HP, HW, Y, old_Y, GW, old_GW, GP, old_GP, La
             HW = HW_bak.copy()
         else:
             H_reset = True
-            print(
+            logger.info(
                 "Eigenvalues below %.4e (%.4e) - will reset the Hessian"
                 % (params.epsilon, np.min(Eig1))
             )
@@ -1650,7 +1616,7 @@ def qualitycheck(old_chain, new_chain, trust, Quality, ThreLQ, ThreRJ, ThreHQ, Y
         # If unexpected behavior appears, check here.
         chain = old_chain
         good = False
-        print("Reducing trust radius to %.1e and rejecting step" % trust)
+        logger.info("Reducing trust radius to %.1e and rejecting step" % trust)
     else:
         chain = new_chain
         good = True
@@ -1673,8 +1639,8 @@ def compare(old_chain, new_chain, ThreHQ, ThreLQ, old_GW, HW, HP, respaced, optC
     except:
         pass  # When the NEB ran by QCFractal, it can't (does not need to) save the climbing images in disk.
     if respaced:
-        print("Respaced images - skipping trust radius update")
-        print(
+        logger.info("Respaced images - skipping trust radius update")
+        logger.info(
             "@%13s %13s %13s %13s %11s %13s %13s"
             % (
                 "GAvg(eV/Ang)",
@@ -1686,7 +1652,7 @@ def compare(old_chain, new_chain, ThreHQ, ThreLQ, old_GW, HW, HP, respaced, optC
                 "Step Quality",
             )
         )
-        print(
+        logger.info(
             "@%13s %13s %13s"
             % (
                 "% 8.4f  " % new_chain.avgg,
@@ -1714,7 +1680,7 @@ def compare(old_chain, new_chain, ThreHQ, ThreLQ, old_GW, HW, HP, respaced, optC
         if Quality > ThreHQ
         else ("Okay" if Quality > ThreLQ else ("Poor" if Quality > -1.0 else "Reject"))
     )
-    print(
+    logger.info(
         "\n %13s %13s %13s %13s %11s %14s %13s"
         % (
             "GAvg(eV/Ang)",
@@ -1726,7 +1692,7 @@ def compare(old_chain, new_chain, ThreHQ, ThreLQ, old_GW, HW, HP, respaced, optC
             "Step Quality",
         )
     )
-    print(
+    logger.info(
         "@%13s %13s %13s %13s %11s  %8.4f (%s)  %13s"
         % (
             "% 8.4f  " % new_chain.avgg,
@@ -1747,10 +1713,10 @@ def converged(chain_maxg, chain_avgg, params_maxg, params_avgg, optCycle, params
     Checking to see whether the chain is converged.
     """
     if chain_maxg < params_maxg and chain_avgg < params_avgg:
-        print("--== Optimization Converged. ==--")
+        logger.info("--== Optimization Converged. ==--")
         return True
     if optCycle >= params_maxcyc:
-        print("--== Maximum optimization cycles reached. ==--")
+        logger.info("--== Maximum optimization cycles reached. ==--")
         return True
     return False
 
@@ -1767,19 +1733,19 @@ def takestep(c_hist, chain, optCycle, LastForce, ForceRebuild, trust, Y, GW, GP,
         if LastForce == 0:
             pass
         elif LastForce == 1:
-            print(
+            logger.info(
                 "\x1b[1;91mFailed twice in a row to rebuild the coordinate system\x1b[0m"
             )
-            print("\x1b[93mResetting Hessian\x1b[0m")
+            logger.info("\x1b[93mResetting Hessian\x1b[0m")
         elif LastForce == 2:
-            print(
+            logger.info(
                 "\x1b[1;91mFailed three times to rebuild the coordinate system\x1b[0m"
             )
-            print("\x1b[93mContinuing in Cartesian coordinates\x1b[0m")
+            logger.info("\x1b[93mContinuing in Cartesian coordinates\x1b[0m")
         else:
-            raise RuntimeError("Coordinate system has failed too many times")
+            raise NEBStructureError("Coordinate system has failed too many times")
         chain, Y, GW, GP, HW, HP = recover(c_hist, LastForce == 2, result)
-        print("\x1b[1;93mSkipping optimization step\x1b[0m")
+        logger.info("\x1b[1;93mSkipping optimization step\x1b[0m")
         optCycle -= 1
     else:
         LastForce = 0
@@ -1807,9 +1773,9 @@ def OptimizeChain(chain, engine, params):
     ThreRJ = 0.001
     # Optimize the endpoints of the chain
     if params.optep:
-        print("First, optimizing endpoint images.")
+        logger.info("First, optimizing endpoint images.")
         chain.OptimizeEndpoints(params.maxg)
-    print("Optimizing the chain.")
+    logger.info("Optimizing the chain.")
     chain.respace(0.01)
     chain.delete_insert(1.0)
     chain.ComputeMetric()
@@ -1819,23 +1785,15 @@ def OptimizeChain(chain, engine, params):
     # Obtain the guess Hessian matrix
     chain.ComputeGuessHessian(blank=isinstance(engine, Blank))
     # Print the status of the zeroth iteration
-    print("-=# Chain optimization cycle 0 #=-")
-    print("Spring Force: %.2f kcal/mol/Ang^2" % params.nebk)
+    logger.info("-=# Chain optimization cycle 0 #=-")
+    logger.info("Spring Force: %.2f kcal/mol/Ang^2" % params.nebk)
     chain.PrintStatus()
-    print("-= Chain Properties =-")
-    print(
+    logger.info("-= Chain Properties =-")
+    logger.info(
         "@%13s %13s %13s %13s %11s %13s %13s"
-        % (
-            "GAvg(eV/Ang)",
-            "GMax(eV/Ang)",
-            "Length(Ang)",
-            "DeltaE(kcal)",
-            "RMSD(Ang)",
-            "TrustRad(Ang)",
-            "Step Quality",
-        )
+        % ("GAvg(eV/Ang)", "GMax(eV/Ang)", "Length(Ang)", "DeltaE(kcal)", "RMSD(Ang)", "TrustRad(Ang)", "Step Quality")
     )
-    print(
+    logger.info(
         "@%13s %13s %13s"
         % (
             "% 8.4f  " % chain.avgg,
@@ -1873,14 +1831,14 @@ def OptimizeChain(chain, engine, params):
         # ======================================================#
 
         optCycle += 1
-        print("-=# Chain optimization cycle %i #=-" % (optCycle))
+        logger.info("-=# Chain optimization cycle %i #=-" % (optCycle))
 
         # =======================================#
         # |    Obtain an optimization step      |#
         # |    and update Cartesian coordinates |#
         # =======================================#
 
-        print("Time since last ComputeChain: %.3f s" % (time.time() - t0))
+        logger.info("Time since last ComputeChain: %.3f s" % (time.time() - t0))
 
         (chain_prev, chain, expect, expectG, ForceRebuild, LastForce, Y_prev, GW_prev, GP_prev, respaced, optCycle) \
         = takestep(c_hist, chain, optCycle, LastForce, ForceRebuild, trust, Y, GW, GP, HW, HP, None)
@@ -2090,10 +2048,10 @@ def prepare(info_dict):
     This function is for QCFractal. It takes a dictionary and prepares for the NEB calculation loops.
     """
 
-    print("\n-=# Chain optimization cycle 0 #=-")
+    logger.info("\n-=# Chain optimization cycle 0 #=-")
     params, M, engine, result, _ = get_basic_info(info_dict)
 
-    print("Spring Force: %.2f kcal/mol/Ang^2" % params.nebk)
+    logger.info("Spring Force: %.2f kcal/mol/Ang^2" % params.nebk)
 
     tmpdir = tempfile.mkdtemp()
 
@@ -2106,8 +2064,8 @@ def prepare(info_dict):
     chain.ComputeGuessHessian(blank=isinstance(engine, Blank))
     chain.PrintStatus()
 
-    print("-= Chain Properties =-")
-    print(
+    logger.info("-= Chain Properties =-")
+    logger.info(
         "@%13s %13s %13s %13s %11s %13s %13s"
         % (
             "GAvg(eV/Ang)",
@@ -2119,7 +2077,7 @@ def prepare(info_dict):
             "Step Quality",
         )
     )
-    print(
+    logger.info(
         "@%13s %13s %13s"
         % (
             "% 8.4f  " % chain.avgg,
@@ -2162,7 +2120,7 @@ def nextchain(info_dict):
     ThreHQ = 0.5
     ThreRJ = 0.001
 
-    print("\n-=# Chain optimization cycle %i #=-" % iteration)
+    logger.info("\n-=# Chain optimization cycle %i #=-" % iteration)
     tmpdir = tempfile.mkdtemp()
 
     # Define two chain objects for the previous and current iteration.
@@ -2266,12 +2224,12 @@ def nextchain(info_dict):
     Eig.sort()
     if np.min(Eig) <= params.epsilon:
         if params.skip:
-            print(
+            logger.info(
                 "Eigenvalues below %.4e (%.4e) - skipping Hessian update"
                 % (params.epsilon, np.min(Eig))
             )
         else:
-            print(
+            logger.info(
                 "Eigenvalues below %.4e (%.4e) - will reset the Hessian"
                 % (params.epsilon, np.min(Eig))
             )
