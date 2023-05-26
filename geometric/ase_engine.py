@@ -40,6 +40,15 @@ class EngineASE(Engine):
     @classmethod
     def from_calculator_constructor(cls, molecule: Molecule, calculator, *args, **kwargs):
         obj = cls(molecule, calculator(*args, **kwargs))
+        # A workaround to set the charge and spin multiplicity.
+        charge = kwargs.get("charge", 0)
+        initial_charges = np.zeros(len(obj.ase_atoms))
+        initial_charges[0] = charge
+        obj.ase_atoms.set_initial_charges(initial_charges)
+        mult = kwargs.get("mult", 1)
+        initial_spins = np.zeros(len(obj.ase_atoms))
+        initial_spins[0] = mult-1
+        obj.ase_atoms.set_initial_magnetic_moments(initial_spins)
         # This stores the needed information to re-create the Engine from strings (for example when using Work Queue)
         obj.calculator_import_path = calculator.__module__+'.'+calculator.__name__
         obj.calculator_kwargs = kwargs
