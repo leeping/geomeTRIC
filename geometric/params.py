@@ -89,7 +89,7 @@ class OptParams(object):
         self.trust = min(self.tmax, self.trust)
         self.trust = max(self.tmin, self.trust)
         # Maximum number of optimization cycles
-        self.maxiter = kwargs.get('maxiter', 500 if self.irc else 300)
+        self.maxiter = kwargs.get('maxiter', 300)
         # Use updated constraint algorithm implemented 2019-03-20
         self.conmethod = kwargs.get('conmethod', 0)
         # Write Hessian matrix at optimized structure to text file
@@ -176,13 +176,14 @@ class OptParams(object):
                             'INTERFRAG_TIGHT': [1e-6, 1e-5, 1.5e-5, 4.0e-4, 6.0e-4],
                             'GAU_TIGHT': [1e-6, 1e-5, 1.5e-5, 4e-5, 6e-5],
                             'GAU_VERYTIGHT': [1e-6, 1e-6, 2e-6, 4e-6, 6e-6],
-                            'IRC': [5e-4, 2e-2, 4e-2, 1e-2, 2e-2]}
+                            }
         # Q-Chem style convergence criteria (i.e. gradient and either energy or displacement)
         self.qccnv = kwargs.get('qccnv', False)
         # Molpro style convergence criteria (i.e. gradient and either energy or displacement, with different defaults)
         self.molcnv = kwargs.get('molcnv', False)
         # Check if there is a convergence set passed else use the default
-        set_name = 'IRC' if self.irc else kwargs.get('convergence_set', 'GAU').upper()
+        #set_name = 'IRC' if self.irc else kwargs.get('convergence_set', 'GAU').upper()
+        set_name = kwargs.get('convergence_set', 'GAU').upper()
         # If we have extra keywords apply them here else use the set
         # Convergence criteria in a.u. and Angstrom
         self.Convergence_energy = kwargs.get('convergence_energy', convergence_sets[set_name][0])

@@ -181,15 +181,6 @@ fqcgmx = -grad_au2gmx              # Previous value: -49621.9
 #             copyfileobj(input, output)
 #     os.remove(input)
 
-def find_lambda(Lambda, s, Heig, Hvec, g_M, p_M):
-    """
-    Equation 26 from Gonzalez & Schlegel (1990)
-    """
-    a = Heig*np.dot(p_M, Hvec) - np.dot(g_M, Hvec)
-    b = Heig - Lambda
-    c = (a / b) ** 2
-    return np.sum(c) - (0.5 * s) ** 2
-
 def pvec1d(vec1d, precision=1, format="e", loglevel=INFO):
     """Printout of a 1-D vector.
 

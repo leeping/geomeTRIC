@@ -33,18 +33,18 @@
 # 
 # == Summary of harmonic free energy analysis ==
 # Note: Rotational symmetry is set to 1 regardless of true symmetry
-# 1 Imaginary Frequencies (cm^-1): 1215.806i
+# 1 Imaginary Frequencies (cm^-1): 1215.761i
 # Note: Free energy does not include contribution from imaginary mode(s)
 # 
 # Free energy contributions calculated at @ 300.00 K:
-# Zero-point vibrational energy:                                    6.5449 kcal/mol 
+# Zero-point vibrational energy:                                    6.5454 kcal/mol 
 # H   (Trans + Rot + Vib = Tot):   1.4904 +   0.8942 +   0.0003 =   2.3849 kcal/mol 
 # S   (Trans + Rot + Vib = Tot):  35.8748 +  16.3847 +   0.0010 =  52.2605 cal/mol/K
 # TS  (Trans + Rot + Vib = Tot):  10.7624 +   4.9154 +   0.0003 =  15.6782 kcal/mol 
 # 
 # Ground State Electronic Energy    : E0                        =   -92.24601961 au (    -57885.2512 kcal/mol)
-# Free Energy Correction (Harmonic) : ZPVE + [H-TS]_T,R,V       =    -0.01075414 au (        -6.7483 kcal/mol)
-# Gibbs Free Energy (Harmonic)      : E0 + ZPVE + [H-TS]_T,R,V  =   -92.25677374 au (    -57891.9996 kcal/mol)
+# Free Energy Correction (Harmonic) : ZPVE + [H-TS]_T,R,V       =    -0.01075331 au (        -6.7478 kcal/mol)
+# Gibbs Free Energy (Harmonic)      : E0 + ZPVE + [H-TS]_T,R,V  =   -92.25677291 au (    -57891.9991 kcal/mol)
 # 
 
 3
@@ -53,17 +53,17 @@ Iteration 0 Energy -92.24601961
  N   -0.6393457902    0.4205365638    0.0052498438
  H    0.7532976101    0.2173493463   -0.0090384631
 
--1215.805689
--0.043211 -0.081875  0.000850
- 0.075171  0.009779 -0.000867
--0.529695  0.839703  0.001921
+-1215.761008
+-0.043230 -0.081825  0.000850
+ 0.075193  0.009739 -0.000867
+-0.529777  0.839653  0.001922
 
- 2125.902258
--0.335229  0.646533  0.000685
- 0.302552 -0.563604 -0.000710
--0.209832  0.128050  0.001704
+ 2126.256784
+-0.335574  0.646848  0.000687
+ 0.302608 -0.563961 -0.000709
+-0.206505  0.129252  0.001662
 
- 2452.329664
- 0.057422  0.023596 -0.000736
- 0.012880  0.015784 -0.000214
--0.863194 -0.500488  0.011743
+ 2452.339052
+ 0.057321  0.023799 -0.000736
+ 0.012966  0.015610 -0.000214
+-0.863190 -0.500500  0.011743

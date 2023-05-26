@@ -57,7 +57,7 @@ from .normal_modes import calc_cartesian_hessian, frequency_analysis
 from .step import brent_wiki, Froot, calc_drms_dmax, get_cartesian_norm, get_delta_prime, trust_step, force_positive_definite, update_hessian
 from .prepare import get_molecule_engine, parse_constraints
 from .params import OptParams, parse_optimizer_args
-from .nifty import row, col, flat, bohr2ang, ang2bohr, logger, bak, createWorkQueue, destroyWorkQueue, find_lambda
+from .nifty import row, col, flat, bohr2ang, ang2bohr, logger, bak, createWorkQueue, destroyWorkQueue
 from .errors import InputError, HessianExit, EngineError, IRCError, GeomOptNotConvergedError, GeomOptStructureError, LinearTorsionError
 
 class Optimizer(object):
@@ -123,13 +123,8 @@ class Optimizer(object):
         # Recalculate the Hessian after a trigger - for example if the energy changes by a lot during TS optimization.
         self.recalcHess = False
         # IRC related attributes
-        self.IRC_converged = False
         self.IRC_direction = 1
-        # status 0 : Need to find a pivot point
-        # status 1 : At the pivot point, need to find the next point
         self.IRC_stepsize = self.params.trust
-        #self.IRC_stepsize = self.params.trust*np.sqrt(self.IC.mass)
-        self.IRC_angle = 0
         if print_info:
             self.print_info()
         
@@ -155,11 +150,14 @@ class Optimizer(object):
             else:
                 logger.info(">  RMS-Grad  < %.2e\n" % params.Convergence_grms)
             logger.info(">  RMS-Disp  < %.2e\n" % params.Convergence_drms)
+        elif params.irc:
+            logger.info("> Will converge when all 4 criteria are reached:\n")
+            logger.info(">  |Delta-E| < %.2e\n" % params.Convergence_energy)
+            logger.info(">  RMS-Disp  < %.2e\n" % params.Convergence_drms)
+            logger.info(">  Max-Disp  < %.2e\n" % params.Convergence_dmax)
+            logger.info(">  IRC-Disp  < 1.00e-05\n")
         else:
-            if params.irc:
-                logger.info("> Will converge when pivot point angle is larger than %s and all 5 criteria are reached:\n" %u'175\xb0')
-            else:
-                logger.info("> Will converge when all 5 criteria are reached:\n")
+            logger.info("> Will converge when all 5 criteria are reached:\n")
             logger.info(">  |Delta-E| < %.2e\n" % params.Convergence_energy)
             if self.IC.haveConstraints():
                 logger.info(">  RMS-Ortho-Grad < %.2e\n" % params.Convergence_grms)
@@ -409,6 +407,15 @@ class Optimizer(object):
             logger.info("Hessian Eigenvalues: " + ' '.join("%.5e" % i for i in Eig) + '\n')
         return Eig
 
+    def find_lambda(self, Lambda, Heig, Hvec, g_M, p_M):
+        """
+        Equation 26 from Gonzalez & Schlegel (1990)
+        """
+        a = Heig * np.dot(p_M, Hvec) - np.dot(g_M, Hvec)
+        b = Heig - Lambda
+        c = (a / b) ** 2
+        return np.sum(c) - (0.5 * self.IRC_stepsize) ** 2
+
     def guess_g(self, g, H, disp):
         """
         guess a gradient using a quadratic expansion
@@ -427,9 +434,8 @@ class Optimizer(object):
             raise RuntimeError("Hessian contains nan - check output and temp-files for possible errors")
 
         if params.irc:
-            logger.info("IRC status 0: Finding a pivot point (q*_{k+1})\n")
+            logger.info("\nIRC sub-step1: Finding a pivot point (q*_{k+1})\n")
             # Need to take a step towards the pivot point
-            g_k = self.G.copy() # Internal coordinate gradients
             self.IC.clearCache()
             GMat = self.IC.GMatrix(self.X, invMW=True)
             GMat_sqrt_inv, GMat_sqrt = self.IC.GInverse_SVD(self.X, sqrt=True, invMW=True)
@@ -444,51 +450,47 @@ class Optimizer(object):
                 # Getting IC vectors correspond to the imaginary frequency
                 H_M = np.dot(np.dot(GMat_sqrt, self.H), GMat_sqrt.T)
                 _, MW_IC_vecs = np.linalg.eigh(H_M)
-                v = np.dot(GMat_sqrt_inv, MW_IC_vecs[0])
-                N = 1/np.linalg.norm(v)
-                #v = np.dot(GMat, v)
-                #N = 1 / np.sqrt(np.dot(v.T, np.dot(GMat, v)))
-
-                # Following Carteisan Hessian
-                #v = self.IC.calcDiff(self.X + self.TSNormal_modes_x[0], self.X)
-                #v = v/np.linalg.norm(v)
-                #N = 1
+                invMW_v = np.dot(GMat_sqrt,MW_IC_vecs[0])
+                v = np.dot(GMat_sqrt_inv, invMW_v)
 
                 # Initial direction
                 v *= self.IRC_direction
+                invMW_v = np.dot(GMat, v)
+
             else:
                 # Else, use the mass-weighted G matrix and internal coordinate gradients to get the vector.
                 # Normalization factor
-                N = 1 / np.sqrt(np.dot(g_k.T, np.dot(GMat, g_k)))
-                v = np.dot(GMat, g_k)
+                v = self.G.copy()  # Internal coordinate gradients
+                invMW_v = np.dot(GMat, v)
 
-            stepsize = self.IRC_stepsize
+            # Normalization factor
+            N = 1 / np.sqrt(np.dot(v.T, np.dot(GMat, v)))
             # Step towards the pivot point
-            dy = -0.5*stepsize*N*v
-            self.IRC_step_to_pivot = dy
-            self.IRC_v = v
-            logger.info("dy in status 0: %.5f\n" %np.linalg.norm(dy))
+            dy_to_pivot = -0.5*self.IRC_stepsize*N*invMW_v
 
             # Move to the pivot point
             X0 = self.X.copy()
-            self.newCartesian(dy)
-            dy = self.IC.calcDiff(self.X, X0)
-            self.Y += dy
+            X_pivot = self.IC.newCartesian(self.X, dy_to_pivot, self.params.verbose)
+            dy_to_pivot = self.IC.calcDiff(X_pivot, X0)
+
+            # Calculating sqrt(mass) weighted Cartesian coordinate
+            GMat_sqrt_inv, GMat_sqrt = self.IC.GInverse_SVD(X_pivot, sqrt=True, invMW=True)
+            mwdx = np.dot(GMat_sqrt_inv,dy_to_pivot)
+            logger.info("Half step dy = %.5f\n" %np.linalg.norm(dy_to_pivot))
+            logger.info("Half step mw-dx = %.5f\n" %np.linalg.norm(mwdx))
 
             # We are at the pivot point
-            logger.info("IRC status 1: Finding the next point (q_{k+1})\n")
-            stepsize = self.IRC_stepsize
-            v1 = self.IRC_v
-            X_pivot = self.X.copy()
+            logger.info('\nIRC sub-step2: Finding the next point (q_{k+1})\n')
+            v1 = v.copy()
             irc_sub_iteration = 0
-            p_prime = self.IRC_step_to_pivot
+            p_prime = dy_to_pivot.copy()
             while True:
                 X = self.IC.newCartesian(X_pivot, p_prime, self.params.verbose)
                 # Now we are at the guessed point, define mass-weighted G matrix at the guessed point
                 self.IC.clearCache()
                 GMat_sqrt_inv, GMat_sqrt = self.IC.GInverse_SVD(X, sqrt=True, invMW=True)
                 # Mass weighted displacement, gradients, and Hessian
-                g_M = np.dot(GMat_sqrt, self.guess_g(self.G, self.H, self.IRC_step_to_pivot + p_prime))
+                g_M = np.dot(GMat_sqrt, self.guess_g(self.G, self.H, dy_to_pivot + p_prime))
                 H_M = np.dot(np.dot(GMat_sqrt,self.H), GMat_sqrt.T)
                 p_M = np.dot(GMat_sqrt_inv, p_prime)
 
@@ -497,9 +499,7 @@ class Optimizer(object):
                 init_guess = 1.01*Heig[0] if Heig[0] < 0 else 0.99*Heig[0]
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore")
-                    min_lambda = scipy.optimize.fsolve(find_lambda, init_guess, (stepsize, Heig, Hvecs, g_M, p_M))
-                if min_lambda[0] > init_guess:
-                    logger.warning('Optimized lambda is bigger than the lowest eigenvalue of H_M\n')
+                    min_lambda = scipy.optimize.fsolve(self.find_lambda, init_guess, (Heig, Hvecs, g_M, p_M))
                 LambdaI = min_lambda[0]*np.eye(len(self.IC.Internals))
                 del_q_M1 = np.linalg.pinv(H_M - LambdaI)
                 del_q_M2 = g_M - min_lambda[0]*p_M
@@ -507,13 +507,15 @@ class Optimizer(object):
                 dq_new = np.dot(GMat_sqrt, del_q_M)
 
                 if np.linalg.norm(dq_new) < 1e-5 or irc_sub_iteration > 500:
-                    dy = p_prime
+                    dy = dy_to_pivot + p_prime
                     v2 = p_prime/np.linalg.norm(p_prime)
                     deg = np.degrees(np.arccos(np.dot(v1/np.linalg.norm(v1),v2)))
-                    self.IRC_angle = deg
                     logger.info('Angle between v1 and v2: %2.f \n' %deg)
-                    logger.info('Final del_q length (should be small): %.8f \n' %np.linalg.norm(dq_new))
-                    logger.info("Final dy in status 1: %.5f \n" %np.linalg.norm(dy))
+                    #logger.info('Final del_q length (should be small): %.8f \n' %np.linalg.norm(dq_new))
+                    logger.info('Total step dy = %.5f \n' %np.linalg.norm(dy))
+                    mwdx = np.dot(GMat_sqrt_inv, dy)
+                    self.IRC_disp = min(np.linalg.norm(mwdx), np.linalg.norm(dy))
+                    logger.info('Total step mw-dx = %.5f \n\n' %np.linalg.norm(mwdx))
                     break
                 irc_sub_iteration += 1
                 p_prime += dq_new
@@ -539,7 +541,7 @@ class Optimizer(object):
         ### OBTAIN AN OPTIMIZATION STEP ###
         # The trust radius is to be computed in Cartesian coordinates.
         # First take a full-size optimization step
-        if params.verbose and not params.irc: logger.info("  Optimizer.step : Attempting full-size optimization step\n")
+        if params.verbose : logger.info("  Optimizer.step : Attempting full-size optimization step\n")
         if not params.irc:
             dy, _, __ = self.get_delta_prime(v0, verbose=self.params.verbose)
         # Internal coordinate step size
@@ -688,31 +690,26 @@ class Optimizer(object):
             logger.info(self.prim_msg + '\n')
 
         ### Check convergence criteria ###
-        criteria_met = Converged_energy and Converged_grms and Converged_drms and Converged_gmax and Converged_dmax
-
-        if (criteria_met and params.irc) or self.IRC_converged:
+        if params.irc and Converged_energy and Converged_drms and Converged_dmax and self.IRC_disp < 1e-5:
             if self.Iteration > 10:
-                self.IRC_converged = True
-                if self.IRC_angle > 175:
-                    if self.IRC_direction == 1:
-                        logger.info("IRC Forward direction converged\n")
-                        logger.info("IRC Backward will be performed\n")
-                        self.IRC_direction = -1
-                        self.progress = self.progress[::-1][:-1]
-                        self.Iteration = 0
-                        self.H = self.H0.copy()
-                        self.X = self.X_hist[0]
-                        self.Y = self.IC.calculate(self.X)
-                        self.G = self.IC.calcGrad(self.X, self.progress.qm_grads[-1]).flatten()
-                        self.IRC_converged = False
-                        return
-                    elif self.IRC_direction == -1:
-                        self.SortedEigenvalues(self.H)
-                        logger.info("Converged! =D\n")
-                        self.state = OPT_STATE.CONVERGED
-                        return
+                if self.IRC_direction == 1:
+                    logger.info("IRC forward direction converged\n")
+                    logger.info("IRC backward direction starts here\n\n")
+                    self.IRC_direction = -1
+                    self.progress = self.progress[::-1][:-1]
+                    self.Iteration = 0
+                    self.gradx = self.Gx_hist[0].copy()
+                    self.X = self.X_hist[0].copy()
+                    self.trust = self.params.trust
+                    self.prepareFirstStep()
+                    return
+                elif self.IRC_direction == -1:
+                    self.SortedEigenvalues(self.H)
+                    logger.info("Converged! =D\n")
+                    self.state = OPT_STATE.CONVERGED
+                    return
 
-        if criteria_met and self.conSatisfied and not params.irc:
+        if Converged_energy and Converged_grms and Converged_drms and Converged_gmax and Converged_dmax and self.conSatisfied and not params.irc:
             self.SortedEigenvalues(self.H)
             logger.info("Converged! =D\n")
             self.state = OPT_STATE.CONVERGED
