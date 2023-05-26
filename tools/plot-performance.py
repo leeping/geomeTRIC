@@ -9,21 +9,45 @@ matplotlib.use('agg')
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 
-logfnms = sys.argv[1:]
+found_input = False
+interactive = True
+for fnm in sys.argv[1:]:
+    if fnm.endswith(".in"):
+        print("Input file (for this script) detected - will parse it for log filenames.")
+        found_input = True
+        interactive = False
+        break
+
+if found_input:
+    logfnms = ["%s/run.log" % line.strip() for line in open(fnm).readlines() if len(line.strip()) > 0]
+else:
+    logfnms = sys.argv[1:]
+
+print(logfnms)
 
 if len(logfnms) == 0 or any([not os.path.exists(fnm) for fnm in logfnms]):
     print("Exiting because did not provide valid log filenames.")
     print("Usage: ./plot-performance.py <geomeTRIC log filenames>")
     sys.exit()
+
+dirname_default = os.path.split(os.getcwd())[1]
+if dirname_default == "saved":
+    dirname_default = os.path.split(os.path.split(os.getcwd())[0])[1]
     
-fig_title_default = "Optimization performance for %s" % os.path.split(os.getcwd())[1]
-fig_title = input('Enter custom figure title (Default: %s) -->' % fig_title_default)
-if not fig_title:
+fig_title_default = "Optimization performance for %s" % dirname_default
+if interactive:
+    fig_title = input('Enter custom figure title (Default: %s) -->' % fig_title_default)
+    if not fig_title:
+        fig_title = fig_title_default
+else:
     fig_title = fig_title_default
 
-labels = input('Enter optional legend labels separated by space (%i required) --> ' % len(logfnms)).split()
+if interactive:
+    labels = input('Enter optional legend labels separated by space (%i required) --> ' % len(logfnms)).split()
+else:
+    labels = []
 if len(labels) != len(logfnms):
-    print("Did not provide valid labels - using log filenames.")
+    if interactive: print("Did not provide valid labels - using log filenames.")
     labels = logfnms
     # Trim off common prefix and suffix from labels
     for i in range(min([len(l) for l in labels])):
@@ -107,9 +131,17 @@ with PdfPages('plot-performance.pdf') as pdf:
         ax1.set_title('Energy change, from start (kcal/mol)')
         df_energy_kcal.plot(ax=ax1, legend=False)
         labels = []
+        final_es = []
         for col in df_energy_kcal.columns:
             labels.append("%s %s N=%i" % (col, status[col], df_energy_kcal[col].last_valid_index()))
+            final_es.append(df_energy_kcal[col][df_energy_kcal[col].last_valid_index()])
+        final_es = np.array(final_es)
         fig.legend(labels, loc='center', bbox_to_anchor=(0.5, 0.05), ncol=2)
+        ax1in = ax1.inset_axes([0.3, 0.3, 0.68, 0.68])
+        ymin = np.min(final_es) - 1
+        ymax = np.max(final_es) + 1
+        ax1in.set_ylim(ymin, ymax)
+        df_energy_kcal.plot(ax=ax1in, legend=False)
 
         ax5.set_xlabel('Optimization Cycle')
         titles = ['RMS Gradient (a.u.)', 'Max Gradient (a.u.)', 'Energy change per step (a.u.)', 'RMS Displacement (a.u.)', 'Max Displacement (a.u.)']
