@@ -816,7 +816,18 @@ def run_optimizer(**kwargs):
 
     import geometric
     logger.info('geometric-optimize called with the following command line:\n')
-    logger.info(' '.join(sys.argv)+'\n')
+    argv_print = []
+    # When geometric-optimize is called on the command line with an argument such as 
+    # --ase-kwargs='{"method":"GFN2-xTB"}'
+    # the shell strips away the single quotes resulting in printing out
+    # --ase-kwargs={"method":"GFN2-xTB"}
+    # making the copy-pasted command invalid.
+    # This is a dirty hack to put the single quotes back.
+    for arg in sys.argv:
+        arg = arg.replace('\'{','{').replace('{','\'{')
+        arg = arg.replace('}\'','}').replace('}','}\'')
+        argv_print.append(arg)
+    logger.info(' '.join(argv_print)+'\n')
     print_logo(logger)
     now = datetime.now()
     logger.info('-=# \x1b[1;94m geomeTRIC started. Version: %s \x1b[0m #=-\n' % (geometric.__version__))
