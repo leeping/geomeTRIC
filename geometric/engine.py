@@ -1001,7 +1001,7 @@ class QUICK(Engine):
                     outfile.write(line)
         try:
             # Run QUICK
-            subprocess.check_call('quick quick.qkin > quick.out', cwd=dirname, shell=True)
+            subprocess.check_call('%s quick.qkin > quick.out' % self.quick_exe, cwd=dirname, shell=True)
             # Read energy and gradients from QUICK output
             result = self.read_result(dirname)
         except (OSError, IOError, RuntimeError, subprocess.CalledProcessError): # pragma: no cover
