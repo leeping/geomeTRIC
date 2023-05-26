@@ -351,7 +351,7 @@ def parse_optimizer_args(*args):
     grp_output.add_argument('--logINI',  type=str, dest='logIni', help='.ini file for customizing logging output.\n ')
     grp_output.add_argument('--write_cart_hess', type=str, help='Write approximate cartesian Hessian at optimized geometry to specified file.')
 
-    grp_software = parser.add_argument_group('molpro', 'Options specific for certain software packages')
+    grp_software = parser.add_argument_group('software', 'Options specific for certain software packages')
     grp_software.add_argument('--molproexe', type=str, help='Specify absolute path of Molpro executable.\n ')
     grp_software.add_argument('--molcnv', type=str2bool, help='Provide "yes" to use Molpro style convergence criteria instead of the default.\n ')
     grp_software.add_argument('--qcdir', type=str, help='Provide an initial Q-Chem scratch folder (e.g. supplied initial guess).\n ')
