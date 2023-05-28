@@ -51,9 +51,9 @@ def test_transition_hcn_terachem(localizer):
     """
     Optimize the transition state of the HCN <-> HNC isomerization.
     """
-    shutil.copy2(os.path.join(exampled, '0-regression-tests', 'hcn-hnc-ts', 'start.xyz'), os.getcwd())
-    # shutil.copy2(os.path.join(exampled, '0-regression-tests', 'hcn-hnc-ts', 'run.tcin'), os.getcwd())
-    geometric.engine.edit_tcin(fin=os.path.join(exampled, '0-regression-tests', 'hcn-hnc-ts', 'run.tcin'), fout='run.tcin', options={'guess':'c0'})
+    shutil.copy2(os.path.join(exampled, '0-performance-tests', 'hcn-hnc-ts', 'start.xyz'), os.getcwd())
+    # shutil.copy2(os.path.join(exampled, '0-performance-tests', 'hcn-hnc-ts', 'run.tcin'), os.getcwd())
+    geometric.engine.edit_tcin(fin=os.path.join(exampled, '0-performance-tests', 'hcn-hnc-ts', 'run.tcin'), fout='run.tcin', options={'guess':'c0'})
     shutil.copy2(os.path.join(datad, 'hcn_tsguess.c0'), os.path.join(os.getcwd(), 'c0'))
     shutil.copy2(os.path.join(datad, 'hcn_tsguess_hessian.txt'), os.getcwd())
     progress = geometric.optimize.run_optimizer(engine='terachem', transition=True, input='run.tcin',

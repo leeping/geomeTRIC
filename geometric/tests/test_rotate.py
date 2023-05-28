@@ -72,7 +72,7 @@ def test_rmsd():
 
 def test_write_displacements(localizer):
     # This test generates 7 rotated structures of a buckyball at (-180, -120, ..., +180) degrees.
-    M = geometric.molecule.Molecule(os.path.join(exampled, '0-regression-tests', 'bucky_catcher', 'start.xyz'))
+    M = geometric.molecule.Molecule(os.path.join(exampled, '0-performance-tests', 'bucky_catcher', 'start.xyz'))
     IC = geometric.internal.PrimitiveInternalCoordinates(M, build=True, connect=False, addcart=False)
     ic_select=["Rotation-A 76-135"]
     # Set weight of IC to 1.0 so IC value matches actual rotation
