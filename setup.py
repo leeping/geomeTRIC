@@ -18,6 +18,7 @@ setup(
     long_description_content_type="text/markdown",
     entry_points={'console_scripts': [
         'geometric-optimize = geometric.optimize:main',
+        'run-ase = geometric.ase_engine:main',
     ]},
     install_requires=[
         'numpy>=1.11',
