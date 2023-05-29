@@ -69,6 +69,9 @@ class Psi4EngineError(EngineError):
 class QChemEngineError(EngineError):
     pass
 
+class QUICKEngineError(EngineError):
+    pass
+
 class GromacsEngineError(EngineError):
     pass
 

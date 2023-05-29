@@ -3935,8 +3935,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
     def second_derivatives(self, coords):
         """ Obtain the second derivatives of the DLCs with respect to the Cartesian coordinates. """
         PrimDers = self.Prims.second_derivatives(coords)
-        Answer2 = np.tensordot(self.Vecs, PrimDers, axes=(0, 0))
-        return np.array(Answer2)
+        return np.tensordot(self.Vecs, PrimDers, axes=(0, 0))
     
     def GInverse(self, xyz):
         return self.GInverse_SVD(xyz)

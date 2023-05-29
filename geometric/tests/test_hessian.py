@@ -42,7 +42,7 @@ def test_hessian_assort():
     assert np.allclose(fgrad_dlc, agrad_dlc, atol=1.e-6)
     assert np.allclose(fhess_dlc, ahess_dlc, atol=1.e-6)
 
-class TestWorkQueueHessian:
+class TestPsi4WorkQueueHessian:
 
     """ Tests are put into class so that the fixture can terminate the worker process. """
 
@@ -56,7 +56,7 @@ class TestWorkQueueHessian:
 
     @addons.using_psi4
     @addons.using_workqueue
-    def test_work_queue_hessian(self, localizer):
+    def test_psi4_work_queue_hessian(self, localizer):
         import work_queue
 
         shutil.copy2(os.path.join(datad, 'hcn_minimized.psi4in'), os.getcwd())
@@ -74,6 +74,40 @@ class TestWorkQueueHessian:
         freqs, modes, G = geometric.normal_modes.frequency_analysis(coords, hessian, elem=molecule.elem, verbose=True)
         np.testing.assert_almost_equal(freqs, [989.5974, 989.5992, 2394.0352, 3690.5745], decimal=0)
         assert len(freqs) == 4
+        geometric.nifty.destroyWorkQueue()
+
+class TestASEWorkQueueHessian:
+
+    """ Tests are put into class so that the fixture can terminate the worker process. """
+
+    @pytest.fixture(autouse=True)
+    def work_queue_cleanup(self):
+        self.workers = None
+        yield
+        if self.workers is not None:
+            for worker in self.workers:
+                worker.terminate()
+
+    @addons.using_ase
+    @addons.using_workqueue
+    def test_ase_work_queue_hessian(self, localizer):
+        import work_queue
+
+        shutil.copy2(os.path.join(datad, 'water1_coords_gfn2-xtb.xyz'), os.path.join(os.getcwd(), "start.xyz"))
+
+        geometric.nifty.createWorkQueue(9191, debug=False)
+        wq = geometric.nifty.getWorkQueue()
+
+        molecule, engine = geometric.prepare.get_molecule_engine(engine="ase", input="start.xyz", ase_class="xtb.ase.calculator.XTB", ase_kwargs='{"method":"GFN2-xTB", "accuracy":0.001}')
+        coords = molecule.xyzs[0].flatten()*geometric.nifty.ang2bohr
+        worker_program = geometric.nifty.which('work_queue_worker')
+        # Assume 4 threads are available
+        self.workers = [subprocess.Popen([os.path.join(worker_program, "work_queue_worker"), "localhost", str(wq.port)],
+                                         stdout=subprocess.PIPE) for i in range(4)]
+        hessian = geometric.normal_modes.calc_cartesian_hessian(coords, molecule, engine, os.getcwd())
+        freqs, modes, G = geometric.normal_modes.frequency_analysis(coords, hessian, elem=molecule.elem, verbose=True)
+        np.testing.assert_almost_equal(freqs, [1539.536, 3642.893, 3651.028], decimal=1)
+        assert len(freqs) == 3
         geometric.nifty.destroyWorkQueue()
 
 
