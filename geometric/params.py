@@ -371,7 +371,7 @@ def parse_optimizer_args(*args):
     grp_modify.add_argument('--radii', type=str, nargs="+", help='List of atomic radii for construction of coordinate system.\n '
                             'Provide pairs of symbol/radius values such as Na 0.0 Fe 1.5\n ')
     grp_modify.add_argument('--pdb', type=str, help='PDB file name with coordinates and resids. TRIC will add T+R coordinates for each residue.\n ')
-    grp_modify.add_argument('--coords', type=str, help='Coordinate file to override the QM input file / PDB file. The LAST frame will be used for optimizations. All the frames will be used for NEB calculations.\n ')
+    grp_modify.add_argument('--coords', type=str, help='Coordinate file to override the QM input file / PDB file. The LAST frame will be used.\n ')
     grp_modify.add_argument('--frag', type=str2bool, help='Provide "yes" to delete bonds between residues, producing\n'
                             'separate fragments in the internal coordinate system.')
     grp_modify.add_argument('--bothre', type=float, help='Set the bond order threshold for building bonds in transition state calculations (Q-Chem, TeraChem only). Set 0.0 to disable.\n ')

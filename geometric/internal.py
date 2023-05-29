@@ -2005,7 +2005,6 @@ class InternalCoordinates(object):
 class PrimitiveInternalCoordinates(InternalCoordinates):
     def __init__(self, molecule, connect=False, addcart=False, constraints=None, cvals=None, **kwargs):
         super(PrimitiveInternalCoordinates, self).__init__()
-        if kwargs.get('chain', False): return
         self.connect = connect
         self.addcart = addcart
         self.Internals = []
@@ -3437,15 +3436,8 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
     def second_derivatives(self, coords):
         """ Obtain the second derivatives of the DLCs with respect to the Cartesian coordinates. """
         PrimDers = self.Prims.second_derivatives(coords)
-        Answer2 = np.tensordot(self.Vecs, PrimDers, axes=(0, 0))
-        return np.array(Answer2)
+        return np.tensordot(self.Vecs, PrimDers, axes=(0, 0))
 
-    def calcDisplacement(self, xyz, imgDisp, imgRef):
-        return self.Prims.calcDisplacement(xyz, imgDisp, imgRef)
-
-    def applyCartesianGrad(self, xyz, gradq, imgApply, imgRef):
-        return self.Prims.applyCartesianGrad(xyz, gradq, imgApply, imgRef)   
- 
     def GInverse(self, xyz):
         return self.GInverse_SVD(xyz)
 
@@ -3475,7 +3467,7 @@ class CartesianCoordinates(PrimitiveInternalCoordinates):
     primitive internal coordinates.
     """
     def __init__(self, molecule, **kwargs):
-        super(CartesianCoordinates, self).__init__(molecule, **kwargs)
+        super(CartesianCoordinates, self).__init__(molecule)
         self.Internals = []
         self.cPrims = []
         self.cVals = []
@@ -3490,7 +3482,7 @@ class CartesianCoordinates(PrimitiveInternalCoordinates):
             raise RuntimeError('Do not use constraints with Cartesian coordinates')
 
     def guess_hessian(self, xyz):
-        return np.eye(len(xyz.flatten()))
+        return 0.5*np.eye(len(xyz.flatten()))
 
 class ImagePrim(PrimitiveCoordinate):
     def __init__(self, ic, na, nr):

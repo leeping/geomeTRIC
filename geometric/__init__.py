@@ -42,6 +42,7 @@ from . import optimize
 from . import engine
 from . import run_json
 from . import neb
+from . import qcf_neb
 
 from ._version import get_versions as _get_versions
 _versions = _get_versions()

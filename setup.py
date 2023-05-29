@@ -19,7 +19,7 @@ setup(
     entry_points={'console_scripts': [
         'geometric-optimize = geometric.optimize:main',
         'run-ase = geometric.ase_engine:main',
-	'geometric-neb = geometric.neb:main',
+	    'geometric-neb = geometric.neb:main',
     ]},
     install_requires=[
         'numpy>=1.11',

@@ -74,7 +74,7 @@ def test_hcn_neb_service_arrange(localizer):
     qcel_mols = [qcmol(symbols=chain_M[0].elem, geometry=coord, molecular_charge=0, molecular_multiplicity=1)
                       for coord in coords]
 
-    new_qcel_mols = geometric.neb.arrange(qcel_mols)
+    new_qcel_mols = geometric.qcf_neb.arrange(qcel_mols)
     count = sum([1 if not np.allclose(i.geometry, j.geometry) else 0 for i, j in zip(qcel_mols, new_qcel_mols)])
     # 5 images should change from the arrange().
     assert count == 5
@@ -89,7 +89,7 @@ def test_hcn_neb_service_rest(localizer):
         in_dict = json.load(prepare_in)
 
     input_dict = copy.deepcopy(in_dict)
-    new_coords, out_dict  = geometric.neb.prepare(input_dict)
+    new_coords, out_dict  = geometric.qcf_neb.prepare(input_dict)
     new_coords_ang = np.array(new_coords[0]) * geometric.nifty.bohr2ang
     old_coords_ang = out_dict['coord_ang_prev'][0]
 
@@ -110,7 +110,7 @@ def test_hcn_neb_service_rest(localizer):
         in_dict = json.load(prepare_in)
 
     input_dict = copy.deepcopy(in_dict)
-    new_coords, out_dict  = geometric.neb.nextchain(input_dict)
+    new_coords, out_dict  = geometric.qcf_neb.nextchain(input_dict)
 
     new_coords_ang = np.array(new_coords[0]) * geometric.nifty.bohr2ang
     old_coords_ang = out_dict['coord_ang_prev'][0]
@@ -141,7 +141,7 @@ def test_hcn_neb_service_rest(localizer):
     # 2-2) neb.nextchain() respaced case test
     input_dict = copy.deepcopy(in_dict)
     input_dict['respaced'] = True
-    new_coords, out_dict = geometric.neb.nextchain(input_dict)
+    new_coords, out_dict = geometric.qcf_neb.nextchain(input_dict)
 
     new_coords_ang = np.array(new_coords[0]) * geometric.nifty.bohr2ang
     old_coords_ang = out_dict['coord_ang_prev'][0]

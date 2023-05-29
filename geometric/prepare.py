@@ -329,6 +329,7 @@ def get_molecule_engine(**kwargs):
 
     NEB = kwargs.get('neb', False)
 
+    # 2022-09-13: If extra coordinates are provided, the topology may be rebuilt. This decision can be revisited later.
     if not NEB and kwargs.get('coords', None) is not None:
         M.load_frames(kwargs.get('coords'))
         M = M[-1]
