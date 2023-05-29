@@ -21,8 +21,8 @@ def test_meci_qmmm_terachem(localizer):
     Find the MECI of a retinal protonated Schiff base model with static QM/MM water molecules.
     """
     for fnm in ['x.prmtop', 'qmindices.txt', 'run.tcin', 'run1.tcin']:
-        shutil.copy(os.path.join(exampled, '0-regression-tests', 'psb3-qmmm-meci', fnm), os.getcwd())
-    shutil.copy(os.path.join(exampled, '0-regression-tests', 'psb3-qmmm-meci', 'converged.inpcrd'), 
+        shutil.copy(os.path.join(exampled, '0-performance-tests', 'psb3-qmmm-meci', fnm), os.getcwd())
+    shutil.copy(os.path.join(exampled, '0-performance-tests', 'psb3-qmmm-meci', 'converged.inpcrd'), 
                 os.path.join(os.getcwd(), 'x.inpcrd'))
     progress = geometric.optimize.run_optimizer(engine='terachem', input='run.tcin', meci=['run1.tcin'], meci_alpha=0.03)
     e_ref = -251.9957148967
@@ -45,8 +45,8 @@ class TestTerachemWorkQueue:
     def test_terachem_workqueue(self, localizer):
         # Copy needed files
         for fnm in ['x.prmtop', 'qmindices.txt', 'run.tcin']:
-            shutil.copy(os.path.join(exampled, '0-regression-tests', 'psb3-qmmm-meci', fnm), os.getcwd())
-        shutil.copy(os.path.join(exampled, '0-regression-tests', 'psb3-qmmm-meci', 'converged.inpcrd'), 
+            shutil.copy(os.path.join(exampled, '0-performance-tests', 'psb3-qmmm-meci', fnm), os.getcwd())
+        shutil.copy(os.path.join(exampled, '0-performance-tests', 'psb3-qmmm-meci', 'converged.inpcrd'), 
                     os.path.join(os.getcwd(), 'x.inpcrd'))
         # Create molecule and engine object
         molecule, engine = geometric.prepare.get_molecule_engine(engine='terachem', input='run.tcin')
@@ -82,7 +82,7 @@ class TestTerachemWorkQueue:
         np.testing.assert_almost_equal(result, refgrad, decimal=5)
 
 def test_edit_tcin(localizer):
-    read_tcin_1 = geometric.engine.edit_tcin(fin=os.path.join(exampled, '0-regression-tests', 'ivermectin', 'run.tcin'), fout='test.tcin', 
+    read_tcin_1 = geometric.engine.edit_tcin(fin=os.path.join(exampled, '0-performance-tests', 'ivermectin', 'run.tcin'), fout='test.tcin', 
                                              options={'basis':'3-21g', 'threspdp':'1e-5'}, defaults={'method':'rhf', 'threspdp':'1e-4', 'precision':'mixed'})
     with pytest.raises(RuntimeError):
         read_tcin_2 = geometric.engine.edit_tcin(fin='test.tcin')

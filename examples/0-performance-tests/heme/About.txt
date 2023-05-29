@@ -1,0 +1,1 @@
+Note that in this test case, the relative coarseness of the DFT grid causes an orientational dependence of the energy of a few kcal/mol.

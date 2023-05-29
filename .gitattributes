@@ -2,4 +2,3 @@ geometric/_version.py export-subst
 examples/* linguist-vendored
 geometric/data/* linguist-vendored
 *.log linguist-vendored
-
