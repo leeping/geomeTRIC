@@ -361,7 +361,6 @@ def parse_optimizer_args(*args):
     grp_optparam.add_argument('--conmethod', type=int, help='Set to 1 to enable updated constraint algorithm (default 0).\n ')
     grp_optparam.add_argument('--reset', type=str2bool, help='Reset approximate Hessian to guess when eigenvalues are under epsilon.\n '
                               'Defaults to True for minimization and False for transition states.\n ')
-    grp_optparam.add_argument('--skip', action='store_true', help='Skip Hessian updates that would introduce negative eigenvalues.')
     grp_optparam.add_argument('--epsilon', type=float, help='Small eigenvalue threshold for resetting Hessian, default 1e-5.\n ')
     grp_optparam.add_argument('--check', type=int, help='Check coordinates every <N> steps and rebuild coordinate system, disabled by default.\n')
     grp_optparam.add_argument('--subfrctor', type=int, help='Project out net force and torque components from nuclear gradient.\n'
@@ -500,19 +499,6 @@ def parse_neb_args(*args):
     # OpenMM .xml files don't have to be in the current folder.
     if not args_dict['input'].endswith('.xml') and not os.path.exists(args_dict['input']):
         raise RuntimeError("Input file does not exist")
-
-    # Parse the constraints file for additional command line options to be added
-    if 'constraints' in args_dict:
-        if not os.path.exists(args_dict['constraints']):
-            raise RuntimeError("Constraints / options file does not exist")
-        args2 = (['_', '__', '@'+args_dict['constraints']],)
-        for k, v in vars(parser.parse_args(*args2)).items():
-            if v is None: continue
-            if k in ['input', 'constraints']: continue
-            if k not in args_dict:
-                args_dict[k] = v
-            elif k in args_dict and v != args_dict[k]:
-                raise RuntimeError("Command line argument %s conflicts with provided value in %s" % (k, args_dict['constraints']))
 
     # Set any defaults that are neither provided on the command line nor in the options file
     if 'engine' not in args_dict:
