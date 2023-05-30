@@ -210,9 +210,7 @@ def get_molecule_engine(**kwargs):
                 M = Molecule(tcin['coordinates'], radii=radii, fragment=frag)
             M.charge = tcin['charge']
             M.mult = tcin.get('spinmult',1)
-            # TC requires the input molecule contain only one structure. The [-1] is because users may provide 
-            # coordinate files with multiple structures and the last one is the one that is used, consistent with the CLI.
-            engine = TeraChem(M[-1], tcin, dirname=dirname, pdb=pdb)
+            engine = TeraChem(M, tcin, dirname=dirname, pdb=pdb)
         elif engine_str == 'qchem':
             logger.info("Q-Chem engine selected. Expecting Q-Chem input for gradient calculation.\n")
             # The file from which we make the Molecule object
