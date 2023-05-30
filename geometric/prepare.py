@@ -210,8 +210,8 @@ def get_molecule_engine(**kwargs):
                 M = Molecule(tcin['coordinates'], radii=radii, fragment=frag)
             M.charge = tcin['charge']
             M.mult = tcin.get('spinmult',1)
-            # The TeraChem engine needs to write rst7 files before calling TC
-            # and also make sure the prmtop and qmindices.txt files are present.
+            # TC requires the input molecule contain only one structure. The [-1] is because users may provide 
+            # coordinate files with multiple structures and the last one is the one that is used, consistent with the CLI.
             engine = TeraChem(M[-1], tcin, dirname=dirname, pdb=pdb)
         elif engine_str == 'qchem':
             logger.info("Q-Chem engine selected. Expecting Q-Chem input for gradient calculation.\n")
@@ -235,7 +235,7 @@ def get_molecule_engine(**kwargs):
                 M = Molecule(pdb, radii=radii, fragment=frag)
             if 'boxes' in M.Data:
                 del M.Data['boxes']
-            engine = Gromacs(M)
+            engine = Gromacs(M])
         elif engine_str == 'openmm':
             logger.info("OpenMM engine selected. Expecting forcefield.xml or system.xml file, and PDB passed in via --pdb.\n")
             if pdb is None:
