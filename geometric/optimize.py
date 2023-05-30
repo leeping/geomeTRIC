@@ -706,7 +706,7 @@ class Optimizer(object):
                     logger.info("\nIRC forward direction converged\n")
                     logger.info("IRC backward direction starts here\n\n")
                     self.IRC_direction = -1
-                    self.progress = self.progress[::-1][:-1]
+                    self.progress = self.progress[::-1]
                     self.Iteration = 0
                     self.gradx = self.Gx_hist[0].copy()
                     self.X = self.X_hist[0].copy()
@@ -720,7 +720,7 @@ class Optimizer(object):
                     return
             elif Converged_energy and Converged_drms and Converged_dmax and self.IRC_disp < 1e-4:
                 logger.info("Decreasing IRC step-size\n")
-                self.IRC_stepsize /= 4
+                self.IRC_stepsize /= 2
 
         if criterima_met and self.conSatisfied and not params.irc:
             self.SortedEigenvalues(self.H)
