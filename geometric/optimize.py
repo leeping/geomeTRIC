@@ -150,12 +150,6 @@ class Optimizer(object):
             else:
                 logger.info(">  RMS-Grad  < %.2e\n" % params.Convergence_grms)
             logger.info(">  RMS-Disp  < %.2e\n" % params.Convergence_drms)
-        elif params.irc:
-            logger.info("> Will converge when all 4 criteria are reached:\n")
-            logger.info(">  |Delta-E| < %.2e\n" % params.Convergence_energy)
-            logger.info(">  RMS-Disp  < %.2e\n" % params.Convergence_drms)
-            logger.info(">  Max-Disp  < %.2e\n" % params.Convergence_dmax)
-            logger.info(">  IRC-Disp  < 1.00e-05\n")
         else:
             logger.info("> Will converge when all 5 criteria are reached:\n")
             logger.info(">  |Delta-E| < %.2e\n" % params.Convergence_energy)
@@ -424,101 +418,134 @@ class Optimizer(object):
         return g_new
 
     def step(self):
-        """
-        Perform one step of the optimization.
-        """
+        if self.params.irc:
+            """
+            Perform one step of the IRC.
+            """
+            dy = self.IRC_step()
+        else:
+            """
+            Perform one step of the optimization.
+            """
+            dy = self.optimize_step()
+        ### Before updating any of our variables, copy current variables to "previous"
+        self.Yprev = self.Y.copy()
+        self.Xprev = self.X.copy()
+        self.Gxprev = self.gradx.copy()
+        self.Gprev = self.G.copy()
+        self.Eprev = self.E
+        ### Update the Internal Coordinates ###
+        X0 = self.X.copy()
+        self.newCartesian(dy)
+        ## The "actual" dy may be different from the one passed to newCartesian(),
+        ## for example if we enforce constraints or don't get the step we expect.
+        dy = self.IC.calcDiff(self.X, X0)
+        # dyp = self.IC.Prims.calcDiff(self.X, X0)
+        # print("Actual dy:", dy)
+        self.Y += dy
+        self.expect = flat(0.5*multi_dot([row(dy),self.H,col(dy)]))[0] + np.dot(dy,self.G)
+        # self.expectdG = np.dot(self.H, col(dy).flatten())
+        self.state = OPT_STATE.NEEDS_EVALUATION
+
+    def IRC_step(self):
+        logger.info("\nIRC sub-step1: Finding a pivot point (q*_{k+1})\n")
+        # Need to take a step towards the pivot point
+        self.IC.clearCache()
+        GMat = self.IC.GMatrix(self.X, invMW=True)
+        GMat_sqrt_inv, GMat_sqrt = self.IC.GInverse_SVD(self.X, sqrt=True, invMW=True)
+
+        # Vector to the pivot point
+        if self.Iteration == 0:
+            # If it's the very first step, pick the eigenvector of the imaginary frequency and pick the direction
+            logger.info('\nFirst, following the imaginary mode vector\n')
+            if self.TSWavenum[1] < 0:
+                raise IRCError("There are more than one imaginary vibrational mode, please optimize the structure and try again.\n")
+
+            # Getting IC vectors correspond to the imaginary frequency
+            H_M = np.dot(np.dot(GMat_sqrt, self.H), GMat_sqrt.T)
+            _, MW_IC_vecs = np.linalg.eigh(H_M)
+            invMW_v = np.dot(GMat_sqrt,MW_IC_vecs[0])
+            v = np.dot(GMat_sqrt_inv, invMW_v)
+
+            # Initial direction
+            v *= self.IRC_direction
+
+            invMW_v = np.dot(GMat, v)
+
+        else:
+            # Else, use the mass-weighted G matrix and internal coordinate gradients to get the vector.
+            # Normalization factor
+            v = self.G.copy()  # Internal coordinate gradients
+            invMW_v = np.dot(GMat, v)
+
+        # Normalization factor
+        N = 1 / np.sqrt(np.dot(v.T, np.dot(GMat, v)))
+        # Step towards the pivot point
+        dy_to_pivot = -0.5*self.IRC_stepsize*N*invMW_v
+
+        # Move to the pivot point
+        X0 = self.X.copy()
+        X_pivot = self.IC.newCartesian(self.X, dy_to_pivot, self.params.verbose)
+        dy_to_pivot = self.IC.calcDiff(X_pivot, X0)
+
+        # Calculating sqrt(mass) weighted Cartesian coordinate
+        GMat_sqrt_inv, GMat_sqrt = self.IC.GInverse_SVD(X_pivot, sqrt=True, invMW=True)
+        mwdx = np.dot(GMat_sqrt_inv,dy_to_pivot)
+        logger.info("Half step dy = %.5f\n" %np.linalg.norm(dy_to_pivot))
+        logger.info("Half step mw-dx = %.5f\n" %np.linalg.norm(mwdx))
+
+        # We are at the pivot point
+        logger.info('\nIRC sub-step2: Finding the next point (q_{k+1})\n')
+        v1 = v.copy()
+        irc_sub_iteration = 0
+        p_prime = dy_to_pivot.copy()
+        while True:
+            X = self.IC.newCartesian(X_pivot, p_prime, self.params.verbose)
+            # Now we are at the guessed point, define mass-weighted G matrix at the guessed point
+            self.IC.clearCache()
+            GMat_sqrt_inv, GMat_sqrt = self.IC.GInverse_SVD(X, sqrt=True, invMW=True)
+            # Mass weighted displacement, gradients, and Hessian
+            g_M = np.dot(GMat_sqrt, self.guess_g(self.G, self.H, dy_to_pivot + p_prime))
+            H_M = np.dot(np.dot(GMat_sqrt,self.H), GMat_sqrt.T)
+            p_M = np.dot(GMat_sqrt_inv, p_prime)
+
+            Heig, Hvecs = np.linalg.eigh(H_M)
+
+            init_guess = 1.01*Heig[0] if Heig[0] < 0 else 0.99*Heig[0]
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                min_lambda = scipy.optimize.fsolve(self.find_lambda, init_guess, (Heig, Hvecs, g_M, p_M), xtol=1e-10)
+            LambdaI = min_lambda[0]*np.eye(len(self.IC.Internals))
+            del_q_M1 = np.linalg.pinv(H_M - LambdaI)
+            del_q_M2 = g_M - min_lambda[0]*p_M
+            del_q_M = -np.dot(del_q_M1, del_q_M2)
+            dq_new = np.dot(GMat_sqrt, del_q_M)
+
+            if np.linalg.norm(dq_new) < 1e-5 or irc_sub_iteration > 500:
+                dy = dy_to_pivot + p_prime
+                v2 = p_prime/np.linalg.norm(p_prime)
+                deg = np.degrees(np.arccos(np.dot(v1/np.linalg.norm(v1),v2)))
+                logger.info('Angle between v1 and v2: %2.f \n' %deg)
+                #logger.info('Final del_q length (should be small): %.8f \n' %np.linalg.norm(dq_new))
+                logger.info('Total step dy = %.5f \n' %np.linalg.norm(dy))
+                mwdx = np.dot(GMat_sqrt_inv, dy)
+                self.IRC_disp = min(np.linalg.norm(mwdx), np.linalg.norm(dy))
+                logger.info('Total step mw-dx = %.5f \n\n' %np.linalg.norm(mwdx))
+                break
+            irc_sub_iteration += 1
+            p_prime += dq_new
+
+        self.Iteration += 1
+        # Cartesian coordinate step size
+        self.cnorm = self.get_cartesian_norm(dy)
+        return dy
+
+    def optimize_step(self):
         params = self.params
         if np.isnan(self.G).any():
             raise RuntimeError("Gradient contains nan - check output and temp-files for possible errors")
         if np.isnan(self.H).any():
             raise RuntimeError("Hessian contains nan - check output and temp-files for possible errors")
-
-        if params.irc:
-            logger.info("\nIRC sub-step1: Finding a pivot point (q*_{k+1})\n")
-            # Need to take a step towards the pivot point
-            self.IC.clearCache()
-            GMat = self.IC.GMatrix(self.X, invMW=True)
-            GMat_sqrt_inv, GMat_sqrt = self.IC.GInverse_SVD(self.X, sqrt=True, invMW=True)
-
-            # Vector to the pivot point
-            if self.Iteration == 0:
-                # If it's the very first step, pick the eigenvector of the imaginary frequency and pick the direction
-                logger.info('\nFirst, following the imaginary mode vector\n')
-                if self.TSWavenum[1] < 0:
-                    raise IRCError("There are more than one imaginary vibrational mode, please optimize the structure and try again.\n")
-
-                # Getting IC vectors correspond to the imaginary frequency
-                H_M = np.dot(np.dot(GMat_sqrt, self.H), GMat_sqrt.T)
-                _, MW_IC_vecs = np.linalg.eigh(H_M)
-                invMW_v = np.dot(GMat_sqrt,MW_IC_vecs[0])
-                v = np.dot(GMat_sqrt_inv, invMW_v)
-
-                # Initial direction
-                v *= self.IRC_direction
-                invMW_v = np.dot(GMat, v)
-
-            else:
-                # Else, use the mass-weighted G matrix and internal coordinate gradients to get the vector.
-                # Normalization factor
-                v = self.G.copy()  # Internal coordinate gradients
-                invMW_v = np.dot(GMat, v)
-
-            # Normalization factor
-            N = 1 / np.sqrt(np.dot(v.T, np.dot(GMat, v)))
-            # Step towards the pivot point
-            dy_to_pivot = -0.5*self.IRC_stepsize*N*invMW_v
-
-            # Move to the pivot point
-            X0 = self.X.copy()
-            X_pivot = self.IC.newCartesian(self.X, dy_to_pivot, self.params.verbose)
-            dy_to_pivot = self.IC.calcDiff(X_pivot, X0)
-
-            # Calculating sqrt(mass) weighted Cartesian coordinate
-            GMat_sqrt_inv, GMat_sqrt = self.IC.GInverse_SVD(X_pivot, sqrt=True, invMW=True)
-            mwdx = np.dot(GMat_sqrt_inv,dy_to_pivot)
-            logger.info("Half step dy = %.5f\n" %np.linalg.norm(dy_to_pivot))
-            logger.info("Half step mw-dx = %.5f\n" %np.linalg.norm(mwdx))
-
-            # We are at the pivot point
-            logger.info('\nIRC sub-step2: Finding the next point (q_{k+1})\n')
-            v1 = v.copy()
-            irc_sub_iteration = 0
-            p_prime = dy_to_pivot.copy()
-            while True:
-                X = self.IC.newCartesian(X_pivot, p_prime, self.params.verbose)
-                # Now we are at the guessed point, define mass-weighted G matrix at the guessed point
-                self.IC.clearCache()
-                GMat_sqrt_inv, GMat_sqrt = self.IC.GInverse_SVD(X, sqrt=True, invMW=True)
-                # Mass weighted displacement, gradients, and Hessian
-                g_M = np.dot(GMat_sqrt, self.guess_g(self.G, self.H, dy_to_pivot + p_prime))
-                H_M = np.dot(np.dot(GMat_sqrt,self.H), GMat_sqrt.T)
-                p_M = np.dot(GMat_sqrt_inv, p_prime)
-
-                Heig, Hvecs = np.linalg.eigh(H_M)
-
-                init_guess = 1.01*Heig[0] if Heig[0] < 0 else 0.99*Heig[0]
-                with warnings.catch_warnings():
-                    warnings.simplefilter("ignore")
-                    min_lambda = scipy.optimize.fsolve(self.find_lambda, init_guess, (Heig, Hvecs, g_M, p_M))
-                LambdaI = min_lambda[0]*np.eye(len(self.IC.Internals))
-                del_q_M1 = np.linalg.pinv(H_M - LambdaI)
-                del_q_M2 = g_M - min_lambda[0]*p_M
-                del_q_M = -np.dot(del_q_M1, del_q_M2)
-                dq_new = np.dot(GMat_sqrt, del_q_M)
-
-                if np.linalg.norm(dq_new) < 1e-5 or irc_sub_iteration > 500:
-                    dy = dy_to_pivot + p_prime
-                    v2 = p_prime/np.linalg.norm(p_prime)
-                    deg = np.degrees(np.arccos(np.dot(v1/np.linalg.norm(v1),v2)))
-                    logger.info('Angle between v1 and v2: %2.f \n' %deg)
-                    #logger.info('Final del_q length (should be small): %.8f \n' %np.linalg.norm(dq_new))
-                    logger.info('Total step dy = %.5f \n' %np.linalg.norm(dy))
-                    mwdx = np.dot(GMat_sqrt_inv, dy)
-                    self.IRC_disp = min(np.linalg.norm(mwdx), np.linalg.norm(dy))
-                    logger.info('Total step mw-dx = %.5f \n\n' %np.linalg.norm(mwdx))
-                    break
-                irc_sub_iteration += 1
-                p_prime += dq_new
 
         self.Iteration += 1
         if (self.Iteration%5) == 0:
@@ -542,8 +569,7 @@ class Optimizer(object):
         # The trust radius is to be computed in Cartesian coordinates.
         # First take a full-size optimization step
         if params.verbose : logger.info("  Optimizer.step : Attempting full-size optimization step\n")
-        if not params.irc:
-            dy, _, __ = self.get_delta_prime(v0, verbose=self.params.verbose)
+        dy, _, __ = self.get_delta_prime(v0, verbose=self.params.verbose)
         # Internal coordinate step size
         inorm = np.linalg.norm(dy)
         # Cartesian coordinate step size
@@ -554,7 +580,7 @@ class Optimizer(object):
         if params.verbose: logger.info("  Optimizer.step : Internal-step: %.4f Cartesian-step: %.4f Trust-radius: %.4f\n" % (inorm, self.cnorm, self.trust))
         # If the step is above the trust radius in Cartesian coordinates, then
         # do the following to reduce the step length:
-        if self.cnorm > 1.1 * self.trust and not params.irc:
+        if self.cnorm > 1.1 * self.trust:
             # This is the function f(inorm) = cnorm-target that we find a root
             # for obtaining a step with the desired Cartesian step size.
             froot = self.createFroot(v0)
@@ -607,24 +633,7 @@ class Optimizer(object):
         # Dot = -np.dot(dy/np.linalg.norm(dy), self.G/np.linalg.norm(self.G))
         # Whether the Cartesian norm comes close to the trust radius
         # bump = cnorm > 0.8 * self.trust
-        ### Before updating any of our variables, copy current variables to "previous"
-        self.Yprev = self.Y.copy()
-        self.Xprev = self.X.copy()
-        self.Gxprev = self.gradx.copy()
-        self.Gprev = self.G.copy()
-        self.Eprev = self.E
-        ### Update the Internal Coordinates ###
-        X0 = self.X.copy()
-        self.newCartesian(dy)
-        ## The "actual" dy may be different from the one passed to newCartesian(),
-        ## for example if we enforce constraints or don't get the step we expect.
-        dy = self.IC.calcDiff(self.X, X0)
-        # dyp = self.IC.Prims.calcDiff(self.X, X0)
-        # print("Actual dy:", dy)
-        self.Y += dy
-        self.expect = flat(0.5*multi_dot([row(dy),self.H,col(dy)]))[0] + np.dot(dy,self.G)
-        # self.expectdG = np.dot(self.H, col(dy).flatten())
-        self.state = OPT_STATE.NEEDS_EVALUATION
+        return dy
 
     def evaluateStep(self):
         ### At this point, the state should be NEEDS_EVALUATION
@@ -690,17 +699,18 @@ class Optimizer(object):
             logger.info(self.prim_msg + '\n')
 
         ### Check convergence criteria ###
-        if params.irc and Converged_energy and Converged_drms and Converged_dmax and self.IRC_disp < 1e-5:
-            if self.Iteration > 10:
+        criterima_met = Converged_energy and Converged_grms and Converged_drms and Converged_gmax and Converged_dmax
+        if params.irc:
+            if criterima_met and self.Iteration > 10:
                 if self.IRC_direction == 1:
-                    logger.info("IRC forward direction converged\n")
+                    logger.info("\nIRC forward direction converged\n")
                     logger.info("IRC backward direction starts here\n\n")
                     self.IRC_direction = -1
                     self.progress = self.progress[::-1][:-1]
                     self.Iteration = 0
                     self.gradx = self.Gx_hist[0].copy()
                     self.X = self.X_hist[0].copy()
-                    self.trust = self.params.trust
+                    self.IRC_stepsize = self.params.trust
                     self.prepareFirstStep()
                     return
                 elif self.IRC_direction == -1:
@@ -708,8 +718,11 @@ class Optimizer(object):
                     logger.info("Converged! =D\n")
                     self.state = OPT_STATE.CONVERGED
                     return
+            elif Converged_energy and Converged_drms and Converged_dmax and self.IRC_disp < 1e-4:
+                logger.info("Decreasing IRC step-size\n")
+                self.IRC_stepsize /= 4
 
-        if Converged_energy and Converged_grms and Converged_drms and Converged_gmax and Converged_dmax and self.conSatisfied and not params.irc:
+        if criterima_met and self.conSatisfied and not params.irc:
             self.SortedEigenvalues(self.H)
             logger.info("Converged! =D\n")
             self.state = OPT_STATE.CONVERGED
