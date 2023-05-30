@@ -295,6 +295,10 @@ class Optimizer(object):
             spcalc['gradient'] = qm_grads_proj
         self.E = spcalc['energy']
         self.gradx = spcalc['gradient']
+        # gx = self.gradx.reshape(-1, 3)
+        # for i in range(gx.shape[0]):
+        #     print("% 10.6f % 10.6f % 10.6f" % (gx[i, 0], gx[i, 1], gx[i, 2]))
+        # sys.exit()
         # Calculate Hessian at the first step, or at each step if desired
         if self.params.hessian == 'each' or self.recalcHess:
             # Hx is assumed to be the Cartesian Hessian at the current step.
