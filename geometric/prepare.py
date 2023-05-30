@@ -233,7 +233,7 @@ def get_molecule_engine(**kwargs):
                 M = Molecule(pdb, radii=radii, fragment=frag)
             if 'boxes' in M.Data:
                 del M.Data['boxes']
-            engine = Gromacs(M])
+            engine = Gromacs(M)
         elif engine_str == 'openmm':
             logger.info("OpenMM engine selected. Expecting forcefield.xml or system.xml file, and PDB passed in via --pdb.\n")
             if pdb is None:
