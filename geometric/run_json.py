@@ -188,7 +188,7 @@ def make_constraints_string(constraints_dict):
 
 
 def geometric_run_json(in_json_dict):
-    """ Take a input dictionary loaded from json, and return an output dictionary for json """
+    """ Take an input dictionary loaded from json, and return an output dictionary for json """
 
     # Default logger configuration (prevents extra newline from being printed)
     logIni = pkg_resources.resource_filename(geometric.optimize.__name__, 'config/logJson.ini')
