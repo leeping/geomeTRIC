@@ -194,7 +194,11 @@ def load_tcin(f_tcin):
 class Engine(object):
     def __init__(self, molecule):
         if len(molecule) != 1:
-            raise RuntimeError('Please pass only length-1 molecule objects to engine creation')
+            # In NEB calculations, length > 1 molecule objects may be passed.  In keeping with the CLI, the last structure
+            # is used for Engine creation.  The Engine behavior shouldn't depend on which structure is used, but if it does,
+            # we would need to rethink this design.
+            molecule = molecule[-1]
+            # raise RuntimeError('Please pass only length-1 molecule objects to engine creation')
         self.M = deepcopy(molecule)
         self.stored_calcs = OrderedDict()
 
