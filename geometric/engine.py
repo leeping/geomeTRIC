@@ -99,6 +99,7 @@ def edit_tcin(fin=None, fout=None, options=None, defaults=None, reqxyz=True, ign
         tcin_dirname = os.path.dirname(os.path.abspath(fin))
         section_mode = False
         for line in open(fin).readlines():
+            line = line.expandtabs(4)
             line = line.split("#")[0].strip()
             if len(line) == 0: continue
             if line == '$end':
@@ -182,7 +183,7 @@ def load_tcin(f_tcin):
     # tcdef['dftgrid'] = "1"
     # tcdef['precision'] = "mixed"
     # tcdef['threspdp'] = "1.0e-8"
-    tcin = edit_tcin(fin=f_tcin, options={'run':'gradient'}, defaults=tcdef)
+    tcin = edit_tcin(fin=f_tcin, options={'run':'gradient', 'keep_scr':'yes', 'scrdir':'scr'}, defaults=tcdef)
     return tcin
 
 #====================================#
@@ -378,6 +379,8 @@ class TeraChem(Engine):
             self.scr = self.tcin['scrdir']
         else:
             self.scr = 'scr'
+        # Always specify the TeraChem scratch folder name
+        self.tcin['scrdir'] = self.scr
         # A few notes about the electronic structure method
         self.casscf = self.tcin.get('casscf', 'no').lower() == 'yes'
         self.unrestricted = (self.tcin['method'][0] == 'u')
