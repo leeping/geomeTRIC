@@ -651,6 +651,7 @@ class TeraChem(Engine):
     def number_output(self, dirname, calcNum):
         if not os.path.exists(os.path.join(dirname, 'run.out')):
             raise RuntimeError('run.out does not exist')
+        start_xyz = 'start.rst7' if self.qmmm else 'start.xyz'
         shutil.copy2(os.path.join(dirname,start_xyz), os.path.join(dirname,'start_%03i.%s' % (calcNum, os.path.splitext(start_xyz)[1])))
         shutil.copy2(os.path.join(dirname,'run.out'), os.path.join(dirname,'run_%03i.out' % calcNum))
 

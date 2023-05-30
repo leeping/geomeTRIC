@@ -44,7 +44,7 @@ import shutil
 import os
 
 from .ase_engine import EngineASE
-from .errors import EngineError
+from .errors import EngineError, InputError
 from .internal import Distance, Angle, Dihedral, CartesianX, CartesianY, CartesianZ, TranslationX, TranslationY, TranslationZ, RotationA, RotationB, RotationC
 from .engine import set_tcenv, load_tcin, TeraChem, ConicalIntersection, Psi4, QChem, Gromacs, Molpro, OpenMM, QCEngineAPI, Gaussian, QUICK
 from .molecule import Molecule, Elements
@@ -210,7 +210,9 @@ def get_molecule_engine(**kwargs):
                 M = Molecule(tcin['coordinates'], radii=radii, fragment=frag)
             M.charge = tcin['charge']
             M.mult = tcin.get('spinmult',1)
-            engine = TeraChem(M, tcin, dirname=dirname, pdb=pdb)
+            # The TeraChem engine needs to write rst7 files before calling TC
+            # and also make sure the prmtop and qmindices.txt files are present.
+            engine = TeraChem(M[-1], tcin, dirname=dirname, pdb=pdb)
         elif engine_str == 'qchem':
             logger.info("Q-Chem engine selected. Expecting Q-Chem input for gradient calculation.\n")
             # The file from which we make the Molecule object
@@ -352,13 +354,29 @@ def get_molecule_engine(**kwargs):
     else:
         raise RuntimeError("Neither engine name nor customengine object was provided.\n")
 
-    # If --coords is provided via command line, use final coordinate set in the provided file
-    # to override all previously provided coordinates.
-    arg_coords = kwargs.get('coords', None)
-    if arg_coords is not None:
-        M.load_frames(arg_coords)
+    # When --coords is provided, it will overwrite the previous coordinate.
+
+    NEB = kwargs.get('neb', False)
+
+    # 2022-09-13: If extra coordinates are provided, the topology may be rebuilt. This decision can be revisited later.
+    if not NEB and kwargs.get('coords', None) is not None:
+        M.load_frames(kwargs.get('coords'))
         M = M[-1]
-        # 2022-09-13: If extra coordinates are provided, the topology may be rebuilt. This decision can be revisited later.
+        M.build_topology()
+
+    if NEB:
+        logger.info("\nNudged Elastic Band calculation will be performed.\n")
+        chain_coord = kwargs.get('chain_coords', None)
+        M.load_frames(chain_coord)
+        images = kwargs.get('images', 11)
+        if images > len(M):
+            # HP 5/3/2023 : We can interpolate here if len(M) == 2.
+            logger.info("WARNING: The input chain does not have enough number of images. All images will be used.\n")
+            images = len(M)
+        M1 = M
+        logger.info("Input coordinates have %i frames. The following will be used to initialize NEB images: \n" % len(M1))
+        logger.info(', '.join(["%i" % (int(round(i))) for i in np.linspace(0, len(M1) - 1, images)]) + "\n")
+        M = M1[np.array([int(round(i)) for i in np.linspace(0, len(M1) - 1, images)])]
         M.build_topology()
 
     # Perform some sanity checks on arguments

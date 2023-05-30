@@ -57,6 +57,27 @@ class FrequencyError(Error):
 class CheckCoordError(Error):
     pass
 
+class NEBStructureError(Error):
+    pass
+
+class NEBChainError(Error):
+    pass
+
+class NEBChainShapeError(NEBChainError):
+    pass
+
+class NEBChainRespaceError(NEBChainError):
+    pass
+
+class NEBBandError(Error):
+    pass
+
+class NEBBandTangentError(NEBBandError):
+    pass
+
+class NEBBandGradientError(NEBBandError):
+    pass
+
 class TeraChemEngineError(EngineError):
     pass
 
@@ -85,6 +106,9 @@ class QCEngineAPIEngineError(EngineError):
     pass
 
 class ConicalIntersectionEngineError(EngineError):
+    pass
+
+class QCAIOptimizationError(EngineError):
     pass
 
 class GeomOptNotConvergedError(Error):
