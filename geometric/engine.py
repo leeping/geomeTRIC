@@ -50,6 +50,7 @@ from .molecule import Molecule
 from .nifty import bak, au2ev, eqcgmx, fqcgmx, bohr2ang, logger, getWorkQueue, queue_up_src_dest, rootdir, copy_tree_over
 from .errors import EngineError, CheckCoordError, Psi4EngineError, QChemEngineError, TeraChemEngineError, \
     ConicalIntersectionEngineError, OpenMMEngineError, GromacsEngineError, MolproEngineError, QCEngineAPIEngineError, GaussianEngineError, QUICKEngineError
+from .xml_helper import read_coors_from_xml, write_coors_to_xml
 
 # Strings matching common DFT functionals
 # exclude "pw", "scan" because they might cause false positives

@@ -152,7 +152,6 @@ def get_molecule_engine(**kwargs):
             qmmm_amber = 'prmtop' in tcin 
             qmmm_openmm = 'system_xml' in tcin
             if qmmm_amber:
-                if 
                 try:
                     from openmm.app import AmberPrmtopFile
                 except ImportError:
@@ -176,11 +175,11 @@ def get_molecule_engine(**kwargs):
                 M.top_settings['radii'] = radii
                 M.top_settings['fragment'] = frag
                 M.build_topology()
-            elif openmm:
+            elif qmmm_openmm:
                 if qmmm_amber:
                     raise RuntimeError("prmtop and system_xml cannot both be in TC input file")
                 if not pdb:
-                    raise RuntimeError("when system_xml is specified, pdb keyword arg must be provided to TC engine")
+                    raise RuntimeError("TeraChem/OpenMM requires PDB file in get_molecule_engine")
                 if not os.path.exists(tcin['coordinates']):
                     raise RuntimeError("TeraChem/OpenMM State XML file does not exist")
                 if not os.path.exists(tcin['system_xml']):

@@ -1,11 +1,11 @@
-from lxml import etree
+import xml.etree.ElementTree as ET
 from .molecule import Molecule
 import copy
 
 def read_coors_from_xml(M, state_xml):
     with open(state_xml) as fobj:
         xml = fobj.read()
-    root = etree.fromstring(xml)
+    root = ET.fromstring(xml)
 
     for child in root:
         if child.tag == "Positions":
@@ -32,6 +32,6 @@ def write_coors_to_xml(M, root_template, filename):
                 child[aid].attrib['z'] = "%.16e" % z
     # write
     fout = open(filename, "w")
-    print(etree.tostring(root, pretty_print=True).decode("utf-8"), file=fout)
+    print(ET.tostring(root).decode("utf-8"), file=fout)
     fout.close()
 
