@@ -98,6 +98,7 @@ def edit_tcin(fin=None, fout=None, options=None, defaults=None, reqxyz=True, ign
         tcin_dirname = os.path.dirname(os.path.abspath(fin))
         section_mode = False
         for line in open(fin).readlines():
+            line = line.expandtabs(4)
             line = line.split("#")[0].strip()
             if len(line) == 0: continue
             if line == '$end':
@@ -377,6 +378,8 @@ class TeraChem(Engine):
             self.scr = self.tcin['scrdir']
         else:
             self.scr = 'scr'
+        # Always specify the TeraChem scratch folder name
+        self.tcin['scrdir'] = self.scr
         # A few notes about the electronic structure method
         self.casscf = self.tcin.get('casscf', 'no').lower() == 'yes'
         self.unrestricted = (self.tcin['method'][0] == 'u')
