@@ -179,11 +179,10 @@ def load_tcin(f_tcin):
     tcdef['threall'] = "1.0e-13"
     tcdef['scf'] = "diis+a"
     tcdef['maxit'] = "50"
-    tcdif['scrdir'] = "scr"
     # tcdef['dftgrid'] = "1"
     # tcdef['precision'] = "mixed"
     # tcdef['threspdp'] = "1.0e-8"
-    tcin = edit_tcin(fin=f_tcin, options={'run':'gradient', 'keep_scr':'yes'}, defaults=tcdef)
+    tcin = edit_tcin(fin=f_tcin, options={'run':'gradient', 'keep_scr':'yes', 'scrdir':'scr'}, defaults=tcdef)
     return tcin
 
 #====================================#
