@@ -542,7 +542,7 @@ class Optimizer(object):
                 #logger.info('Final del_q length (should be small): %.8f \n' %np.linalg.norm(dq_new))
                 logger.info('Total step dy = %.5f \n' %np.linalg.norm(dy))
                 mwdx = np.dot(GMat_sqrt_inv, dy)
-                self.IRC_disp = min(np.linalg.norm(mwdx), np.linalg.norm(dy))
+                self.IRC_disp = np.linalg.norm(mwdx)
                 logger.info('Total step mw-dx = %.5f \n\n' %np.linalg.norm(mwdx))
                 break
             irc_sub_iteration += 1
@@ -720,7 +720,7 @@ class Optimizer(object):
                     logger.info("Converged! =D\n")
                     self.state = OPT_STATE.CONVERGED
                     return
-            elif Converged_energy and Converged_drms and Converged_dmax and self.IRC_disp < 1e-4:
+            elif self.IRC_disp < 0.5*self.IRC_stepsize:
                 logger.info("Decreasing IRC step-size\n")
                 self.IRC_stepsize *= 0.5
                 return
