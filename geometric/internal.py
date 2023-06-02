@@ -1725,7 +1725,7 @@ class InternalCoordinates(object):
             CacheWarning = True
         ans = np.array(WilsonB)
         if invMW:
-            ans /= np.tile(self.mass, (len(self.Internals), 1))
+            ans /= np.tile(np.sqrt(self.mass), (len(self.Internals), 1))
         return ans
 
     def GMatrix(self, xyz, invMW=False):

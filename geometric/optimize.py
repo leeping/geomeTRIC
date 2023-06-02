@@ -428,7 +428,20 @@ class Optimizer(object):
             Perform one step of the optimization.
             """
             dy = self.optimize_step()
+
         ### Before updating any of our variables, copy current variables to "previous"
+        self.cnorm = self.get_cartesian_norm(dy)
+        ### DONE OBTAINING THE STEP ###
+        if isinstance(self.IC, PrimitiveInternalCoordinates):
+            idx = np.argmax(np.abs(dy))
+            iunit = np.zeros_like(dy)
+            iunit[idx] = 1.0
+            self.prim_msg = "Along %s %.3f" % (self.IC.Internals[idx], np.dot(dy/np.linalg.norm(dy), iunit))
+        ### These quantities, computed previously, are no longer used.
+        # Dot product of the gradient with the step direction
+        # Dot = -np.dot(dy/np.linalg.norm(dy), self.G/np.linalg.norm(self.G))
+        # Whether the Cartesian norm comes close to the trust radius
+        # bump = cnorm > 0.8 * self.trust
         self.Yprev = self.Y.copy()
         self.Xprev = self.X.copy()
         self.Gxprev = self.gradx.copy()
@@ -534,10 +547,7 @@ class Optimizer(object):
                 break
             irc_sub_iteration += 1
             p_prime += dq_new
-
         self.Iteration += 1
-        # Cartesian coordinate step size
-        self.cnorm = self.get_cartesian_norm(dy)
         return dy
 
     def optimize_step(self):
@@ -621,18 +631,7 @@ class Optimizer(object):
             ##### End Rebuild
             # Finally, take an internal coordinate step of the desired length.
             dy, _ = self.trust_step(iopt, v0, verbose=(self.params.verbose+1 if self.params.verbose >= 2 else 0))
-            self.cnorm = self.get_cartesian_norm(dy)
-        ### DONE OBTAINING THE STEP ###
-        if isinstance(self.IC, PrimitiveInternalCoordinates):
-            idx = np.argmax(np.abs(dy))
-            iunit = np.zeros_like(dy)
-            iunit[idx] = 1.0
-            self.prim_msg = "Along %s %.3f" % (self.IC.Internals[idx], np.dot(dy/np.linalg.norm(dy), iunit))
-        ### These quantities, computed previously, are no longer used.
-        # Dot product of the gradient with the step direction
-        # Dot = -np.dot(dy/np.linalg.norm(dy), self.G/np.linalg.norm(self.G))
-        # Whether the Cartesian norm comes close to the trust radius
-        # bump = cnorm > 0.8 * self.trust
+
         return dy
 
     def evaluateStep(self):
@@ -703,7 +702,10 @@ class Optimizer(object):
         if params.irc:
             if criterima_met and self.Iteration > 10:
                 if self.IRC_direction == 1:
-                    logger.info("\nIRC forward direction converged\n")
+                    if self.Iteration > params.maxiter:
+                        logger.info("\nIRC forward direction reached maximum iteration number\n")
+                    else:
+                        logger.info("\nIRC forward direction converged\n")
                     logger.info("IRC backward direction starts here\n\n")
                     self.IRC_direction = -1
                     self.progress = self.progress[::-1]
@@ -720,9 +722,10 @@ class Optimizer(object):
                     return
             elif Converged_energy and Converged_drms and Converged_dmax and self.IRC_disp < 1e-4:
                 logger.info("Decreasing IRC step-size\n")
-                self.IRC_stepsize /= 2
+                self.IRC_stepsize *= 0.5
+                return
 
-        if criterima_met and self.conSatisfied and not params.irc:
+        if criterima_met and self.conSatisfied:
             self.SortedEigenvalues(self.H)
             logger.info("Converged! =D\n")
             self.state = OPT_STATE.CONVERGED
