@@ -155,9 +155,7 @@ def find_path(mtx, thre=1):
     for niter in range(n**2):
         for ic in range(0, n):
             for ix in range(0, n):
-                if ic == n-1 and ix == n-1: 
-                    pass
-                elif ic == 0 and ix == 0:
+                if (ic == n-1 and ix == n-1) or (ic == 0 and ix == 0): # Do nothing at the starting point and end point
                     pass
                 elif ic == n-1 and not okay[ic, ix+1]: # Lower right corner on bottom
                     okay2[ic, ix] = 0
@@ -173,7 +171,7 @@ def find_path(mtx, thre=1):
                     okay2[ic, ix] = 0
         ndiff = np.sum(okay2 != okay)
         okay = okay2.copy()
-        if ndiff == 0: break
+        if ndiff == 0: break # Break when the maze is "converged"
 
     print_map(okay, "Allowed driving regions", colorscheme=1)
 
@@ -1183,6 +1181,7 @@ class Interpolator(object):
 
 def main():
     M0 = Molecule(sys.argv[1])
+    #interpolator = Interpolator(M0, use_midframes=True, n_frames=0, align_system=True, do_prealign=False)
     interpolator = Interpolator(M0, align_system=True, do_prealign=False)
     interpolator.run_workflow()
     

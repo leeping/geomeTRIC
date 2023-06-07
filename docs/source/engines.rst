@@ -33,7 +33,7 @@ Different engines have different features available.  Here is a simple summary:
 +-------------+--------------+-----------------+---------+---------------+------------+
 | Custom      | No           | No              | No      | No            | No         |
 +-------------+--------------+-----------------+---------+---------------+------------+
-| ASE         | No           | No              | No      | No            | No         |
+| ASE         | No           | Yes             | No      | No            | No         |
 +-------------+--------------+-----------------+---------+---------------+------------+
 | QUICK       | No           | No              | No      | No            | No         |
 +-------------+--------------+-----------------+---------+---------------+------------+
@@ -207,8 +207,10 @@ that is subclassed from ASE can be used, eg. `XTB <https://github.com/grimme-lab
 Usage:
 
 * Selected using ``--engine ase``
-* set the class of your calculator with ``--ase-class``, eg. ``--ase-class=xtb.ase.calculator.XTB``, ``--ase-class=quippy.potential.Potential``
-* set any initialisation keyword arguments for the calculator class with ``--ase-kwargs``, where the given argument is parsed as a JSON string. Note, this requires correct quoting, eg. ``--ase-kwargs='{"method":"GFN2-xTB"}'``.
+* Set the class of your calculator with ``--ase-class``, eg. ``--ase-class=xtb.ase.calculator.XTB``, ``--ase-class=quippy.potential.Potential``
+* Set any initialisation keyword arguments for the calculator class with ``--ase-kwargs``, where the given argument is parsed as a JSON string. Note, this requires correct quoting, eg. ``--ase-kwargs='{"method":"GFN2-xTB"}'``.
+* The charge and spin multiplicity for the XTB calculator can be set by passing ``charge`` and ``mult`` key-value pairs into ``ase-kwargs`` as: ``--ase-kwargs='{"method":"GFN2-xTB", "charge":0, "mult":1}'``.  
+* (New in upcoming v1.1 release): Work Queue support for ASE engine.
 
 QUICK
 -----

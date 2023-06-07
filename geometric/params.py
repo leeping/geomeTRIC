@@ -56,6 +56,8 @@ class OptParams(object):
         self.enforce = kwargs.get('enforce', 0.0)
         # Small eigenvalue threshold
         self.epsilon = kwargs.get('epsilon', 1e-5)
+        # Energy increase threshold; 3e-2 -> about 20 kcal/mol
+        self.erisemax = kwargs.get('erisemax', 3e-2)
         # Interval for checking the coordinate system for changes
         self.check = kwargs.get('check', 0)
         # More verbose printout
@@ -328,6 +330,7 @@ def parse_optimizer_args(*args):
     grp_optparam.add_argument('--reset', type=str2bool, help='Reset approximate Hessian to guess when eigenvalues are under epsilon.\n '
                               'Defaults to True for minimization and False for transition states.\n ')
     grp_optparam.add_argument('--epsilon', type=float, help='Small eigenvalue threshold for resetting Hessian, default 1e-5.\n ')
+    grp_optparam.add_argument('--erisemax', type=float, help='For energy minimization, the maximum value that energy can rise without step being rejected.\n ')
     grp_optparam.add_argument('--check', type=int, help='Check coordinates every <N> steps and rebuild coordinate system, disabled by default.\n')
     grp_optparam.add_argument('--subfrctor', type=int, help='Project out net force and torque components from nuclear gradient.\n'
                               '0 = never project; 1 = auto-detect (default); 2 = always project.')
@@ -351,7 +354,7 @@ def parse_optimizer_args(*args):
     grp_output.add_argument('--logINI',  type=str, dest='logIni', help='.ini file for customizing logging output.\n ')
     grp_output.add_argument('--write_cart_hess', type=str, help='Write approximate cartesian Hessian at optimized geometry to specified file.')
 
-    grp_software = parser.add_argument_group('molpro', 'Options specific for certain software packages')
+    grp_software = parser.add_argument_group('software', 'Options specific for certain software packages')
     grp_software.add_argument('--molproexe', type=str, help='Specify absolute path of Molpro executable.\n ')
     grp_software.add_argument('--molcnv', type=str2bool, help='Provide "yes" to use Molpro style convergence criteria instead of the default.\n ')
     grp_software.add_argument('--qcdir', type=str, help='Provide an initial Q-Chem scratch folder (e.g. supplied initial guess).\n ')

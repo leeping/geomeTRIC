@@ -1,0 +1,270 @@
+geometric-optimize called with the following command line:
+/home/leeping/opt/miniconda3/envs/main/bin/geometric-optimize --engine terachem run.tcin --meci run1.tcin
+
+                                        [91m())))))))))))))))/[0m                     
+                                    [91m())))))))))))))))))))))))),[0m                
+                                [91m*)))))))))))))))))))))))))))))))))[0m             
+                        [94m#,[0m    [91m()))))))))/[0m                [91m.)))))))))),[0m          
+                      [94m#%%%%,[0m  [91m())))))[0m                        [91m.))))))))*[0m        
+                      [94m*%%%%%%,[0m  [91m))[0m              [93m..[0m              [91m,))))))).[0m      
+                        [94m*%%%%%%,[0m         [93m***************/.[0m        [91m.)))))))[0m     
+                [94m#%%/[0m      [94m(%%%%%%,[0m    [93m/*********************.[0m       [91m)))))))[0m    
+              [94m.%%%%%%#[0m      [94m*%%%%%%,[0m  [93m*******/,[0m     [93m**********,[0m      [91m.))))))[0m   
+                [94m.%%%%%%/[0m      [94m*%%%%%%,[0m  [93m**[0m              [93m********[0m      [91m.))))))[0m  
+          [94m##[0m      [94m.%%%%%%/[0m      [94m(%%%%%%,[0m                  [93m,******[0m      [91m/)))))[0m  
+        [94m%%%%%%[0m      [94m.%%%%%%#[0m      [94m*%%%%%%,[0m    [92m,/////.[0m       [93m******[0m      [91m))))))[0m 
+      [94m#%[0m      [94m%%[0m      [94m.%%%%%%/[0m      [94m*%%%%%%,[0m  [92m////////,[0m      [93m*****/[0m     [91m,)))))[0m 
+    [94m#%%[0m  [94m%%%[0m  [94m%%%#[0m      [94m.%%%%%%/[0m      [94m(%%%%%%,[0m  [92m///////.[0m     [93m/*****[0m      [91m))))).[0m
+  [94m#%%%%.[0m      [94m%%%%%#[0m      [94m/%%%%%%*[0m      [94m#%%%%%%[0m   [92m/////)[0m     [93m******[0m      [91m))))),[0m
+    [94m#%%%%##%[0m  [94m%%%#[0m      [94m.%%%%%%/[0m      [94m(%%%%%%,[0m  [92m///////.[0m     [93m/*****[0m      [91m))))).[0m
+      [94m##[0m     [94m%%%[0m      [94m.%%%%%%/[0m      [94m*%%%%%%,[0m  [92m////////.[0m      [93m*****/[0m     [91m,)))))[0m 
+        [94m#%%%%#[0m      [94m/%%%%%%/[0m      [94m(%%%%%%[0m      [92m/)/)//[0m       [93m******[0m      [91m))))))[0m 
+          [94m##[0m      [94m.%%%%%%/[0m      [94m(%%%%%%,[0m                  [93m*******[0m      [91m))))))[0m  
+                [94m.%%%%%%/[0m      [94m*%%%%%%,[0m  [93m**.[0m             [93m/*******[0m      [91m.))))))[0m  
+              [94m*%%%%%%/[0m      [94m(%%%%%%[0m   [93m********/*..,*/*********[0m       [91m*))))))[0m   
+                [94m#%%/[0m      [94m(%%%%%%,[0m    [93m*********************/[0m        [91m)))))))[0m    
+                        [94m*%%%%%%,[0m         [93m,**************/[0m         [91m,))))))/[0m     
+                      [94m(%%%%%%[0m   [91m()[0m                              [91m))))))))[0m       
+                      [94m#%%%%,[0m  [91m())))))[0m                        [91m,)))))))),[0m        
+                        [94m#,[0m    [91m())))))))))[0m                [91m,)))))))))).[0m          
+                                 [91m()))))))))))))))))))))))))))))))/[0m             
+                                    [91m())))))))))))))))))))))))).[0m                
+                                         [91m())))))))))))))),[0m                     
+
+-=# [1;94m geomeTRIC started. Version: 1.0 [0m #=-
+Current date and time: 2023-05-19 13:05:44
+Backed up existing log file: run.log -> run_1.log
+TeraChem engine selected. Expecting TeraChem input for gradient calculation.
+TeraChem engine selected. Expecting TeraChem input for gradient calculation.
+Bonds will be generated from interatomic distances less than 1.20 times sum of covalent radii
+42 internal coordinates being used (instead of 42 Cartesians)
+Internal coordinate system (atoms numbered from 1):
+Distance 1-2
+Distance 1-3
+Distance 1-4
+Distance 2-5
+Distance 2-6
+Distance 6-7
+Distance 6-8
+Distance 7-9
+Distance 7-10
+Distance 10-11
+Distance 10-14
+Distance 12-14
+Distance 13-14
+Angle 2-1-4
+Angle 3-1-4
+Angle 1-2-6
+Angle 5-2-6
+Angle 2-6-8
+Angle 7-6-8
+Angle 6-7-10
+Angle 9-7-10
+Angle 7-10-14
+Angle 11-10-14
+Angle 10-14-13
+Angle 12-14-13
+Out-of-Plane 1-2-3-4
+Out-of-Plane 2-1-5-6
+Out-of-Plane 6-2-7-8
+Out-of-Plane 7-6-9-10
+Out-of-Plane 10-7-11-14
+Out-of-Plane 14-10-12-13
+Dihedral 3-1-2-5
+Dihedral 3-1-2-6
+Dihedral 4-1-2-5
+Dihedral 4-1-2-6
+Dihedral 1-2-6-7
+Dihedral 1-2-6-8
+Dihedral 5-2-6-7
+Dihedral 5-2-6-8
+Dihedral 2-6-7-9
+Dihedral 2-6-7-10
+Dihedral 8-6-7-9
+Dihedral 8-6-7-10
+Dihedral 6-7-10-11
+Dihedral 6-7-10-14
+Dihedral 9-7-10-11
+Dihedral 9-7-10-14
+Dihedral 7-10-14-12
+Dihedral 7-10-14-13
+Dihedral 11-10-14-12
+Dihedral 11-10-14-13
+Translation-X 1-14
+Translation-Y 1-14
+Translation-Z 1-14
+Rotation-A 1-14
+Rotation-B 1-14
+Rotation-C 1-14
+<class 'geometric.internal.Distance'> : 13
+<class 'geometric.internal.Angle'> : 12
+<class 'geometric.internal.OutOfPlane'> : 6
+<class 'geometric.internal.Dihedral'> : 20
+<class 'geometric.internal.TranslationX'> : 1
+<class 'geometric.internal.TranslationY'> : 1
+<class 'geometric.internal.TranslationZ'> : 1
+<class 'geometric.internal.RotationA'> : 1
+<class 'geometric.internal.RotationB'> : 1
+<class 'geometric.internal.RotationC'> : 1
+> ===== Optimization Info: ====
+> Job type: Energy minimization
+> Maximum number of optimization cycles: 300
+> Initial / maximum trust radius (Angstrom): 0.100 / 0.300
+> Convergence Criteria:
+> Will converge when all 5 criteria are reached:
+>  |Delta-E| < 1.00e-06
+>  RMS-Grad  < 3.00e-04
+>  Max-Grad  < 4.50e-04
+>  RMS-Disp  < 1.20e-03
+>  Max-Disp  < 1.80e-03
+> === End Optimization Info ===
+>>> MECI Report: <E> =    -251.9909804137 Penalty =    0.0036999193 <<<
+State      Energy (a.u.)   <S^2>     G_rms     G_max   Gaps (eV)   Cos(^Gi,^Gj)
+    0    -251.9938286524  0.0000 2.411e-03 5.189e-03     0.15501     -0.4513
+    1    -251.9881321751  0.0000 3.152e-02 7.601e-02                        
+Step    0 : Gradient = 5.367e-02/1.300e-01 (rms/max) Energy = -251.9872804945
+Hessian Eigenvalues: 2.30000e-02 2.30000e-02 2.30000e-02 ... 5.28657e-01 5.47704e-01 5.52047e-01
+>>> MECI Report: <E> =    -251.9843902842 Penalty =    0.0231713743 <<<
+State      Energy (a.u.)   <S^2>     G_rms     G_max   Gaps (eV)   Cos(^Gi,^Gj)
+    0    -251.9926874305  0.0000 1.231e-02 2.315e-02     0.45155      0.5544
+    1    -251.9760931378  0.0000 4.217e-02 9.132e-02                        
+Step    1 : Displace = [0m9.352e-02[0m/[0m2.179e-01[0m (rms/max) Trust = 1.000e-01 (=) Grad = [0m1.050e-01[0m/[0m2.537e-01[0m (rms/max) E (change) = -251.9612189098 ([91m+2.606e-02[0m) Quality = [91m-1.091[0m
+[93mRejecting step - quality is lower than -1.0[0m
+Hessian Eigenvalues: 2.30000e-02 2.30000e-02 2.30000e-02 ... 5.28657e-01 5.47704e-01 5.52047e-01
+>>> MECI Report: <E> =    -251.9916537901 Penalty =    0.0054447489 <<<
+State      Energy (a.u.)   <S^2>     G_rms     G_max   Gaps (eV)   Cos(^Gi,^Gj)
+    0    -251.9951849956  0.0000 1.104e-02 2.717e-02     0.19218     -0.6959
+    1    -251.9881225845  0.0000 2.699e-02 6.311e-02                        
+Step    2 : Displace = [0m4.564e-02[0m/[0m1.017e-01[0m (rms/max) Trust = 4.676e-02 ([1;91mx[0m) Grad = [0m5.763e-02[0m/[0m1.408e-01[0m (rms/max) E (change) = -251.9862090412 ([91m+1.071e-03[0m) Quality = [91m-0.066[0m
+Hessian Eigenvalues: 2.29712e-02 2.30000e-02 2.30000e-02 ... 5.31272e-01 5.48668e-01 1.86099e+00
+>>> MECI Report: <E> =    -251.9931695814 Penalty =    0.0002369803 <<<
+State      Energy (a.u.)   <S^2>     G_rms     G_max   Gaps (eV)   Cos(^Gi,^Gj)
+    0    -251.9938372510  0.0000 1.862e-02 4.645e-02     0.03634     -0.8809
+    1    -251.9925019119  0.0000 1.439e-02 3.188e-02                        
+Step    3 : Displace = [0m2.480e-02[0m/[0m4.708e-02[0m (rms/max) Trust = 2.282e-02 ([91m-[0m) Grad = [0m9.744e-03[0m/[0m2.063e-02[0m (rms/max) E (change) = -251.9929326011 ([0m-6.724e-03[0m) Quality = [0m1.040[0m
+Hessian Eigenvalues: 2.18754e-02 2.30000e-02 2.30000e-02 ... 5.31160e-01 5.50129e-01 1.78990e+00
+>>> MECI Report: <E> =    -251.9935335683 Penalty =    0.0086705640 <<<
+State      Energy (a.u.)   <S^2>     G_rms     G_max   Gaps (eV)   Cos(^Gi,^Gj)
+    0    -251.9981361988  0.0000 1.569e-02 3.310e-02     0.25049     -0.4373
+    1    -251.9889309378  0.0000 1.656e-02 3.698e-02                        
+Step    4 : Displace = [0m3.359e-02[0m/[0m6.170e-02[0m (rms/max) Trust = 3.228e-02 ([92m+[0m) Grad = [0m4.589e-02[0m/[0m9.792e-02[0m (rms/max) E (change) = -251.9848630043 ([91m+8.070e-03[0m) Quality = [91m-2.457[0m
+[93mRejecting step - quality is lower than -1.0[0m
+Hessian Eigenvalues: 2.18754e-02 2.30000e-02 2.30000e-02 ... 5.31160e-01 5.50129e-01 1.78990e+00
+>>> MECI Report: <E> =    -251.9934206652 Penalty =    0.0019694817 <<<
+State      Energy (a.u.)   <S^2>     G_rms     G_max   Gaps (eV)   Cos(^Gi,^Gj)
+    0    -251.9954419599  0.0000 1.548e-02 3.318e-02     0.11000     -0.6284
+    1    -251.9913993706  0.0000 1.473e-02 3.287e-02                        
+Step    5 : Displace = [0m1.748e-02[0m/[0m3.087e-02[0m (rms/max) Trust = 1.614e-02 ([1;91mx[0m) Grad = [0m2.515e-02[0m/[0m5.473e-02[0m (rms/max) E (change) = -251.9914511835 ([91m+1.481e-03[0m) Quality = [91m-0.863[0m
+Hessian Eigenvalues: 2.28371e-02 2.30000e-02 2.30002e-02 ... 5.39618e-01 1.43329e+00 1.90770e+00
+>>> MECI Report: <E> =    -251.9934443935 Penalty =    0.0002876339 <<<
+State      Energy (a.u.)   <S^2>     G_rms     G_max   Gaps (eV)   Cos(^Gi,^Gj)
+    0    -251.9941819144  0.0000 1.575e-02 3.387e-02     0.04014     -0.7377
+    1    -251.9927068726  0.0000 1.325e-02 2.881e-02                        
+Step    6 : Displace = [0m8.272e-03[0m/[0m1.661e-02[0m (rms/max) Trust = 8.069e-03 ([91m-[0m) Grad = [0m1.033e-02[0m/[0m2.271e-02[0m (rms/max) E (change) = -251.9931567596 ([0m-1.706e-03[0m) Quality = [0m1.048[0m
+Hessian Eigenvalues: 2.28431e-02 2.30000e-02 2.30002e-02 ... 5.39631e-01 1.49812e+00 1.64572e+00
+>>> MECI Report: <E> =    -251.9938983886 Penalty =    0.0000718912 <<<
+State      Energy (a.u.)   <S^2>     G_rms     G_max   Gaps (eV)   Cos(^Gi,^Gj)
+    0    -251.9942618581  0.0000 2.093e-02 5.135e-02     0.01978     -0.9593
+    1    -251.9935349191  0.0000 1.333e-02 3.269e-02                        
+Step    7 : Displace = [0m1.140e-02[0m/[0m2.092e-02[0m (rms/max) Trust = 1.141e-02 ([92m+[0m) Grad = [0m3.619e-03[0m/[0m7.928e-03[0m (rms/max) E (change) = -251.9938264974 ([0m-6.697e-04[0m) Quality = [0m0.938[0m
+Hessian Eigenvalues: 2.06944e-02 2.30001e-02 2.30056e-02 ... 5.39236e-01 1.50018e+00 2.31942e+00
+>>> MECI Report: <E> =    -251.9941429047 Penalty =    0.0000172938 <<<
+State      Energy (a.u.)   <S^2>     G_rms     G_max   Gaps (eV)   Cos(^Gi,^Gj)
+    0    -251.9943198762  0.0000 2.123e-02 5.128e-02     0.00963     -0.9155
+    1    -251.9939659331  0.0000 1.258e-02 3.001e-02                        
+Step    8 : Displace = [0m1.635e-02[0m/[0m2.686e-02[0m (rms/max) Trust = 1.614e-02 ([92m+[0m) Grad = [0m3.456e-03[0m/[0m6.410e-03[0m (rms/max) E (change) = -251.9941256109 ([0m-2.991e-04[0m) Quality = [0m0.889[0m
+Hessian Eigenvalues: 1.39011e-02 2.30046e-02 2.30067e-02 ... 5.77937e-01 1.69007e+00 1.98216e+00
+>>> MECI Report: <E> =    -251.9949734071 Penalty =    0.0000519341 <<<
+State      Energy (a.u.)   <S^2>     G_rms     G_max   Gaps (eV)   Cos(^Gi,^Gj)
+    0    -251.9952816709  0.0000 2.126e-02 5.011e-02     0.01678     -0.9137
+    1    -251.9946651433  0.0000 9.831e-03 2.261e-02                        
+Step    9 : Displace = [0m2.304e-02[0m/[0m5.927e-02[0m (rms/max) Trust = 2.282e-02 ([92m+[0m) Grad = [0m2.883e-03[0m/[0m6.583e-03[0m (rms/max) E (change) = -251.9949214730 ([0m-7.959e-04[0m) Quality = [0m1.008[0m
+Hessian Eigenvalues: 1.07000e-02 2.30063e-02 2.30243e-02 ... 5.56623e-01 1.78337e+00 2.01708e+00
+>>> MECI Report: <E> =    -251.9953650523 Penalty =    0.0000410800 <<<
+State      Energy (a.u.)   <S^2>     G_rms     G_max   Gaps (eV)   Cos(^Gi,^Gj)
+    0    -251.9956388477  0.0000 2.318e-02 5.578e-02     0.01490     -0.9732
+    1    -251.9950912568  0.0000 9.104e-03 2.187e-02                        
+Step   10 : Displace = [0m3.352e-02[0m/[0m8.360e-02[0m (rms/max) Trust = 3.228e-02 ([92m+[0m) Grad = [0m2.759e-03[0m/[0m5.938e-03[0m (rms/max) E (change) = -251.9953239722 ([0m-4.025e-04[0m) Quality = [0m0.623[0m
+Hessian Eigenvalues: 1.43866e-02 2.30171e-02 2.30806e-02 ... 5.53688e-01 1.79171e+00 1.92346e+00
+>>> MECI Report: <E> =    -251.9954716803 Penalty =    0.0000527000 <<<
+State      Energy (a.u.)   <S^2>     G_rms     G_max   Gaps (eV)   Cos(^Gi,^Gj)
+    0    -251.9957822366  0.0000 2.269e-02 5.656e-02     0.01690     -0.9766
+    1    -251.9951611239  0.0000 1.031e-02 2.354e-02                        
+Step   11 : Displace = [0m3.158e-02[0m/[0m5.196e-02[0m (rms/max) Trust = 3.228e-02 (=) Grad = [0m1.692e-03[0m/[0m3.081e-03[0m (rms/max) E (change) = -251.9954189802 ([0m-9.501e-05[0m) Quality = [0m0.377[0m
+Hessian Eigenvalues: 1.59334e-02 2.30170e-02 2.30770e-02 ... 6.97115e-01 1.76247e+00 1.89360e+00
+>>> MECI Report: <E> =    -251.9956371536 Penalty =    0.0000878669 <<<
+State      Energy (a.u.)   <S^2>     G_rms     G_max   Gaps (eV)   Cos(^Gi,^Gj)
+    0    -251.9960395920  0.0000 2.264e-02 5.581e-02     0.02190     -0.9919
+    1    -251.9952347152  0.0000 1.019e-02 2.429e-02                        
+Step   12 : Displace = [0m1.374e-02[0m/[0m1.992e-02[0m (rms/max) Trust = 3.228e-02 (=) Grad = [0m1.207e-03[0m/[0m2.600e-03[0m (rms/max) E (change) = -251.9955492867 ([0m-1.303e-04[0m) Quality = [0m0.929[0m
+Hessian Eigenvalues: 1.42678e-02 2.24714e-02 2.30188e-02 ... 7.24358e-01 1.79792e+00 1.89633e+00
+>>> MECI Report: <E> =    -251.9956616551 Penalty =    0.0000759715 <<<
+State      Energy (a.u.)   <S^2>     G_rms     G_max   Gaps (eV)   Cos(^Gi,^Gj)
+    0    -251.9960354468  0.0000 2.263e-02 5.449e-02     0.02034     -0.9848
+    1    -251.9952878633  0.0000 9.944e-03 2.450e-02                        
+Step   13 : Displace = [0m6.375e-03[0m/[0m1.026e-02[0m (rms/max) Trust = 4.564e-02 ([92m+[0m) Grad = [0m1.210e-03[0m/[0m2.104e-03[0m (rms/max) E (change) = -251.9955856835 ([0m-3.640e-05[0m) Quality = [0m0.494[0m
+Hessian Eigenvalues: 1.12255e-02 2.18921e-02 2.30283e-02 ... 7.32342e-01 1.78098e+00 1.90696e+00
+>>> MECI Report: <E> =    -251.9957079104 Penalty =    0.0000708638 <<<
+State      Energy (a.u.)   <S^2>     G_rms     G_max   Gaps (eV)   Cos(^Gi,^Gj)
+    0    -251.9960687362  0.0000 2.301e-02 5.613e-02     0.01964     -0.9991
+    1    -251.9953470847  0.0000 9.864e-03 2.414e-02                        
+Step   14 : Displace = [0m4.948e-03[0m/[0m8.673e-03[0m (rms/max) Trust = 4.564e-02 (=) Grad = [0m3.623e-04[0m/[0m6.038e-04[0m (rms/max) E (change) = -251.9956370467 ([0m-5.136e-05[0m) Quality = [0m1.090[0m
+Hessian Eigenvalues: 1.08676e-02 2.09634e-02 2.30088e-02 ... 6.80722e-01 1.78877e+00 1.91605e+00
+>>> MECI Report: <E> =    -251.9957461028 Penalty =    0.0000850283 <<<
+State      Energy (a.u.)   <S^2>     G_rms     G_max   Gaps (eV)   Cos(^Gi,^Gj)
+    0    -251.9961418853  0.0000 2.281e-02 5.551e-02     0.02154     -0.9976
+    1    -251.9953503203  0.0000 1.017e-02 2.511e-02                        
+Step   15 : Displace = [0m8.276e-03[0m/[0m1.632e-02[0m (rms/max) Trust = 6.455e-02 ([92m+[0m) Grad = [0m8.132e-04[0m/[0m1.962e-03[0m (rms/max) E (change) = -251.9956610745 ([0m-2.403e-05[0m) Quality = [0m0.976[0m
+Hessian Eigenvalues: 8.28433e-03 1.82636e-02 2.29118e-02 ... 7.49222e-01 1.81631e+00 1.94049e+00
+>>> MECI Report: <E> =    -251.9957512823 Penalty =    0.0000763575 <<<
+State      Energy (a.u.)   <S^2>     G_rms     G_max   Gaps (eV)   Cos(^Gi,^Gj)
+    0    -251.9961260363  0.0000 2.292e-02 5.615e-02     0.02040     -0.9981
+    1    -251.9953765284  0.0000 9.766e-03 2.348e-02                        
+Step   16 : Displace = [0m6.479e-03[0m/[0m1.181e-02[0m (rms/max) Trust = 9.129e-02 ([92m+[0m) Grad = [0m4.230e-04[0m/[0m9.854e-04[0m (rms/max) E (change) = -251.9956749249 ([0m-1.385e-05[0m) Quality = [0m0.924[0m
+Hessian Eigenvalues: 5.29160e-03 1.84035e-02 2.25467e-02 ... 7.09193e-01 1.81061e+00 1.95720e+00
+>>> MECI Report: <E> =    -251.9957588272 Penalty =    0.0000745257 <<<
+State      Energy (a.u.)   <S^2>     G_rms     G_max   Gaps (eV)   Cos(^Gi,^Gj)
+    0    -251.9961289928  0.0000 2.296e-02 5.593e-02     0.02015     -0.9994
+    1    -251.9953886616  0.0000 9.654e-03 2.349e-02                        
+Step   17 : Displace = [0m2.972e-03[0m/[0m6.260e-03[0m (rms/max) Trust = 1.291e-01 ([92m+[0m) Grad = [92m2.947e-04[0m/[0m5.821e-04[0m (rms/max) E (change) = -251.9956843015 ([0m-9.377e-06[0m) Quality = [0m0.801[0m
+Hessian Eigenvalues: 5.41660e-03 1.80563e-02 2.22272e-02 ... 7.02594e-01 1.81048e+00 1.95694e+00
+>>> MECI Report: <E> =    -251.9957648872 Penalty =    0.0000765499 <<<
+State      Energy (a.u.)   <S^2>     G_rms     G_max   Gaps (eV)   Cos(^Gi,^Gj)
+    0    -251.9961401201  0.0000 2.296e-02 5.603e-02     0.02042     -0.9998
+    1    -251.9953896542  0.0000 9.810e-03 2.392e-02                        
+Step   18 : Displace = [0m2.402e-03[0m/[0m6.100e-03[0m (rms/max) Trust = 1.826e-01 ([92m+[0m) Grad = [92m1.339e-04[0m/[92m2.594e-04[0m (rms/max) E (change) = -251.9956883372 ([0m-4.036e-06[0m) Quality = [0m0.980[0m
+Hessian Eigenvalues: 5.47743e-03 1.40582e-02 2.18860e-02 ... 7.06036e-01 1.81209e+00 1.96594e+00
+>>> MECI Report: <E> =    -251.9957703016 Penalty =    0.0000777812 <<<
+State      Energy (a.u.)   <S^2>     G_rms     G_max   Gaps (eV)   Cos(^Gi,^Gj)
+    0    -251.9961485850  0.0000 2.296e-02 5.596e-02     0.02059     -0.9998
+    1    -251.9953920181  0.0000 9.859e-03 2.419e-02                        
+Step   19 : Displace = [92m9.117e-04[0m/[0m1.837e-03[0m (rms/max) Trust = 2.582e-01 ([92m+[0m) Grad = [92m1.732e-04[0m/[92m3.940e-04[0m (rms/max) E (change) = -251.9956925203 ([0m-4.183e-06[0m) Quality = [0m1.443[0m
+Hessian Eigenvalues: 5.37823e-03 8.77839e-03 2.11081e-02 ... 7.02864e-01 1.81183e+00 1.97957e+00
+>>> MECI Report: <E> =    -251.9957741512 Penalty =    0.0000769486 <<<
+State      Energy (a.u.)   <S^2>     G_rms     G_max   Gaps (eV)   Cos(^Gi,^Gj)
+    0    -251.9961503744  0.0000 2.305e-02 5.631e-02     0.02048     -0.9999
+    1    -251.9953979280  0.0000 9.697e-03 2.362e-02                        
+Step   20 : Displace = [0m1.298e-03[0m/[0m2.062e-03[0m (rms/max) Trust = 3.000e-01 ([92m+[0m) Grad = [92m1.318e-04[0m/[92m2.515e-04[0m (rms/max) E (change) = -251.9956972026 ([0m-4.682e-06[0m) Quality = [0m1.313[0m
+Hessian Eigenvalues: 3.33721e-03 8.45152e-03 1.98564e-02 ... 7.02749e-01 1.81060e+00 1.99280e+00
+>>> MECI Report: <E> =    -251.9957790569 Penalty =    0.0000791216 <<<
+State      Energy (a.u.)   <S^2>     G_rms     G_max   Gaps (eV)   Cos(^Gi,^Gj)
+    0    -251.9961606347  0.0000 2.308e-02 5.624e-02     0.02077     -0.9999
+    1    -251.9953974792  0.0000 9.694e-03 2.375e-02                        
+Step   21 : Displace = [92m8.889e-04[0m/[0m1.867e-03[0m (rms/max) Trust = 3.000e-01 (=) Grad = [92m9.472e-05[0m/[92m1.567e-04[0m (rms/max) E (change) = -251.9956999353 ([0m-2.733e-06[0m) Quality = [0m1.115[0m
+Hessian Eigenvalues: 3.13147e-03 8.38107e-03 1.88051e-02 ... 7.03021e-01 1.80669e+00 1.99310e+00
+>>> MECI Report: <E> =    -251.9957806464 Penalty =    0.0000801907 <<<
+State      Energy (a.u.)   <S^2>     G_rms     G_max   Gaps (eV)   Cos(^Gi,^Gj)
+    0    -251.9961648323  0.0000 2.313e-02 5.652e-02     0.02091     -1.0000
+    1    -251.9953964606  0.0000 9.630e-03 2.346e-02                        
+Step   22 : Displace = [92m8.380e-04[0m/[92m1.467e-03[0m (rms/max) Trust = 3.000e-01 (=) Grad = [92m4.519e-05[0m/[92m9.863e-05[0m (rms/max) E (change) = -251.9957004558 ([92m-5.204e-07[0m) Quality = [0m0.845[0m
+Hessian Eigenvalues: 3.13147e-03 8.38107e-03 1.88051e-02 ... 7.03021e-01 1.80669e+00 1.99310e+00
+Converged! =D
+
+    #==========================================================================#
+    #| If this code has benefited your research, please support us by citing: |#
+    #|                                                                        |#
+    #| Wang, L.-P.; Song, C.C. (2016) "Geometry optimization made simple with |#
+    #| translation and rotation coordinates", J. Chem, Phys. 144, 214108.     |#
+    #| http://dx.doi.org/10.1063/1.4952956                                    |#
+    #==========================================================================#
+    Time elapsed since start of run_optimizer: 397.636 seconds
