@@ -472,7 +472,9 @@ class Optimizer(object):
             # If it's the very first step, pick the eigenvector of the imaginary frequency and pick the direction
             logger.info('\nFirst, following the imaginary mode vector\n')
             if self.TSWavenum[1] < 0:
-                raise IRCError("There are more than one imaginary vibrational mode, please optimize the structure and try again.\n")
+                raise IRCError("There are more than one imaginary vibrational mode. Please optimize the structure and try again.\n")
+            elif self.TSWavenum[0] > 0:
+                raise IRCError("No imaginary mode detected. Please optimize the structure and try again.\n")
 
             # Getting IC vectors correspond to the imaginary frequency
             H_M = np.dot(np.dot(GMat_sqrt, self.H), GMat_sqrt.T)
@@ -1044,8 +1046,10 @@ def run_optimizer(**kwargs):
     coordsys = kwargs.get('coordsys', 'tric')
 
     # TRIC IRC will fail when there is only one molecule due to the small Hessian eigenvalues.
+    print_dft_warning = False
     if params.irc and len(M.molecules) == 1 and coordsys == 'tric':
         coordsys = 'dlc'
+        print_dft_warning = True
 
     CoordClass, connect, addcart = CoordSysDict[coordsys.lower()]
 
@@ -1101,7 +1105,7 @@ def run_optimizer(**kwargs):
     logger.info("\n")
 
     # Print out a note if DFT is used for non-fragmented systems; recommend --dlc and --subfrctor 2.
-    if engine.detect_dft() and coordsys != "dlc" and len(IC.frags) == 1:
+    if engine.detect_dft() and coordsys != "dlc" and len(IC.frags) == 1 or print_dft_warning:
         logger.info("#===================================================================================#\n")
         logger.info("#| \x1b[91mNote: Detected the use of DFT for a system containing only one fragment.\x1b[0m        |#\n")
         logger.info("#|                                                                                 |#\n")
