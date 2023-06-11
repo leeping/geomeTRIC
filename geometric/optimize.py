@@ -723,7 +723,7 @@ class Optimizer(object):
                     logger.info("Converged! =D\n")
                     self.state = OPT_STATE.CONVERGED
                     return
-            elif self.IRC_disp < 0.5*self.IRC_stepsize:
+            elif self.IRC_disp < 0.5*self.IRC_stepsize and self.Iteration > 5:
                 logger.info("Decreasing IRC step-size\n")
                 self.IRC_stepsize *= 0.5
                 return
