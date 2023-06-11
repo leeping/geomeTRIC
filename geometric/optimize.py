@@ -701,21 +701,22 @@ class Optimizer(object):
 
         ### Check convergence criteria ###
         criterima_met = Converged_energy and Converged_grms and Converged_drms and Converged_gmax and Converged_dmax
+
+        def reset_irc():
+            self.IRC_direction = -1
+            self.progress = self.progress[::-1]
+            self.Iteration = 0
+            self.gradx = self.Gx_hist[0].copy()
+            self.X = self.X_hist[0].copy()
+            self.IRC_stepsize = self.params.trust
+            self.prepareFirstStep()
+
         if params.irc:
             if criterima_met and self.Iteration > 10:
                 if self.IRC_direction == 1:
-                    if self.Iteration > params.maxiter:
-                        logger.info("\nIRC forward direction reached maximum iteration number\n")
-                    else:
-                        logger.info("\nIRC forward direction converged\n")
+                    logger.info("\nIRC forward direction converged\n")
                     logger.info("IRC backward direction starts here\n\n")
-                    self.IRC_direction = -1
-                    self.progress = self.progress[::-1]
-                    self.Iteration = 0
-                    self.gradx = self.Gx_hist[0].copy()
-                    self.X = self.X_hist[0].copy()
-                    self.IRC_stepsize = self.params.trust
-                    self.prepareFirstStep()
+                    reset_irc()
                     return
                 elif self.IRC_direction == -1:
                     self.SortedEigenvalues(self.H)
@@ -725,6 +726,12 @@ class Optimizer(object):
             elif self.IRC_disp < 0.5*self.IRC_stepsize:
                 logger.info("Decreasing IRC step-size\n")
                 self.IRC_stepsize *= 0.5
+                return
+
+            elif self.Iteration > params.maxiter:
+                logger.info("\nIRC forward direction reached maximum iteration number\n")
+                logger.info("IRC backward direction starts here\n\n")
+                reset_irc()
                 return
 
         if criterima_met and self.conSatisfied:
