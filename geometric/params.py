@@ -63,9 +63,9 @@ class OptParams(object):
         # More verbose printout
         self.verbose = kwargs.get('verbose', False)
         # Starting value of the trust radius
-        # Because TS optimization and IRC are experimental, use conservative trust radii
+        # Because TS optimization is experimental, use conservative trust radii
         self.trust = kwargs.get('trust', 0.01 if self.transition else 0.1)
-        # Maximum value of trust radius (HP: I don't think self.irc is needed inside the if statement)
+        # Maximum value of trust radius
         self.tmax = kwargs.get('tmax', 0.03 if self.transition else 0.3)
         # Minimum value of the trust radius
         # Also sets the maximum step size that can be rejected
@@ -358,8 +358,8 @@ def parse_optimizer_args(*args):
     grp_optparam.add_argument('--converge', type=str, nargs="+", help='Custom convergence criteria as key/value pairs.\n'
                               'Provide the name of a criteria set as "set GAU_LOOSE" or "set TURBOMOLE",\n'
                               'and/or set specific criteria using key/value pairs e.g. "energy 1e-5 grms 1e-3"\n ')
-    grp_optparam.add_argument('--trust', type=float, help='Starting trust radius, defaults to 0.1 (energy minimization) or 0.01 (TS optimization).\n ')
-    grp_optparam.add_argument('--tmax', type=float, help='Maximum trust radius, defaults to 0.3 (energy minimization) or 0.03 (TS optimization).\n ')
+    grp_optparam.add_argument('--trust', type=float, help='Starting trust radius, defaults to 0.1 Angstrom (energy minimization) or 0.01 Angstrom (TS optimization).\n ')
+    grp_optparam.add_argument('--tmax', type=float, help='Maximum trust radius, defaults to 0.3 Angstrom (energy minimization) or 0.03 Angstrom (TS optimization).\n ')
     grp_optparam.add_argument('--tmin', type=float, help='Minimum trust radius, do not reject steps trust radius is below this threshold (method-dependent).\n ')
     grp_optparam.add_argument('--usedmax', type=str2bool, help='Use maximum component instead of RMS displacement when applying trust radius.\n ')
     grp_optparam.add_argument('--enforce', type=float, help='Enforce exact constraints when within provided tolerance (in a.u./radian, default 0.0)\n ')

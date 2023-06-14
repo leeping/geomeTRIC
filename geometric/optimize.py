@@ -124,7 +124,7 @@ class Optimizer(object):
         self.recalcHess = False
         # IRC related attributes
         self.IRC_direction = 1
-        self.IRC_stepsize = self.params.trust
+        self.IRC_stepsize = self.params.trust*ang2bohr
         if print_info:
             self.print_info()
         
@@ -461,12 +461,14 @@ class Optimizer(object):
         self.state = OPT_STATE.NEEDS_EVALUATION
 
     def IRC_step(self):
-        logger.info("\nIRC sub-step1: Finding a pivot point (q*_{k+1})\n")
+        logger.info("\nIRC sub-step 1: Finding a pivot point (q*_{k+1})\n")
         # Need to take a step towards the pivot point
         self.IC.clearCache()
         GMat = self.IC.GMatrix(self.X, invMW=True)
         GMat_sqrt_inv, GMat_sqrt = self.IC.GInverse_SVD(self.X, sqrt=True, invMW=True)
 
+        # Save the initial Cartesian coordinate
+        X0 = self.X.copy()
         # Vector to the pivot point
         if self.Iteration == 0:
             # If it's the very first step, pick the eigenvector of the imaginary frequency and pick the direction
@@ -484,8 +486,24 @@ class Optimizer(object):
 
             # Initial direction
             v *= self.IRC_direction
-
             invMW_v = np.dot(GMat, v)
+
+            # Move towards the imaginary vector to see how much Cartesian coordinate moves
+            N = 1 / np.sqrt(np.dot(v.T, np.dot(GMat, v)))
+            dy_to_temp = -self.IRC_stepsize*N*invMW_v
+            X_temp = self.IC.newCartesian(X0, dy_to_temp, self.params.verbose)
+
+            dy_to_temp = self.IC.calcDiff(X_temp, X0)
+            GMat_sqrt_inv_temp, GMat_sqrt_temp = self.IC.GInverse_SVD(X_temp, sqrt=True, invMW=True)
+
+            mwdx_temp = np.dot(GMat_sqrt_inv_temp, dy_to_temp)
+
+            mw_cnorm = self.get_cartesian_norm(mwdx_temp)
+            cnorm = self.get_cartesian_norm(dy_to_temp)
+
+            # Adjust the stepsize
+            self.IRC_stepsize *= mw_cnorm/cnorm
+            self.params.tmax = self.IRC_stepsize*3
 
         else:
             # Else, use the mass-weighted G matrix and internal coordinate gradients to get the vector.
@@ -499,21 +517,24 @@ class Optimizer(object):
         dy_to_pivot = -0.5*self.IRC_stepsize*N*invMW_v
 
         # Move to the pivot point
-        X0 = self.X.copy()
-        X_pivot = self.IC.newCartesian(self.X, dy_to_pivot, self.params.verbose)
+        X_pivot = self.IC.newCartesian(X0, dy_to_pivot, self.params.verbose)
         dy_to_pivot = self.IC.calcDiff(X_pivot, X0)
 
         # Calculating sqrt(mass) weighted Cartesian coordinate
         GMat_sqrt_inv, GMat_sqrt = self.IC.GInverse_SVD(X_pivot, sqrt=True, invMW=True)
         mwdx = np.dot(GMat_sqrt_inv,dy_to_pivot)
-        logger.info("Half step dy = %.5f\n" %np.linalg.norm(dy_to_pivot))
-        logger.info("Half step mw-dx = %.5f\n" %np.linalg.norm(mwdx))
+        dx = self.get_cartesian_norm(dy_to_pivot)
+        logger.info("Half step dy    = %.5f\n" %np.linalg.norm(dy_to_pivot))
+        logger.info("Half step mw-dx = %.5f Bohr*sqrt(amu)\n" %np.linalg.norm(mwdx))
+        logger.info("Half step dx    = %.5f Bohr\n" %dx)
 
         # We are at the pivot point
-        logger.info('\nIRC sub-step2: Finding the next point (q_{k+1})\n')
+        logger.info('\nIRC sub-step 2: Finding the next point (q_{k+1})\n')
         v1 = v.copy()
         irc_sub_iteration = 0
         p_prime = dy_to_pivot.copy()
+
+        # Finding the next point
         while True:
             X = self.IC.newCartesian(X_pivot, p_prime, self.params.verbose)
             # Now we are at the guessed point, define mass-weighted G matrix at the guessed point
@@ -542,10 +563,12 @@ class Optimizer(object):
                 deg = np.degrees(np.arccos(np.dot(v1/np.linalg.norm(v1),v2)))
                 logger.info('Angle between v1 and v2: %2.f \n' %deg)
                 #logger.info('Final del_q length (should be small): %.8f \n' %np.linalg.norm(dq_new))
-                logger.info('Total step dy = %.5f \n' %np.linalg.norm(dy))
-                mwdx = np.dot(GMat_sqrt_inv, dy)
-                self.IRC_disp = np.linalg.norm(mwdx)
-                logger.info('Total step mw-dx = %.5f \n\n' %np.linalg.norm(mwdx))
+                mwdx = np.linalg.norm(np.dot(GMat_sqrt_inv, dy))
+                dx = self.get_cartesian_norm(dy)
+                logger.info('Total step dy    = %.5f \n' %np.linalg.norm(dy))
+                logger.info('Total step mw-dx = %.5f Bohr*sqrt(amu)\n' %mwdx)
+                logger.info('Total step dx    = %.5f Bohr\n' %dx)
+                self.IRC_disp = mwdx
                 break
             irc_sub_iteration += 1
             p_prime += dq_new
@@ -688,7 +711,7 @@ class Optimizer(object):
         msg = "\n Step %4i :" % self.Iteration
         msg += " Displace = %s%.3e\x1b[0m/%s%.3e\x1b[0m (rms/max)" % (colors['drms'], rms_displacement, colors['dmax'], max_displacement)
         if params.irc:
-            msg += " Trust = %.3e" % (self.IRC_stepsize)
+            msg += " Stepsize = %.3e Bohr*sqrt(amu)" % (self.IRC_stepsize)
         else:
             msg += " Trust = %.3e (%s)" % (self.trust, self.trustprint)
         msg += " Grad%s = %s%.3e\x1b[0m/%s%.3e\x1b[0m (rms/max)" % ("_T" if self.IC.haveConstraints() else "", colors['grms'], rms_gradient, colors['gmax'], max_gradient)
@@ -708,14 +731,14 @@ class Optimizer(object):
             self.Iteration = 0
             self.gradx = self.Gx_hist[0].copy()
             self.X = self.X_hist[0].copy()
-            self.IRC_stepsize = self.params.trust
+            self.IRC_stepsize = self.params.trust*ang2bohr
             self.prepareFirstStep()
 
         if params.irc:
             if criterima_met and self.Iteration > 10:
                 if self.IRC_direction == 1:
-                    logger.info("\nIRC forward direction converged\n")
-                    logger.info("IRC backward direction starts here\n\n")
+                    logger.info("\nIRC forward direction converged")
+                    logger.info("\nIRC backward direction starts here\n\n")
                     reset_irc()
                     return
                 elif self.IRC_direction == -1:
@@ -1053,10 +1076,8 @@ def run_optimizer(**kwargs):
     coordsys = kwargs.get('coordsys', 'tric')
 
     # TRIC IRC will fail when there is only one molecule due to the small Hessian eigenvalues.
-    print_dft_warning = False
     if params.irc and len(M.molecules) == 1 and coordsys == 'tric':
         coordsys = 'dlc'
-        print_dft_warning = True
 
     CoordClass, connect, addcart = CoordSysDict[coordsys.lower()]
 
@@ -1112,7 +1133,7 @@ def run_optimizer(**kwargs):
     logger.info("\n")
 
     # Print out a note if DFT is used for non-fragmented systems; recommend --dlc and --subfrctor 2.
-    if engine.detect_dft() and coordsys != "dlc" and len(IC.frags) == 1 or print_dft_warning:
+    if engine.detect_dft() and coordsys != "dlc" and len(IC.frags) == 1:
         logger.info("#===================================================================================#\n")
         logger.info("#| \x1b[91mNote: Detected the use of DFT for a system containing only one fragment.\x1b[0m        |#\n")
         logger.info("#|                                                                                 |#\n")
