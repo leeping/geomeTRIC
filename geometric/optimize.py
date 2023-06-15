@@ -748,7 +748,7 @@ class Optimizer(object):
                     return
             elif self.IRC_disp < 0.5*self.IRC_stepsize and self.Iteration > 5:
                 logger.info("Decreasing IRC step-size\n")
-                self.IRC_stepsize *= 0.5
+                self.IRC_stepsize *= 0.8
                 return
 
             elif self.Iteration > params.maxiter:
