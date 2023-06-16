@@ -125,6 +125,7 @@ class Optimizer(object):
         # IRC related attributes
         self.IRC_direction = 1
         self.IRC_stepsize = self.params.trust*ang2bohr
+        self.IRC_adjstep = False
         if print_info:
             self.print_info()
         
@@ -176,9 +177,8 @@ class Optimizer(object):
             logger.info("> \n")
             logger.info("> Constraints are requested. The following criterion is added:\n")
             logger.info(">  Max Constraint Violation (in Angstroms/degrees) < %.2e \n" % self.params.Convergence_cmax)
-
         logger.info("> === End Optimization Info ===\n")
-        
+
     def get_cartesian_norm(self, dy, verbose=None):
         if not verbose: verbose = self.params.verbose
         return get_cartesian_norm(self.X, dy, self.IC, self.params.enforce, self.params.verbose, self.params.usedmax)
@@ -461,11 +461,11 @@ class Optimizer(object):
         self.state = OPT_STATE.NEEDS_EVALUATION
 
     def IRC_step(self):
-        logger.info("\nIRC sub-step 1: Finding a pivot point (q*_{k+1})\n")
+        logger.info("IRC sub-step 1: Finding a pivot point (q*_{k+1})\n")
         # Need to take a step towards the pivot point
         self.IC.clearCache()
-        GMat = self.IC.GMatrix(self.X, invMW=True)
-        GMat_sqrt_inv, GMat_sqrt = self.IC.GInverse_SVD(self.X, sqrt=True, invMW=True)
+        MWGMat = self.IC.GMatrix(self.X, invMW=True)
+        MWGMat_sqrt_inv, MWGMat_sqrt = self.IC.GInverse_SVD(self.X, sqrt=True, invMW=True)
 
         # Save the initial Cartesian coordinate
         X0 = self.X.copy()
@@ -479,40 +479,26 @@ class Optimizer(object):
                 raise IRCError("No imaginary mode detected. Please optimize the structure and try again.\n")
 
             # Getting IC vectors correspond to the imaginary frequency
-            H_M = np.dot(np.dot(GMat_sqrt, self.H), GMat_sqrt.T)
+            H_M = np.dot(np.dot(MWGMat_sqrt, self.H), MWGMat_sqrt.T)
             _, MW_IC_vecs = np.linalg.eigh(H_M)
-            invMW_v = np.dot(GMat_sqrt,MW_IC_vecs[0])
-            v = np.dot(GMat_sqrt_inv, invMW_v)
+            invMW_v = np.dot(MWGMat_sqrt, MW_IC_vecs[0])
+            v = np.dot(MWGMat_sqrt_inv, invMW_v)
 
             # Initial direction
             v *= self.IRC_direction
-            invMW_v = np.dot(GMat, v)
+            invMW_v = np.dot(MWGMat, v)
 
-            # Move towards the imaginary vector to see how much Cartesian coordinate moves
-            N = 1 / np.sqrt(np.dot(v.T, np.dot(GMat, v)))
-            dy_to_temp = -self.IRC_stepsize*N*invMW_v
-            X_temp = self.IC.newCartesian(X0, dy_to_temp, self.params.verbose)
-
-            dy_to_temp = self.IC.calcDiff(X_temp, X0)
-            GMat_sqrt_inv_temp, GMat_sqrt_temp = self.IC.GInverse_SVD(X_temp, sqrt=True, invMW=True)
-
-            mwdx_temp = np.dot(GMat_sqrt_inv_temp, dy_to_temp)
-
-            mw_cnorm = self.get_cartesian_norm(mwdx_temp)
-            cnorm = self.get_cartesian_norm(dy_to_temp)
-
-            # Adjust the stepsize
-            self.IRC_stepsize *= mw_cnorm/cnorm
-            self.params.tmax = self.IRC_stepsize*3
+            adj_factor = np.linalg.norm(self.TSNormal_modes_x[0] * np.sqrt(self.IC.mass))
+            self.IRC_stepsize *= adj_factor
+            logger.info("Step-size: %.5f Bohr*sqrt(amu)\n" %self.IRC_stepsize)
 
         else:
             # Else, use the mass-weighted G matrix and internal coordinate gradients to get the vector.
-            # Normalization factor
             v = self.G.copy()  # Internal coordinate gradients
-            invMW_v = np.dot(GMat, v)
+            invMW_v = np.dot(MWGMat, v)
 
         # Normalization factor
-        N = 1 / np.sqrt(np.dot(v.T, np.dot(GMat, v)))
+        N = 1 / np.sqrt(np.dot(v.T, np.dot(MWGMat, v)))
         # Step towards the pivot point
         dy_to_pivot = -0.5*self.IRC_stepsize*N*invMW_v
 
@@ -521,12 +507,10 @@ class Optimizer(object):
         dy_to_pivot = self.IC.calcDiff(X_pivot, X0)
 
         # Calculating sqrt(mass) weighted Cartesian coordinate
-        GMat_sqrt_inv, GMat_sqrt = self.IC.GInverse_SVD(X_pivot, sqrt=True, invMW=True)
-        mwdx = np.dot(GMat_sqrt_inv,dy_to_pivot)
-        dx = self.get_cartesian_norm(dy_to_pivot)
+        MWGMat_sqrt_inv, MWGMat_sqrt = self.IC.GInverse_SVD(X_pivot, sqrt=True, invMW=True)
+        mwdx = np.dot(MWGMat_sqrt_inv, dy_to_pivot)
         logger.info("Half step dy    = %.5f\n" %np.linalg.norm(dy_to_pivot))
         logger.info("Half step mw-dx = %.5f Bohr*sqrt(amu)\n" %np.linalg.norm(mwdx))
-        logger.info("Half step dx    = %.5f Bohr\n" %dx)
 
         # We are at the pivot point
         logger.info('\nIRC sub-step 2: Finding the next point (q_{k+1})\n')
@@ -539,23 +523,23 @@ class Optimizer(object):
             X = self.IC.newCartesian(X_pivot, p_prime, self.params.verbose)
             # Now we are at the guessed point, define mass-weighted G matrix at the guessed point
             self.IC.clearCache()
-            GMat_sqrt_inv, GMat_sqrt = self.IC.GInverse_SVD(X, sqrt=True, invMW=True)
+            MWGMat_sqrt_inv, MWGMat_sqrt = self.IC.GInverse_SVD(X, sqrt=True, invMW=True)
             # Mass weighted displacement, gradients, and Hessian
-            g_M = np.dot(GMat_sqrt, self.guess_g(self.G, self.H, dy_to_pivot + p_prime))
-            H_M = np.dot(np.dot(GMat_sqrt,self.H), GMat_sqrt.T)
-            p_M = np.dot(GMat_sqrt_inv, p_prime)
+            g_M = np.dot(MWGMat_sqrt, self.guess_g(self.G, self.H, dy_to_pivot + p_prime))
+            H_M = np.dot(np.dot(MWGMat_sqrt, self.H), MWGMat_sqrt.T)
+            p_M = np.dot(MWGMat_sqrt_inv, p_prime)
 
             Heig, Hvecs = np.linalg.eigh(H_M)
 
             init_guess = 1.01*Heig[0] if Heig[0] < 0 else 0.99*Heig[0]
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
-                min_lambda = scipy.optimize.fsolve(self.find_lambda, init_guess, (Heig, Hvecs, g_M, p_M), xtol=1e-10)
+                min_lambda = scipy.optimize.fsolve(self.find_lambda, init_guess, (Heig, Hvecs, g_M, p_M), xtol=1e-12, maxfev=500)
             LambdaI = min_lambda[0]*np.eye(len(self.IC.Internals))
             del_q_M1 = np.linalg.pinv(H_M - LambdaI)
             del_q_M2 = g_M - min_lambda[0]*p_M
             del_q_M = -np.dot(del_q_M1, del_q_M2)
-            dq_new = np.dot(GMat_sqrt, del_q_M)
+            dq_new = np.dot(MWGMat_sqrt, del_q_M)
 
             if np.linalg.norm(dq_new) < 1e-5 or irc_sub_iteration > 500:
                 dy = dy_to_pivot + p_prime
@@ -563,11 +547,9 @@ class Optimizer(object):
                 deg = np.degrees(np.arccos(np.dot(v1/np.linalg.norm(v1),v2)))
                 logger.info('Angle between v1 and v2: %2.f \n' %deg)
                 #logger.info('Final del_q length (should be small): %.8f \n' %np.linalg.norm(dq_new))
-                mwdx = np.linalg.norm(np.dot(GMat_sqrt_inv, dy))
-                dx = self.get_cartesian_norm(dy)
+                mwdx = np.linalg.norm(np.dot(MWGMat_sqrt_inv, dy))
                 logger.info('Total step dy    = %.5f \n' %np.linalg.norm(dy))
                 logger.info('Total step mw-dx = %.5f Bohr*sqrt(amu)\n' %mwdx)
-                logger.info('Total step dx    = %.5f Bohr\n' %dx)
                 self.IRC_disp = mwdx
                 break
             irc_sub_iteration += 1
@@ -732,6 +714,8 @@ class Optimizer(object):
             self.gradx = self.Gx_hist[0].copy()
             self.X = self.X_hist[0].copy()
             self.IRC_stepsize = self.params.trust*ang2bohr
+            self.IRC_adjstep = False
+            self.calcEnergyForce()
             self.prepareFirstStep()
 
         if params.irc:
@@ -746,9 +730,16 @@ class Optimizer(object):
                     logger.info("Converged! =D\n")
                     self.state = OPT_STATE.CONVERGED
                     return
-            elif self.IRC_disp < 0.5*self.IRC_stepsize and self.Iteration > 5:
-                logger.info("Decreasing IRC step-size\n")
-                self.IRC_stepsize *= 0.8
+            elif self.IRC_disp < 0.65*self.IRC_stepsize or Quality < 0.65:
+                if self.Iteration > 5:
+                    logger.info("Decreasing IRC step-size\n")
+                    self.IRC_stepsize *= 0.50
+                    self.IRC_adjstep = True
+                return
+
+            elif self.IRC_adjstep and Quality > 0.99:
+                logger.info("Increasing IRC step-size\n")
+                self.IRC_stepsize *= 1.25
                 return
 
             elif self.Iteration > params.maxiter:
@@ -756,6 +747,7 @@ class Optimizer(object):
                 logger.info("IRC backward direction starts here\n\n")
                 reset_irc()
                 return
+            return
 
         if criterima_met and self.conSatisfied:
             self.SortedEigenvalues(self.H)
