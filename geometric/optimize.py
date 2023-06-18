@@ -125,7 +125,7 @@ class Optimizer(object):
         # IRC related attributes
         self.IRC_direction = 1
         self.IRC_stepsize = self.params.trust*ang2bohr
-        self.IRC_adjstep = False
+        self.IRC_opt = False
         if print_info:
             self.print_info()
         
@@ -422,7 +422,10 @@ class Optimizer(object):
             """
             Perform one step of the IRC.
             """
-            dy = self.IRC_step()
+            if self.IRC_opt:
+                dy = self.optimize_step() 
+            else:
+                dy = self.IRC_step()
         else:
             """
             Perform one step of the optimization.
@@ -550,8 +553,11 @@ class Optimizer(object):
                 mwdx = np.linalg.norm(np.dot(MWGMat_sqrt_inv, dy))
                 logger.info('Total step dy    = %.5f \n' %np.linalg.norm(dy))
                 logger.info('Total step mw-dx = %.5f Bohr*sqrt(amu)\n' %mwdx)
-                self.IRC_disp = mwdx
+                ang_disp =  self.get_cartesian_norm(dy)* bohr2ang
+                if ang_disp > 1e-5:
+                    self.trust = ang_disp
                 break
+
             irc_sub_iteration += 1
             p_prime += dq_new
         self.Iteration += 1
@@ -678,7 +684,7 @@ class Optimizer(object):
         else:
             colors['energy'] = "\x1b[92m" if Converged_energy else "\x1b[91m"
             colors['quality'] = "\x1b[91m"
-            step_state = StepState.Reject if (Quality < -1.0 or params.transition) and not params.irc else StepState.Poor
+            step_state = StepState.Reject if (Quality < -1.0 or params.transition) and (not params.irc or self.IRC_opt) else StepState.Poor
         if 'energy' not in colors: colors['energy'] = "\x1b[92m" if Converged_energy else "\x1b[0m"
         if 'quality' not in colors: colors['quality'] = "\x1b[0m"
         colors['grms'] = "\x1b[92m" if Converged_grms else "\x1b[0m"
@@ -693,7 +699,10 @@ class Optimizer(object):
         msg = "\n Step %4i :" % self.Iteration
         msg += " Displace = %s%.3e\x1b[0m/%s%.3e\x1b[0m (rms/max)" % (colors['drms'], rms_displacement, colors['dmax'], max_displacement)
         if params.irc:
-            msg += " Stepsize = %.3e Bohr*sqrt(amu)" % (self.IRC_stepsize)
+            if self.IRC_opt:
+                msg += " Trust = %.3e (%s)" % (self.trust, self.trustprint)
+            else:
+                msg += " Stepsize = %.3e Bohr*sqrt(amu)" % (self.IRC_stepsize)
         else:
             msg += " Trust = %.3e (%s)" % (self.trust, self.trustprint)
         msg += " Grad%s = %s%.3e\x1b[0m/%s%.3e\x1b[0m (rms/max)" % ("_T" if self.IC.haveConstraints() else "", colors['grms'], rms_gradient, colors['gmax'], max_gradient)
@@ -706,6 +715,7 @@ class Optimizer(object):
 
         ### Check convergence criteria ###
         criterima_met = Converged_energy and Converged_grms and Converged_drms and Converged_gmax and Converged_dmax
+        near_convergence = Converged_energy and Converged_drms and Converged_dmax
 
         def reset_irc():
             self.IRC_direction = -1
@@ -714,7 +724,8 @@ class Optimizer(object):
             self.gradx = self.Gx_hist[0].copy()
             self.X = self.X_hist[0].copy()
             self.IRC_stepsize = self.params.trust*ang2bohr
-            self.IRC_adjstep = False
+            self.IRC_opt = False
+            self.trust = self.params.trust
             self.calcEnergyForce()
             self.prepareFirstStep()
 
@@ -730,24 +741,19 @@ class Optimizer(object):
                     logger.info("Converged! =D\n")
                     self.state = OPT_STATE.CONVERGED
                     return
-            elif self.IRC_disp < 0.65*self.IRC_stepsize or Quality < 0.65:
-                if self.Iteration > 5:
-                    logger.info("Decreasing IRC step-size\n")
-                    self.IRC_stepsize *= 0.50
-                    self.IRC_adjstep = True
-                return
-
-            elif self.IRC_adjstep and Quality > 0.99:
-                logger.info("Increasing IRC step-size\n")
-                self.IRC_stepsize *= 1.25
-                return
-
+            elif (Quality < 0.0 or near_convergence) and not self.IRC_opt:
+                if self.Iteration > 10:
+                    logger.info("Switching to optimization\n")
+                    self.IRC_opt = True
             elif self.Iteration > params.maxiter:
                 logger.info("\nIRC forward direction reached maximum iteration number\n")
                 logger.info("IRC backward direction starts here\n\n")
                 reset_irc()
                 return
-            return
+            elif self.IRC_opt:
+                pass
+            else:
+                return
 
         if criterima_met and self.conSatisfied:
             self.SortedEigenvalues(self.H)
