@@ -5,7 +5,7 @@ Copyright 2016-2020 Regents of the University of California and the Authors
 
 Authors: Lee-Ping Wang, Chenchen Song
 
-Contributors: 
+Contributors:
 
 Redistribution and use in source and binary forms, with or without modification,
 are permitted provided that the following conditions are met:
@@ -107,10 +107,10 @@ def nudot(a, b):
     """
     ev = a / np.linalg.norm(a)
     return np.dot(ev, b)
-    
+
 def d_nudot(a, b):
     r"""
-    Given two vectors a and b, return the gradient of 
+    Given two vectors a and b, return the gradient of
     the norm of the dot product (\hat{a}).b w/r.t. a.
     """
     return np.dot(d_unit_vector(a), b)
@@ -121,10 +121,10 @@ def ucross(a, b):
     """
     ev = a / np.linalg.norm(a)
     return np.cross(ev, b)
-    
+
 def d_ucross(a, b):
     r"""
-    Given two vectors a and b, return the gradient of 
+    Given two vectors a and b, return the gradient of
     the cross product (\hat{a})xb w/r.t. a.
     """
     ev = a / np.linalg.norm(a)
@@ -136,10 +136,10 @@ def nucross(a, b):
     """
     ev = a / np.linalg.norm(a)
     return np.linalg.norm(np.cross(ev, b))
-    
+
 def d_nucross(a, b):
     r"""
-    Given two vectors a and b, return the gradient of 
+    Given two vectors a and b, return the gradient of
     the norm of the cross product (\hat{a})xb w/r.t. a.
     """
     ev = a / np.linalg.norm(a)
@@ -188,7 +188,7 @@ class PrimitiveCoordinate(object):
                 diff = Minus2Pi
         diff *= w
         return diff
-        
+
 class CartesianX(PrimitiveCoordinate):
     def __init__(self, a, w=1.0):
         self.a = a
@@ -199,7 +199,7 @@ class CartesianX(PrimitiveCoordinate):
     def __repr__(self):
         #return "Cartesian-X %i : Weight %.3f" % (self.a+1, self.w)
         return "Cartesian-X %i" % (self.a+1)
-        
+
     def __eq__(self, other):
         if type(self) is not type(other): return False
         eq = self.a == other.a
@@ -209,7 +209,7 @@ class CartesianX(PrimitiveCoordinate):
 
     def __ne__(self, other):
         return not self.__eq__(other)
-        
+
     def value(self, xyz):
         xyz = xyz.reshape(-1,3)
         a = self.a
@@ -225,7 +225,7 @@ class CartesianX(PrimitiveCoordinate):
         xyz = xyz.reshape(-1,3)
         deriv2 = np.zeros((xyz.shape[0], xyz.shape[1], xyz.shape[0], xyz.shape[1]))
         return deriv2
-    
+
 class CartesianY(PrimitiveCoordinate):
     def __init__(self, a, w=1.0):
         self.a = a
@@ -236,7 +236,7 @@ class CartesianY(PrimitiveCoordinate):
     def __repr__(self):
         # return "Cartesian-Y %i : Weight %.3f" % (self.a+1, self.w)
         return "Cartesian-Y %i" % (self.a+1)
-        
+
     def __eq__(self, other):
         if type(self) is not type(other): return False
         eq = self.a == other.a
@@ -246,12 +246,12 @@ class CartesianY(PrimitiveCoordinate):
 
     def __ne__(self, other):
         return not self.__eq__(other)
-        
+
     def value(self, xyz):
         xyz = xyz.reshape(-1,3)
         a = self.a
         return xyz[a][1]*self.w
-        
+
     def derivative(self, xyz):
         xyz = xyz.reshape(-1,3)
         derivatives = np.zeros_like(xyz)
@@ -273,7 +273,7 @@ class CartesianZ(PrimitiveCoordinate):
     def __repr__(self):
         # return "Cartesian-Z %i : Weight %.3f" % (self.a+1, self.w)
         return "Cartesian-Z %i" % (self.a+1)
-        
+
     def __eq__(self, other):
         if type(self) is not type(other): return False
         eq = self.a == other.a
@@ -283,7 +283,7 @@ class CartesianZ(PrimitiveCoordinate):
 
     def __ne__(self, other):
         return not self.__eq__(other)
-        
+
     def value(self, xyz):
         xyz = xyz.reshape(-1,3)
         a = self.a
@@ -299,7 +299,7 @@ class CartesianZ(PrimitiveCoordinate):
         xyz = xyz.reshape(-1,3)
         deriv2 = np.zeros((xyz.shape[0], xyz.shape[1], xyz.shape[0], xyz.shape[1]))
         return deriv2
-    
+
 class TranslationX(PrimitiveCoordinate):
     def __init__(self, a, w):
         self.a = a
@@ -311,7 +311,7 @@ class TranslationX(PrimitiveCoordinate):
     def __repr__(self):
         # return "Translation-X %s : Weights %s" % (' '.join([str(i+1) for i in self.a]), ' '.join(['%.2e' % i for i in self.w]))
         return "Translation-X %s" % (commadash(self.a))
-        
+
     def __eq__(self, other):
         if type(self) is not type(other): return False
         eq = set(self.a) == set(other.a)
@@ -322,7 +322,7 @@ class TranslationX(PrimitiveCoordinate):
 
     def __ne__(self, other):
         return not self.__eq__(other)
-        
+
     def value(self, xyz):
         xyz = xyz.reshape(-1,3)
         a = np.array(self.a)
@@ -351,7 +351,7 @@ class TranslationX(PrimitiveCoordinate):
         xyz = xyz.reshape(-1,3)
         deriv2 = np.zeros((xyz.shape[0], xyz.shape[1], xyz.shape[0], xyz.shape[1]))
         return deriv2
-    
+
 class TranslationY(object):
     def __init__(self, a, w):
         self.a = a
@@ -363,7 +363,7 @@ class TranslationY(object):
     def __repr__(self):
         # return "Translation-Y %s : Weights %s" % (' '.join([str(i+1) for i in self.a]), ' '.join(['%.2e' % i for i in self.w]))
         return "Translation-Y %s" % (commadash(self.a))
-        
+
     def __eq__(self, other):
         if type(self) is not type(other): return False
         eq = set(self.a) == set(other.a)
@@ -374,7 +374,7 @@ class TranslationY(object):
 
     def __ne__(self, other):
         return not self.__eq__(other)
-        
+
     def value(self, xyz):
         xyz = xyz.reshape(-1,3)
         a = np.array(self.a)
@@ -391,7 +391,7 @@ class TranslationY(object):
             val2 = self.value(xyz2)
         diff = self.value(xyz1) - val2
         return diff
-    
+
     def derivative(self, xyz):
         xyz = xyz.reshape(-1,3)
         derivatives = np.zeros_like(xyz)
@@ -415,7 +415,7 @@ class TranslationZ(PrimitiveCoordinate):
     def __repr__(self):
         # return "Translation-Z %s : Weights %s" % (' '.join([str(i+1) for i in self.a]), ' '.join(['%.2e' % i for i in self.w]))
         return "Translation-Z %s" % (commadash(self.a))
-        
+
     def __eq__(self, other):
         if type(self) is not type(other): return False
         eq = set(self.a) == set(other.a)
@@ -426,12 +426,12 @@ class TranslationZ(PrimitiveCoordinate):
 
     def __ne__(self, other):
         return not self.__eq__(other)
-        
+
     def value(self, xyz):
         xyz = xyz.reshape(-1,3)
         a = np.array(self.a)
         return np.sum(xyz[a,2]*self.w)
-        
+
     def calcDiff(self, xyz1, xyz2=None, val2=None):
         # Translation ICs require an explicit implementation of calcDiff
         # because self.w is not a float but an array
@@ -443,14 +443,14 @@ class TranslationZ(PrimitiveCoordinate):
             val2 = self.value(xyz2)
         diff = self.value(xyz1) - val2
         return diff
-    
+
     def derivative(self, xyz):
         xyz = xyz.reshape(-1,3)
         derivatives = np.zeros_like(xyz)
         for i, a in enumerate(self.a):
             derivatives[a][2] = self.w[i]
         return derivatives
-    
+
     def second_derivative(self, xyz):
         xyz = xyz.reshape(-1,3)
         deriv2 = np.zeros((xyz.shape[0], xyz.shape[1], xyz.shape[0], xyz.shape[1]))
@@ -531,7 +531,7 @@ class Rotator(object):
                 self.rmode = 1
                 regularization_changed = True
             else:
-                # 
+                #
                 # logger.info(" >>> %s L[0] = %.3f, L[0]/L[1] = %.3f (nonlin), turning regularization off.\n" % (str(self), L[0], L[0]/L[1]))
                 self.rnorm = 0.0
                 self.rmode = -1
@@ -614,7 +614,7 @@ class Rotator(object):
             self.stored_derxyz = xyz.copy()
             self.stored_deriv = derivatives.copy()
             return derivatives
-        
+
     def second_derivative(self, xyz):
         xyz = xyz.reshape(-1, 3)
         if np.max(np.abs(xyz-self.stored_deriv2xyz)) < 1e-12:
@@ -631,7 +631,7 @@ class Rotator(object):
                     second_derivatives[a, :, b, :, :] = deriv2_raw[i, :, j, :, :]
             # derivatives, second_derivatives = get_expmap_der(xsel, ysel, second=True, r=self.rnorm*self.rquat)
             return second_derivatives
-        
+
 class RotationA(PrimitiveCoordinate):
     def __init__(self, a, x0, Rotators, w=1.0):
         self.a = tuple(sorted(a))
@@ -658,13 +658,13 @@ class RotationA(PrimitiveCoordinate):
 
     def __ne__(self, other):
         return not self.__eq__(other)
-        
+
     def value(self, xyz):
         return self.Rotator.value(xyz)[0]*self.w
 
     def calcDiff(self, xyz1, xyz2=None, val2=None):
         return self.Rotator.calcDiff(xyz1, xyz2, val2)[0]*self.w
-        
+
     def derivative(self, xyz):
         der_all = self.Rotator.derivative(xyz)
         derivatives = der_all[:, :, 0]*self.w
@@ -674,7 +674,7 @@ class RotationA(PrimitiveCoordinate):
         deriv2_all = self.Rotator.second_derivative(xyz)
         second_derivatives = deriv2_all[:, :, :, :, 0]*self.w
         return second_derivatives
-    
+
 class RotationB(PrimitiveCoordinate):
     def __init__(self, a, x0, Rotators, w=1.0):
         self.a = tuple(sorted(a))
@@ -701,13 +701,13 @@ class RotationB(PrimitiveCoordinate):
 
     def __ne__(self, other):
         return not self.__eq__(other)
-        
+
     def value(self, xyz):
         return self.Rotator.value(xyz)[1]*self.w
-    
+
     def calcDiff(self, xyz1, xyz2=None, val2=None):
         return self.Rotator.calcDiff(xyz1, xyz2, val2)[1]*self.w
-        
+
     def derivative(self, xyz):
         der_all = self.Rotator.derivative(xyz)
         derivatives = der_all[:, :, 1]*self.w
@@ -744,10 +744,10 @@ class RotationC(PrimitiveCoordinate):
 
     def __ne__(self, other):
         return not self.__eq__(other)
-        
+
     def value(self, xyz):
         return self.Rotator.value(xyz)[2]*self.w
-        
+
     def calcDiff(self, xyz1, xyz2=None, val2=None):
         return self.Rotator.calcDiff(xyz1, xyz2, val2)[2]*self.w
 
@@ -772,7 +772,7 @@ class Distance(PrimitiveCoordinate):
 
     def __repr__(self):
         return "Distance %i-%i" % (self.a+1, self.b+1)
-        
+
     def __eq__(self, other):
         if type(self) is not type(other): return False
         if self.a == other.a:
@@ -785,13 +785,13 @@ class Distance(PrimitiveCoordinate):
 
     def __ne__(self, other):
         return not self.__eq__(other)
-        
+
     def value(self, xyz):
         xyz = xyz.reshape(-1,3)
         a = self.a
         b = self.b
         return np.sqrt(np.sum((xyz[a]-xyz[b])**2))
-    
+
     def derivative(self, xyz):
         xyz = xyz.reshape(-1,3)
         derivatives = np.zeros_like(xyz)
@@ -815,7 +815,7 @@ class Distance(PrimitiveCoordinate):
         deriv2[m, :, n, :] = mtx
         deriv2[n, :, m, :] = mtx
         return deriv2
-    
+
 class Angle(PrimitiveCoordinate):
     def __init__(self, a, b, c):
         self.a = a
@@ -842,7 +842,7 @@ class Angle(PrimitiveCoordinate):
 
     def __ne__(self, other):
         return not self.__eq__(other)
-        
+
     def value(self, xyz):
         xyz = xyz.reshape(-1,3)
         a = self.a
@@ -882,7 +882,7 @@ class Angle(PrimitiveCoordinate):
         crs = np.cross(vector1, vector2)
         crs /= np.linalg.norm(crs)
         return crs
-        
+
     def derivative(self, xyz):
         xyz = xyz.reshape(-1,3)
         derivatives = np.zeros_like(xyz)
@@ -985,8 +985,8 @@ class LinearAngle(PrimitiveCoordinate):
 
     def reposition_e0(self, xyz):
         """
-        Project out the component of e0 that is parallel to ev. 
-        This prevents linear angles from becoming parallel to e0, 
+        Project out the component of e0 that is parallel to ev.
+        This prevents linear angles from becoming parallel to e0,
         which requires resetting the coordinate system.
         This function should be called at the end of each accepted step.
         """
@@ -1129,7 +1129,7 @@ class LinearAngle(PrimitiveCoordinate):
         ##     print np.linalg.norm(derivatives - fderivatives)
         ##     raise Exception()
         return derivatives
-    
+
     def second_derivative(self, xyz):
         xyz = xyz.reshape(-1,3)
         a = self.a
@@ -1148,7 +1148,7 @@ class LinearAngle(PrimitiveCoordinate):
                 fderiv = (FPlus-FMinus)/(2*h)
                 deriv2[ii, j, :, :] = fderiv
         return deriv2
-    
+
 class MultiAngle(PrimitiveCoordinate): # pragma: no cover
     def __init__(self, a, b, c):
         if type(a) is int:
@@ -1181,7 +1181,7 @@ class MultiAngle(PrimitiveCoordinate): # pragma: no cover
 
     def __ne__(self, other):
         return not self.__eq__(other)
-        
+
     def value(self, xyz):
         xyz = xyz.reshape(-1,3)
         a = np.array(self.a)
@@ -1221,7 +1221,7 @@ class MultiAngle(PrimitiveCoordinate): # pragma: no cover
         crs = np.cross(vector1, vector2)
         crs /= np.linalg.norm(crs)
         return crs
-        
+
     def derivative(self, xyz):
         xyz = xyz.reshape(-1,3)
         derivatives = np.zeros_like(xyz)
@@ -1258,7 +1258,7 @@ class MultiAngle(PrimitiveCoordinate): # pragma: no cover
             derivatives[i, :] = term2/len(n)
         derivatives[o, :] = -(term1 + term2)
         return derivatives
-    
+
     def second_derivative(self, xyz):
         raise NotImplementedError("Second derivatives have not been implemented for IC type %s" % self.__name__)
 
@@ -1292,7 +1292,7 @@ class Dihedral(PrimitiveCoordinate):
 
     def __ne__(self, other):
         return not self.__eq__(other)
-        
+
     def value(self, xyz):
         xyz = xyz.reshape(-1,3)
         a = self.a
@@ -1309,7 +1309,7 @@ class Dihedral(PrimitiveCoordinate):
         arg2 = np.sum(np.multiply(cross1, cross2))
         answer = np.arctan2(arg1, arg2)
         return answer
-    
+
     def derivative(self, xyz):
         xyz = xyz.reshape(-1,3)
         derivatives = np.zeros_like(xyz)
@@ -1371,7 +1371,7 @@ class Dihedral(PrimitiveCoordinate):
         sv = (1 - np.dot(v, w)**2)**0.5
         sv4 = sv**4
         if su < 1e-6 or sv < 1e-6 : return deriv2
-        
+
         uxw = np.cross(u, w)
         vxw = np.cross(v, w)
 
@@ -1413,7 +1413,7 @@ class Dihedral(PrimitiveCoordinate):
                     deriv2[a, :, b, :] += ((zeta(a, m, o)*zeta(b, p, o) + zeta(a, p, o)*zeta(b, o, m))*term7 +
                                            (zeta(a, n, o)*zeta(b, p, o) + zeta(a, p, o)*zeta(b, o, n))*term8)
         return deriv2
-                    
+
         # Accumulate a dictionary of contributions to the second derivatives by term (for debugging)
         #             deriv2_terms[7][a, :, b, :] = (zeta(a, m, o)*zeta(b, p, o) + zeta(a, p, o)*zeta(b, o, m))*term7
         #             deriv2_terms[8][a, :, b, :] = (zeta(a, n, o)*zeta(b, p, o) + zeta(a, p, o)*zeta(b, o, n))*term8
@@ -1424,14 +1424,14 @@ class Dihedral(PrimitiveCoordinate):
         #         deriv2_terms[5][a, :, b, :] = zeta(a, o, p)*zeta(b, p, o)*term5
         #         deriv2_terms[6][a, :, b, :] = zeta(a, p, o)*zeta(b, o, p)*term6
         # deriv2_terms[0] = deriv2.copy()
-        # 
+        #
         #=======
         # Term-by-term checking of the second derivative.
         # Produces output such as:
         # 1x1x a:  0.0000 n:  0.0000 e:  0.0000 Terms: NNNNNNNN  0.0000  0.0000 -0.0000 -0.0000 -0.0000 -0.0000  0.0000  0.0000
         # 1x1y a:  0.3337 n:  0.3337 e:  0.0000 Terms: YNNNNNNN  0.3337  0.0000 -0.0000 -0.0000 -0.0000 -0.0000  0.0000  0.0000
         # 1x1z a:  0.0590 n:  0.0590 e: -0.0000 Terms: YNNNNNNN  0.0590  0.0000 -0.0000  0.0000 -0.0000  0.0000  0.0000  0.0000
-        # 
+        #
         # def printTerm(strin, num):
         #     i = int(strin[0])-1
         #     j = 'xyz'.index(strin[1])
@@ -1486,7 +1486,7 @@ class MultiDihedral(PrimitiveCoordinate): # pragma: no cover
 
     def __ne__(self, other):
         return not self.__eq__(other)
-        
+
     def value(self, xyz):
         xyz = xyz.reshape(-1,3)
         a = np.array(self.a)
@@ -1495,7 +1495,7 @@ class MultiDihedral(PrimitiveCoordinate): # pragma: no cover
         d = np.array(self.d)
         xyza = np.mean(xyz[a], axis=0)
         xyzd = np.mean(xyz[d], axis=0)
-        
+
         vec1 = xyz[b] - xyza
         vec2 = xyz[c] - xyz[b]
         vec3 = xyzd - xyz[c]
@@ -1506,7 +1506,7 @@ class MultiDihedral(PrimitiveCoordinate): # pragma: no cover
         arg2 = np.sum(np.multiply(cross1, cross2))
         answer = np.arctan2(arg1, arg2)
         return answer
-    
+
     def derivative(self, xyz):
         xyz = xyz.reshape(-1,3)
         derivatives = np.zeros_like(xyz)
@@ -1516,7 +1516,7 @@ class MultiDihedral(PrimitiveCoordinate): # pragma: no cover
         n = np.array(self.d)
         xyzm = np.mean(xyz[m], axis=0)
         xyzn = np.mean(xyz[n], axis=0)
-        
+
         u_prime = (xyzm - xyz[o])
         w_prime = (xyz[p] - xyz[o])
         v_prime = (xyzn - xyz[p])
@@ -1549,7 +1549,7 @@ class MultiDihedral(PrimitiveCoordinate): # pragma: no cover
         derivatives[o, :] = -term1 + term3 - term4
         derivatives[p, :] = term2 - term3 + term4
         return derivatives
-    
+
     def second_derivative(self, xyz):
         raise NotImplementedError("Second derivatives have not been implemented for IC type %s" % self.__name__)
 
@@ -1587,7 +1587,7 @@ class OutOfPlane(PrimitiveCoordinate):
 
     def __ne__(self, other):
         return not self.__eq__(other)
-        
+
     def value(self, xyz):
         xyz = xyz.reshape(-1,3)
         a = self.a
@@ -1604,7 +1604,7 @@ class OutOfPlane(PrimitiveCoordinate):
         arg2 = np.sum(np.multiply(cross1, cross2))
         answer = np.arctan2(arg1, arg2)
         return answer
-        
+
     def derivative(self, xyz):
         xyz = xyz.reshape(-1,3)
         derivatives = np.zeros_like(xyz)
@@ -1871,7 +1871,7 @@ class InternalCoordinates(object):
             logger.info("%s : Max Error = % 12.5e (%i above threshold)\n" % (title, maxerr, numerr))
         logger.info("Finite-difference Finished\n")
         return FiniteDifference
-        
+
     def calcGrad(self, xyz, gradx):
         q0 = self.calculate(xyz)
         Ginv = self.GInverse(xyz)
@@ -1883,7 +1883,7 @@ class InternalCoordinates(object):
 
     def calcHess(self, xyz, gradx, hessx):
         """
-        Compute the internal coordinate Hessian. 
+        Compute the internal coordinate Hessian.
         Expects Cartesian coordinates to be provided in a.u.
         """
         xyz = xyz.flatten()
@@ -1899,7 +1899,7 @@ class InternalCoordinates(object):
 
     def calcHessCart(self, xyz, gradq, hessq):
         """
-        Compute the Cartesian Hessian given internal coordinate gradient and Hessian. 
+        Compute the Cartesian Hessian given internal coordinate gradient and Hessian.
         Returns the answer in a.u.
         """
         xyz = xyz.flatten()
@@ -1910,7 +1910,7 @@ class InternalCoordinates(object):
         Hx = np.einsum('ai,ab,bj->ij', Bmat, hessq, Bmat, optimize=True)
         Hx += BptGq
         return Hx
-    
+
     def readCache(self, xyz, dQ):
         if not hasattr(self, 'stored_xyz'):
             return None
@@ -2001,7 +2001,7 @@ class InternalCoordinates(object):
             # Figure out the further change needed
             dQ1 = dQ1 - dQ_actual
             xyz1 = xyz2.copy()
-            
+
 class PrimitiveInternalCoordinates(InternalCoordinates):
     def __init__(self, molecule, connect=False, addcart=False, constraints=None, cvals=None, **kwargs):
         super(PrimitiveInternalCoordinates, self).__init__()
@@ -2060,21 +2060,18 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                 frags = [list(m.nodes()) for m in molecule.molecules]
         # Make frags accessible from outside.
         self.frags = frags
-            
+
         # coordinates in Angstrom
         coords = molecule.xyzs[0].flatten()
         # Make a distance matrix mapping atom pairs to interatomic distances
         AtomIterator, dxij = molecule.distance_matrix(pbc=False)
-        D = {}
-        for i, j in zip(AtomIterator, dxij[0]):
-            assert i[0] < i[1]
-            D[tuple(i)] = j
+        edges_gen = ((AtomIterator[i][0], AtomIterator[i][1], dxij[0][i]) for i in range(len(AtomIterator)))
+
         dgraph = nx.Graph()
-        for i in range(molecule.na):
-            dgraph.add_node(i)
-        for k, v in D.items():
-            dgraph.add_edge(k[0], k[1], weight=v)
-        mst = sorted(list(nx.minimum_spanning_edges(dgraph, data=False)))
+        dgraph.add_nodes_from(list(range(molecule.na)))
+        dgraph.add_weighted_edges_from(edges_gen)
+        mst = sorted(list(nx.minimum_spanning_edges(dgraph, algorithm='boruvka', data=False)))
+
         # Build a list of noncovalent distances
         noncov = []
         # Connect all non-bonded fragments together
@@ -2082,7 +2079,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
             # LPW 2022-08-12
             # Technically the MST should not add edges within a molecule, but
             # the "bug" actually seemed to improve performance for the constrained
-            # dipeptide case (from OpenFF). To "fix" the bug add the following 
+            # dipeptide case (from OpenFF). To "fix" the bug add the following
             # clause to the if statement on the next line:
             # and not nx.has_path(molecule.topology, edge[0], edge[1]):
             if edge not in list(molecule.topology.edges()):
@@ -2208,7 +2205,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                                 # Add two of the most perpendicular Cartesian coordinates
                                 for i in np.argsort(dots)[:2]:
                                     self.add(trans[i]([a, b, c], w=w))
-                            
+
         for b in molecule.topology.nodes():
             for a in molecule.topology.neighbors(b):
                 for c in molecule.topology.neighbors(b):
@@ -2227,7 +2224,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                                     self.delete(Angle(i, b, j))
                                     self.add(OutOfPlane(b, i, j, k))
                                     break
-                                
+
         # Find groups of atoms that are in straight lines
         atom_lines = [list(i) for i in molecule.topology.edges()]
         while True:
@@ -2256,7 +2253,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                             aline.append(az)
             if atom_lines == atom_lines0: break
         atom_lines_uniq = []
-        for i in atom_lines:    # 
+        for i in atom_lines:    #
             if tuple(i) not in set(atom_lines_uniq):
                 atom_lines_uniq.append(tuple(i))
         lthree = [l for l in atom_lines_uniq if len(l) > 2]
@@ -2286,7 +2283,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                             if np.abs(np.cos(Ang1.value(coords))) > LinThre: continue
                             if np.abs(np.cos(Ang2.value(coords))) > LinThre: continue
                             self.add(Dihedral(a, b, c, d))
-            
+
         ### Following are codes that evaluate angles and dihedrals involving entire lines-of-atoms
         ### as single degrees of freedom
         ### Unfortunately, they do not seem to improve the performance
@@ -2294,13 +2291,13 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         # def pull_lines(a, front=True, middle=False):
         #     """
         #     Given an atom, pull all lines-of-atoms that it is in, e.g.
-        #     e.g. 
+        #     e.g.
         #               D
         #               C
         #               B
         #           EFGHAIJKL
         #     returns (B, C, D), (H, G, F, E), (I, J, K, L).
-        #   
+        #
         #     A is the implicit first item in the list.
         #     Set front to False to make A the implicit last item in the list.
         #     Set middle to True to return lines where A is in the middle e.g. (H, G, F, E) and (I, J, K, L).
@@ -2360,7 +2357,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         #                 self.add(MultiDihedral(al, b, c, dl))
 
     def makeConstraints(self, molecule, constraints, cvals):
-        # Add the list of constraints. 
+        # Add the list of constraints.
         xyz = molecule.xyzs[0].flatten() * ang2bohr
         if constraints is not None:
             if len(constraints) != len(cvals):
@@ -2460,9 +2457,9 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         Check if a torsion constrained optimization is about to fail
         because three consecutive atoms are nearly linear.
         """
-        
+
         coords = coords.copy().reshape(-1, 3)
-        
+
         def measure_angle_degrees(i, j, k):
             x1 = coords[i]
             x2 = coords[j]
@@ -2551,14 +2548,14 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         # 4) Number of atoms
         # 5) 3
         return np.array(answer)
-    
+
     def calcDiff(self, xyz1, xyz2):
         """ Calculate difference in internal coordinates (coord1-coord2), accounting for changes in 2*pi of angles. """
         answer = []
         for Internal in self.Internals:
             answer.append(Internal.calcDiff(xyz1, xyz2))
         return np.array(answer)
-    
+
     def GInverse(self, xyz):
         return self.GInverse_SVD(xyz)
 
@@ -2575,7 +2572,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         if cVal is None and xyz is None:
             raise RuntimeError('Please provide either cval or xyz')
         if cVal is None:
-            # If coordinates are provided instead of a constraint value, 
+            # If coordinates are provided instead of a constraint value,
             # then calculate the constraint value from the positions.
             # If both are provided, then the coordinates are ignored.
             cVal = cPrim.value(xyz)
@@ -2614,7 +2611,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
 
     def getConstraintNames(self):
         return [str(c) for c in self.cPrims]
-        
+
     def getConstraintTargetVals(self, units=False):
         if units:
             return convert_angstroms_degrees(self.cPrims, self.cVals)
@@ -2632,10 +2629,10 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
             return np.array(answer)
 
     def calcConstraintDiff(self, xyz, units=False):
-        """ Calculate difference between 
+        """ Calculate difference between
         (constraint ICs evaluated at provided coordinates - constraint values).
 
-        If units=True then the values will be returned in units of Angstrom and degrees 
+        If units=True then the values will be returned in units of Angstrom and degrees
         for distance and angle degrees of freedom respectively.
         """
         cDiffs = np.zeros(len(self.cPrims), dtype=float)
@@ -2659,7 +2656,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
             return convert_angstroms_degrees(self.cPrims, cDiffs)
         else:
             return cDiffs
-    
+
     def maxConstraintViolation(self, xyz):
         cDiffs = self.calcConstraintDiff(xyz, units=True)
         return np.max(np.abs(cDiffs))
@@ -2712,10 +2709,10 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         M.xyzs = [xyz_with_r*bohr2ang]
         M.elem = list(elem_with_r)
         return M
-            
+
     def guess_hessian(self, coords):
         """
-        Build a guess Hessian that roughly follows Schlegel's guidelines. 
+        Build a guess Hessian that roughly follows Schlegel's guidelines.
         """
         xyzs = coords.reshape(-1,3)*bohr2ang
         Hdiag = []
@@ -2723,7 +2720,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
             r = np.linalg.norm(xyzs[a]-xyzs[b])
             rcov = Radii[Elements.index(self.elem[a])-1] + Radii[Elements.index(self.elem[b])-1]
             return r/rcov < 1.2
-        
+
         for ic in self.Internals:
             if type(ic) is Distance:
                 r = np.linalg.norm(xyzs[ic.a]-xyzs[ic.b]) * ang2bohr
@@ -2790,7 +2787,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                 raise RuntimeError('Failed to build guess Hessian matrix. Make sure all IC types are supported')
         return np.diag(Hdiag)
 
-    
+
 class DelocalizedInternalCoordinates(InternalCoordinates):
     def __init__(self, molecule, imagenr=0, build=False, connect=False, addcart=False, constraints=None, cvals=None, remove_tr=False, cart_only=False, conmethod=0):
         super(DelocalizedInternalCoordinates, self).__init__()
@@ -2803,7 +2800,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         # HDLC is given by (connect = False, addcart = True)
         # Standard DLC is given by (connect = True, addcart = False)
         # TRIC is given by (connect = False, addcart = False)
-        # Build a minimum spanning tree 
+        # Build a minimum spanning tree
         self.connect = connect
         # Add Cartesian coordinates to all.
         self.addcart = addcart
@@ -2828,34 +2825,34 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
 
     def __repr__(self):
         return self.Prims.__repr__()
-            
+
     def update(self, other):
         return self.Prims.update(other.Prims)
-        
+
     def join(self, other):
         return self.Prims.join(other.Prims)
-        
+
     def addConstraint(self, cPrim, cVal, xyz):
         self.Prims.addConstraint(cPrim, cVal, xyz)
 
     def getConstraints_from(self, other):
         self.Prims.getConstraints_from(other.Prims)
-        
+
     def haveConstraints(self):
         return len(self.Prims.cPrims) > 0
 
     def getConstraintNames(self):
         return self.Prims.getConstraintNames()
-    
+
     def getConstraintTargetVals(self, units=True):
         return self.Prims.getConstraintTargetVals(units=units)
-    
+
     def getConstraintCurrentVals(self, xyz, units=True):
         return self.Prims.getConstraintCurrentVals(xyz, units=units)
 
     def calcConstraintDiff(self, xyz, units=False):
         return self.Prims.calcConstraintDiff(xyz, units=units)
-    
+
     def maxConstraintViolation(self, xyz):
         return self.Prims.maxConstraintViolation(xyz)
 
@@ -2864,21 +2861,21 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
 
     def visualizeRotations(self, xyz):
         return self.Prims.visualizeRotations(xyz)
-    
+
     def augmentGH(self, xyz, G, H):
         """
         Add extra dimensions to the gradient and Hessian corresponding to the constrained degrees of freedom.
         The Hessian becomes:  H  c
                               cT 0
-        where the elements of cT are the first derivatives of the constraint function 
-        (typically a single primitive minus a constant) with respect to the DLCs. 
-        
-        Since we picked a DLC to represent the constraint (cProj), we only set one element 
+        where the elements of cT are the first derivatives of the constraint function
+        (typically a single primitive minus a constant) with respect to the DLCs.
+
+        Since we picked a DLC to represent the constraint (cProj), we only set one element
         in each row of cT to be nonzero. Because cProj = a_i * Prim_i + a_j * Prim_j, we have
         d(Prim_c)/d(cProj) = 1.0/a_c where "c" is the index of the primitive being constrained.
-        
+
         The extended elements of the Gradient are equal to the constraint violation.
-        
+
         Parameters
         ----------
         xyz : np.ndarray
@@ -2929,7 +2926,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         GC[0:ni] = G[:]
         GC[ni:nt] = -c0[:]
         return GC, HC
-    
+
     def applyConstraints(self, xyz):
         """
         Pass in Cartesian coordinates and return new coordinates that satisfy the constraints exactly.
@@ -2965,7 +2962,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
             xyz1 = xyz2.copy()
             niter += 1
             dQ0 = dQ.copy()
-            
+
     def newCartesian_withConstraint(self, xyz, dQ, thre=0.1, verbose=0):
         xyz2 = self.newCartesian(xyz, dQ, verbose)
         constraintSmall = len(self.Prims.cPrims) > 0
@@ -2982,7 +2979,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         else:
             self.enforced = False
         return xyz2
-    
+
     def calcGradProj(self, xyz, gradx):
         """
         Project out the components of the internal coordinate gradient along the
@@ -3017,16 +3014,16 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         # Gxc = np.array(np.matrix(Bmat.T)*np.matrix(Gqc).T).flatten()
         Gxc = multi_dot([Bmat.T, Gqc.T]).flatten()
         return Gxc
-    
+
     def build_dlc_0(self, xyz):
         """
-        Build the delocalized internal coordinates (DLCs) which are linear 
+        Build the delocalized internal coordinates (DLCs) which are linear
         combinations of the primitive internal coordinates. Each DLC is stored
         as a column in self.Vecs.
-        
+
         In short, each DLC is an eigenvector of the G-matrix, and the number of
-        nonzero eigenvalues of G should be equal to 3*N. 
-        
+        nonzero eigenvalues of G should be equal to 3*N.
+
         After creating the DLCs, we construct special ones corresponding to primitive
         coordinates that are constrained (cProj).  These are placed in the front (i.e. left)
         of the list of DLCs, and then we perform a Gram-Schmidt orthogonalization.
@@ -3111,26 +3108,26 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
             # Constrained DLCs are on the left of self.Vecs.
             self.cDLC = [i for i in range(len(self.Prims.cPrims))]
         # Now self.Internals is no longer a list of InternalCoordinate objects but only a list of strings.
-        # We do not create objects for individual DLCs but 
+        # We do not create objects for individual DLCs but
         self.Internals = ["Constraint-DLC" if i < ncon else "DLC" + " %i" % (i+1) for i in range(self.Vecs.shape[1])]
 
     def build_dlc_1(self, xyz):
         """
-        Build the delocalized internal coordinates (DLCs) which are linear 
+        Build the delocalized internal coordinates (DLCs) which are linear
         combinations of the primitive internal coordinates. Each DLC is stored
         as a column in self.Vecs.
-        
+
         After some thought, build_dlc_0 did not implement constraint satisfaction
         in the most correct way. Constraint satisfaction was rather slow and
         the --enforce 0.1 may be passed to improve performance. Rethinking how the
         G matrix is constructed provides a more fundamental solution.
 
-        In the new approach implemented here, constrained primitive ICs (PICs) are 
+        In the new approach implemented here, constrained primitive ICs (PICs) are
         first set aside from the rest of the PICs. Next, a G-matrix is constructed
-        from the rest of the PICs and diagonalized to form DLCs, called "residual" DLCs. 
+        from the rest of the PICs and diagonalized to form DLCs, called "residual" DLCs.
         The union of the cPICs and rDLCs forms a generalized set of DLCs, but the
         cPICs are not orthogonal to each other or to the rDLCs.
-        
+
         A set of orthogonal DLCs is constructed by carrying out Gram-Schmidt
         on the generalized set. Orthogonalization is carried out on the cPICs in order.
         Next, orthogonalization is carried out on the rDLCs using a greedy algorithm
@@ -3145,11 +3142,11 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
 
         v_i * B * B^T * v_j = v_i * G * v_j
 
-        Notes on usage: 1) When this is activated, constraints tend to be satisfied very 
+        Notes on usage: 1) When this is activated, constraints tend to be satisfied very
         rapidly even if the current coordinates are very far from the constraint values,
         leading to possible blowing up of the energies. In augment_GH, maximum steps in
         constrained degrees of freedom are restricted to 0.1 a.u./radian for this reason.
-        
+
         2) Although the performance of this method is generally superior to the old method,
         the old method with --enforce 0.1 is more extensively tested and recommended.
         Thus, this method isn't enabled by default but provided as an optional feature.
@@ -3193,7 +3190,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         if (ncon + len(LargeIdx)) < Expect:
             raise RuntimeError("Expected at least %i delocalized coordinates, but got only %i" % (Expect, ncon + len(LargeIdx)))
         # print("%i atoms (expect %i coordinates); %i/%i singular values are > 1e-6" % (self.na, Expect, LargeVals, len(L)))
-        
+
         # Create "generalized" DLCs where the first six columns are the constrained primitive ICs
         # and the other columns are the DLCs formed from the rest
         self.Vecs = np.zeros((nprim, ncon+LargeVals), dtype=float)
@@ -3212,7 +3209,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
             # U holds the Gram-Schmidt orthogonalized DLCs
             U = np.zeros((V.shape[0], Expect), dtype=float)
             Unorms = np.zeros(Expect, dtype=float)
-            
+
             for ic in range(ncon):
                 # At the top of the loop, V columns are orthogonal to U columns up to ic.
                 # Copy V column corresponding to the next constraint to U.
@@ -3226,7 +3223,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
                 for jc in range(ic+1, nv):
                     vj = V[:, jc]
                     vj -= ui * ov(ui, vj)/Unorms[ic]**2
-                
+
             for ic in range(ncon, Expect):
                 # Pick out the V column with the largest norm
                 norms = np.array([np.sqrt(ov(V[:, jc], V[:, jc])) for jc in range(ncon, nv)])
@@ -3238,7 +3235,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
                 # Project out the newest U column from all V columns
                 for jc in range(ncon, nv):
                     V[:, jc] -= ui * ov(ui, V[:, jc])/Unorms[ic]**2
-                
+
             # self.Vecs contains the linear combination coefficients that are our new DLCs
             self.Vecs = U.copy()
             # Constrained DLCs are on the left of self.Vecs.
@@ -3265,7 +3262,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
             return self.build_dlc_0(xyz)
         else:
             raise RuntimeError("Unsupported value of conmethod %i" % self.conmethod)
-            
+
     def remove_TR(self, xyz):
         """
         Project overall translation and rotation out of the DLCs.
@@ -3299,7 +3296,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
                 primorder.append(iprim)
         self.Prims.Internals = addPrims + [self.Prims.Internals[p] for p in primorder]
         self.Vecs = np.vstack((np.zeros((len(addPrims), self.Vecs.shape[1]), dtype=float), self.Vecs[np.array(primorder), :]))
-        
+
         self.clearCache()
         # Build DLCs with six extra in the front corresponding to the overall translations and rotations
         subVecs = self.Vecs.copy()
@@ -3389,7 +3386,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
     def torsionConstraintLinearAngles(self, coords, thre=175):
         """ Check if certain problems might be happening due to three consecutive atoms in a torsion angle becoming linear. """
         return self.Prims.torsionConstraintLinearAngles(coords, thre)
-    
+
     def setRegularization(self, xyz):
         return self.Prims.setRegularization(xyz)
 
@@ -3438,7 +3435,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         PrimDers = self.Prims.second_derivatives(coords)
         Answer2 = np.tensordot(self.Vecs, PrimDers, axes=(0, 0))
         return np.array(Answer2)
-    
+
     def GInverse(self, xyz):
         return self.GInverse_SVD(xyz)
 
@@ -3452,7 +3449,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
                 return 'Delocalized -> Primitive\n' + self.Prims.repr_diff(other)
 
     def guess_hessian(self, coords):
-        """ Build the guess Hessian, consisting of a diagonal matrix 
+        """ Build the guess Hessian, consisting of a diagonal matrix
         in the primitive space and changed to the basis of DLCs. """
         Hprim = self.Prims.guess_hessian(coords)
         return multi_dot([self.Vecs.T,Hprim,self.Vecs])
@@ -3463,8 +3460,8 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
 
 class CartesianCoordinates(PrimitiveInternalCoordinates):
     """
-    Cartesian coordinate system, written as a kind of internal coordinate class.  
-    This one does not support constraints, because that requires adding some 
+    Cartesian coordinate system, written as a kind of internal coordinate class.
+    This one does not support constraints, because that requires adding some
     primitive internal coordinates.
     """
     def __init__(self, molecule, **kwargs):
