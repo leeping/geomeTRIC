@@ -66,7 +66,7 @@ class OptParams(object):
         # Because TS optimization is experimental, use conservative trust radii
         self.trust = kwargs.get('trust', 0.01 if self.transition else 0.1)
         # Maximum value of trust radius
-        self.tmax = kwargs.get('tmax', 0.03 if self.transition else 0.3)
+        self.tmax = kwargs.get('tmax', 0.03 if self.transition else self.trust if self.irc else 0.3)
         # Minimum value of the trust radius
         # Also sets the maximum step size that can be rejected
         # LPW: Add to documentation later:

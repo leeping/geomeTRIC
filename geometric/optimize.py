@@ -124,8 +124,8 @@ class Optimizer(object):
         self.recalcHess = False
         # IRC related attributes
         self.IRC_direction = 1
-        self.IRC_stepsize = self.params.trust*ang2bohr
         self.IRC_opt = False
+        self.IRC_init_v = None
         if print_info:
             self.print_info()
         
@@ -412,7 +412,7 @@ class Optimizer(object):
 
     def guess_g(self, g, H, disp):
         """
-        guess a gradient using a quadratic expansion
+        Guess the gradient using the quadratic expansion
         """
         g_new = g + np.dot(H, disp)
         return g_new
@@ -423,7 +423,7 @@ class Optimizer(object):
             Perform one step of the IRC.
             """
             if self.IRC_opt:
-                dy = self.optimize_step() 
+                dy = self.optimize_step()
             else:
                 dy = self.IRC_step()
         else:
@@ -464,6 +464,7 @@ class Optimizer(object):
         self.state = OPT_STATE.NEEDS_EVALUATION
 
     def IRC_step(self):
+        self.farConstraints = self.IC.haveConstraints() and self.IC.maxConstraintViolation(self.X) > 1e-1
         logger.info("IRC sub-step 1: Finding a pivot point (q*_{k+1})\n")
         # Need to take a step towards the pivot point
         self.IC.clearCache()
@@ -481,19 +482,20 @@ class Optimizer(object):
             elif self.TSWavenum[0] > 0:
                 raise IRCError("No imaginary mode detected. Please optimize the structure and try again.\n")
 
-            # Getting IC vectors correspond to the imaginary frequency
-            H_M = np.dot(np.dot(MWGMat_sqrt, self.H), MWGMat_sqrt.T)
-            _, MW_IC_vecs = np.linalg.eigh(H_M)
-            invMW_v = np.dot(MWGMat_sqrt, MW_IC_vecs[0])
-            v = np.dot(MWGMat_sqrt_inv, invMW_v)
-
-            # Initial direction
-            v *= self.IRC_direction
-            invMW_v = np.dot(MWGMat, v)
-
-            adj_factor = np.linalg.norm(self.TSNormal_modes_x[0] * np.sqrt(self.IC.mass))
-            self.IRC_stepsize *= adj_factor
-            logger.info("Step-size: %.5f Bohr*sqrt(amu)\n" %self.IRC_stepsize)
+            # Getting mass-weighted displacement following the imaginary frequency
+            if self.IRC_init_v is None:
+                H_M = np.dot(np.dot(MWGMat_sqrt, self.H), MWGMat_sqrt.T)
+                _, MW_IC_vecs = np.linalg.eigh(H_M)
+                invMW_v = np.dot(MWGMat_sqrt, MW_IC_vecs[0])
+                v = np.dot(MWGMat_sqrt_inv, invMW_v)
+                invMW_v = np.dot(MWGMat, v)
+                self.IRC_init_v = v
+                self.IRC_adjfactor = np.linalg.norm(self.TSNormal_modes_x[0] * np.sqrt(self.IC.mass))
+                self.IRC_init_step = self.params.trust * ang2bohr * self.IRC_adjfactor
+            else:
+                v = -self.IRC_init_v
+                invMW_v = np.dot(MWGMat, v)
+            logger.info("Initial step-size: %.5f Bohr*sqrt(amu)\n" %(self.IRC_init_step))
 
         else:
             # Else, use the mass-weighted G matrix and internal coordinate gradients to get the vector.
@@ -502,13 +504,13 @@ class Optimizer(object):
 
         # Normalization factor
         N = 1 / np.sqrt(np.dot(v.T, np.dot(MWGMat, v)))
+        self.IRC_stepsize = self.trust * ang2bohr * self.IRC_adjfactor
         # Step towards the pivot point
         dy_to_pivot = -0.5*self.IRC_stepsize*N*invMW_v
 
         # Move to the pivot point
         X_pivot = self.IC.newCartesian(X0, dy_to_pivot, self.params.verbose)
         dy_to_pivot = self.IC.calcDiff(X_pivot, X0)
-
         # Calculating sqrt(mass) weighted Cartesian coordinate
         MWGMat_sqrt_inv, MWGMat_sqrt = self.IC.GInverse_SVD(X_pivot, sqrt=True, invMW=True)
         mwdx = np.dot(MWGMat_sqrt_inv, dy_to_pivot)
@@ -520,7 +522,6 @@ class Optimizer(object):
         v1 = v.copy()
         irc_sub_iteration = 0
         p_prime = dy_to_pivot.copy()
-
         # Finding the next point
         while True:
             X = self.IC.newCartesian(X_pivot, p_prime, self.params.verbose)
@@ -548,18 +549,25 @@ class Optimizer(object):
                 dy = dy_to_pivot + p_prime
                 v2 = p_prime/np.linalg.norm(p_prime)
                 deg = np.degrees(np.arccos(np.dot(v1/np.linalg.norm(v1),v2)))
-                logger.info('Angle between v1 and v2: %2.f \n' %deg)
-                #logger.info('Final del_q length (should be small): %.8f \n' %np.linalg.norm(dq_new))
                 mwdx = np.linalg.norm(np.dot(MWGMat_sqrt_inv, dy))
-                logger.info('Total step dy    = %.5f \n' %np.linalg.norm(dy))
-                logger.info('Total step mw-dx = %.5f Bohr*sqrt(amu)\n' %mwdx)
-                ang_disp =  self.get_cartesian_norm(dy)* bohr2ang
-                if ang_disp > 1e-5:
-                    self.trust = ang_disp
+                half_mwdx = np.linalg.norm(np.dot(MWGMat_sqrt_inv, p_prime))
+                if mwdx < 0.8*self.IRC_init_step and self.Iteration == 0:
+                    logger.info("\nAdjusting step-size for the first step..\n")
+                    self.trust *= self.IRC_init_step / mwdx
+                    self.IRC_init_v *= -1
+                    dy = self.IRC_step()
+                    return dy
                 break
 
             irc_sub_iteration += 1
             p_prime += dq_new
+
+        logger.info('Angle between v1 and v2: %2.f \n' % deg)
+        logger.info('Half step mw-dx  = %.5f Bohr*sqrt(amu)\n' % half_mwdx)
+        logger.info('Total step dy    = %.5f \n' % np.linalg.norm(dy))
+        logger.info('Total step mw-dx = %.5f Bohr*sqrt(amu)\n' % mwdx)
+        if self.Iteration == 0:
+            self.trust = self.params.trust
         self.Iteration += 1
         return dy
 
@@ -684,7 +692,7 @@ class Optimizer(object):
         else:
             colors['energy'] = "\x1b[92m" if Converged_energy else "\x1b[91m"
             colors['quality'] = "\x1b[91m"
-            step_state = StepState.Reject if (Quality < -1.0 or params.transition) and (not params.irc or self.IRC_opt) else StepState.Poor
+            step_state = StepState.Reject if (Quality < -1.0 or params.transition) and not params.irc else StepState.Poor
         if 'energy' not in colors: colors['energy'] = "\x1b[92m" if Converged_energy else "\x1b[0m"
         if 'quality' not in colors: colors['quality'] = "\x1b[0m"
         colors['grms'] = "\x1b[92m" if Converged_grms else "\x1b[0m"
@@ -698,13 +706,7 @@ class Optimizer(object):
         # Print status
         msg = "\n Step %4i :" % self.Iteration
         msg += " Displace = %s%.3e\x1b[0m/%s%.3e\x1b[0m (rms/max)" % (colors['drms'], rms_displacement, colors['dmax'], max_displacement)
-        if params.irc:
-            if self.IRC_opt:
-                msg += " Trust = %.3e (%s)" % (self.trust, self.trustprint)
-            else:
-                msg += " Stepsize = %.3e Bohr*sqrt(amu)" % (self.IRC_stepsize)
-        else:
-            msg += " Trust = %.3e (%s)" % (self.trust, self.trustprint)
+        msg += " Trust = %.3e (%s)" % (self.trust, self.trustprint)
         msg += " Grad%s = %s%.3e\x1b[0m/%s%.3e\x1b[0m (rms/max)" % ("_T" if self.IC.haveConstraints() else "", colors['grms'], rms_gradient, colors['gmax'], max_gradient)
         logger.info(msg + " E (change) = % .10f (%s%+.3e\x1b[0m) Quality = %s%.3f\x1b[0m" % (self.E, colors['energy'], self.E-self.Eprev, colors['quality'], Quality) + "\n")
 
@@ -714,8 +716,8 @@ class Optimizer(object):
             logger.info(self.prim_msg + '\n')
 
         ### Check convergence criteria ###
-        criterima_met = Converged_energy and Converged_grms and Converged_drms and Converged_gmax and Converged_dmax
-        near_convergence = Converged_energy and Converged_drms and Converged_dmax
+        criteria_met = Converged_energy and Converged_grms and Converged_drms and Converged_gmax and Converged_dmax
+        IRC_converged = Converged_energy and Converged_grms and Converged_gmax
 
         def reset_irc():
             self.IRC_direction = -1
@@ -723,39 +725,41 @@ class Optimizer(object):
             self.Iteration = 0
             self.gradx = self.Gx_hist[0].copy()
             self.X = self.X_hist[0].copy()
-            self.IRC_stepsize = self.params.trust*ang2bohr
-            self.IRC_opt = False
             self.trust = self.params.trust
             self.calcEnergyForce()
+            self.IRC_opt = False
             self.prepareFirstStep()
 
         if params.irc:
-            if criterima_met and self.Iteration > 10:
-                if self.IRC_direction == 1:
-                    logger.info("\nIRC forward direction converged")
-                    logger.info("\nIRC backward direction starts here\n\n")
-                    reset_irc()
-                    return
-                elif self.IRC_direction == -1:
-                    self.SortedEigenvalues(self.H)
-                    logger.info("Converged! =D\n")
-                    self.state = OPT_STATE.CONVERGED
-                    return
-            elif (Quality < 0.0 or near_convergence) and not self.IRC_opt:
-                if self.Iteration > 10:
-                    logger.info("Switching to optimization\n")
+            if self.Iteration > 10:
+                if criteria_met :
+                    if self.IRC_direction == 1:
+                        logger.info("\nIRC forward direction converged")
+                        logger.info("\nIRC backward direction starts here\n\n")
+                        reset_irc()
+                        return
+                    elif self.IRC_direction == -1:
+                        self.SortedEigenvalues(self.H)
+                        logger.info("Converged! =D\n")
+                        self.state = OPT_STATE.CONVERGED
+                        return
+                elif (IRC_converged or self.cnorm < 1e-5) and not self.IRC_opt:
                     self.IRC_opt = True
-            elif self.Iteration > params.maxiter:
-                logger.info("\nIRC forward direction reached maximum iteration number\n")
-                logger.info("IRC backward direction starts here\n\n")
-                reset_irc()
-                return
-            elif self.IRC_opt:
-                pass
-            else:
-                return
+                    if self.cnorm > 1e-5:
+                        self.trust = self.cnorm
+                    logger.info("Switching to optimization\n")
 
-        if criterima_met and self.conSatisfied:
+                elif self.Iteration > params.maxiter:
+                    logger.info("\nIRC forward direction reached maximum iteration number\n")
+                    if self.IRC_direction == -1:
+                        logger.info("Terminating IRC\n")
+                        self.state = OPT_STATE.FAILED
+                    else:
+                        logger.info("IRC backward direction starts here\n\n")
+                        reset_irc()
+                    return
+
+        if criteria_met and self.conSatisfied:
             self.SortedEigenvalues(self.H)
             logger.info("Converged! =D\n")
             self.state = OPT_STATE.CONVERGED
