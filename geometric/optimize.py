@@ -465,11 +465,10 @@ class Optimizer(object):
 
     def IRC_step(self):
         self.farConstraints = self.IC.haveConstraints() and self.IC.maxConstraintViolation(self.X) > 1e-1
-        logger.info("IRC sub-step 1: Finding a pivot point (q*_{k+1})\n")
+        logger.info("IRC sub-step 1: Finding the pivot point (q*_{k+1})\n")
         # Need to take a step towards the pivot point
         self.IC.clearCache()
         MWGMat = self.IC.GMatrix(self.X, invMW=True)
-        MWGMat_sqrt_inv, MWGMat_sqrt = self.IC.GInverse_SVD(self.X, sqrt=True, invMW=True)
 
         # Save the initial Cartesian coordinate
         X0 = self.X.copy()
@@ -482,26 +481,25 @@ class Optimizer(object):
             elif self.TSWavenum[0] > 0:
                 raise IRCError("No imaginary mode detected. Please optimize the structure and try again.\n")
 
-            # Getting mass-weighted displacement following the imaginary frequency
+            self.IRC_adjfactor = np.linalg.norm(self.TSNormal_modes_x[0] * np.sqrt(self.IC.mass))
+            logger.info("Initial step-size: %.5f \n" %(self.trust * ang2bohr * self.IRC_adjfactor))
+
+            # Following the imaginary mode vector
             if self.IRC_init_v is None:
-                H_M = np.dot(np.dot(MWGMat_sqrt, self.H), MWGMat_sqrt.T)
-                _, MW_IC_vecs = np.linalg.eigh(H_M)
-                invMW_v = np.dot(MWGMat_sqrt, MW_IC_vecs[0])
-                v = np.dot(MWGMat_sqrt_inv, invMW_v)
-                invMW_v = np.dot(MWGMat, v)
-                self.IRC_init_v = v
-                self.IRC_adjfactor = np.linalg.norm(self.TSNormal_modes_x[0] * np.sqrt(self.IC.mass))
-                self.IRC_init_step = self.params.trust * ang2bohr * self.IRC_adjfactor
+                #MWGMat_sqrt_inv, MWGMat_sqrt = self.IC.GInverse_SVD(self.X, sqrt=True, invMW=True)
+                #H_M = np.dot(np.dot(MWGMat_sqrt, self.H), MWGMat_sqrt.T)
+                #_, MW_IC_vecs = np.linalg.eigh(H_M)
+                #v = MW_IC_vecs[0]
+                Im_mode = self.TSNormal_modes_x[0]
+                v = self.IC.calcDiff(X0 + Im_mode, X0)
+                self.IRC_init_v = self.IC.calcDiff(X0 - Im_mode, X0)
             else:
-                v = -self.IRC_init_v
-                invMW_v = np.dot(MWGMat, v)
-            logger.info("Initial step-size: %.5f Bohr*sqrt(amu)\n" %(self.IRC_init_step))
+                v = self.IRC_init_v
 
         else:
-            # Else, use the mass-weighted G matrix and internal coordinate gradients to get the vector.
             v = self.G.copy()  # Internal coordinate gradients
-            invMW_v = np.dot(MWGMat, v)
 
+        invMW_v = np.dot(MWGMat, v)# Inverse mass-weighted vector
         # Normalization factor
         N = 1 / np.sqrt(np.dot(v.T, np.dot(MWGMat, v)))
         self.IRC_stepsize = self.trust * ang2bohr * self.IRC_adjfactor
@@ -534,40 +532,39 @@ class Optimizer(object):
             p_M = np.dot(MWGMat_sqrt_inv, p_prime)
 
             Heig, Hvecs = np.linalg.eigh(H_M)
-
             init_guess = 1.01*Heig[0] if Heig[0] < 0 else 0.99*Heig[0]
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
-                min_lambda = scipy.optimize.fsolve(self.find_lambda, init_guess, (Heig, Hvecs, g_M, p_M), xtol=1e-12, maxfev=500)
+                min_lambda = scipy.optimize.fsolve(self.find_lambda, init_guess, (Heig, Hvecs, g_M, p_M), xtol=1e-14, maxfev=500)
             LambdaI = min_lambda[0]*np.eye(len(self.IC.Internals))
             del_q_M1 = np.linalg.pinv(H_M - LambdaI)
             del_q_M2 = g_M - min_lambda[0]*p_M
             del_q_M = -np.dot(del_q_M1, del_q_M2)
             dq_new = np.dot(MWGMat_sqrt, del_q_M)
 
-            if np.linalg.norm(dq_new) < 1e-5 or irc_sub_iteration > 500:
+            if np.linalg.norm(dq_new) < 1e-6 or irc_sub_iteration > 100:
                 dy = dy_to_pivot + p_prime
                 v2 = p_prime/np.linalg.norm(p_prime)
                 deg = np.degrees(np.arccos(np.dot(v1/np.linalg.norm(v1),v2)))
                 mwdx = np.linalg.norm(np.dot(MWGMat_sqrt_inv, dy))
                 half_mwdx = np.linalg.norm(np.dot(MWGMat_sqrt_inv, p_prime))
-                if mwdx < 0.8*self.IRC_init_step and self.Iteration == 0:
-                    logger.info("\nAdjusting step-size for the first step..\n")
-                    self.trust *= self.IRC_init_step / mwdx
-                    self.IRC_init_v *= -1
-                    dy = self.IRC_step()
-                    return dy
+                self.IRC_dystep = np.linalg.norm(p_prime)
+                const = self.find_lambda(min_lambda, Heig, Hvecs, g_M, p_M)
+                if const > 1e-5 or min_lambda > Heig[0]:
+                    logger.info("Something is wrong in the IRC second sub-step\n")
+                    logger.info('Check constraint: %.9f \n' %const)
+                    logger.info('dq_new: %.9f \n' %np.linalg.norm(dq_new))
+                    logger.info('IRC sub iteration %i\n' %irc_sub_iteration)
                 break
 
             irc_sub_iteration += 1
             p_prime += dq_new
 
         logger.info('Angle between v1 and v2: %2.f \n' % deg)
-        logger.info('Half step mw-dx  = %.5f Bohr*sqrt(amu)\n' % half_mwdx)
-        logger.info('Total step dy    = %.5f \n' % np.linalg.norm(dy))
-        logger.info('Total step mw-dx = %.5f Bohr*sqrt(amu)\n' % mwdx)
-        if self.Iteration == 0:
-            self.trust = self.params.trust
+        logger.info('Half step dy     = %.5f \n' % np.linalg.norm(p_prime))
+        logger.info('Half step mw-dx  = %.5f Bohr*sqrt(amu)\n\n' % half_mwdx)
+        logger.info('=> Total step dy    = %.5f \n' % np.linalg.norm(dy))
+        logger.info('=> Total step mw-dx = %.5f Bohr*sqrt(amu)\n' % mwdx)
         self.Iteration += 1
         return dy
 
@@ -729,6 +726,8 @@ class Optimizer(object):
             self.calcEnergyForce()
             self.IRC_opt = False
             self.prepareFirstStep()
+            self.trustprint = "="
+            self.params.tmax = self.trust
 
         if params.irc:
             if self.Iteration > 10:
@@ -743,10 +742,11 @@ class Optimizer(object):
                         logger.info("Converged! =D\n")
                         self.state = OPT_STATE.CONVERGED
                         return
-                elif (IRC_converged or self.cnorm < 1e-5) and not self.IRC_opt:
+                elif (IRC_converged or self.IRC_dystep < 1e-4) and not self.IRC_opt:
                     self.IRC_opt = True
-                    if self.cnorm > 1e-5:
+                    if self.cnorm > 1e-4:
                         self.trust = self.cnorm
+                    self.params.tmax = self.params.trust*3
                     logger.info("Switching to optimization\n")
 
                 elif self.Iteration > params.maxiter:
@@ -1077,12 +1077,6 @@ def run_optimizer(**kwargs):
                     'tric':(DelocalizedInternalCoordinates, False, False)}
     coordsys = kwargs.get('coordsys', 'tric')
 
-    # TRIC IRC will fail when there is only one molecule due to the small Hessian eigenvalues.
-    if params.irc and len(M.molecules) == 1 and coordsys == 'tric':
-        coordsys = 'dlc'
-
-    CoordClass, connect, addcart = CoordSysDict[coordsys.lower()]
-
     # Perform an initial single-point QM calculation to determine bonding & fragments, if using TRIC
     if hasattr(engine, 'calc_bondorder') and coordsys.lower() in ['hdlc', 'tric'] and params.bothre > 1e-3:
         bothre = params.bothre
@@ -1104,6 +1098,12 @@ def run_optimizer(**kwargs):
         if coordsys.lower() in ['hdlc', 'tric'] and params.bothre > 1e-3:
             logger.info("Requested bond order-based connectivity but it is not available in the current engine\n")
         logger.info("Bonds will be generated from interatomic distances less than %.2f times sum of covalent radii\n" % M.top_settings['Fac'])
+
+    # TRIC IRC will fail when there is only one molecule due to the small Hessian eigenvalues.
+    if params.irc and len(M.molecules) == 1 and coordsys == 'tric':
+        coordsys = 'dlc'
+
+    CoordClass, connect, addcart = CoordSysDict[coordsys.lower()]
 
     IC = CoordClass(M, build=True, connect=connect, addcart=addcart, constraints=Cons, cvals=CVals[0] if CVals is not None else None,
                     conmethod=params.conmethod)
