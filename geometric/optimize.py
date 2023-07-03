@@ -86,6 +86,7 @@ class Optimizer(object):
         # Copies of data passed into constructor
         self.coords = coords
         self.molecule = deepcopy(molecule)
+        self.IC0 = IC
         self.IC = IC
         self.engine = engine
         self.dirname = dirname
@@ -125,6 +126,7 @@ class Optimizer(object):
         # IRC related attributes
         self.IRC_direction = 1
         self.IRC_opt = False
+        self.IRC_vary_stepsize = False
         self.IRC_init_v = None
         if print_info:
             self.print_info()
@@ -468,6 +470,9 @@ class Optimizer(object):
         logger.info("IRC sub-step 1: Finding the pivot point (q*_{k+1})\n")
         # Need to take a step towards the pivot point
         self.IC.clearCache()
+        if not (self.Iteration != 0 or isinstance(self.IC, CartesianCoordinates)):
+            self.checkCoordinateSystem()
+
         MWGMat = self.IC.GMatrix(self.X, invMW=True)
 
         # Save the initial Cartesian coordinate
@@ -667,15 +672,16 @@ class Optimizer(object):
         rms_gradient, max_gradient = self.calcGradNorm()
         rms_displacement, max_displacement = calc_drms_dmax(self.X, self.Xprev)
         rms_displacement_noalign, max_displacement_noalign = calc_drms_dmax(self.X, self.Xprev, align=False)
+        Egap = self.E-self.Eprev
         # The ratio of the actual energy change to the expected change
-        Quality = (self.E-self.Eprev)/self.expect
+        Quality = Egap/self.expect
         # The internal coordinate gradient (actually not really used in this function)
         self.G = self.IC.calcGrad(self.X, self.gradx).flatten()
         # For transition states, the quality factor decreases in both directions
         if params.transition and Quality > 1.0:
             Quality = 2.0 - Quality
         # Check convergence criteria
-        Converged_energy = np.abs(self.E-self.Eprev) < params.Convergence_energy
+        Converged_energy = np.abs(Egap) < params.Convergence_energy
         Converged_grms = rms_gradient < params.Convergence_grms
         Converged_gmax = max_gradient < params.Convergence_gmax
         Converged_drms = rms_displacement < params.Convergence_drms
@@ -684,12 +690,12 @@ class Optimizer(object):
         # 2020-03-10: Step quality thresholds are hard-coded here.
         colors = {}
         if Quality > 0.75: step_state = StepState.Good
-        elif Quality > (0.5 if params.transition else 0.25): step_state = StepState.Okay
+        elif Quality > (0.5 if params.transition or params.irc else 0.25): step_state = StepState.Okay
         elif Quality > 0.0: step_state = StepState.Poor
         else:
             colors['energy'] = "\x1b[92m" if Converged_energy else "\x1b[91m"
             colors['quality'] = "\x1b[91m"
-            step_state = StepState.Reject if (Quality < -1.0 or params.transition) and not params.irc else StepState.Poor
+            step_state = StepState.Reject if (Quality < -1.0 or params.transition or params.irc) else StepState.Poor
         if 'energy' not in colors: colors['energy'] = "\x1b[92m" if Converged_energy else "\x1b[0m"
         if 'quality' not in colors: colors['quality'] = "\x1b[0m"
         colors['grms'] = "\x1b[92m" if Converged_grms else "\x1b[0m"
@@ -718,46 +724,58 @@ class Optimizer(object):
 
         def reset_irc():
             self.IRC_direction = -1
-            self.progress = self.progress[::-1]
+            self.progress = self.progress[::-1][:-1]
             self.Iteration = 0
-            self.gradx = self.Gx_hist[0].copy()
             self.X = self.X_hist[0].copy()
+            self.coords = self.X_hist[0].copy()
+            self.IC = self.IC0
             self.trust = self.params.trust
-            self.calcEnergyForce()
             self.IRC_opt = False
-            self.prepareFirstStep()
             self.trustprint = "="
             self.params.tmax = self.trust
+            #self.IRC_vary_stepsize = False
+            self.calcEnergyForce()
+            self.prepareFirstStep()
 
         if params.irc:
             if self.Iteration > 10:
                 if criteria_met :
                     if self.IRC_direction == 1:
-                        logger.info("\nIRC forward direction converged")
-                        logger.info("\nIRC backward direction starts here\n\n")
+                        logger.info("\nIRC forward direction converged\n")
+                        logger.info("IRC backward direction starts here\n\n")
                         reset_irc()
-                        return
                     elif self.IRC_direction == -1:
                         self.SortedEigenvalues(self.H)
                         logger.info("Converged! =D\n")
                         self.state = OPT_STATE.CONVERGED
-                        return
+                    return
                 elif (IRC_converged or self.IRC_dystep < 1e-4) and not self.IRC_opt:
                     self.IRC_opt = True
                     if self.cnorm > 1e-4:
                         self.trust = self.cnorm
                     self.params.tmax = self.params.trust*3
                     logger.info("Switching to optimization\n")
-
                 elif self.Iteration > params.maxiter:
-                    logger.info("\nIRC forward direction reached maximum iteration number\n")
                     if self.IRC_direction == -1:
+                        logger.info("\nIRC backward direction reached maximum iteration number\n")
                         logger.info("Terminating IRC\n")
                         self.state = OPT_STATE.FAILED
                     else:
+                        logger.info("\nIRC forward direction reached maximum iteration number\n")
                         logger.info("IRC backward direction starts here\n\n")
                         reset_irc()
                     return
+
+                #if self.IRC_Egap < abs(Egap):
+                #    self.IRC_Egap = abs(Egap)
+                #    self.IRC_vary_stepsize = False
+
+                #elif abs(Egap) < self.IRC_Egap*0.2 and not self.IRC_vary_stepsize:
+                #    self.IRC_vary_stepsize = True
+
+            #if not (self.IRC_vary_stepsize or self.IRC_opt):
+            #    return
+
 
         if criteria_met and self.conSatisfied:
             self.SortedEigenvalues(self.H)
@@ -794,7 +812,7 @@ class Optimizer(object):
         #     logger.info("LPW: Recalculating Hessian\n")
         #     self.recalcHess = True
         if step_state in (StepState.Poor, StepState.Reject):
-            new_trust = max(params.tmin, min(self.trust, self.cnorm)/2)
+            new_trust = max(params.tmin, min(self.trust, self.cnorm)/2) if not params.irc or self.IRC_opt else max(params.tmin, self.trust*0.5)
             # if (Converged_grms or Converged_gmax) or (params.molcnv and Converged_molpro_gmax):
             #     new_trust = max(new_trust, self.params.Convergence_dmax if self.params.usedmax else self.params.Convergence_drms)
             self.trustprint = "\x1b[91m-\x1b[0m" if new_trust < self.trust else "="
@@ -807,7 +825,7 @@ class Optimizer(object):
                     logger.info("Poor-quality step dominated by net translation/rotation detected; ")
                     logger.info("will project out net forces and torques past this point.\n")
         elif step_state == StepState.Good:
-            new_trust = min(params.tmax, np.sqrt(2)*self.trust)
+            new_trust = min(params.tmax, np.sqrt(2)*self.trust) if not params.irc or self.IRC_opt else min(params.tmax, self.trust*1.10)
             self.trustprint = "\x1b[92m+\x1b[0m" if new_trust > self.trust else "="
             self.trust = new_trust
         elif step_state == StepState.Okay:
@@ -833,7 +851,7 @@ class Optimizer(object):
             elif self.farConstraints:
                 logger.info("\x1b[93mNot rejecting step - far from constraint satisfaction\x1b[0m\n")
             else:
-                logger.info("\x1b[93mRejecting step - quality is lower than %.1f\x1b[0m\n" % (0.0 if params.transition else -1.0))
+                logger.info("\x1b[93mRejecting step - quality is lower than %.1f\x1b[0m\n" % (0.0 if params.transition or params.irc else -1.0))
                 self.trustprint = "\x1b[1;91mx\x1b[0m"
                 # Store the rejected step.  In case the next step is identical to the rejected one, the next step should be accepted to avoid infinite loops.
                 self.X_rj = self.X.copy()
@@ -844,6 +862,7 @@ class Optimizer(object):
                 self.E = self.Eprev
                 self.engine.load_guess_files(self.dirname)
                 self.recalcHess = False
+                self.progress = self.progress[:-1]
                 return
 
         # Append steps to history (for rebuilding Hessian)

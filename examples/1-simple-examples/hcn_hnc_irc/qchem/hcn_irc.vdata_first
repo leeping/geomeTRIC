@@ -33,7 +33,7 @@
 # 
 # == Summary of harmonic free energy analysis ==
 # Note: Rotational symmetry is set to 1 regardless of true symmetry
-# 1 Imaginary Frequencies (cm^-1): 1215.913i
+# 1 Imaginary Frequencies (cm^-1): 1215.900i
 # Note: Free energy does not include contribution from imaginary mode(s)
 # 
 # Free energy contributions calculated at @ 300.00 K:
@@ -43,8 +43,8 @@
 # TS  (Trans + Rot + Vib = Tot):  10.7624 +   4.9154 +   0.0003 =  15.6782 kcal/mol 
 # 
 # Ground State Electronic Energy    : E0                        =   -92.24604268 au (    -57885.2657 kcal/mol)
-# Free Energy Correction (Harmonic) : ZPVE + [H-TS]_T,R,V       =    -0.01075345 au (        -6.7479 kcal/mol)
-# Gibbs Free Energy (Harmonic)      : E0 + ZPVE + [H-TS]_T,R,V  =   -92.25679613 au (    -57892.0136 kcal/mol)
+# Free Energy Correction (Harmonic) : ZPVE + [H-TS]_T,R,V       =    -0.01075346 au (        -6.7479 kcal/mol)
+# Gibbs Free Energy (Harmonic)      : E0 + ZPVE + [H-TS]_T,R,V  =   -92.25679614 au (    -57892.0136 kcal/mol)
 # 
 
 3
@@ -53,17 +53,17 @@ Iteration 0 Energy -92.24604268
  N   -0.6393457902    0.4205365638    0.0052498438
  H    0.7532976101    0.2173493463   -0.0090384631
 
--1215.913129
--0.043292 -0.081608  0.000849
- 0.075287  0.009578 -0.000867
--0.530338  0.839311  0.001930
+-1215.900475
+-0.043294 -0.081606  0.000849
+ 0.075287  0.009576 -0.000867
+-0.530321  0.839321  0.001929
 
- 2126.645765
--0.335092  0.647229  0.000680
- 0.302442 -0.563886 -0.000708
--0.209932  0.123671  0.001725
+ 2126.644652
+-0.335090  0.647234  0.000680
+ 0.302441 -0.563887 -0.000708
+-0.209940  0.123630  0.001725
 
- 2451.888293
- 0.057521  0.023516 -0.000737
- 0.012770  0.015894 -0.000213
--0.862850 -0.501073  0.011742
+ 2451.882983
+-0.057521 -0.023513  0.000737
+-0.012771 -0.015896  0.000213
+ 0.862859  0.501058 -0.011742

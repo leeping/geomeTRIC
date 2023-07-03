@@ -1,1 +1,3 @@
-geometric-optimize --irc yes --engine tera tera.in
+geometric-optimize hcn.terain --irc yes --trust 0.05 --engine tera --converge set GAU_LOOSE
+
+
