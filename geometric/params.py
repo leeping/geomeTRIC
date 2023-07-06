@@ -56,6 +56,8 @@ class OptParams(object):
         self.enforce = kwargs.get('enforce', 0.0)
         # Small eigenvalue threshold
         self.epsilon = kwargs.get('epsilon', 1e-5)
+        # Energy increase threshold; 3e-2 -> about 20 kcal/mol
+        self.erisemax = kwargs.get('erisemax', 3e-2)
         # Interval for checking the coordinate system for changes
         self.check = kwargs.get('check', 0)
         # More verbose printout
@@ -362,6 +364,7 @@ def parse_optimizer_args(*args):
     grp_optparam.add_argument('--reset', type=str2bool, help='Reset approximate Hessian to guess when eigenvalues are under epsilon.\n '
                               'Defaults to True for minimization and False for transition states.\n ')
     grp_optparam.add_argument('--epsilon', type=float, help='Small eigenvalue threshold for resetting Hessian, default 1e-5.\n ')
+    grp_optparam.add_argument('--erisemax', type=float, help='For energy minimization, the maximum value that energy can rise without step being rejected.\n ')
     grp_optparam.add_argument('--check', type=int, help='Check coordinates every <N> steps and rebuild coordinate system, disabled by default.\n')
     grp_optparam.add_argument('--subfrctor', type=int, help='Project out net force and torque components from nuclear gradient.\n'
                               '0 = never project; 1 = auto-detect (default); 2 = always project.')

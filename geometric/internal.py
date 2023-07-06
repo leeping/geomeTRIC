@@ -46,7 +46,7 @@ from numpy.linalg import multi_dot
 
 from geometric.molecule import Molecule, Elements, Radii
 from geometric.nifty import click, commadash, ang2bohr, bohr2ang, logger, pvec1d, pmat2d
-from geometric.rotate import get_expmap, get_expmap_der, calc_rot_vec_diff, get_quat, build_F, sorted_eigh
+from geometric.rotate import get_expmap, get_expmap_der, calc_rot_vec_diff, get_quat, build_F, sorted_eigh, is_linear
 
 ## Some vector calculus functions
 def unit_vector(a):
@@ -154,7 +154,7 @@ class PrimitiveCoordinate(object):
         """
         Return the difference of the internal coordinate
         calculated for c(xyz1) - c(xyz2) or c(xyz1) - val2.
-
+ 
         Parameters
         ----------
         xyz1 : np.ndarray
@@ -188,7 +188,12 @@ class PrimitiveCoordinate(object):
                 diff = Minus2Pi
         diff *= w
         return diff
-        
+
+    def diagnostic(self, xyz):
+        result = 0
+        message = "Diagnostic message not implemented for this coordinate"
+        return result, message
+
 class CartesianX(PrimitiveCoordinate):
     def __init__(self, a, w=1.0):
         self.a = a
@@ -203,8 +208,8 @@ class CartesianX(PrimitiveCoordinate):
     def __eq__(self, other):
         if type(self) is not type(other): return False
         eq = self.a == other.a
-        if eq and self.w != other.w:
-            logger.warning("Warning: CartesianX same atoms, different weights (%.4f %.4f)\n" % (self.w, other.w))
+        # if eq and self.w != other.w:
+        #     logger.warning("Warning: CartesianX same atoms, different weights (%.4f %.4f)\n" % (self.w, other.w))
         return eq
 
     def __ne__(self, other):
@@ -240,8 +245,8 @@ class CartesianY(PrimitiveCoordinate):
     def __eq__(self, other):
         if type(self) is not type(other): return False
         eq = self.a == other.a
-        if eq and self.w != other.w:
-            logger.warning("Warning: CartesianY same atoms, different weights (%.4f %.4f)\n" % (self.w, other.w))
+        # if eq and self.w != other.w:
+        #     logger.warning("Warning: CartesianY same atoms, different weights (%.4f %.4f)\n" % (self.w, other.w))
         return eq
 
     def __ne__(self, other):
@@ -277,8 +282,8 @@ class CartesianZ(PrimitiveCoordinate):
     def __eq__(self, other):
         if type(self) is not type(other): return False
         eq = self.a == other.a
-        if eq and self.w != other.w:
-            logger.warning("Warning: CartesianZ same atoms, different weights (%.4f %.4f)\n" % (self.w, other.w))
+        # if eq and self.w != other.w:
+        #     logger.warning("Warning: CartesianZ same atoms, different weights (%.4f %.4f)\n" % (self.w, other.w))
         return eq
 
     def __ne__(self, other):
@@ -302,8 +307,8 @@ class CartesianZ(PrimitiveCoordinate):
     
 class TranslationX(PrimitiveCoordinate):
     def __init__(self, a, w):
-        self.a = a
-        self.w = w
+        self.a = a[:]
+        self.w = w.copy()
         assert len(a) == len(w)
         self.isAngular = False
         self.isPeriodic = False
@@ -315,9 +320,9 @@ class TranslationX(PrimitiveCoordinate):
     def __eq__(self, other):
         if type(self) is not type(other): return False
         eq = set(self.a) == set(other.a)
-        if eq and np.sum((self.w-other.w)**2) > 1e-6:
-            logger.warning("Warning: TranslationX same atoms, different weights\n")
-            eq = False
+        # if eq and np.sum((self.w-other.w)**2) > 1e-6:
+        #     logger.warning("Warning: TranslationX same atoms, different weights\n")
+        #     eq = False
         return eq
 
     def __ne__(self, other):
@@ -352,10 +357,10 @@ class TranslationX(PrimitiveCoordinate):
         deriv2 = np.zeros((xyz.shape[0], xyz.shape[1], xyz.shape[0], xyz.shape[1]))
         return deriv2
     
-class TranslationY(object):
+class TranslationY(PrimitiveCoordinate):
     def __init__(self, a, w):
-        self.a = a
-        self.w = w
+        self.a = a[:]
+        self.w = w.copy()
         assert len(a) == len(w)
         self.isAngular = False
         self.isPeriodic = False
@@ -367,9 +372,9 @@ class TranslationY(object):
     def __eq__(self, other):
         if type(self) is not type(other): return False
         eq = set(self.a) == set(other.a)
-        if eq and np.sum((self.w-other.w)**2) > 1e-6:
-            logger.warning("Warning: TranslationY same atoms, different weights\n")
-            eq = False
+        # if eq and np.sum((self.w-other.w)**2) > 1e-6:
+        #     logger.warning("Warning: TranslationY same atoms, different weights\n")
+        #     eq = False
         return eq
 
     def __ne__(self, other):
@@ -406,8 +411,8 @@ class TranslationY(object):
 
 class TranslationZ(PrimitiveCoordinate):
     def __init__(self, a, w):
-        self.a = a
-        self.w = w
+        self.a = a[:]
+        self.w = w.copy()
         assert len(a) == len(w)
         self.isAngular = False
         self.isPeriodic = False
@@ -419,9 +424,9 @@ class TranslationZ(PrimitiveCoordinate):
     def __eq__(self, other):
         if type(self) is not type(other): return False
         eq = set(self.a) == set(other.a)
-        if eq and np.sum((self.w-other.w)**2) > 1e-6:
-            logger.warning("Warning: TranslationZ same atoms, different weights\n")
-            eq = False
+        # if eq and np.sum((self.w-other.w)**2) > 1e-6:
+        #     logger.warning("Warning: TranslationZ same atoms, different weights\n")
+        #     eq = False
         return eq
 
     def __ne__(self, other):
@@ -762,16 +767,21 @@ class RotationC(PrimitiveCoordinate):
         return second_derivatives
 
 class Distance(PrimitiveCoordinate):
-    def __init__(self, a, b):
+    def __init__(self, a, b, rab=1.0, n=1.0):
         self.a = a
         self.b = b
+        self.rab = rab
+        self.n = n
         if a == b:
             raise RuntimeError('a and b must be different')
         self.isAngular = False
         self.isPeriodic = False
 
     def __repr__(self):
-        return "Distance %i-%i" % (self.a+1, self.b+1)
+        if self.rab != 1.0 or self.n != 1.0:
+            return "Distance %i-%i (rab=%.3f n=%.3f)" % (self.a+1, self.b+1, self.rab, self.n)
+        else:
+            return "Distance %i-%i" % (self.a+1, self.b+1)
         
     def __eq__(self, other):
         if type(self) is not type(other): return False
@@ -790,32 +800,186 @@ class Distance(PrimitiveCoordinate):
         xyz = xyz.reshape(-1,3)
         a = self.a
         b = self.b
-        return np.sqrt(np.sum((xyz[a]-xyz[b])**2))
+        rab = self.rab
+        n = self.n
+        r = np.linalg.norm(xyz[a] - xyz[b])
+        answer = (r/rab)**n
+        return answer
     
     def derivative(self, xyz):
         xyz = xyz.reshape(-1,3)
+        a = self.a
+        b = self.b
+        rab = self.rab
+        n = self.n
+        r = np.linalg.norm(xyz[a] - xyz[b])
         derivatives = np.zeros_like(xyz)
-        m = self.a
-        n = self.b
-        u = (xyz[m] - xyz[n]) / np.linalg.norm(xyz[m] - xyz[n])
-        derivatives[m, :] = u
-        derivatives[n, :] = -u
+        u = (xyz[a] - xyz[b]) / r
+        prefactor = n * r ** (n-1) / rab ** n
+        derivatives[a, :] = u * prefactor
+        derivatives[b, :] = -u * prefactor
         return derivatives
 
     def second_derivative(self, xyz):
         xyz = xyz.reshape(-1,3)
+        a = self.a
+        b = self.b
+        rab = self.rab
+        n = self.n
+        r = np.linalg.norm(xyz[a] - xyz[b])
         deriv2 = np.zeros((xyz.shape[0], xyz.shape[1], xyz.shape[0], xyz.shape[1]))
-        m = self.a
-        n = self.b
-        l = np.linalg.norm(xyz[m] - xyz[n])
-        u = (xyz[m] - xyz[n]) / l
-        mtx = (np.outer(u, u) - np.eye(3))/l
-        deriv2[m, :, m, :] = -mtx
-        deriv2[n, :, n, :] = -mtx
-        deriv2[m, :, n, :] = mtx
-        deriv2[n, :, m, :] = mtx
+        u = (xyz[a] - xyz[b]) / r
+        mtx = (np.outer(u, u) - np.eye(3)) / r
+        prefactor = n * r ** (n-1) / rab ** n
+        prefactor2 = n * (n-1) * r ** (n-2) / rab ** n
+        deriv2[a, :, a, :] = -mtx * prefactor + np.outer(u, u) * prefactor2
+        deriv2[b, :, b, :] = -mtx * prefactor + np.outer(u, u) * prefactor2
+        deriv2[a, :, b, :] =  mtx * prefactor - np.outer(u, u) * prefactor2
+        deriv2[b, :, a, :] =  mtx * prefactor - np.outer(u, u) * prefactor2
         return deriv2
-    
+
+class DistanceDifference(PrimitiveCoordinate):
+    def __init__(self, a, b, c):
+        self.a = a
+        self.b = b
+        self.c = c
+        self.isAngular = False
+        self.isPeriodic = False
+
+    def __repr__(self):
+        return "DistanceDifference %i-%i-%i" % (self.a+1, self.b+1, self.c+1)
+
+    def __eq__(self, other):
+        if type(self) is not type(other): return False
+        if self.b == other.b:
+            if self.a == other.a:
+                if self.c == other.c:
+                    return True
+            if self.a == other.c:
+                if self.c == other.a:
+                    return True
+        return False
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    def value(self, xyz):
+        xyz = xyz.reshape(-1, 3)
+        a = self.a
+        b = self.b
+        c = self.c
+        r1 = np.linalg.norm(xyz[a]-xyz[b])
+        r2 = np.linalg.norm(xyz[b]-xyz[c])
+        # print("DistanceDifference %i-%i-%i Value=%.5f" % (self.a+1, self.b+1, self.c+1, r1-r2))
+        return r1-r2
+
+    def derivative(self, xyz):
+        xyz = xyz.reshape(-1, 3)
+        derivatives = np.zeros_like(xyz)
+        a = self.a
+        b = self.b
+        c = self.c
+
+        u = (xyz[a] - xyz[b]) / np.linalg.norm(xyz[a] - xyz[b])
+        v = (xyz[b] - xyz[c]) / np.linalg.norm(xyz[b] - xyz[c])
+
+        derivatives[a,:] = u
+        derivatives[b,:] = -u-v
+        derivatives[c,:] = v
+
+        return derivatives
+
+class ReducedDistance(PrimitiveCoordinate):
+    def __init__(self, a, b, c, rab=1.0, rbc=1.0, n=1.0):
+        self.a = a
+        self.b = b
+        self.c = c
+        # Equilibrium bond length between a and b
+        self.rab = rab
+        # Equilibrium bond length between b and c
+        self.rbc = rbc
+        # "Power" to use when computing the IC (higher power gives a more square 'surface')
+        self.n = n
+        self.isAngular = False
+        self.isPeriodic = False
+
+    def __repr__(self):
+        return "ReducedDistance %i-%i-%i" % (self.a + 1, self.b + 1, self.c + 1)
+
+    def __eq__(self, other):
+        if type(self) is not type(other): return False
+        if self.b == other.b:
+            if self.a == other.a:
+                if self.c == other.c:
+                    return True
+            if self.a == other.c:
+                if self.c == other.a:
+                    return True
+        return False
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    def value(self, xyz):
+        xyz = xyz.reshape(-1, 3)
+        a = self.a
+        b = self.b
+        c = self.c
+        n = self.n
+        rab = self.rab
+        rbc = self.rbc
+        r1 = np.linalg.norm(xyz[b] - xyz[a])
+        r2 = np.linalg.norm(xyz[b] - xyz[c])
+        r1n = r1/rab
+        r2n = r2/rbc
+        answer = r1n**n * r2n**n/(r1n**n + r2n**n)
+        # print("ReducedDistance %2i-%2i-%2i" % (self.a+1, self.b+1, self.c+1), end=' ')
+        # print("Dist Cov Ratio a-b: %8.3f %8.3f %8.3f" % (r1*bohr2ang, rab*bohr2ang, r1/rab), end=' ')
+        # print("b-c: %8.3f %8.3f %8.3f" % (r2*bohr2ang, rbc*bohr2ang, r2/rbc), end=' ')
+        # print("Value: %8.3f" % answer)
+        return answer
+
+    def derivative(self, xyz):
+        xyz = xyz.reshape(-1, 3)
+        derivatives = np.zeros_like(xyz)
+        a = self.a
+        b = self.b
+        c = self.c
+        n = self.n
+        rab = self.rab
+        rbc = self.rbc
+
+        u_vec = xyz[b] - xyz[a]
+        v_vec = xyz[b] - xyz[c]
+        r1 = np.linalg.norm(u_vec)
+        r2 = np.linalg.norm(v_vec)
+        
+        # Unit vector that points from a to b, equal to dr1/dxyz[b], or -dr1/dxyz[a]
+        eu = u_vec/r1
+        # Unit vector that points from c to b, equal to dr1/dxyz[b], or -dr1/dxyz[c]
+        ev = v_vec/r2
+
+        # Numerator in applying the quotient rule
+        numer = r1**n * r2**n
+        # Denominator in applying the quotient rule
+        denom = rbc**n * r1**n + rab**n * r2**n
+        # This is f'g/g^2 in the quotient rule
+        derivatives[a, :] -= n*(r1**(n-1) * r2**n * eu)/denom
+        derivatives[b, :] += n*(r1**(n-1) * r2**n * eu + r1**n * r2**(n-1) * ev)/denom
+        derivatives[c, :] -= n*(r1**n * r2**(n-1) * ev)/denom
+        # This is -fg'/g^2 in the quotient rule
+        # Double negative for [a, :] comes from the -fg' and the -eu
+        derivatives[a, :] += numer*n*(rbc**n * r1**(n-1) * eu)/denom**2
+        derivatives[b, :] -= numer*n*(rbc**n * r1**(n-1) * eu + rab**n * r2**(n-1) * ev)/denom**2
+        derivatives[c, :] += numer*n*(rab**n * r2**(n-1) * ev)/denom**2
+        # r1r2 = r1+r2
+
+        # derivatives[a, :] = (-r2/r1*u_vec*r1r2 + r2*u_vec)/r1r2**2
+        # derivatives[b, :] = ((r2/r1*u_vec + r1/r2*v_vec)*r1r2 - r2*u_vec - r1*v_vec)/r1r2**2
+        # derivatives[c, :] = (-r1/r2*v_vec*r1r2 + r1*v_vec)/r1r2**2
+
+        return derivatives
+
 class Angle(PrimitiveCoordinate):
     def __init__(self, a, b, c):
         self.a = a
@@ -1148,6 +1312,27 @@ class LinearAngle(PrimitiveCoordinate):
                 fderiv = (FPlus-FMinus)/(2*h)
                 deriv2[ii, j, :, :] = fderiv
         return deriv2
+
+    def diagnostic(self, xyz):
+        # result = 3 or above: failure of the IC system is imminent
+        # result = 2: IC may fail for small perturbations from the provided geometry
+        # result = 1: IC is unsuitable for the provided geometry, should pay attention
+        LinThres = [0.8, 0.6, 0.4]
+        descrips = ["close to nonlinear", "very nonlinear", "extremely nonlinear"]
+        a = self.a
+        b = self.b
+        c = self.c
+        Ang1 = Angle(a,b,c)
+        result = 0
+        message = "no problems detected"
+        cos1 = np.abs(np.cos(Ang1.value(xyz)))
+        for i in range(len(LinThres)):
+            thre = LinThres[i]
+            desc = descrips[i]
+            if cos1 < thre:
+                result = i+1
+                message = "%s angle is %s (|cos(theta)| %.4f < %.4f threshold)" % (repr(Ang1), desc, cos1, thre)
+        return result, message
     
 class MultiAngle(PrimitiveCoordinate): # pragma: no cover
     def __init__(self, a, b, c):
@@ -1450,6 +1635,37 @@ class Dihedral(PrimitiveCoordinate):
         # printTerm('1x1y',  3.33702e-01)
         # printTerm('1x1z',  5.90389e-02)
 
+    def diagnostic(self, xyz):
+        # result = 3 or above: failure of the IC system is imminent
+        # result = 2: IC may fail for small perturbations from the provided geometry
+        # result = 1: IC is unsuitable for the provided geometry, should pay attention
+        LinThres = [0.95, 0.98, 0.995]
+        descrips = ["close to linear", "very close to linear", "extremely close to linear"]
+        a = self.a
+        b = self.b
+        c = self.c
+        d = self.d
+        Ang1 = Angle(a,b,c)
+        Ang2 = Angle(b,c,d)
+        result = 0
+        message = "no problems detected"
+        cos1 = np.abs(np.cos(Ang1.value(xyz)))
+        cos2 = np.abs(np.cos(Ang2.value(xyz)))
+        cos3 = np.abs(np.dot(Ang1.normal_vector(xyz), Ang2.normal_vector(xyz)))
+        for i in range(len(LinThres)):
+            thre = LinThres[i]
+            desc = descrips[i]
+            if cos1 > thre and cos2 > thre:
+                result = i+2
+                message = "%s and %s angles are %s (|cos(theta)| %.4f, %.4f > %.4f threshold)" % (repr(Ang1), repr(Ang2), desc, cos1, cos2, thre)
+            elif cos1 > thre:
+                result = i+1
+                message = "%s angle is %s (|cos(theta)| %.4f > %.4f threshold)" % (repr(Ang1), desc, cos1, thre)
+            elif cos2 > thre:
+                result = i+1
+                message = "%s angle is %s (|cos(theta)| %.4f > %.4f threshold)" % (repr(Ang2), desc, cos2, thre)
+        return result, message
+
 class MultiDihedral(PrimitiveCoordinate): # pragma: no cover
     def __init__(self, a, b, c, d):
         if type(a) is int:
@@ -1571,8 +1787,8 @@ class OutOfPlane(PrimitiveCoordinate):
         if type(self) is not type(other): return False
         if self.a == other.a:
             if {self.b, self.c, self.d} == {other.b, other.c, other.d}:
-                if [self.b, self.c, self.d] != [other.b, other.c, other.d]:
-                    logger.warning("Warning: OutOfPlane atoms are the same, ordering is different\n")
+                # if [self.b, self.c, self.d] != [other.b, other.c, other.d]:
+                #     logger.warning("Warning: OutOfPlane atoms are the same, ordering is different\n")
                 return True
         #     if self.b == other.b:
         #         if self.c == other.c:
@@ -1663,6 +1879,37 @@ class OutOfPlane(PrimitiveCoordinate):
                 deriv2[ii, j, :, :] = fderiv
         return deriv2
 
+    def diagnostic(self, xyz):
+        # result = 3 or above: failure of the IC system is imminent
+        # result = 2: IC may fail for small perturbations from the provided geometry
+        # result = 1: IC is unsuitable for the provided geometry, should pay attention
+        LinThres = [0.95, 0.98, 0.99]
+        descrips = ["close to linear", "very close to linear", "extremely close to linear"]
+        a = self.a
+        b = self.b
+        c = self.c
+        d = self.d
+        Ang1 = Angle(a,b,c)
+        Ang2 = Angle(b,c,d)
+        result = 0
+        message = "no problems detected"
+        cos1 = np.abs(np.cos(Ang1.value(xyz)))
+        cos2 = np.abs(np.cos(Ang2.value(xyz)))
+        cos3 = np.abs(np.dot(Ang1.normal_vector(xyz), Ang2.normal_vector(xyz)))
+        for i in range(len(LinThres)):
+            thre = LinThres[i]
+            desc = descrips[i]
+            if cos1 > thre and cos2 > thre:
+                result = i+2
+                message = "%s and %s angles are %s (|cos(theta)| %.4f, %.4f > %.4f threshold)" % (repr(Ang1), repr(Ang2), desc, cos1, cos2, thre)
+            elif cos1 > thre:
+                result = i+1
+                message = "%s angle is %s (|cos(theta)| %.4f > %.4f threshold)" % (repr(Ang1), desc, cos1, thre)
+            elif cos2 > thre:
+                result = i+1
+                message = "%s angle is %s (|cos(theta)| %.4f > %.4f threshold)" % (repr(Ang2), desc, cos2, thre)
+        return result, message
+
 def convert_angstroms_degrees(prims, values):
     """ Convert values of primitive ICs (or differences) from
     weighted atomic units to Angstroms and degrees. """
@@ -1720,8 +1967,8 @@ class InternalCoordinates(object):
         for i in range(Der.shape[0]):
             WilsonB.append(Der[i].flatten())
         self.stored_wilsonB[xhash] = np.array(WilsonB)
-        if len(self.stored_wilsonB) > 1000 and not CacheWarning:
-            logger.warning("\x1b[91mWarning: more than 1000 B-matrices stored, memory leaks likely\x1b[0m\n")
+        if len(self.stored_wilsonB) > 10000 and not CacheWarning:
+            logger.warning("\x1b[91mWarning: more than 10000 B-matrices stored, memory leaks likely\x1b[0m\n")
             CacheWarning = True
         ans = np.array(WilsonB)
         return ans
@@ -1740,6 +1987,8 @@ class InternalCoordinates(object):
         # Perform singular value decomposition
         click()
         loops = 0
+        # The expected number of nonzero eigenvalues.
+        Expect = self.expected_dof()
         while True:
             try:
                 G = self.GMatrix(xyz)
@@ -1760,14 +2009,35 @@ class InternalCoordinates(object):
         Sinv = np.zeros_like(S)
         LargeVals = 0
         for ival, value in enumerate(S):
-            # print "%.5e % .5e" % (ival,value)
+            # if ival == (3*xyz.shape[0]-1):
+            #     print("SVD: %5i % .5e" % (ival,value))
             if np.abs(value) > 1e-6:
                 LargeVals += 1
                 Sinv[ival] = 1/value
-        # print "%i atoms; %i/%i singular values are > 1e-6" % (xyz.shape[0], LargeVals, len(S))
+        # print("SVD Condition Number: % .5e" % (S[0]/S[3*xyz.shape[0]-1]))
+        # if LargeVals < 3*xyz.shape[0]:
+        #     print("%3i degrees of freedom; %i/%i singular values are > 1e-6" % (3*xyz.shape[0], LargeVals, len(S)))
         Sinv = np.diag(Sinv)
         Inv = multi_dot([V, Sinv, UT])
+        if G.shape[0] < Expect:
+            # Return a very large number if the G-matrix dimension is actually smaller than expected.
+            # This can happen if we lost a DoF at the stage of forming the DLCs.
+            self.GCond_Inverse = S[0]/S[-1]
+        else:
+            self.GCond_Inverse = S[0]/S[Expect-1]
         return Inv
+
+    def G_condition(self, xyz):
+        # Calculate the condition number of the G matrix.
+        G = self.GMatrix(xyz)
+        # The expected number of nonzero eigenvalues.
+        # Expect = self.expected_dof()
+        # if G.shape[0] < Expect:
+        #     # Return a very large number if the G-matrix dimension is actually smaller than expected.
+        #     # This can happen if we lost a DoF at the stage of forming the DLCs.
+        #     return 1e15
+        U, S, VT = np.linalg.svd(G)
+        return S[0]/S[-1]
 
     def GInverse_EIG(self, xyz): # pragma: no cover
         # Currently unused function, but could possibly speed up calculations
@@ -1930,65 +2200,86 @@ class InternalCoordinates(object):
         self.stored_newxyz = newxyz.copy()
 
     def newCartesian(self, xyz, dQ, verbose=True):
+	# Perform iterations to find new coordinates starting from xyz
+	# with the requested internal coordinate change dQ.
         cached = self.readCache(xyz, dQ)
         if cached is not None:
-            # print "Returning cached result"
             return cached
+	# The coordinates at the start of each iteration
         xyz1 = xyz.copy()
+	# The required IC change at the start of each iteration
         dQ1 = dQ.copy()
-        # Iterate until convergence:
+	# Iteration counter
         microiter = 0
-        ndqs = []
+	# The history of the required IC changes; should converge with iteration nr.
+        ndqs = [np.linalg.norm(dQ)]
+	# The current-best (smallest) IC change out of all iterations taken
+        ndqt = ndqs[0]
+	# The RMSD of the Cartesian step taken
         rmsds = []
+	# Whether we failed to get the desired step
         self.bork = False
         # Damping factor
         damp = 1.0
         # Function to exit from loop
-        if verbose >= 2: logger.info("    InternalCoordinates.newCartesian converting internal to Cartesian step\n")
+        if verbose >= 2: logger.info("    InternalCoordinates.newCartesian converting internal to Cartesian step (desired |dQ| = %.3e)\n" % np.linalg.norm(dQ))
         def finish(microiter, rmsdt, ndqt, xyzsave, xyz_iter1):
+            # This function returns the result, and is called from inside the iterations.
             if ndqt > 1e-1:
-                if verbose: logger.info("      newCartesian Iter: %i Failed to obtain coordinates (rmsd = %.3e |dQ| = %.3e)\n" % (microiter, rmsdt, ndqt))
+                if verbose: logger.info("      newCartesian Iter: %i Failed to obtain coordinates (rmsd = %.3e Err-dQ = %.3e)\n" % (microiter, rmsdt, ndqt))
                 self.bork = True
                 self.writeCache(xyz, dQ, xyz_iter1)
+                # Return the result after taking just one step.
                 return xyz_iter1.flatten()
             elif ndqt > 1e-3:
-                if verbose: logger.info("      newCartesian Iter: %i Approximate coordinates obtained (rmsd = %.3e |dQ| = %.3e)\n" % (microiter, rmsdt, ndqt))
+                if verbose: logger.info("      newCartesian Iter: %i Approximate coordinates obtained (rmsd = %.3e Err-dQ = %.3e)\n" % (microiter, rmsdt, ndqt))
             else:
-                if verbose: logger.info("      newCartesian Iter: %i Cartesian coordinates obtained (rmsd = %.3e |dQ| = %.3e)\n" % (microiter, rmsdt, ndqt))
+                if verbose: logger.info("      newCartesian Iter: %i Cartesian coordinates obtained (rmsd = %.3e Err-dQ = %.3e)\n" % (microiter, rmsdt, ndqt))
+            # Return the final result.
             self.writeCache(xyz, dQ, xyzsave)
             return xyzsave.flatten()
         fail_counter = 0
+        # Start iterations.
         while True:
             microiter += 1
+            # Get generalized inverse of Wilson B-matrix
             Bmat = self.wilsonB(xyz1)
             Ginv = self.GInverse(xyz1)
             # Get new Cartesian coordinates
             dxyz = damp*multi_dot([Bmat.T,Ginv,dQ1.T])
             xyz2 = xyz1 + np.array(dxyz).flatten()
+            rmsd = np.sqrt(np.mean((np.array(xyz2-xyz1).flatten())**2))
+            # The coordinates after the first step are saved no matter good or bad.
             if microiter == 1:
                 xyzsave = xyz2.copy()
                 xyz_iter1 = xyz2.copy()
+                rmsdt = rmsd
             # Calculate the actual change in internal coordinates
             dQ_actual = self.calcDiff(xyz2, xyz1)
-            rmsd = np.sqrt(np.mean((np.array(xyz2-xyz1).flatten())**2))
-            ndq = np.linalg.norm(dQ1-dQ_actual)
-            if len(ndqs) > 0:
-                if ndq > ndqt:
-                    if verbose >= 2: logger.info("      newCartesian Iter: %i Err-dQ (Best) = %.5e (%.5e) RMSD: %.5e Damp: %.5e (Bad)\n" % (microiter, ndq, ndqt, rmsd, damp))
-                    damp /= 2
-                    fail_counter += 1
-                    # xyz2 = xyz1.copy()
-                else:
-                    if verbose >= 2: logger.info("      newCartesian Iter: %i Err-dQ (Best) = %.5e (%.5e) RMSD: %.5e Damp: %.5e (Good)\n" % (microiter, ndq, ndqt, rmsd, damp))
-                    fail_counter = 0
-                    damp = min(damp*1.2, 1.0)
-                    rmsdt = rmsd
-                    ndqt = ndq
-                    xyzsave = xyz2.copy()
+            if hasattr(self, 'Prims'):
+                Prims = self.Prims
             else:
-                if verbose >= 2: logger.info("      newCartesian Iter: %i Err-dQ = %.5e RMSD: %.5e Damp: %.5e\n" % (microiter, ndq, rmsd, damp))
+                Prims = self
+            dQ_Prims = Prims.calcDiff(xyz2, xyz1)
+            # dQ1-dQ_actual is the remaining IC step needed to achieve convergence
+            ndq = np.linalg.norm(dQ1-dQ_actual)
+            if ndq > ndqt:
+                # Bad result: |dQ1-dQ_actual| increases from previous iteration
+                # Discard the IC step and retry with damping.
+                if verbose >= 2: logger.info("      newCartesian Iter: %i |dQ(Step)| = %.5e Err-dQ (Best) = %.5e (%.5e) RMSD: %.5e Damp: %.5e Gcond: %.5e (Bad)\n" 
+                                             % (microiter, np.linalg.norm(dQ_actual), ndq, ndqt, rmsd, damp, self.GCond_Inverse))
+                damp /= 2
+                fail_counter += 1
+                xyz2 = xyz1.copy()
+                dQ_actual *= 0
+            else:
+                if verbose >= 2: logger.info("      newCartesian Iter: %i |dQ(Step)| = %.5e Err-dQ (Best) = %.5e (%.5e) RMSD: %.5e Damp: %.5e Gcond: %.5e (Good)\n" 
+                                             % (microiter, np.linalg.norm(dQ_actual), ndq, ndqt, rmsd, damp, self.GCond_Inverse))
+                fail_counter = 0
+                damp = min(damp*1.2, 1.0)
                 rmsdt = rmsd
                 ndqt = ndq
+                xyzsave = xyz2.copy()
             ndqs.append(ndq)
             rmsds.append(rmsd)
             # Check convergence / fail criteria
@@ -1998,18 +2289,26 @@ class InternalCoordinates(object):
                 return finish(microiter, rmsdt, ndqt, xyzsave, xyz_iter1)
             if microiter == 50:
                 return finish(microiter, rmsdt, ndqt, xyzsave, xyz_iter1)
-            # Figure out the further change needed
+            # The next IC step required to reach convergence.
             dQ1 = dQ1 - dQ_actual
             xyz1 = xyz2.copy()
-            
+
 class PrimitiveInternalCoordinates(InternalCoordinates):
-    def __init__(self, molecule, connect=False, addcart=False, constraints=None, cvals=None, **kwargs):
+    def __init__(self, molecule, connect=False, addcart=False, constraints=None, cvals=None, repulsions=[], transfers=[], connect_isolated=True, **kwargs):
         super(PrimitiveInternalCoordinates, self).__init__()
         self.connect = connect
         self.addcart = addcart
+        self.connect_isolated = connect_isolated
         self.Internals = []
+        self.repulsions = repulsions
+        # self.nbpairs = nbpairs
+        # Atom transfer from donor to acceptor
+        # This should be a list of 3-tuples as (D, H, A)
+        # where D-H......A becomes D......H-A
+        self.transfers = transfers
         self.cPrims = []
         self.cVals = []
+        self.sync = []
         self.Rotators = OrderedDict()
         self.elem = molecule.elem
         # List of fragments as determined by residue ID, distance criteria or bond order
@@ -2022,11 +2321,33 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         # Note that reorderPrimitives() _must_ be updated with each new InternalCoordinate class written.
         self.reorderPrimitives()
 
+    def expected_dof(self, xyz=None, linear_check=False):
+        """ Return the expected number of nonredundant degrees of freedom. """
+        natoms = len(self.elem)
+        if self.addcart or (not self.connect):
+            # if self.addcart is true, then a full set of Cartesian coords is added (HDLC).
+            # if self.connect is false, then it is either HDLC (addcart=True) or TRIC (addcart=False).
+            # In these cases we expect 3*natoms degrees of freedom.
+            return 3*natoms
+        else:
+            # These situations correspond to ICs that do not span overall translation and rotation.
+            if natoms == 2 or (linear_check and is_linear(xyz, xyz)):
+                # When the entire system is linear, there are 3n-5 DoFs
+                return 3*natoms-5
+            else:
+                # Otherwise, there are 3n-6 DoFs
+                return 3*natoms-6
+
     def makePrimitives(self, molecule, connect, addcart):
         # force_bonds=False is set because we don't want to override
         # bond order-based bonds that may have been obtained earlier.
         molecule.build_topology(force_bonds=False)
-        connect_isolated = True
+        transfer_atoms = []
+        transfer_bonds = []
+        for (d, h, a) in self.transfers:
+            transfer_bonds.append((min(d, h), max(d, h)))
+            transfer_bonds.append((min(a, h), max(a, h)))
+            transfer_atoms.append(h)
         if 'resid' in molecule.Data.keys():
             # Create fragments corresponding to unique resID numbers if provided.
             frags = []
@@ -2047,11 +2368,12 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         else:
             # Create fragments based on connectivity in provided molecule object.
             frags = [list(m.nodes()) for m in molecule.molecules]
-            if connect_isolated:
+            if self.connect_isolated:
                 isolates = [list(m.nodes())[0] for m in molecule.molecules if len(m.nodes()) == 1]
                 for i in isolates:
+                    # if i in transfer_atoms: continue
                     j = molecule.get_closest_atom(i, pbc=False)[0]
-                    logger.info("Creating artificial bond to isolated atom: %i-%i\n" % (i+1, j+1))
+                    # logger.info("Creating artifical bond to isolated atom: %i-%i\n" % (i+1, j+1))
                     molecule.bonds.append((i, j))
                 old_read_bonds = molecule.top_settings['read_bonds']
                 molecule.top_settings['read_bonds'] = True
@@ -2165,7 +2487,60 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
 
         # Add an internal coordinate for bonded atom pairs
         for (a, b) in molecule.topology.edges():
+            bond = (min(a, b), max(a, b))
+            if bond in transfer_bonds:
+                continue
             self.add(Distance(a, b))
+            
+        for (a, b) in self.repulsions:
+            (a, b) = (min(a, b), max(a, b))
+            if a >= len(self.elem) or b >= len(self.elem):
+                raise RuntimeError("The provided repulsion %i,%i is greater than the number of atoms in the system" % (a, b))
+            rab = (Radii[Elements.index(self.elem[a])-1] + Radii[Elements.index(self.elem[b])-1])*ang2bohr
+            if Distance(a, b) in self.Internals:
+                self.delete(Distance(a, b))
+                # raise RuntimeError("Repulsion %i-%i is in existing list of Distances" % (a, b))
+                # Replace the distance with a repulsion
+                # This has caused lack of convergence issues, so it's commented out.
+                # Prim = self.Internals[self.Internals.index((Distance(a, b)))]
+                # Prim.rab = 4*rab
+                # Prim.n = -1
+            # else:
+            self.add(Distance(a, b, rab=4*rab, n=-1))
+            # self.add(Exponential(a, b, rab=1.6*rab, alpha=1.6, w=1.0))
+            for TranslationType in [TranslationX, TranslationY, TranslationZ]:
+                APrims = []
+                BPrims = []
+                for Prim in [p for p in self.Internals if type(p) is TranslationType]:
+                    if a in Prim.a:
+                        APrims.append(Prim)
+                    if b in Prim.a:
+                        BPrims.append(Prim)
+                if len(APrims) != 1 or len(BPrims) != 1: continue
+                APrim = APrims[0]
+                BPrim = BPrims[0]
+                if APrim.a != BPrim.a:
+                    if len(APrim.a) >= len(BPrim.a):
+                        BPrim.a.append(a)
+                        BPrim.w = np.append(BPrim.w, -1.0)
+                        # BPrim.a += APrim.a[:]
+                        # BPrim.w = np.append(BPrim.w, -APrim.w)
+                        # print("New translation coordinate:")
+                        # print(BPrim.a, BPrim.w)
+                    else:
+                        APrim.a.append(b)
+                        APrim.w = np.append(APrim.w, -1.0)
+                        # APrim.a += BPrim.a[:]
+                        # APrim.w = np.append(APrim.w, -BPrim.w)
+                        # print("New translation coordinate:")
+                        # print(APrim.a, APrim.w)
+
+        for (a, b, c) in self.transfers:
+            self.add(DistanceDifference(a, b, c))
+            rab = (Radii[Elements.index(self.elem[a])-1] + Radii[Elements.index(self.elem[b])-1])*ang2bohr
+            rbc = (Radii[Elements.index(self.elem[b])-1] + Radii[Elements.index(self.elem[c])-1])*ang2bohr
+            rac = (Radii[Elements.index(self.elem[a])-1] + Radii[Elements.index(self.elem[c])-1])*ang2bohr
+            self.add(ReducedDistance(a, b, c, rab=rab, rbc=rbc, n=2))
 
         # Linear angle threshold - corresponds to about 162 degrees.
         LinThre   = 0.95
@@ -2217,17 +2592,44 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                             nnc = (min(a, b), max(a, b)) in noncov
                             nnc += (min(b, c), max(b, c)) in noncov
                             nnc += (min(b, d), max(b, d)) in noncov
-                            # if nnc >= 1: continue
+                            candidates = []
+                            maxdists = []
+                            # First pass: build the list of candidate angles that we can replace with an OutOfPlane
                             for i, j, k in sorted(list(itertools.permutations([a, c, d], 3))):
                                 Ang1 = Angle(b,i,j)
                                 Ang2 = Angle(i,j,k)
+                                rbi = (Radii[Elements.index(self.elem[b])-1] + Radii[Elements.index(self.elem[i])-1])
+                                rbj = (Radii[Elements.index(self.elem[b])-1] + Radii[Elements.index(self.elem[j])-1])
+                                maxdist = max(Distance(b, i).value(coords)/rbi, Distance(b, j).value(coords)/rbj)
                                 if np.abs(np.cos(Ang1.value(coords))) > LinThre: continue
                                 if np.abs(np.cos(Ang2.value(coords))) > LinThre: continue
-                                if np.abs(np.dot(Ang1.normal_vector(coords), Ang2.normal_vector(coords))) > LinThre:
-                                    self.delete(Angle(i, b, j))
-                                    self.add(OutOfPlane(b, i, j, k))
-                                    break
-                                
+                                if np.abs(np.dot(Ang1.normal_vector(coords), Ang2.normal_vector(coords))) < LinThre: continue
+                                if any([set(x).issubset(set([a, b, c, d])) for x in self.transfers]): continue
+                                # self.delete(Angle(i, b, j))
+                                # self.add(OutOfPlane(b, i, j, k))
+                                # break
+                                candidates.append((i, b, j, k))
+                                maxdists.append(maxdist)
+                            if not candidates: continue
+                            # Second pass: make sure to remove an angle that has close to the maximum distance
+                            # but don't switch if the ordering of distances is swapped minutely
+                            for i, j, k in sorted(list(itertools.permutations([a, c, d], 3))):
+                                Ang1 = Angle(b,i,j)
+                                Ang2 = Angle(i,j,k)
+                                rbi = (Radii[Elements.index(self.elem[b])-1] + Radii[Elements.index(self.elem[i])-1])
+                                rbj = (Radii[Elements.index(self.elem[b])-1] + Radii[Elements.index(self.elem[j])-1])
+                                maxdist = max(Distance(b, i).value(coords)/rbi, Distance(b, j).value(coords)/rbj)
+                                if np.abs(np.cos(Ang1.value(coords))) > LinThre: continue
+                                if np.abs(np.cos(Ang2.value(coords))) > LinThre: continue
+                                if np.abs(np.dot(Ang1.normal_vector(coords), Ang2.normal_vector(coords))) < LinThre: continue
+                                if any([set(x).issubset(set([a, b, c, d])) for x in self.transfers]): continue
+                                if maxdist <= 0.8*max(maxdists): continue
+                                # print("Deleting Angle %i-%i-%i for OutOfPlane %i-%i-%i-%i; maxdist %.3f (%.1f%% of %.3f)" 
+                                #       % (i+1, b+1, j+1, b+1, i+1, j+1, k+1, maxdist, 100*maxdist/max(maxdists), max(maxdists)))
+                                if Angle(i, b, j) in self.Internals: self.delete(Angle(i, b, j))
+                                self.add(OutOfPlane(b, i, j, k))
+                                break
+                                    
         # Find groups of atoms that are in straight lines
         atom_lines = [list(i) for i in molecule.topology.edges()]
         while True:
@@ -2265,6 +2667,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         #     print "Lines of three or more atoms:", ', '.join(['-'.join(["%i" % (i+1) for i in l]) for l in lthree])
 
         # Normal dihedral code
+        dihedral_idx = []
         for aline in atom_lines_uniq:
             # Go over ALL pairs of atoms in a line
             for (b, c) in itertools.combinations(aline, 2):
@@ -2285,8 +2688,12 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                             # (should be eliminated already)
                             if np.abs(np.cos(Ang1.value(coords))) > LinThre: continue
                             if np.abs(np.cos(Ang2.value(coords))) > LinThre: continue
+                            # if any([set(x).issubset(set([a, b, c, d])) for x in self.transfers]): 
+                            #     logger.info("Skipping dihedral %i-%i-%i-%i due to transfer" % (a+1, b+1, c+1, d+1))
+                            #     continue
                             self.add(Dihedral(a, b, c, d))
-            
+                            dihedral_idx.append((a, b, c, d))
+                                    
         ### Following are codes that evaluate angles and dihedrals involving entire lines-of-atoms
         ### as single degrees of freedom
         ### Unfortunately, they do not seem to improve the performance
@@ -2455,6 +2862,26 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         for rot in self.Rotators.values():
             rot.reset(xyz)
 
+    def diagnostics(self, xyz, verbose=False, print_thre=3, full_output=False):
+        warning_results = []
+        warning_messages = []
+        header = 0
+        print_str = ""
+        for i, Internal in enumerate(self.Internals):
+            result, message = Internal.diagnostic(xyz)
+            warning_results.append(result)
+            warning_messages.append(message)
+            if result >= print_thre:
+                if not header:
+                    print_str += "%5s %50s %6s %-50s\n" % ("#N", "Primitive-IC", "Status", "Message")
+                    header = True
+                print_str += "%5i %50s %6i %-50s\n" % (i, repr(Internal), result, message)
+        if verbose: logger.info(print_str)
+        if full_output:
+            return max(warning_results), print_str, warning_results, warning_messages
+        else:
+            return max(warning_results), print_str
+
     def torsionConstraintLinearAngles(self, coords, thre=175):
         """
         Check if a torsion constrained optimization is about to fail
@@ -2552,13 +2979,50 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         # 5) 3
         return np.array(answer)
     
-    def calcDiff(self, xyz1, xyz2):
+    def calcDiff(self, xyz1, xyz2, sync=0):
         """ Calculate difference in internal coordinates (coord1-coord2), accounting for changes in 2*pi of angles. """
         answer = []
-        for Internal in self.Internals:
-            answer.append(Internal.calcDiff(xyz1, xyz2))
+        for i, Internal in enumerate(self.Internals):
+            diff = Internal.calcDiff(xyz1, xyz2)
+            if sync != 0 and i in self.sync:
+                # Sometimes, e.g. during interpolation, multiple dihedrals can change in opposite directions
+                # resulting in clashes. By turning on the sync flag we ensure the change is always in the same direction.
+                if sync == 1 and diff < -np.pi/2:
+                    # print("dihedral-sync %i: %50s %.3f -> %.3f" % (sync, Internal, diff, diff+2*np.pi))
+                    diff += 2*np.pi
+                elif sync == -1 and diff > np.pi/2:
+                    # print("dihedral-sync %i: %50s %.3f -> %.3f" % (sync, Internal, diff, diff-2*np.pi))
+                    diff -= 2*np.pi
+                elif sync not in [-1, 1]:
+                    raise RuntimeError("Invalid value of sync")
+            answer.append(diff)
         return np.array(answer)
-    
+
+    def syncDihedrals(self, xyz1, xyz2):
+        answer = self.calcDiff(xyz1, xyz2)
+        dih_by_trip = {}
+        for i, Prim in enumerate(self.Internals):
+            if type(Prim) is Dihedral:
+                dih_by_trip.setdefault((Prim.a, Prim.b, Prim.c), []).append(i)
+                dih_by_trip.setdefault((Prim.d, Prim.c, Prim.b), []).append(i)
+        for (a, b, c), dihIdx in dih_by_trip.items():
+            # Being conservative here; only sync dihedrals where a-b-c are bonded and angles are not linear.
+            if np.abs(Distance(a, b).calcDiff(xyz2, xyz1)) > 0.5: continue
+            if np.abs(Distance(b, c).calcDiff(xyz2, xyz1)) > 0.5: continue
+            if np.abs(np.cos(Angle(a, b, c).value(xyz1))) > 0.95: continue
+            if np.abs(np.cos(Angle(a, b, c).value(xyz2))) > 0.95: continue
+            diffs = np.array([answer[i] for i in dihIdx])
+            if all(np.abs(diffs) > np.pi/2) and len(np.unique(np.sign(diffs))) > 1:
+                for i in dihIdx:
+                    self.sync.append(i)
+                    # print("Turning on dihedral sync for", self.Internals[i])
+                    # self.Internals[i].sync = True
+                    # if answer[i] < 0:
+                    #     answer[i] += 2*np.pi
+                # print("Dihedrals with center bond %s:" % str(bond))
+                # for i in dihIdx:
+                #     print("%50s %.3f" % (self.Internals[i], answer[i]))
+     
     def GInverse(self, xyz):
         return self.GInverse_SVD(xyz)
 
@@ -2567,9 +3031,24 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
             self.Internals.append(dof)
 
     def delete(self, dof):
+        deleted = False
         for ii in range(len(self.Internals))[::-1]:
             if dof == self.Internals[ii]:
                 del self.Internals[ii]
+                deleted = True
+        if not deleted:
+            logger.warning("Warning: Attempted to delete %s but it does not exist in this object\n" % dof)
+            raise RuntimeError
+
+    def delete_type(self, doftype):
+        deleted = False
+        for ii in range(len(self.Internals))[::-1]:
+            if doftype == type(self.Internals[ii]):
+                # logger.warning("Deleting %s\n" % self.Internals[ii])
+                del self.Internals[ii]
+                deleted = True
+        if not deleted:
+            logger.warning("Warning: Attempted to delete type %s but it does not exist in this object\n" % doftype)
 
     def addConstraint(self, cPrim, cVal=None, xyz=None):
         if cVal is None and xyz is None:
@@ -2593,15 +3072,19 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
     def reorderPrimitives(self):
         # Reorder primitives to be in line with cc's code
         newPrims = []
+        newSync = []
         for cPrim in self.cPrims:
             newPrims.append(cPrim)
-        for typ in [Distance, Angle, LinearAngle, MultiAngle, OutOfPlane, Dihedral, MultiDihedral, CartesianX, CartesianY, CartesianZ, TranslationX, TranslationY, TranslationZ, RotationA, RotationB, RotationC]:
-            for p in self.Internals:
+        for typ in [Distance, DistanceDifference, ReducedDistance, Angle, LinearAngle, MultiAngle, OutOfPlane, Dihedral, MultiDihedral, CartesianX, CartesianY, CartesianZ, TranslationX, TranslationY, TranslationZ, RotationA, RotationB, RotationC]:
+            for i, p in enumerate(self.Internals):
                 if type(p) is typ and p not in self.cPrims:
                     newPrims.append(p)
+                    if i in self.sync:
+                        newSync.append(len(newPrims)-1)
         if len(newPrims) != len(self.Internals):
             raise RuntimeError("Not all internal coordinates have been accounted for. You may need to add something to reorderPrimitives()")
         self.Internals = newPrims
+        self.sync = newSync
 
     def getConstraints_from(self, other):
         if other.haveConstraints():
@@ -2792,7 +3275,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
 
     
 class DelocalizedInternalCoordinates(InternalCoordinates):
-    def __init__(self, molecule, imagenr=0, build=False, connect=False, addcart=False, constraints=None, cvals=None, remove_tr=False, cart_only=False, conmethod=0):
+    def __init__(self, molecule, imagenr=0, build=False, connect=False, addcart=False, constraints=None, cvals=None, remove_tr=False, cart_only=False, conmethod=0, repulsions=[], transfers=[], connect_isolated=True):
         super(DelocalizedInternalCoordinates, self).__init__()
         # cart_only is just because of how I set up the class structure.
         if cart_only: return
@@ -2808,7 +3291,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         # Add Cartesian coordinates to all.
         self.addcart = addcart
         # The DLC contains an instance of primitive internal coordinates.
-        self.Prims = PrimitiveInternalCoordinates(molecule, connect=connect, addcart=addcart, constraints=constraints, cvals=cvals)
+        self.Prims = PrimitiveInternalCoordinates(molecule, connect=connect, addcart=addcart, constraints=constraints, cvals=cvals, repulsions=repulsions, transfers=transfers, connect_isolated=connect_isolated)
         self.frags = self.Prims.frags
         self.na = molecule.na
         # Whether constraints have been enforced previously
@@ -2834,9 +3317,12 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         
     def join(self, other):
         return self.Prims.join(other.Prims)
+
+    def expected_dof(self, xyz=None, linear_check=False):
+        return self.Prims.expected_dof(xyz, linear_check)
         
-    def addConstraint(self, cPrim, cVal, xyz):
-        self.Prims.addConstraint(cPrim, cVal, xyz)
+    def addConstraint(self, cPrim, cVal=None, xyz=None):
+        self.Prims.addConstraint(cPrim, cVal=cVal, xyz=xyz)
 
     def getConstraints_from(self, other):
         self.Prims.getConstraints_from(other.Prims)
@@ -3062,9 +3548,12 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
                 LargeVals += 1
                 LargeIdx.append(ival)
         Expect = 3*self.na
-        # print "%i atoms (expect %i coordinates); %i/%i singular values are > 1e-6" % (self.na, Expect, LargeVals, len(L))
+        # print("%i atoms (expect %i coordinates); %i/%i singular values are > 1e-6" % (self.na, Expect, LargeVals, len(L)))
         # if LargeVals <= Expect:
         self.Vecs = Q[:, LargeIdx]
+        # print(G.shape, self.Vecs.shape, len(self.Prims.Internals))
+        # if self.Vecs.shape[0] != len(self.Prims.Internals):
+        #     print(self.Prims)
 
         # Vecs has number of rows equal to the number of primitives, and
         # number of columns equal to the number of delocalized internal coordinates.
@@ -3194,7 +3683,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
             raise RuntimeError("Expected at least %i delocalized coordinates, but got only %i" % (Expect, ncon + len(LargeIdx)))
         # print("%i atoms (expect %i coordinates); %i/%i singular values are > 1e-6" % (self.na, Expect, LargeVals, len(L)))
         
-        # Create "generalized" DLCs where the first six columns are the constrained primitive ICs
+        # Create "generalized" DLCs where the first few columns are the constrained primitive ICs
         # and the other columns are the DLCs formed from the rest
         self.Vecs = np.zeros((nprim, ncon+LargeVals), dtype=float)
         for i in range(ncon):
@@ -3203,7 +3692,12 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
 
         # Perform Gram-Schmidt orthogonalization
         def ov(vi, vj):
-            return multi_dot([vi, G, vj])
+            answer = multi_dot([vi, G, vj])
+            if (vi == vj).all():
+                return max(0.0, answer)
+            else:
+                return answer
+                
         if self.haveConstraints():
             click()
             V = self.Vecs.copy()
@@ -3218,6 +3712,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
                 # Copy V column corresponding to the next constraint to U.
                 U[:, ic] = V[:, ic].copy()
                 ui = U[:, ic]
+
                 Unorms[ic] = np.sqrt(ov(ui, ui))
                 if Unorms[ic]/Vnorms[ic] < 0.1:
                     logger.warning("Constraint %i is almost redundant; after projection norm is %.3f of original\n" % (ic, Unorms[ic]/Vnorms[ic]))
@@ -3259,6 +3754,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         # print(L)
 
     def build_dlc(self, xyz):
+        self.clearCache()
         if self.conmethod == 1:
             return self.build_dlc_1(xyz)
         elif self.conmethod == 0:
@@ -3400,11 +3896,14 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
     def printRotations(self, xyz):
         return self.Prims.printRotations(xyz)
 
-    def calcDiff(self, coord1, coord2):
+    def calcDiff(self, coord1, coord2, sync=False):
         """ Calculate difference in internal coordinates (coord1-coord2), accounting for changes in 2*pi of angles. """
-        PMDiff = self.Prims.calcDiff(coord1, coord2)
+        PMDiff = self.Prims.calcDiff(coord1, coord2, sync=sync)
         Answer = np.dot(PMDiff, self.Vecs)
         return np.array(Answer).flatten()
+
+    def syncDihedrals(self, xyz1, xyz2):
+        self.Prims.syncDihedrals(xyz1, xyz2)
 
     def calculate(self, coords):
         """ Calculate the DLCs given the Cartesian coordinates. """
@@ -3459,6 +3958,9 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
     def resetRotations(self, xyz):
         """ Reset the reference geometries for calculating the orientational variables. """
         self.Prims.resetRotations(xyz)
+
+    def diagnostics(self, xyz, verbose=False, print_thre=3, full_output=False):
+        return self.Prims.diagnostics(xyz, verbose=verbose, print_thre=print_thre, full_output=full_output)
 
 class CartesianCoordinates(PrimitiveInternalCoordinates):
     """

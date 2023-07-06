@@ -762,7 +762,7 @@ def get_rotate_translate(matrix1,matrix2):
 def cartesian_product2(arrays):
     """ Form a Cartesian product of two NumPy arrays. """
     la = len(arrays)
-    arr = np.empty([len(a) for a in arrays] + [la], dtype=np.int32)
+    arr = np.empty([len(a) for a in arrays] + [la], dtype=int)
     for i, a in enumerate(np.ix_(*arrays)):
         arr[...,i] = a
     return arr.reshape(-1, la)
@@ -899,7 +899,12 @@ def arc(Mol, begin=None, end=None, RMSD=True, align=True):
     if RMSD:
         Arc = Mol.pathwise_rmsd(align)
     else:
-        Arc = np.array([np.max([np.linalg.norm(Mol.xyzs[i+1][j]-Mol.xyzs[i][j]) for j in range(Mol.na)]) for i in range(begin, end-1)])
+        Arc = []
+        for i in range(begin, end-1):
+            dmax = np.max([np.linalg.norm(Mol.xyzs[i+1][j]-Mol.xyzs[i][j]) for j in range(Mol.na)])
+            if dmax < 1e-15: dmax = 1e-15
+            Arc.append(dmax)
+        Arc = np.array(Arc) #[np.max([np.linalg.norm(Mol.xyzs[i+1][j]-Mol.xyzs[i][j]) for j in range(Mol.na)]) for i in range(begin, end-1)])
     return Arc
 
 def EqualSpacing(Mol, frames=0, dx=0, RMSD=True, align=True):
@@ -920,7 +925,7 @@ def EqualSpacing(Mol, frames=0, dx=0, RMSD=True, align=True):
     frames : int
         Return a Molecule object with this number of frames.
     RMSD : bool
-        Use RMSD in the arc length calculation.
+        Use RMSD in the arc length calculation. 
 
     Returns
     -------
@@ -928,21 +933,24 @@ def EqualSpacing(Mol, frames=0, dx=0, RMSD=True, align=True):
         New molecule object, either the same one (if frames > len(Mol))
         or with equally spaced frames.
     """
+    import scipy.interpolate
     ArcMol = arc(Mol, RMSD=RMSD, align=align)
     ArcMolCumul = np.insert(np.cumsum(ArcMol), 0, 0.0)
     if frames != 0 and dx != 0:
         logger.error("Provide dx or frames or neither")
     elif dx != 0:
         frames = int(float(max(ArcMolCumul))/dx)
+        if frames == 0: frames = 1
     elif frames == 0:
         frames = len(ArcMolCumul)
-
     ArcMolEqual = np.linspace(0, max(ArcMolCumul), frames)
     xyzold = np.array(Mol.xyzs)
     xyznew = np.zeros((frames, Mol.na, 3))
     for a in range(Mol.na):
         for i in range(3):
-            xyznew[:,a,i] = np.interp(ArcMolEqual, ArcMolCumul, xyzold[:, a, i])
+            cs = scipy.interpolate.CubicSpline(ArcMolCumul, xyzold[:, a, i])
+            xyznew[:,a,i] = cs(ArcMolEqual)
+            # xyznew[:,a,i] = np.interp(ArcMolEqual, ArcMolCumul, xyzold[:, a, i])
     if len(xyzold) == len(xyznew):
         Mol1 = copy.deepcopy(Mol)
     else:
@@ -1383,6 +1391,8 @@ class Molecule(object):
         The Molecule class has list-like behavior, so we can get slices of it.
         If we say MyMolecule[0:10], then we'll return a copy of MyMolecule with frames 0 through 9.
         """
+        if isinstance(key, np.int32) or isinstance(key, np.int64):
+            key = int(key)
         if isinstance(key, int) or isinstance(key, slice) or isinstance(key,np.ndarray) or isinstance(key,list):
             if isinstance(key, int):
                 key = [key]
@@ -1451,7 +1461,11 @@ class Molecule(object):
                 if type(other.Data[key]) is not list:
                     logger.error('Key %s in other is a FrameKey, it must be a list\n' % key)
                     raise RuntimeError
-                if isinstance(self.Data[key][0], np.ndarray):
+                if len(self.Data[key]) == 0:
+                    Sum.Data[key] = copy.deepcopy(other.Data[key])
+                elif len(other.Data[key]) == 0:
+                    Sum.Data[key] = copy.deepcopy(self.Data[key])
+                elif isinstance(self.Data[key][0], np.ndarray):
                     Sum.Data[key] = [i.copy() for i in self.Data[key]] + [i.copy() for i in other.Data[key]]
                 else:
                     Sum.Data[key] = list(self.Data[key] + other.Data[key])
@@ -2022,7 +2036,7 @@ class Molecule(object):
             for i in range(len(self)):
                 self.xyzs[i] -= self.xyzs[i].mean(0)
 
-    def build_bonds(self):
+    def build_bonds(self, extras=[]):
         """ Build the bond connectivity graph. """
         sn = self.top_settings['topframe']
         toppbc = self.top_settings['toppbc']
@@ -2138,7 +2152,7 @@ class Molecule(object):
         else:
             # Create a list of 2-tuples corresponding to combinations of atomic indices.
             # This is much faster than using itertools.combinations.
-            AtomIterator = np.ascontiguousarray(np.vstack((np.fromiter(itertools.chain(*[[i]*(self.na-i-1) for i in range(self.na)]),dtype=np.int32), np.fromiter(itertools.chain(*[range(i+1,self.na) for i in range(self.na)]),dtype=np.int32))).T)
+            AtomIterator = np.ascontiguousarray(np.vstack((np.fromiter(itertools.chain(*[[i]*(self.na-i-1) for i in range(self.na)]),dtype=int), np.fromiter(itertools.chain(*[range(i+1,self.na) for i in range(self.na)]),dtype=int))).T)
 
         # Create a list of thresholds for determining whether a certain interatomic distance is considered to be a bond.
         BT0 = R[AtomIterator[:,0]]
@@ -2149,6 +2163,10 @@ class Molecule(object):
             dxij = AtomContact(self.xyzs[sn][np.newaxis, :], AtomIterator, box=np.array([[self.boxes[sn].a, self.boxes[sn].b, self.boxes[sn].c]]))[0]
         else:
             dxij = AtomContact(self.xyzs[sn][np.newaxis, :], AtomIterator)[0]
+
+        warn_thre = 0.2
+        if np.min(dxij) < warn_thre:
+            logger.warning("*** %i distances are less than 0.2 Angstrom - check coordinates!! ***" % np.sum(dxij<warn_thre))
 
         # Update topology settings with what we learned
         self.top_settings['toppbc'] = toppbc
@@ -2172,6 +2190,9 @@ class Molecule(object):
                     bondlist.append((i, j))
                 else:
                     bondlist.append((j, i))
+        extras_standard = [(min(i, j), max(i, j)) for (i, j) in extras]
+        for extra in extras_standard:
+            bondlist.append(extra)
         bondlist = sorted(list(set(bondlist)))
         self.Data['bonds'] = sorted(list(set(bondlist)))
         self.built_bonds = True
@@ -2207,6 +2228,7 @@ class Molecule(object):
         """
         sn = kwargs.get('topframe', self.top_settings['topframe'])
         self.top_settings['topframe'] = sn
+        extras = kwargs.get('extra_bonds', [])
         if self.na > 100000:
             logger.warning("Warning: Large number of atoms (%i), topology building may take a long time" % self.na)
         if bond_order > 0.0:
@@ -2221,10 +2243,12 @@ class Molecule(object):
                     elif ((self.elem[i] in TransitionMetals or self.elem[j] in TransitionMetals)
                           and self.qm_bondorder[sn][i, j] > bond_order*metal_bo_factor):
                         bondlist.append((i, j))
+                    elif (i, j) in extras or (j, i) in extras:
+                        bondlist.append((i, j))
             self.Data['bonds'] = sorted(list(set(bondlist)))
         # Build bonds from connectivity graph.
         elif (not self.top_settings['read_bonds']) or force_bonds:
-            self.build_bonds()
+            self.build_bonds(extras=extras)
         # Create a NetworkX graph object to hold the bonds.
         G = MyG()
         for i, a in enumerate(self.elem):
@@ -2251,8 +2275,8 @@ class Molecule(object):
 
     def distance_matrix(self, pbc=True):
         """ Obtain distance matrix between all pairs of atoms. """
-        AtomIterator = np.ascontiguousarray(np.vstack((np.fromiter(itertools.chain(*[[i]*(self.na-i-1) for i in range(self.na)]),dtype=np.int32),
-                                                       np.fromiter(itertools.chain(*[range(i+1,self.na) for i in range(self.na)]),dtype=np.int32))).T)
+        AtomIterator = np.ascontiguousarray(np.vstack((np.fromiter(itertools.chain(*[[i]*(self.na-i-1) for i in range(self.na)]),dtype=int),
+                                                       np.fromiter(itertools.chain(*[range(i+1,self.na) for i in range(self.na)]),dtype=int))).T)
         if hasattr(self, 'boxes') and pbc:
             boxes = np.array([[self.boxes[i].a, self.boxes[i].b, self.boxes[i].c] for i in range(len(self))])
             drij = AtomContact(np.array(self.xyzs), AtomIterator, box=boxes)
@@ -2262,8 +2286,8 @@ class Molecule(object):
 
     def distance_displacement(self):
         """ Obtain distance matrix and displacement vectors between all pairs of atoms. """
-        AtomIterator = np.ascontiguousarray(np.vstack((np.fromiter(itertools.chain(*[[i]*(self.na-i-1) for i in range(self.na)]),dtype=np.int32),
-                                                       np.fromiter(itertools.chain(*[range(i+1,self.na) for i in range(self.na)]),dtype=np.int32))).T)
+        AtomIterator = np.ascontiguousarray(np.vstack((np.fromiter(itertools.chain(*[[i]*(self.na-i-1) for i in range(self.na)]),dtype=int),
+                                                       np.fromiter(itertools.chain(*[range(i+1,self.na) for i in range(self.na)]),dtype=int))).T)
         if hasattr(self, 'boxes') and pbc:
             boxes = np.array([[self.boxes[i].a, self.boxes[i].b, self.boxes[i].c] for i in range(len(self))])
             drij, dxij = AtomContact(np.array(self.xyzs), AtomIterator, box=boxes, displace=True)
@@ -2399,8 +2423,8 @@ class Molecule(object):
         if groups is not None:
             AtomIterator = np.ascontiguousarray([[min(g), max(g)] for g in itertools.product(groups[0], groups[1])])
         else:
-            AtomIterator = np.ascontiguousarray(np.vstack((np.fromiter(itertools.chain(*[[i]*(self.na-i-1) for i in range(self.na)]),dtype=np.int32),
-                                                           np.fromiter(itertools.chain(*[range(i+1,self.na) for i in range(self.na)]),dtype=np.int32))).T)
+            AtomIterator = np.ascontiguousarray(np.vstack((np.fromiter(itertools.chain(*[[i]*(self.na-i-1) for i in range(self.na)]),dtype=int),
+                                                           np.fromiter(itertools.chain(*[range(i+1,self.na) for i in range(self.na)]),dtype=int))).T)
         ang13 = [(min(a[0], a[2]), max(a[0], a[2])) for a in self.find_angles()]
         dih14 = [(min(d[0], d[3]), max(d[0], d[3])) for d in self.find_dihedrals()]
         bondedPairs = np.where([tuple(aPair) in (self.bonds+ang13+dih14) for aPair in AtomIterator])[0]
@@ -2845,6 +2869,7 @@ class Molecule(object):
                 tr, rt = get_rotate_translate(xyzj, xyzi)
                 xyzj = np.dot(xyzj, rt) + tr
             rmsd = np.sqrt(3*np.mean((xyzj - xyzi) ** 2))
+            if rmsd < 1e-15: rmsd = 1e-15
             Vec[i] = rmsd
         return Vec
 
