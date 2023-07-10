@@ -738,6 +738,8 @@ class Optimizer(object):
             self.prepareFirstStep()
 
         if params.irc:
+            if step_state == StepState.Poor:
+                step_state = StepState.Reject
             if self.Iteration > 10:
                 if criteria_met :
                     if self.IRC_direction == 1:
