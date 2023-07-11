@@ -169,6 +169,9 @@ class Optimizer(object):
             logger.info("> Constraints are requested. The following criterion is added:\n")
             logger.info(">  Max Constraint Violation (in Angstroms/degrees) < %.2e \n" % self.params.Convergence_cmax)
 
+        if params.Converge_maxiter:
+            logger.info(">  Converge-on-maxiter set: Will exit with success if maximum number of iterations (%i) is reached.\n" % params.maxiter)
+
         logger.info("> === End Optimization Info ===\n")
         
     def get_cartesian_norm(self, dy, verbose=None):
@@ -334,6 +337,14 @@ class Optimizer(object):
                     self.frequency_analysis(self.Hx0, 'first', False)
                 if self.Hx0.shape != (self.X.shape[0], self.X.shape[0]):
                     raise IOError('hess_data passed in via OptParams does not have the right shape')
+            if self.params.maxiter == 0:
+                logger.info("Maximum iterations reached (%i); increase --maxiter for more\n" % self.params.maxiter)
+                if self.params.Converge_maxiter:
+                    logger.info("Exiting normally because --converge maxiter was set.\n")
+                    self.state = OPT_STATE.CONVERGED
+                else:
+                    self.state = OPT_STATE.FAILED
+
             # self.Hx = self.Hx0.copy()
         # Add new Cartesian coordinates, energies, and gradients to history
         if self.viz_rotations:
@@ -574,10 +585,14 @@ class Optimizer(object):
             self.state = OPT_STATE.CONVERGED
             return
 
-        if self.Iteration > params.maxiter:
+        if self.Iteration >= params.maxiter:
             self.SortedEigenvalues(self.H)
             logger.info("Maximum iterations reached (%i); increase --maxiter for more\n" % params.maxiter)
-            self.state = OPT_STATE.FAILED
+            if params.Converge_maxiter:
+                logger.info("Exiting normally because --converge maxiter was set.\n")
+                self.state = OPT_STATE.CONVERGED
+            else:
+                self.state = OPT_STATE.FAILED
             return
 
         if params.qccnv and Converged_grms and (Converged_drms or Converged_energy) and self.conSatisfied:

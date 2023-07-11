@@ -306,7 +306,7 @@ def get_molecule_engine(**kwargs):
                 exe = "quick.cuda.MPI"
             elif shutil.which("quick.cuda") is not None:
                 exe = "quick.cuda"
-            elif shutil.which("quick") is not None:
+            elif shutil.which("quick.MPI") is not None:
                 exe = "quick.MPI"
             elif shutil.which("quick") is not None:
                 exe = "quick"
