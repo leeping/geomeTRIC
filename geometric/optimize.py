@@ -128,6 +128,8 @@ class Optimizer(object):
         self.IRC_opt = False
         self.IRC_vary_stepsize = False
         self.IRC_init_v = None
+        self.prevQ = 0.0
+        self.IRC_total_disp = 0.0
         if print_info:
             self.print_info()
         
@@ -422,7 +424,7 @@ class Optimizer(object):
     def step(self):
         if self.params.irc:
             """
-            Perform one step of the IRC.
+            Take an IRC step.
             """
             if self.IRC_opt:
                 dy = self.optimize_step()
@@ -430,9 +432,11 @@ class Optimizer(object):
                 dy = self.IRC_step()
         else:
             """
-            Perform one step of the optimization.
+            Take an optimization step.
             """
             dy = self.optimize_step()
+
+        if dy is None: return
 
         ### Before updating any of our variables, copy current variables to "previous"
         self.cnorm = self.get_cartesian_norm(dy)
@@ -487,7 +491,8 @@ class Optimizer(object):
                 raise IRCError("No imaginary mode detected. Please optimize the structure and try again.\n")
 
             self.IRC_adjfactor = np.linalg.norm(self.TSNormal_modes_x[0] * np.sqrt(self.IC.mass))
-            logger.info("Initial step-size: %.5f \n" %(self.trust * ang2bohr * self.IRC_adjfactor))
+            self.IRC_init_step = self.trust * ang2bohr * self.IRC_adjfactor
+            logger.info("Initial step-size: %.5f \n" %self.IRC_init_step)
 
             # Following the imaginary mode vector
             if self.IRC_init_v is None:
@@ -553,9 +558,11 @@ class Optimizer(object):
                 deg = np.degrees(np.arccos(np.dot(v1/np.linalg.norm(v1),v2)))
                 mwdx = np.linalg.norm(np.dot(MWGMat_sqrt_inv, dy))
                 half_mwdx = np.linalg.norm(np.dot(MWGMat_sqrt_inv, p_prime))
-                self.IRC_dystep = np.linalg.norm(p_prime)
+                self.IRC_dystep = np.linalg.norm(dy)
+                self.IRC_mwdxstep = mwdx
+                self.IRC_total_disp += mwdx
                 const = self.find_lambda(min_lambda, Heig, Hvecs, g_M, p_M)
-                if const > 1e-5 or min_lambda > Heig[0]:
+                if (const > 1e-5 or min_lambda > Heig[0]) and const > 1e-5:
                     logger.info("Something is wrong in the IRC second sub-step\n")
                     logger.info('Check constraint: %.9f \n' %const)
                     logger.info('dq_new: %.9f \n' %np.linalg.norm(dq_new))
@@ -695,7 +702,7 @@ class Optimizer(object):
         else:
             colors['energy'] = "\x1b[92m" if Converged_energy else "\x1b[91m"
             colors['quality'] = "\x1b[91m"
-            step_state = StepState.Reject if (Quality < -1.0 or params.transition or params.irc) else StepState.Poor
+            step_state = StepState.Reject if (Quality < -1.0 or params.transition) else StepState.Poor
         if 'energy' not in colors: colors['energy'] = "\x1b[92m" if Converged_energy else "\x1b[0m"
         if 'quality' not in colors: colors['quality'] = "\x1b[0m"
         colors['grms'] = "\x1b[92m" if Converged_grms else "\x1b[0m"
@@ -733,14 +740,30 @@ class Optimizer(object):
             self.IRC_opt = False
             self.trustprint = "="
             self.params.tmax = self.trust
-            #self.IRC_vary_stepsize = False
+            self.IRC_total_disp = 0.0
+            self.prevQ = 0.0
             self.calcEnergyForce()
             self.prepareFirstStep()
 
         if params.irc:
-            if step_state == StepState.Poor:
-                step_state = StepState.Reject
-            if self.Iteration > 10:
+            if self.Iteration > params.maxiter:
+                if self.IRC_direction == -1:
+                    logger.info("\nIRC backward direction reached maximum iteration number\n")
+                    logger.info("Terminating IRC\n")
+                    self.state = OPT_STATE.FAILED
+                else:
+                    logger.info("\nIRC forward direction reached maximum iteration number\n")
+                    logger.info("IRC backward direction starts here\n\n")
+                    reset_irc()
+                return
+
+            if step_state in (StepState.Poor, StepState.Reject) and not self.IRC_opt and self.Iteration > 5:
+                if not np.isclose(Quality, self.prevQ):
+                    step_state = StepState.Reject
+                else:
+                    step_state = StepState.Poor
+            self.prevQ = Quality
+            if self.IRC_total_disp > 5*self.IRC_init_step:
                 if criteria_met :
                     if self.IRC_direction == 1:
                         logger.info("\nIRC forward direction converged\n")
@@ -757,51 +780,31 @@ class Optimizer(object):
                         self.trust = self.cnorm
                     self.params.tmax = self.params.trust*3
                     logger.info("Switching to optimization\n")
-                elif self.Iteration > params.maxiter:
-                    if self.IRC_direction == -1:
-                        logger.info("\nIRC backward direction reached maximum iteration number\n")
-                        logger.info("Terminating IRC\n")
-                        self.state = OPT_STATE.FAILED
-                    else:
-                        logger.info("\nIRC forward direction reached maximum iteration number\n")
-                        logger.info("IRC backward direction starts here\n\n")
-                        reset_irc()
-                    return
 
-                #if self.IRC_Egap < abs(Egap):
-                #    self.IRC_Egap = abs(Egap)
-                #    self.IRC_vary_stepsize = False
+        else:
+            if criteria_met and self.conSatisfied:
+                self.SortedEigenvalues(self.H)
+                logger.info("Converged! =D\n")
+                self.state = OPT_STATE.CONVERGED
+                return
 
-                #elif abs(Egap) < self.IRC_Egap*0.2 and not self.IRC_vary_stepsize:
-                #    self.IRC_vary_stepsize = True
+            if self.Iteration > params.maxiter:
+                self.SortedEigenvalues(self.H)
+                logger.info("Maximum iterations reached (%i); increase --maxiter for more\n" % params.maxiter)
+                self.state = OPT_STATE.FAILED
+                return
 
-            #if not (self.IRC_vary_stepsize or self.IRC_opt):
-            #    return
+            if params.qccnv and Converged_grms and (Converged_drms or Converged_energy) and self.conSatisfied:
+                self.SortedEigenvalues(self.H)
+                logger.info("Converged! (Q-Chem style criteria requires grms and either drms or energy)\n")
+                self.state = OPT_STATE.CONVERGED
+                return
 
-
-        if criteria_met and self.conSatisfied:
-            self.SortedEigenvalues(self.H)
-            logger.info("Converged! =D\n")
-            self.state = OPT_STATE.CONVERGED
-            return
-
-        if self.Iteration > params.maxiter:
-            self.SortedEigenvalues(self.H)
-            logger.info("Maximum iterations reached (%i); increase --maxiter for more\n" % params.maxiter)
-            self.state = OPT_STATE.FAILED
-            return
-
-        if params.qccnv and Converged_grms and (Converged_drms or Converged_energy) and self.conSatisfied:
-            self.SortedEigenvalues(self.H)
-            logger.info("Converged! (Q-Chem style criteria requires grms and either drms or energy)\n")
-            self.state = OPT_STATE.CONVERGED
-            return
-
-        if params.molcnv and Converged_molpro_gmax and (Converged_molpro_dmax or Converged_energy) and self.conSatisfied:
-            self.SortedEigenvalues(self.H)
-            logger.info("Converged! (Molpro style criteria requires gmax and either dmax or energy)\nThis is approximate since convergence checks are done in cartesian coordinates.\n")
-            self.state = OPT_STATE.CONVERGED
-            return
+            if params.molcnv and Converged_molpro_gmax and (Converged_molpro_dmax or Converged_energy) and self.conSatisfied:
+                self.SortedEigenvalues(self.H)
+                logger.info("Converged! (Molpro style criteria requires gmax and either dmax or energy)\nThis is approximate since convergence checks are done in cartesian coordinates.\n")
+                self.state = OPT_STATE.CONVERGED
+                return
 
         assert self.state == OPT_STATE.NEEDS_EVALUATION
         
@@ -814,7 +817,7 @@ class Optimizer(object):
         #     logger.info("LPW: Recalculating Hessian\n")
         #     self.recalcHess = True
         if step_state in (StepState.Poor, StepState.Reject):
-            new_trust = max(params.tmin, min(self.trust, self.cnorm)/2) if not params.irc or self.IRC_opt else max(params.tmin, self.trust*0.5)
+            new_trust = max(params.tmin, min(self.trust, self.cnorm)/2)# if not params.irc or self.IRC_opt else max(params.tmin, self.trust*0.5)
             # if (Converged_grms or Converged_gmax) or (params.molcnv and Converged_molpro_gmax):
             #     new_trust = max(new_trust, self.params.Convergence_dmax if self.params.usedmax else self.params.Convergence_drms)
             self.trustprint = "\x1b[91m-\x1b[0m" if new_trust < self.trust else "="
@@ -827,13 +830,27 @@ class Optimizer(object):
                     logger.info("Poor-quality step dominated by net translation/rotation detected; ")
                     logger.info("will project out net forces and torques past this point.\n")
         elif step_state == StepState.Good:
-            new_trust = min(params.tmax, np.sqrt(2)*self.trust) if not params.irc or self.IRC_opt else min(params.tmax, self.trust*1.10)
+            new_trust = min(params.tmax, np.sqrt(2)*self.trust) if not params.irc or self.IRC_opt else min(params.tmax, self.trust*1.20)
             self.trustprint = "\x1b[92m+\x1b[0m" if new_trust > self.trust else "="
             self.trust = new_trust
         elif step_state == StepState.Okay:
             self.trustprint = "="
 
         if step_state == StepState.Reject:
+            if params.irc and not self.IRC_opt:
+                self.IRC_total_disp -= self.IRC_mwdxstep
+                logger.info("\x1b[93mRejecting step - low quality IRC step\x1b[0m\n")
+                self.trustprint = "\x1b[1;91mx\x1b[0m"
+                self.X_rj = self.X.copy()
+                self.Y = self.Yprev.copy()
+                self.X = self.Xprev.copy()
+                self.gradx = self.Gxprev.copy()
+                self.G = self.Gprev.copy()
+                self.E = self.Eprev
+                self.engine.load_guess_files(self.dirname)
+                self.recalcHess = False
+                self.progress = self.progress[:-1]
+                return
             if hasattr(self, 'X_rj') and np.allclose(self.X_rj, self.X, atol=1e-6):
                 logger.info("\x1b[93mA previously rejected step was repeated; accepting to avoid infinite loop\x1b[0m\n")
                 delattr(self, 'X_rj')
@@ -864,7 +881,6 @@ class Optimizer(object):
                 self.E = self.Eprev
                 self.engine.load_guess_files(self.dirname)
                 self.recalcHess = False
-                self.progress = self.progress[:-1]
                 return
 
         # Append steps to history (for rebuilding Hessian)
