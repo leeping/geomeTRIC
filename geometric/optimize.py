@@ -474,9 +474,6 @@ class Optimizer(object):
         logger.info("IRC sub-step 1: Finding the pivot point (q*_{k+1})\n")
         # Need to take a step towards the pivot point
         self.IC.clearCache()
-        if not (self.Iteration != 0 or isinstance(self.IC, CartesianCoordinates)):
-            self.checkCoordinateSystem()
-
         MWGMat = self.IC.GMatrix(self.X, invMW=True)
 
         # Save the initial Cartesian coordinate
@@ -697,7 +694,7 @@ class Optimizer(object):
         # 2020-03-10: Step quality thresholds are hard-coded here.
         colors = {}
         if Quality > 0.75: step_state = StepState.Good
-        elif Quality > (0.5 if params.transition or params.irc else 0.25): step_state = StepState.Okay
+        elif Quality > (0.5 if params.transition else 0.25): step_state = StepState.Okay
         elif Quality > 0.0: step_state = StepState.Poor
         else:
             colors['energy'] = "\x1b[92m" if Converged_energy else "\x1b[91m"
@@ -757,7 +754,7 @@ class Optimizer(object):
                     reset_irc()
                 return
 
-            if step_state in (StepState.Poor, StepState.Reject) and not self.IRC_opt and self.Iteration > 5:
+            if step_state in (StepState.Poor, StepState.Reject) and not self.IRC_opt and self.Iteration > 2:
                 if not np.isclose(Quality, self.prevQ):
                     step_state = StepState.Reject
                 else:
@@ -817,7 +814,7 @@ class Optimizer(object):
         #     logger.info("LPW: Recalculating Hessian\n")
         #     self.recalcHess = True
         if step_state in (StepState.Poor, StepState.Reject):
-            new_trust = max(params.tmin, min(self.trust, self.cnorm)/2)# if not params.irc or self.IRC_opt else max(params.tmin, self.trust*0.5)
+            new_trust = max(params.tmin, min(self.trust, self.cnorm)/2)
             # if (Converged_grms or Converged_gmax) or (params.molcnv and Converged_molpro_gmax):
             #     new_trust = max(new_trust, self.params.Convergence_dmax if self.params.usedmax else self.params.Convergence_drms)
             self.trustprint = "\x1b[91m-\x1b[0m" if new_trust < self.trust else "="
@@ -830,7 +827,7 @@ class Optimizer(object):
                     logger.info("Poor-quality step dominated by net translation/rotation detected; ")
                     logger.info("will project out net forces and torques past this point.\n")
         elif step_state == StepState.Good:
-            new_trust = min(params.tmax, np.sqrt(2)*self.trust) if not params.irc or self.IRC_opt else min(params.tmax, self.trust*1.20)
+            new_trust = min(params.tmax, np.sqrt(2)*self.trust)
             self.trustprint = "\x1b[92m+\x1b[0m" if new_trust > self.trust else "="
             self.trust = new_trust
         elif step_state == StepState.Okay:
@@ -839,6 +836,7 @@ class Optimizer(object):
         if step_state == StepState.Reject:
             if params.irc and not self.IRC_opt:
                 self.IRC_total_disp -= self.IRC_mwdxstep
+                self.Iteration -= 1
                 logger.info("\x1b[93mRejecting step - low quality IRC step\x1b[0m\n")
                 self.trustprint = "\x1b[1;91mx\x1b[0m"
                 self.X_rj = self.X.copy()
@@ -850,6 +848,9 @@ class Optimizer(object):
                 self.engine.load_guess_files(self.dirname)
                 self.recalcHess = False
                 self.progress = self.progress[:-1]
+                if Quality < 0.0:
+                    logger.info("Checking coordinate system\n")
+                    self.checkCoordinateSystem()
                 return
             if hasattr(self, 'X_rj') and np.allclose(self.X_rj, self.X, atol=1e-6):
                 logger.info("\x1b[93mA previously rejected step was repeated; accepting to avoid infinite loop\x1b[0m\n")
