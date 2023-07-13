@@ -694,7 +694,7 @@ class Optimizer(object):
         # 2020-03-10: Step quality thresholds are hard-coded here.
         colors = {}
         if Quality > 0.75: step_state = StepState.Good
-        elif Quality > (0.5 if params.transition else 0.25): step_state = StepState.Okay
+        elif Quality > (0.5 if params.transition else 0.65 if params.irc else 0.25): step_state = StepState.Okay
         elif Quality > 0.0: step_state = StepState.Poor
         else:
             colors['energy'] = "\x1b[92m" if Converged_energy else "\x1b[91m"
@@ -728,18 +728,19 @@ class Optimizer(object):
 
         def reset_irc():
             self.IRC_direction = -1
-            self.progress = self.progress[::-1][:-1]
             self.Iteration = 0
             self.X = self.X_hist[0].copy()
             self.coords = self.X_hist[0].copy()
             self.IC = self.IC0
+            self.E = self.progress.qm_energies[0]
+            self.gradx = self.progress.qm_grads[0]
+            self.progress = self.progress[::-1]
             self.trust = self.params.trust
             self.IRC_opt = False
             self.trustprint = "="
             self.params.tmax = self.trust
             self.IRC_total_disp = 0.0
             self.prevQ = 0.0
-            self.calcEnergyForce()
             self.prepareFirstStep()
 
         if params.irc:
@@ -754,10 +755,12 @@ class Optimizer(object):
                     reset_irc()
                 return
 
-            if step_state in (StepState.Poor, StepState.Reject) and not self.IRC_opt and self.Iteration > 2:
+            if step_state in (StepState.Poor, StepState.Reject) and not self.IRC_opt and self.Iteration > 1:
                 if not np.isclose(Quality, self.prevQ):
                     step_state = StepState.Reject
                 else:
+                    logger.info("Checking coordinate system\n")
+                    self.checkCoordinateSystem()
                     step_state = StepState.Poor
             self.prevQ = Quality
             if self.IRC_total_disp > 5*self.IRC_init_step:
@@ -848,7 +851,7 @@ class Optimizer(object):
                 self.engine.load_guess_files(self.dirname)
                 self.recalcHess = False
                 self.progress = self.progress[:-1]
-                if Quality < 0.0:
+                if Quality < 0.1:
                     logger.info("Checking coordinate system\n")
                     self.checkCoordinateSystem()
                 return

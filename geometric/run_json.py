@@ -255,7 +255,7 @@ def geometric_run_json(in_json_dict):
         if Cons is None:
             # Run a standard geometry optimization
             params.xyzout = "qce_optim.xyz"
-            geometric.optimize.Optimize(coords, M, IC, engine, dirname, params)
+            progress = geometric.optimize.Optimize(coords, M, IC, engine, dirname, params)
         else:
             # Run a constrained geometry optimization
             if isinstance(IC, (geometric.internal.CartesianCoordinates,
@@ -266,7 +266,22 @@ def geometric_run_json(in_json_dict):
                     logger.info("---=== Scan %i/%i : Constrained Optimization ===---\n" % (ic + 1, len(CVals)))
                 IC = CoordClass(M, build=True, connect=connect, addcart=addcart, constraints=Cons, cvals=CVal)
                 IC.printConstraints(coords, thre=-1)
-                geometric.optimize.Optimize(coords, M, IC, engine, dirname, params, print_info = (ic==0))
+                progress = geometric.optimize.Optimize(coords, M, IC, engine, dirname, params, print_info = (ic==0))
+
+        if params.irc:
+            old_traj = engine.schema_traj.copy()
+            if hess is None:
+                old_traj[1:M.na*6] = []
+            new_traj = []
+            for point in progress:
+                for schema in old_traj:
+                    qcvars = schema['extras']['qcvars']
+                    same_E = np.isclose(point.qm_energies, qcvars['SCF TOTAL ENERGY'])
+                    same_g = np.allclose(point.qm_grads, qcvars['CURRENT GRADIENT'])
+                    same_G = np.allclose(point.xyzs.flatten() / geometric.nifty.bohr2ang, schema['molecule']['geometry'])
+                    if same_E and same_G and same_g and schema not in new_traj:
+                        new_traj.append(schema)
+            engine.schema_traj = new_traj
 
         out_json_dict = get_output_json_dict(in_json_dict, engine.schema_traj)
         out_json_dict["success"] = True
