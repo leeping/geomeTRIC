@@ -694,7 +694,7 @@ class Optimizer(object):
         # 2020-03-10: Step quality thresholds are hard-coded here.
         colors = {}
         if Quality > 0.75: step_state = StepState.Good
-        elif Quality > (0.5 if params.transition else 0.65 if params.irc else 0.25): step_state = StepState.Okay
+        elif Quality > (0.5 if params.transition or params.irc else 0.25): step_state = StepState.Okay
         elif Quality > 0.0: step_state = StepState.Poor
         else:
             colors['energy'] = "\x1b[92m" if Converged_energy else "\x1b[91m"
@@ -817,7 +817,8 @@ class Optimizer(object):
         #     logger.info("LPW: Recalculating Hessian\n")
         #     self.recalcHess = True
         if step_state in (StepState.Poor, StepState.Reject):
-            new_trust = max(params.tmin, min(self.trust, self.cnorm)/2)
+            #new_trust = max(params.tmin, min(self.trust, self.cnorm)/2)
+            new_trust = min(params.tmin, self.trust/2) if params.irc and not self.IRC_opt else max(params.tmin, min(self.trust, self.cnorm)/2)
             # if (Converged_grms or Converged_gmax) or (params.molcnv and Converged_molpro_gmax):
             #     new_trust = max(new_trust, self.params.Convergence_dmax if self.params.usedmax else self.params.Convergence_drms)
             self.trustprint = "\x1b[91m-\x1b[0m" if new_trust < self.trust else "="
