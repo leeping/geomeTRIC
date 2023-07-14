@@ -279,8 +279,9 @@ def geometric_run_json(in_json_dict):
                     same_E = np.isclose(point.qm_energies, qcvars['SCF TOTAL ENERGY'])
                     same_g = np.allclose(point.qm_grads, qcvars['CURRENT GRADIENT'])
                     same_G = np.allclose(point.xyzs.flatten() / geometric.nifty.bohr2ang, schema['molecule']['geometry'])
-                    if same_E and same_G and same_g and schema not in new_traj:
+                    if same_E and same_G and same_g:
                         new_traj.append(schema)
+                        break
             engine.schema_traj = new_traj
 
         out_json_dict = get_output_json_dict(in_json_dict, engine.schema_traj)
