@@ -185,21 +185,16 @@ def prepare(info_dict):
 
     GW = chain.get_global_grad("total", "working")
     GP = chain.get_global_grad("total", "plain")
-    HW = chain.guess_hessian_working.copy()
-    HP = chain.guess_hessian_plain.copy()
-    dy, expect, expectG, ForceRebuild = chain.CalcInternalStep(trust, HW, HP)
-    new_chain = chain.TakeStep(dy)
-    respaced = new_chain.delete_insert(1.5)
-    newcoords = chaintocoords(new_chain)
-    attrs_new = check_attr(new_chain)
+    oldcoords = chaintocoords(chain)
+    attrs_new = check_attr(chain)
     attrs_prev = check_attr(chain)
 
     temp = {"Ys": [chain.get_internal_all().tolist()], "GWs": [GW.tolist()], "GPs": [GP.tolist()], "attrs_new": attrs_new,
-        "attrs_prev": attrs_prev, "trust": trust, "expect": expect, "expectG": expectG.tolist(), "respaced": respaced,
+        "attrs_prev": attrs_prev, "trust": trust, "expect": None, "expectG": None, "respaced": False,
         "trustprint": "=", "frocerebuild": False,"lastforce": 0, "coord_ang_prev": chaintocoords(chain, True),
         "result_prev": result, "geometry": []}
     info_dict.update(temp)
-    return newcoords, info_dict
+    return oldcoords, info_dict
 
 
 def nextchain(info_dict):
@@ -257,6 +252,22 @@ def nextchain(info_dict):
     GW = chain.get_global_grad("total", "working")
     GP = chain.get_global_grad("total", "plain")
     Y = chain.get_internal_all()
+
+    if iteration == 1:
+        logger.info("Taking the first NEB step\n")
+        dy, expect, expectG, ForceBuild = chain.CalcInternalStep(trust, HW0, HP0)
+        newchain = chain.TakeStep(dy)
+        respaced = newchain.delete_insert(1.5)
+        newcoords = chaintocoords(newchain)
+        attrs_new = check_attr(chain)
+        attrs_prev = check_attr(chain)
+        temp = {"Ys": [chain.get_internal_all().tolist()], "GWs": [GW.tolist()], "GPs": [GP.tolist()],
+                "attrs_new": attrs_new, "attrs_prev": attrs_prev, "trust": trust, "expect": expect,
+                "expectG": expectG.tolist(), "respaced": respaced, "trustprint": "=", "frocerebuild": False,
+                "lastforce": 0, "coord_ang_prev": chaintocoords(chain, True), "result_prev": result, "geometry": []}
+        info_dict.update(temp)
+        return newcoords, info_dict
+
 
     # Building the Hessian up to the previous iteration.
     for i in range(len(Ys) - 1):
