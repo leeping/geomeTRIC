@@ -271,16 +271,16 @@ def nextchain(info_dict):
 
     # Building the Hessian up to the previous iteration.
     for i in range(len(Ys) - 1):
-        BFGSUpdate(np.array(Ys[i + 1]), np.array(Ys[i]), np.array(GPs[i + 1]), np.array(GPs[i]), HP0, params, Eig=False)
-        BFGSUpdate(np.array(Ys[i + 1]), np.array(Ys[i]), np.array(GWs[i + 1]), np.array(GWs[i]), HW0, params, Eig=False)
+        BFGSUpdate(np.array(Ys[i + 1]), np.array(Ys[i]), np.array(GPs[i + 1]), np.array(GPs[i]), HP0, params)
+        BFGSUpdate(np.array(Ys[i + 1]), np.array(Ys[i]), np.array(GWs[i + 1]), np.array(GWs[i]), HW0, params)
 
     # Saving the Hessians for special cases such as rejecting a step.
     HW_bak = deepcopy(HW0)
     HP_bak = deepcopy(HP0)
 
     # Updating the Hessian for the current iteration
-    BFGSUpdate(Y, np.array(Ys[-1]), GP, np.array(GPs[-1]), HP0, params, Eig=False)
-    BFGSUpdate(Y, np.array(Ys[-1]), GW, np.array(GWs[-1]), HW0, params, Eig=False)
+    BFGSUpdate(Y, np.array(Ys[-1]), GP, np.array(GPs[-1]), HP0, params)
+    BFGSUpdate(Y, np.array(Ys[-1]), GW, np.array(GWs[-1]), HW0, params)
 
     HW_prev = HW0
     HP_prev = HP0

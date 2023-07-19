@@ -1493,7 +1493,7 @@ def recover(chain_hist, forceCart, result=None):
     return newchain, Y, GW, GP, HW, HP
 
 
-def BFGSUpdate(Y, old_Y, G, old_G, H, params, Eig=True):
+def BFGSUpdate(Y, old_Y, G, old_G, H, params):
     """Update a Hessian using the BFGS method"""
     verbose = params.verbose
     # BFGS Hessian update
@@ -1515,15 +1515,14 @@ def BFGSUpdate(Y, old_Y, G, old_G, H, params, Eig=True):
         logger.info("Denoms: %.3e %.3e \n" % ((Dg.T * Dy)[0, 0], (Dy.T * H * Dy)[0, 0]))
         logger.info("Dots: %.3e %.3e \n" % (np.dot(ndg, ndy), np.dot(ndy, nhdy)))
     H += Mat1 - Mat2
-    if Eig:
-        Eig1 = np.linalg.eigh(H)[0]
-        Eig1.sort()
-        if verbose:
-            logger.info(
-                "Eig-ratios: %.5e ... %.5e \n"
-                % (np.min(Eig1) / np.min(Eig), np.max(Eig1) / np.max(Eig))
-            )
-        return Eig1
+    Eig1 = np.linalg.eigh(H)[0]
+    Eig1.sort()
+    if verbose:
+        logger.info(
+            "Eig-ratios: %.5e ... %.5e \n"
+            % (np.min(Eig1) / np.min(Eig), np.max(Eig1) / np.max(Eig))
+        )
+    return Eig1
     # Then it's on to the next loop iteration!
 
 

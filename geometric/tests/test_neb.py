@@ -51,7 +51,7 @@ def test_hcn_neb_optimize(localizer):
         engine='psi4'
     )
 
-    params = geometric.params.NEBParams(**{'optep':True})
+    params = geometric.params.NEBParams(**{'optep':True, 'verbose':1})
     chain = geometric.neb.ElasticBand(M, engine=engine, tmpdir=tempfile.mkdtemp(), params=params, plain=0)
 
     assert chain.coordtype == 'cart'
