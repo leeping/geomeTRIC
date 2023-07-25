@@ -291,7 +291,7 @@ def nextchain(info_dict):
     if respaced:
         # 1-1) If the chain was respaced, take a new step using the guessed Hessians.
         (chain_prev, chain, expect, expectG, ForceRebuild, LastForce, Y_prev, GW_prev, GP_prev, respaced, _) \
-            = takestep(chain_prev, chain, iteration, LastForce, ForceBuild, trust, Y, GW, GP, HW, HP, result_prev)
+            = takestep([chain_prev], chain, iteration, LastForce, ForceBuild, trust, Y, GW, GP, HW, HP, result_prev)
         attrs_new = check_attr(chain)
         attrs_prev = check_attr(chain_prev)
         newcoords = chaintocoords(chain)
@@ -316,7 +316,7 @@ def nextchain(info_dict):
         # 2-1) If the quality is bad, reject the step and take a new step with a decreased stepsize.
         chain.ComputeChain(result=result_prev)
         (chain_prev, chain, expect, expectG, ForceRebuild, LastForce, Y_prev, GW_prev, GP_prev, respaced, _) \
-        = takestep(chain_prev, chain, iteration, LastForce, ForceBuild, trust, Y, GW, GP, HW_bak, HP_bak, result_prev)
+        = takestep([chain_prev], chain, iteration, LastForce, ForceBuild, trust, Y, GW, GP, HW_bak, HP_bak, result_prev)
         attrs_new = check_attr(chain)
         attrs_prev = check_attr(chain_prev)
         newcoords = chaintocoords(chain)
@@ -350,7 +350,7 @@ def nextchain(info_dict):
 
     # 4) Take the step based on the current Hessians and gradients. Pass the result Cartesian coordinates to QCFractal.
     (chain_prev, chain, expect, expectG, ForceRebuild, LastForce, Y_prev, GW_prev, GP_prev, respaced, _) \
-        = takestep(chain_prev, chain, iteration, LastForce, ForceBuild, trust, Y, GW, GP, HW, HP, result_prev)
+        = takestep([chain_prev], chain, iteration, LastForce, ForceBuild, trust, Y, GW, GP, HW, HP, result_prev)
     attrs_new = check_attr(chain)
     attrs_prev = check_attr(chain_prev)
     Ys.append(Y.tolist())
