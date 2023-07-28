@@ -567,7 +567,7 @@ class Optimizer(object):
                 const = self.find_lambda(min_lambda, Heig, Hvecs, g_M, p_M)
                 cnorm = self.get_cartesian_norm(dy) # Angstrom
                 if ((const > 1 or min_lambda > Heig[0]) and irc_sub_iteration > 100) :
-                    if mwdx > self.IRC_init_step*1.5 and cnorm > self.trust and self.IRC_substep_success:
+                    if mwdx > self.IRC_stepsize*1.5 and cnorm > self.trust and self.IRC_substep_success:
                         logger.info("IRC second sub-step failed. Rejecting the step.\n")
                         self.IRC_substep_success = False
                     else:
@@ -777,7 +777,7 @@ class Optimizer(object):
                 if np.isclose(self.trust, params.tmin) and np.isclose(self.Qprev, Quality): 
                     logger.info("IRC stuck with the minimum step-size and bad quality step. Forcing it to take a step\n")
                     step_state = StepState.Poor
-                elif self.Qprev < 0.65 and Quality > 0:
+                elif self.Qprev < 0.65 and Quality > 0.25:
                     self.trust = params.tmin
                     step_state = StepState.Poor
                 else:
