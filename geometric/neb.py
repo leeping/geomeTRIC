@@ -619,7 +619,6 @@ class ElasticBand(Chain):
     def __init__(self, molecule, engine, tmpdir, params, coords=None, plain=0):
         super(ElasticBand, self).__init__(molecule, engine, tmpdir, params, coords=coords)
         # convert kcal/mol/Ang^2 to Hartree/Bohr^2
-        self.coordtype = 'cart'
         self.k = self.params.nebk * kcal2au * (bohr2ang**2)
         # Number of atoms
         self.na = molecule.na

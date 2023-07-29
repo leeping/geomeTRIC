@@ -91,6 +91,7 @@ def arrange(qcel_mols):
     M = Molecule()
     M.elem = sym
     M.xyzs = [mol.geometry*bohr2ang for mol in qcel_mols]
+    M.build_topology()
 
     # Getting parameters and the chain
     neb_param = NEBParams()
@@ -255,11 +256,11 @@ def nextchain(info_dict):
 
     if iteration == 1:
         logger.info("Taking the first NEB step\n")
-        dy, expect, expectG, ForceBuild = chain.CalcInternalStep(trust, HW0, HP0)
+        dy, expect, expectG, ForceRebuild = chain.CalcInternalStep(trust, HW0, HP0)
         newchain = chain.TakeStep(dy)
         respaced = newchain.delete_insert(1.5)
         newcoords = chaintocoords(newchain)
-        attrs_new = check_attr(chain)
+        attrs_new = check_attr(newchain)
         attrs_prev = check_attr(chain)
         temp = {"Ys": [chain.get_internal_all().tolist()], "GWs": [GW.tolist()], "GPs": [GP.tolist()],
                 "attrs_new": attrs_new, "attrs_prev": attrs_prev, "trust": trust, "expect": expect,
@@ -343,9 +344,9 @@ def nextchain(info_dict):
             )
 
             chain, Y, GW, GP, HW, HP = recover([chain_prev], LastForce, result_prev)
-            Ys = [Y.tolist()]
-            GWs = [GW.tolist()]
-            GPs = [GP.tolist()]
+            Ys = []
+            GWs = []
+            GPs = []
             result = result_prev
 
     # 4) Take the step based on the current Hessians and gradients. Pass the result Cartesian coordinates to QCFractal.
