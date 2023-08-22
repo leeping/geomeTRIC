@@ -207,7 +207,10 @@ class Optimizer(object):
         if isinstance(self.IC, DelocalizedInternalCoordinates):
             self.IC.build_dlc(self.X)
         # With redefined internal coordinates, the Hessian needs to be rebuilt
-        self.rebuild_hessian()
+        if self.params.irc:
+            self.H = self.IC.calcHess(self.Xprev, self.Gxprev, self.Hx)
+        else:
+            self.rebuild_hessian()
         # Current values of internal coordinates and IC gradient are recalculated
         self.Y = self.IC.calculate(self.X)
         self.G = self.IC.calcGrad(self.X, self.gradx)
@@ -239,6 +242,8 @@ class Optimizer(object):
         # Set current ICs to the new one
         if changed or recover or cartesian:
             self.IC = IC1
+            if self.params.irc:
+                self.Hx = IC1.calcHessCart(self.Xprev, self.Yprev, self.H)
             self.refreshCoordinates()
             return True
         else: return False
@@ -586,7 +591,7 @@ class Optimizer(object):
         logger.info('Angle between v1 and v2: %2.f \n' % deg)
         logger.info('Half step dy     = %.5f \n' % np.linalg.norm(p_prime))
         logger.info('Half step mw-dx  = %.5f Bohr*sqrt(amu)\n\n' % half_mwdx)
-        logger.info('=> Total step dy    = %.5f \n' % np.linalg.norm(dy))
+        logger.info('=> Total step dy    = %.5f \n' % dy_norm)
         logger.info('=> Total step mw-dx = %.5f Bohr*sqrt(amu)\n' % mwdx)
         self.Iteration += 1
         return dy
@@ -745,10 +750,9 @@ class Optimizer(object):
             self.Iteration = 0
             self.X = self.X_hist[0].copy()
             self.IC = self.IC0
-            self.checkCoordinateSystem(cartesian=isinstance(self.IC,CartesianCoordinates))
             self.E = self.progress.qm_energies[0]
             self.gradx = self.progress.qm_grads[0]
-            self.progress = self.progress[::-1]#[:-1]
+            self.progress = self.progress[::-1]
             self.trust = self.params.trust
             self.IRC_opt = False
             self.trustprint = "="
@@ -780,6 +784,7 @@ class Optimizer(object):
                     step_state = StepState.Poor
                 else:
                     step_state = StepState.Reject
+                    IC_check = True
 
             if not self.IRC_substep_success:
                 step_state = StepState.Reject
