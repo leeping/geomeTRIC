@@ -126,10 +126,9 @@ class Optimizer(object):
         # IRC related attributes
         self.IRC_direction = 1
         self.IRC_opt = False
-        self.IRC_vary_stepsize = False
+        self.IRC_substep_success = True
         self.Qprev = 0.0
         self.IRC_total_disp = 0.0
-        #self.Internals = self.IC.Internals.copy()
         if print_info:
             self.print_info()
         
@@ -572,18 +571,21 @@ class Optimizer(object):
                 self.IRC_total_disp += mwdx
                 const = self.find_lambda(min_lambda, Heig, Hvecs, g_M, p_M)
                 cnorm = self.get_cartesian_norm(dy) # Angstrom
-                self.IRC_substep_success = True
-                if ((const > 1 or min_lambda > Heig[0]) and irc_sub_iteration > 100) or (mwdx > self.IRC_init_step*2 and cnorm > self.trust):
-                    logger.info("IRC second sub-step failed. Rejecting the step.\n")
+                if ((const > 1 or min_lambda > Heig[0]) and irc_sub_iteration > 100) :
+                    if mwdx > self.IRC_stepsize*1.5 and cnorm > self.trust and self.IRC_substep_success:
+                        logger.info("IRC second sub-step failed. Rejecting the step.\n")
+                        self.IRC_substep_success = False
+                    else:
+                        logger.info("IRC second sub-step failed again. Taking a half-step.\n")
+                        dy = dy_to_pivot
+                        self.IRC_substep_success = True
                     logger.info('X Failed half step dy     = %.5f \n' % np.linalg.norm(p_prime))
                     logger.info('X Failed half step mw-dx  = %.5f Bohr*sqrt(amu)\n\n' % half_mwdx)
-
                     logger.info('X Failed total step dy: %.5f \n' %dy_norm)
                     logger.info('X Failed total step mw-dx = %.5f Bohr*sqrt(amu)\n' % mwdx)
                     logger.info('X Failed total cnorm: %.5f \n' %cnorm)
-                    #logger.info('Constraint: %.5f \n' %const)
-                    #logger.info('dq_new: %.5f \n' %np.linalg.norm(dq_new))
-                    self.IRC_substep_success = False
+                    logger.info('Constraint: %.5f \n' %const)
+                    logger.info('dq_new: %.5f \n' %np.linalg.norm(dq_new))
                 break
             irc_sub_iteration += 1
             p_prime += dq_new
@@ -779,7 +781,7 @@ class Optimizer(object):
                 if np.isclose(self.trust, params.tmin) and np.isclose(self.Qprev, Quality): 
                     logger.info("IRC stuck with the minimum step-size and bad quality step. Forcing it to take a step\n")
                     step_state = StepState.Poor
-                elif self.Qprev < 0.65 and Quality > 0:
+                elif self.Qprev < 0.65 and Quality > 0.25:
                     self.trust = params.tmin
                     step_state = StepState.Poor
                 else:
