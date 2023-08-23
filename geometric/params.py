@@ -222,10 +222,14 @@ class InterpParams(object):
     def __init__(self, **kwargs):
         # Whether we are optimizing a given trajectory.
         self.optimize = kwargs.get('optimize', False)
-        # Number of frames that will be used for the interpolation.
-        self.nframes = kwargs.get('nframes', False)
-        # Whether we want to align the molecules in reactant and product frames.
-        self.prealign = kwargs.get('prealign', False)
+        if self.optimize:
+            self.nframes = 0
+            self.prealign = False
+        else:
+            # Number of frames that will be used for the interpolation.
+            self.nframes = kwargs.get('nframes', False)
+            # Whether we want to align the molecules in reactant and product frames.
+            self.prealign = kwargs.get('prealign', False)
         # Whether we want to align the initial interpolate trajectory before optimization.
         self.align = kwargs.get('align', False)
         # Verbose printout
