@@ -7,6 +7,7 @@ import json
 import numpy as np
 import networkx as nx
 import scipy.special
+from geometric.params import InterpParams, parse_interpolate_args
 from geometric.molecule import *
 from geometric.internal import *
 from geometric.nifty import ang2bohr, logger, commadash
@@ -1180,9 +1181,11 @@ class Interpolator(object):
                 print("Failed after 3 splits; exiting")
 
 def main():
+    args = parse_interpolate_args(sys.argv[1:])
+    params = InterpParams(**args)
     M0 = Molecule(sys.argv[1])
     #interpolator = Interpolator(M0, use_midframes=True, n_frames=0, align_system=True, do_prealign=False)
-    interpolator = Interpolator(M0, align_system=True, do_prealign=False)
+    interpolator = Interpolator(M0, n_frames= params.nframes, use_midframes=params.optimize, align_system=params.align, do_prealign=params.prealign)
     interpolator.run_workflow()
     
 if __name__ == "__main__":

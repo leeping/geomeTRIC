@@ -215,6 +215,22 @@ class OptParams(object):
         elif self.hessian.startswith('file+last:'):
             logger.info(' Hessian data will be read from file: %s, then computed for the last step.\n' % self.hessian[5:])
 
+class InterpParams(object):
+    """
+    Container for interpolation parameters.
+    """
+    def __init__(self, **kwargs):
+        # Whether we are optimizing a given trajectory.
+        self.optimize = kwargs.get('optimize', False)
+        # Number of frames that will be used for the interpolation.
+        self.nframes = kwargs.get('nframes', False)
+        # Whether we want to align the molecules in reactant and product frames.
+        self.prealign = kwargs.get('prealign', False)
+        # Whether we want to align the initial interpolate trajectory before optimization.
+        self.align = kwargs.get('align', False)
+        # Verbose printout
+        self.verbose = kwargs.get('verbose', 0)
+
 def str2bool(v):
     """ Allows command line options such as "yes" and "True" to be converted into Booleans. """
     if isinstance(v, bool):
@@ -404,5 +420,42 @@ def parse_optimizer_args(*args):
     # Set any defaults that are neither provided on the command line nor in the options file
     if 'engine' not in args_dict:
         args_dict['engine'] = 'tera'
+
+    return args_dict
+
+def parse_interpolate_args(*args):
+
+    """
+    Read user input from the command line interface.
+    Designed to be called by interpolate.main() passing in sys.argv[1:]
+    """
+
+    parser = ArgumentParserWithFile(add_help=False, formatter_class=argparse.RawTextHelpFormatter, fromfile_prefix_chars='@')
+
+    grp_univ = parser.add_argument_group('universal', 'Relevant to every job')
+    grp_univ.add_argument('input', type=str, help='REQUIRED positional argument: xyz file containing reactant and product structures.\n')
+    grp_univ.add_argument('--optimize', type=str2bool, help='Provide "yes" to optimize an interpolated trajectory.\n'
+                                                            'The followting two arguments, nframes and prealign, will be ignored.\n'
+                                                            'The input xyz file must contain 5 or more structures.\n')
+    grp_univ.add_argument('--nframes', type=int, help='Number of frames, needs to be bigger than 5, that will be used to interpolate, default 50\n')
+    grp_univ.add_argument('--prealign', type=str2bool, help='Provide "yes" to align the molecules in reactant and product before the interpolation.\n')
+    grp_univ.add_argument('--align', type=str2bool, help='Provide "yes" to align the initial interpolated trajectory.\n')
+
+    grp_output = parser.add_argument_group('output', 'Control the format and amount of the output')
+    grp_output.add_argument('--prefix', type=str, help='Specify a prefix for log file and temporary directory.\n'
+                            'Defaults to the input file path (incl. file name with extension removed).\n ')
+    grp_output.add_argument('--verbose', type=int, help='Set to positive for more verbose printout.\n'
+                            '0 = Default print level.     1 = Basic info about optimization step.\n'
+                            '2 = Include microiterations. 3 = Lots of printout from low-level functions.\n ')
+
+    grp_help = parser.add_argument_group('help', 'Get help')
+    grp_help.add_argument('-h', '--help', action='help', help='Show this help message and exit')
+
+    # Keep all arguments whose values are not None, so that the setting of default values
+    # in InterpParams() and get_molecule_engine() will work properly.
+    args_dict = {}
+    for k, v in vars(parser.parse_args(*args)).items():
+        if v is not None:
+            args_dict[k] = v
 
     return args_dict
