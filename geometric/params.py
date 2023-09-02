@@ -202,6 +202,8 @@ class OptParams(object):
             logger.info(' Net force and torque will be projected out of gradient.\n')
         if self.transition:
             logger.info(' Transition state optimization requested.\n')
+        if self.irc:
+            logger.info(' The IRC method requested.\n')
         if self.hessian == 'first':
             logger.info(' Hessian will be computed on the first step.\n')
         elif self.hessian == 'each':
