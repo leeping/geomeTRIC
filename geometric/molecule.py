@@ -545,7 +545,7 @@ def MolEqual(mol1, mol2):
     if Counter(mol1.elem) != Counter(mol2.elem) : return False
     return Counter(mol1.molecules) == Counter(mol2.molecules)
 
-def format_xyz_coord(element,xyz,tinker=False):
+def format_xyz_coord(element,xyz,tinker=False,precision=None):
     """ Print a line consisting of (element, x, y, z) in accordance with .xyz file format
 
     @param[in] element A chemical element of a single atom
@@ -553,9 +553,15 @@ def format_xyz_coord(element,xyz,tinker=False):
 
     """
     if tinker:
-        return "%-3s % 13.8f % 13.8f % 13.8f" % (element,xyz[0],xyz[1],xyz[2])
+        if precision is None: precision = 8
+        fmtstr = "%%-%is %% %i.%if %% %i.%if %% %i.%if" % (3, precision+5, precision, precision+5, precision, precision+5, precision)
+        return fmtstr % (element,xyz[0],xyz[1],xyz[2])
+        # return "%-3s % 13.8f % 13.8f % 13.8f" % (element,xyz[0],xyz[1],xyz[2])
     else:
-        return "%-5s % 15.10f % 15.10f % 15.10f" % (element,xyz[0],xyz[1],xyz[2])
+        if precision is None: precision = 10
+        fmtstr = "%%-%is %% %i.%if %% %i.%if %% %i.%if" % (5, precision+5, precision, precision+5, precision, precision+5, precision)
+        return fmtstr % (element,xyz[0],xyz[1],xyz[2])
+        # return "%-5s % 15.10f % 15.10f % 15.10f" % (element,xyz[0],xyz[1],xyz[2])
 
 def _format_83(f):
     """Format a single float into a string of width 8, with ideally 3 decimal

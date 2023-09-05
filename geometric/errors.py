@@ -93,6 +93,9 @@ class QChemEngineError(EngineError):
 class QUICKEngineError(EngineError):
     pass
 
+class CFOUREngineError(EngineError):
+    pass
+
 class GromacsEngineError(EngineError):
     pass
 

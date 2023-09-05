@@ -46,10 +46,10 @@ import numpy as np
 import re
 import os
 
-from .molecule import Molecule
+from .molecule import Molecule, format_xyz_coord
 from .nifty import bak, au2ev, eqcgmx, fqcgmx, bohr2ang, logger, getWorkQueue, queue_up_src_dest, rootdir, copy_tree_over
 from .errors import EngineError, CheckCoordError, Psi4EngineError, QChemEngineError, TeraChemEngineError, \
-    ConicalIntersectionEngineError, OpenMMEngineError, GromacsEngineError, MolproEngineError, QCEngineAPIEngineError, GaussianEngineError, QUICKEngineError
+    ConicalIntersectionEngineError, OpenMMEngineError, GromacsEngineError, MolproEngineError, QCEngineAPIEngineError, GaussianEngineError, QUICKEngineError, CFOUREngineError
 from .xml_helper import read_coors_from_xml, write_coors_to_xml
 
 # Strings matching common DFT functionals
@@ -848,6 +848,177 @@ class OpenMM(Engine):
 
     def copy_scratch(self, src, dest):
         return
+
+class CFOUR(Engine):
+    """
+    Run a CFOUR energy and gradient calculation.
+    """
+    def __init__(self, cfour_input, threads=None):
+        if threads is not None and threads > 1:
+            raise ValueError("When using cfour engine, do not specify threads with --nt, but you may specify OMP_NUM_THREADS outside of geomeTRIC.")
+        molecule = self.load_cfour_input(cfour_input)
+        super(CFOUR, self).__init__(molecule)
+
+    def load_cfour_input(self, cfour_input):
+        """
+        Load CFOUR input file (CFOUR requires this to be called ZMAT).
+        The user does not have to name it ZMAT for geomeTRIC however.
+        """
+        coord_mode = 0
+        after_coord = 0
+        ln = 0
+        elem = []
+        template = []
+        # Line number in the "template" (the portion that comes after Cartesian coords.)
+        templn = 0
+        # The line number containing *CFOUR( or *ACES2( within the template
+        cfourln = -1
+        # Are all the arguments to *CFOUR() in a single line?
+        cfour_oneline = False
+        have_coord_cartesian = False
+        have_deriv_lev1 = False
+        have_symmetry_off = False
+        have_print = False
+        xyz = []
+        for line in open(cfour_input):
+            line = line.strip().expandtabs()
+            if ln == 0:
+                comment_line = line
+            elif ln == 1:
+                coord_mode = 1
+            if coord_mode:
+                if len(line.strip()) == 0:
+                    coord_mode = 0
+                    after_coord = 1
+                elif re.match(r"^ *[A-Z][A-Za-z]?( +[-+]?([0-9]*\.)?[0-9]+){3}$", line):
+                    s = line.split()
+                    elem.append(s[0])
+                    xyz.append([float(s[1]), float(s[2]), float(s[3])])
+                else:
+                    raise CFOUREngineError("Failed to parse coordinates; make sure to use"
+                                           "Cartesian coordinates in Angstrom without any asterisks.")
+            if after_coord:
+                template.append(line)
+                if line.startswith("*CFOUR(") or line.startswith("*ACES2("):
+                    cfourln = templn
+                    if line.endswith(")"):
+                        cfour_oneline = True
+                if "COORD=CARTESIAN" in line:
+                    have_coord_cartesian = True
+                if "DERIV_LEV=1" in line:
+                    have_deriv_lev1 = True
+                elif "DERIV_LEV=" in line:
+                    raise CFOUREngineError("DERIV_LEV is set to something other than 1.")
+                if "SYMMETRY=OFF" in line or "SYMMETRY=1" in line:
+                    have_symmetry_off = True
+                elif "SYMMETRY=" in line:
+                    raise CFOUREngineError("SYMMETRY is set to something other than OFF.")
+                if "PRINT=" in line:
+                    if "PRINT=0" in line:
+                        raise CFOUREngineError("PRINT=0 is set; please set to 1 or larger.")
+                    have_print = True
+                if "%grid" in line.lower():
+                    raise CFOUREngineError("%grid found, but geomeTRIC can only call CFOUR for single point calculations.")
+                templn += 1
+            ln += 1
+        if cfourln == -1:
+            raise CFOUREngineError("Failed to find *CFOUR( or *ACES2( in input.\n")
+        M = Molecule()
+        M.elem = elem
+        M.xyzs = [np.array(xyz)]
+        # Properties of the template file that are needed for writing the new ZMAT file
+        self.template_props = {'cfour_oneline': cfour_oneline, 'have_coord_cartesian': have_coord_cartesian,
+                               'cfourln' : cfourln, 'have_deriv_lev1' : have_deriv_lev1, 'comment': comment_line,
+                               'have_print': have_print, 'have_symmetry_off': have_symmetry_off}
+        self.template = template
+        return M
+
+    def write_zmat(self, coords, dirname):
+        if not os.path.exists(dirname): os.makedirs(dirname)
+        # Convert coordinates back to Angstrom
+        self.M.xyzs[0] = coords.reshape(-1, 3) * bohr2ang
+        with open(os.path.join(dirname, 'ZMAT'), 'w') as f:
+            print(self.template_props['comment'], file=f)
+            for i in range(self.M.na):
+                print(format_xyz_coord(self.M.elem[i], self.M.xyzs[0][i]), file=f)
+            for ln, line in enumerate(self.template):
+                if ln == self.template_props['cfourln']:
+                    if self.template_props['cfour_oneline']:
+                        line = line[:-1]
+                    if not self.template_props['have_coord_cartesian']:
+                        line = line+",COORD=CARTESIAN"
+                    if not self.template_props['have_deriv_lev1']:
+                        line = line+",DERIV_LEV=1"
+                    if not self.template_props['have_print']:
+                        line = line+",PRINT=1"
+                    if not self.template_props['have_symmetry_off']:
+                        line = line+",SYMMETRY=OFF"
+                    if self.template_props['cfour_oneline']:
+                        line = line + ")"
+                print(line, file=f)
+
+    def read_result(self, dirname, check_coord=None):
+        if check_coord is not None:
+            raise CheckCoordError("Coordinate check not implemented")
+        # Parse energy and gradient from the output file
+        # Read the file backwards for speed - however, does require fitting it in memory.
+        energy = None
+        gradient = []
+        for line in open(os.path.join(dirname, 'xcfour.out')).readlines()[::-1]:
+            line = line.strip().expandtabs()
+            if 'The final electronic energy is' in line:
+                s = line.split()
+                energy = float(s[-2])
+            if 'reordered gradient in QCOM coords for ZMAT order' in line:
+                gradient = gradient[::-1]
+                break
+            # The first number in the gradient may not be preceded by a space
+            if re.match(r"^ *[-+]?([0-9]*\.)?[0-9]+( +[-+]?([0-9]*\.)?[0-9]+){2}$", line):
+                s = line.split()
+                gradient.append([float(s[0]), float(s[1]), float(s[2])])
+            else:
+                # If we encounter any line that doesn't match, then we have read in
+                # an array that doesn't contain the gradient we want. Discard it.
+                gradient = []
+        if energy is None:
+            raise CFOUREngineError("Failed to parse electronic energy from CFOUR output file.")
+        if not gradient:
+            raise CFOUREngineError("Failed to parse gradient from CFOUR output file.")
+        result = {'energy':energy, 'gradient':np.array(gradient).flatten()}
+        return result
+
+    def calc_new(self, coords, dirname):
+        """
+        Run the gaussian single point calculation using the given exe.
+        """
+        if not os.path.exists(dirname): os.makedirs(dirname)
+        self.write_zmat(coords, dirname)
+        try:
+            # Before removing tmp-files, check to see if NEWMOS file exists (from a previous single point run).
+            # and back it up if needed.
+            if os.path.exists(os.path.join(dirname, 'NEWMOS')):
+                shutil.copy2(os.path.join(dirname, 'NEWMOS'), os.path.join(dirname, 'newmos_bak'))
+            # Run xclean to remove tmp-files
+            subprocess.check_call('xclean', cwd=dirname, shell=True)
+            # If the NEWMOS file was backed up, now rename it to OLDMOS so the next single point run will read it.
+            if os.path.exists(os.path.join(dirname, 'newmos_bak')):
+                shutil.move(os.path.join(dirname, 'newmos_bak'), os.path.join(dirname, 'OLDMOS'))
+            subprocess.check_call('xcfour > xcfour.out 2> xcfour.err', cwd=dirname, shell=True)
+            result = self.read_result(dirname)
+        except (OSError, IOError, RuntimeError, subprocess.CalledProcessError):
+            raise CFOUREngineError("CFOUR executation failed")
+        return result
+
+    def calc_wq_new(self, coords, dirname):
+        wq = getWorkQueue()
+        if not os.path.exists(dirname): os.makedirs(dirname)
+        self.write_zmat(coords, dirname)
+        in_files = [('%s/ZMAT' % dirname, 'ZMAT')]
+        # If NEWMOS file exists, then 
+        if os.path.exists(os.path.join(dirname, 'NEWMOS')):
+            in_files += [('%s/NEWMOS' % dirname, 'OLDMOS')]
+        out_files = [('%s/xcfour.out' % dirname, 'xcfour.out'), ('%s/xcfour.err' % dirname, 'xcfour.err')]
+        queue_up_src_dest(wq, 'xcfour > xcfour.out 2> xcfour.err', in_files, out_files, verbose=False)
 
 class Gaussian(Engine):
     """
