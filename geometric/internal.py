@@ -299,7 +299,11 @@ class CartesianZ(PrimitiveCoordinate):
         xyz = xyz.reshape(-1,3)
         deriv2 = np.zeros((xyz.shape[0], xyz.shape[1], xyz.shape[0], xyz.shape[1]))
         return deriv2
-    
+
+def IsTR(Prim):
+    return type(Prim) in (TranslationX, TranslationY, TranslationZ,
+                          RotationA, RotationB, RotationC)
+            
 class TranslationX(PrimitiveCoordinate):
     def __init__(self, a, w):
         self.a = a
@@ -2807,6 +2811,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         self.connect = connect
         # Add Cartesian coordinates to all.
         self.addcart = addcart
+        self.rigid = True
         # The DLC contains an instance of primitive internal coordinates.
         self.Prims = PrimitiveInternalCoordinates(molecule, connect=connect, addcart=addcart, constraints=constraints, cvals=cvals)
         self.frags = self.Prims.frags
@@ -2842,7 +2847,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         self.Prims.getConstraints_from(other.Prims)
         
     def haveConstraints(self):
-        return len(self.Prims.cPrims) > 0
+        return (len(self.Prims.cPrims) > 0) or self.rigid
 
     def getConstraintNames(self):
         return self.Prims.getConstraintNames()
@@ -2854,10 +2859,11 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         return self.Prims.getConstraintCurrentVals(xyz, units=units)
 
     def calcConstraintDiff(self, xyz, units=False):
-        return self.Prims.calcConstraintDiff(xyz, units=units)
+        cDiff = self.Prims.calcConstraintDiff(xyz, units=units)
+        return cDiff
     
     def maxConstraintViolation(self, xyz):
-        return self.Prims.maxConstraintViolation(xyz)
+        return self.Prims.maxConstraintViolation(xyz) if self.Prims.cPrims else 0.0
 
     def printConstraints(self, xyz, thre=1e-5):
         self.Prims.printConstraints(xyz, thre=thre)
@@ -2899,13 +2905,17 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         ni = len(G)
         # Number of constraints
         nc = len(self.Prims.cPrims)
+        # Number of rigidified DLCs
+        nr = len(self.rigDLC)
         # Total dimension
-        nt = ni+nc
+        nt = ni+nc+nr
         # Lower block of the augmented Hessian
-        cT = np.zeros((nc, ni), dtype=float)
+        cT = np.zeros((nc+nr, ni), dtype=float)
         # The further change needed in constrained variables:
         # (Constraint values) - (Current values of constraint ICs)
         c0 = -1.0 * self.calcConstraintDiff(xyz)
+        c0 = np.hstack((c0, np.zeros(nr)))
+        # print("rigid: c0 = ", c0)
         for ic, c in enumerate(self.Prims.cPrims):
             # Look up the index of the primitive that is being constrained
             iPrim = self.Prims.Internals.index(c)
@@ -2919,6 +2929,9 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
                     c0[ic] = -0.1
                 if c0[ic] > 0.1:
                     c0[ic] = 0.1
+        for ir, r in enumerate(self.rigDLC):
+            # print("rigid: cT[%i, %i] -> 1.0" % (nc+ir, r))
+            cT[nc+ir, r] = 1.0
         # Construct augmented Hessian
         HC = np.zeros((nt, nt), dtype=float)
         HC[0:ni, 0:ni] = H[:,:]
@@ -3002,7 +3015,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
             Flat array containing gradient in Cartesian coordinates with forces
             along constrained directions projected out
         """
-        if len(self.Prims.cPrims) == 0:
+        if len(self.Prims.cPrims) == 0 and not self.rigid:
             return gradx
         q0 = self.calculate(xyz)
         Ginv = self.GInverse(xyz)
@@ -3013,6 +3026,8 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         Gqc = np.array(Gq).flatten()
         # Remove the directions that are along the DLCs that we are constraining
         for i in self.cDLC:
+            Gqc[i] = 0.0
+        for i in self.rigDLC:
             Gqc[i] = 0.0
         # Gxc = np.array(np.matrix(Bmat.T)*np.matrix(Gqc).T).flatten()
         Gxc = multi_dot([Bmat.T, Gqc.T]).flatten()
@@ -3066,15 +3081,14 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         # if LargeVals <= Expect:
         self.Vecs = Q[:, LargeIdx]
 
+        TRNonCon = []
         # Vecs has number of rows equal to the number of primitives, and
         # number of columns equal to the number of delocalized internal coordinates.
-        if self.haveConstraints():
+        if self.haveConstraints() or self.rigid:
             click()
             # print "Projecting out constraints...",
             V = []
-            for ic, c in enumerate(self.Prims.cPrims):
-                # Look up the index of the primitive that is being constrained
-                iPrim = self.Prims.Internals.index(c)
+            for iPrim, Prim in enumerate(self.Prims.cPrims):
                 # Pick a row out of the eigenvector space. This is a linear combination of the DLCs.
                 cVec = self.Vecs[iPrim, :]
                 cVec = np.array(cVec)
@@ -3083,6 +3097,18 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
                 cProj = np.dot(self.Vecs,cVec.T)
                 cProj /= np.linalg.norm(cProj)
                 V.append(np.array(cProj).flatten())
+            
+            if self.rigid:
+                for iPrim, Prim in enumerate(self.Prims.Internals):
+                    if not IsTR(Prim): continue
+                    if Prim in self.Prims.cPrims: continue
+                    TRNonCon.append(iPrim)
+                    cVec = self.Vecs[iPrim, :]
+                    cVec = np.array(cVec)
+                    cVec /= np.linalg.norm(cVec)
+                    cProj = np.dot(self.Vecs,cVec.T)
+                    cProj /= np.linalg.norm(cProj)
+                    V.append(np.array(cProj).flatten())
                 # print c, cProj[iPrim]
             # V contains the constraint vectors on the left, and the original DLCs on the right
             V = np.hstack((np.array(V).T, np.array(self.Vecs)))
@@ -3110,6 +3136,11 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
             self.Vecs = np.array(U).T
             # Constrained DLCs are on the left of self.Vecs.
             self.cDLC = [i for i in range(len(self.Prims.cPrims))]
+            if self.rigid:
+                self.rigDLC = [i for i in range(len(self.Prims.cPrims) + len(TRNonCon), self.Vecs.shape[1])]
+                self.rxyz = xyz.copy()
+            else:
+                self.rigDLC = []
         # Now self.Internals is no longer a list of InternalCoordinate objects but only a list of strings.
         # We do not create objects for individual DLCs but 
         self.Internals = ["Constraint-DLC" if i < ncon else "DLC" + " %i" % (i+1) for i in range(self.Vecs.shape[1])]
