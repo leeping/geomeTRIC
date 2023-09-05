@@ -3786,7 +3786,8 @@ class Molecule(object):
                     line_rest = line_rest[5:]
                 for conect_B in conect_B_list:
                     bond = (min((conect_A, conect_B)), max((conect_A, conect_B)))
-                    bonds.append(bond)
+                    if bond not in bonds:
+                        bonds.append(bond)
 
         Answer={"xyzs":XYZList, "chain":list(ChainID), "altloc":list(AltLoc), "icode":list(ICode),
                 "atomname":[str(i) for i in AtomNames], "resid":list(ResidueID), "resname":list(ResidueNames),
