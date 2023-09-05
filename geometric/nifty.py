@@ -1305,7 +1305,7 @@ def copy_tree_over(src, dest):
     # If you copy folder, then remove it, then copy again it will fail, because it caches all the created dirs. 
     # To workaround you can clear _path_created before copy:
     distutils.dir_util._path_created = {}
-    distutils.dir_util.copy_tree(src, dest)
+    distutils.dir_util.copy_tree(src, dest, verbose=0)
 
 # Thanks to cesarkawakami on #python (IRC freenode) for this code.
 class LineChunker(object):
