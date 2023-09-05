@@ -2027,7 +2027,6 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         # bond order-based bonds that may have been obtained earlier.
         molecule.build_topology(force_bonds=False)
         connect_isolated = True
-        trOnly = True
         if 'resid' in molecule.Data.keys():
             # Create fragments corresponding to unique resID numbers if provided.
             frags = []
@@ -2288,9 +2287,6 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                             if np.abs(np.cos(Ang2.value(coords))) > LinThre: continue
                             self.add(Dihedral(a, b, c, d))
 
-        if trOnly:
-            self.Internals = [i for i in self.Internals if type(i) in (TranslationX, TranslationY, TranslationZ, RotationA, RotationB, RotationC)]
-            
         ### Following are codes that evaluate angles and dihedrals involving entire lines-of-atoms
         ### as single degrees of freedom
         ### Unfortunately, they do not seem to improve the performance
