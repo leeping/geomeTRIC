@@ -622,7 +622,7 @@ class TeraChem(Engine):
             # Copy OpenMM Files
             shutil.copy2(self.qmindices_name, dirname)
             shutil.copy2(self.systemxml_name, dirname)
-            if self.mmgrdindices is not None:
+            if self.mmgrdindices_name is not None:
                 shutil.copy2(self.mmgrdindices_name, dirname)
             self.M_full.xyzs[0][self.grdindices, :] = self.M.xyzs[0]
             write_coors_to_xml(self.M_full, self.state_xml, os.path.join(dirname, start_xyz)) 
