@@ -864,7 +864,9 @@ def run_optimizer(**kwargs):
     coords = M.xyzs[0].flatten() * ang2bohr
 
     # Read in the constraints
-    constraints = kwargs.get('constraints', None) #Constraint input file (optional)
+    constraints = kwargs.get('constraints', None) # Constraint input file (optional)
+    conmethod = kwargs.get('conmethod', 0) # Constraint algorithm - 0, original; 1, alternative
+    rigid = kwargs.get('rigid', False) # Whether to keep molecules rigid during optimization (TRIC only)
 
     if constraints is not None:
         Cons, CVals = parse_constraints(M, open(constraints).read())
@@ -910,7 +912,7 @@ def run_optimizer(**kwargs):
         logger.info("Bonds will be generated from interatomic distances less than %.2f times sum of covalent radii\n" % M.top_settings['Fac'])
 
     IC = CoordClass(M, build=True, connect=connect, addcart=addcart, constraints=Cons, cvals=CVals[0] if CVals is not None else None,
-                    conmethod=params.conmethod)
+                    conmethod=conmethod, rigid=rigid)
     
     #========================================#
     #| End internal coordinate system setup |#
@@ -966,7 +968,7 @@ def run_optimizer(**kwargs):
         for ic, CVal in enumerate(CVals):
             if len(CVals) > 1:
                 logger.info("---=== Scan %i/%i : Constrained Optimization ===---\n" % (ic+1, len(CVals)))
-            IC = CoordClass(M, build=True, connect=connect, addcart=addcart, constraints=Cons, cvals=CVal, conmethod=params.conmethod)
+            IC = CoordClass(M, build=True, connect=connect, addcart=addcart, constraints=Cons, cvals=CVal, conmethod=conmethod, rigid=rigid)
             IC.printConstraints(coords, thre=-1)
             if len(CVals) > 1:
                 params.xyzout = prefix+"_scan-%03i.xyz" % (ic+1)

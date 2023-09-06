@@ -188,7 +188,7 @@ class PrimitiveCoordinate(object):
                 diff = Minus2Pi
         diff *= w
         return diff
-        
+
 class CartesianX(PrimitiveCoordinate):
     def __init__(self, a, w=1.0):
         self.a = a
@@ -765,6 +765,104 @@ class RotationC(PrimitiveCoordinate):
         second_derivatives = deriv2_all[:, :, :, :, 2]*self.w
         return second_derivatives
 
+class CentroidDistance(PrimitiveCoordinate):
+    def __init__(self, a, b):
+        self.a = a
+        self.b = b
+        self.isAngular = False
+        self.isPeriodic = False
+        self.xa = TranslationX(a, w=np.ones(len(a))/len(a))
+        self.ya = TranslationY(a, w=np.ones(len(a))/len(a))
+        self.za = TranslationZ(a, w=np.ones(len(a))/len(a))
+        self.xb = TranslationX(b, w=np.ones(len(b))/len(b))
+        self.yb = TranslationY(b, w=np.ones(len(b))/len(b))
+        self.zb = TranslationZ(b, w=np.ones(len(b))/len(b))
+
+    def __repr__(self):
+        return "CentroidDistance %s --- %s" % (commadash(self.a), commadash(self.b))
+        
+    def __eq__(self, other):
+        if type(self) is not type(other): return False
+        eq = (set(self.a) == set(other.a) and set(self.b) == set(other.b))
+        return eq
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+        
+    def value(self, xyz):
+        (xa, ya, za, xb, yb, zb) = (p.value(xyz) for p in (self.xa, self.ya, self.za,
+                                                           self.xb, self.yb, self.zb))
+        ra = np.array([xa, ya, za])
+        rb = np.array([xb, yb, zb])
+        rab = (rb-ra)
+        nab = np.linalg.norm(rab)
+        return nab
+        
+    def calcDiff(self, xyz1, xyz2=None, val2=None):
+        if xyz2 is None and val2 is None:
+            raise RuntimeError("Provide exactly one of xyz2 and val2")
+        elif xyz2 is not None and val2 is not None:
+            raise RuntimeError("Provide exactly one of xyz2 and val2")
+        if xyz2 is not None:
+            val2 = self.value(xyz2)
+        diff = self.value(xyz1) - val2
+        return diff
+    
+    def derivative(self, xyz):
+        (xa, ya, za, xb, yb, zb) = (p.value(xyz) for p in (self.xa, self.ya, self.za,
+                                                           self.xb, self.yb, self.zb))
+        ra = np.array([xa, ya, za])
+        rb = np.array([xb, yb, zb])
+        rab = (rb-ra)
+        nab = np.linalg.norm(rab)
+        
+        dxa = self.xa.derivative(xyz)
+        dya = self.ya.derivative(xyz)
+        dza = self.za.derivative(xyz)
+        dxb = self.xb.derivative(xyz)
+        dyb = self.yb.derivative(xyz)
+        dzb = self.zb.derivative(xyz)
+        
+        xyz = xyz.reshape(-1,3)
+        derivatives = np.zeros_like(xyz)
+        derivatives += rab[0]*dxb
+        derivatives -= rab[0]*dxa
+        derivatives += rab[1]*dyb
+        derivatives -= rab[1]*dya
+        derivatives += rab[2]*dzb
+        derivatives -= rab[2]*dza
+        derivatives /= nab
+        return derivatives
+        # for i, a in enumerate(self.a):
+        #     derivatives[a][2] = self.w[i]
+        # return derivatives
+
+    def second_derivative(self, xyz):
+        (xa, ya, za, xb, yb, zb) = (p.value(xyz) for p in (self.xa, self.ya, self.za,
+                                                           self.xb, self.yb, self.zb))
+        ra = np.array([xa, ya, za])
+        rb = np.array([xb, yb, zb])
+        rab = (rb-ra)
+        nab = np.linalg.norm(rab)
+        
+        # Finite difference for now - I don't expect we'll be using this anyway,
+        # since second derivs. are usually for TS optimization and CentroidDistance
+        # is used for constraints
+        h = 1e-4 
+
+        xyz = xyz.reshape(-1,3)
+        deriv2 = np.zeros((xyz.shape[0], xyz.shape[1], xyz.shape[0], xyz.shape[1]))
+        for i in range(xyz.shape[0]):
+            for j in range(xyz.shape[1]):
+                xyz[i, j] += h
+                dplus = self.derivative(xyz)
+                xyz[i, j] -= 2*h
+                dminus = self.derivative(xyz)
+                xyz[i, j] += h
+                deriv2[i, j, :, :] = (dplus-dminus)/(2*h)
+
+        return deriv2
+    
 class Distance(PrimitiveCoordinate):
     def __init__(self, a, b):
         self.a = a
@@ -1678,7 +1776,7 @@ def convert_angstroms_degrees(prims, values):
             w = c.w
         else:
             w = 1.0
-        if type(c) in [TranslationX, TranslationY, TranslationZ, CartesianX, CartesianY, CartesianZ, Distance, LinearAngle]:
+        if type(c) in [TranslationX, TranslationY, TranslationZ, CartesianX, CartesianY, CartesianZ, Distance, LinearAngle, CentroidDistance]:
             factor = bohr2ang
         elif c.isAngular:
             factor = 180.0 / np.pi
@@ -2009,8 +2107,13 @@ class InternalCoordinates(object):
 class PrimitiveInternalCoordinates(InternalCoordinates):
     def __init__(self, molecule, connect=False, addcart=False, constraints=None, cvals=None, **kwargs):
         super(PrimitiveInternalCoordinates, self).__init__()
+        # connect = True corresponds to "traditional" internal coordinates with minimum spanning bonds
         self.connect = connect
+        # connect = False, addcart = True corresponds to HDLC
+        # connect = False, addcart = False corresponds to TRIC
         self.addcart = addcart
+        if 'rigid' in kwargs and kwargs['rigid'] is not None:
+            raise RuntimeError('Do not use rigid molecules with PrimitiveInternalCoordinates')
         self.Internals = []
         self.cPrims = []
         self.cVals = []
@@ -2786,7 +2889,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                     Hdiag.append(0.023)
             elif type(ic) in [CartesianX, CartesianY, CartesianZ]:
                 Hdiag.append(0.05)
-            elif type(ic) in [TranslationX, TranslationY, TranslationZ]:
+            elif type(ic) in [TranslationX, TranslationY, TranslationZ, CentroidDistance]:
                 Hdiag.append(0.05)
             elif type(ic) in [RotationA, RotationB, RotationC]:
                 Hdiag.append(0.05)
@@ -2796,7 +2899,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
 
     
 class DelocalizedInternalCoordinates(InternalCoordinates):
-    def __init__(self, molecule, imagenr=0, build=False, connect=False, addcart=False, constraints=None, cvals=None, remove_tr=False, cart_only=False, conmethod=0):
+    def __init__(self, molecule, imagenr=0, build=False, connect=False, addcart=False, constraints=None, cvals=None, rigid=False, remove_tr=False, cart_only=False, conmethod=0):
         super(DelocalizedInternalCoordinates, self).__init__()
         # cart_only is just because of how I set up the class structure.
         if cart_only: return
@@ -2811,7 +2914,13 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         self.connect = connect
         # Add Cartesian coordinates to all.
         self.addcart = addcart
-        self.rigid = True
+        # Make molecules rigid during optimization?
+        self.rigid = rigid
+        if self.rigid:
+            if self.conmethod != 0:
+                raise RuntimeError("Rigid optimizations only available with conmethod=0")
+            if connect or addcart:
+                raise RuntimeError("Rigid optimizations not available using non-TRIC coordinates")
         # The DLC contains an instance of primitive internal coordinates.
         self.Prims = PrimitiveInternalCoordinates(molecule, connect=connect, addcart=addcart, constraints=constraints, cvals=cvals)
         self.frags = self.Prims.frags
@@ -2832,7 +2941,10 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         self.Prims.clearCache()
 
     def __repr__(self):
-        return self.Prims.__repr__()
+        outstr = self.Prims.__repr__()
+        if self.rigid:
+            outstr += '\nRigid IC system defined: %i non-translation-rotation coordinates will be constrained.' % len(self.rigDLC)
+        return outstr
             
     def update(self, other):
         return self.Prims.update(other.Prims)
@@ -3088,6 +3200,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
             click()
             # print "Projecting out constraints...",
             V = []
+            projPrims = []
             for iPrim, Prim in enumerate(self.Prims.cPrims):
                 # Pick a row out of the eigenvector space. This is a linear combination of the DLCs.
                 cVec = self.Vecs[iPrim, :]
@@ -3097,7 +3210,8 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
                 cProj = np.dot(self.Vecs,cVec.T)
                 cProj /= np.linalg.norm(cProj)
                 V.append(np.array(cProj).flatten())
-            
+                projPrims.append(iPrim)
+
             if self.rigid:
                 for iPrim, Prim in enumerate(self.Prims.Internals):
                     if not IsTR(Prim): continue
@@ -3108,6 +3222,16 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
                     cVec /= np.linalg.norm(cVec)
                     cProj = np.dot(self.Vecs,cVec.T)
                     cProj /= np.linalg.norm(cProj)
+                    projPrims.append(iPrim)
+                    # Check to see if cProj is already redundant
+                    # (can happen if using CentroidDistance + rigid)
+                    # u = cProj.copy()
+                    # vv = np.array(V).T
+                    # for iv in range(vv.shape[1]):
+                    #     v = vv[:, iv].flatten()
+                    #     u -= v * np.dot(u, v)
+                    # print(iPrim, np.linalg.norm(u))
+                        
                     V.append(np.array(cProj).flatten())
                 # print c, cProj[iPrim]
             # V contains the constraint vectors on the left, and the original DLCs on the right
@@ -3115,6 +3239,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
             # Apply Gram-Schmidt to V, and produce U.
             # The Gram-Schmidt process should produce a number of orthogonal DLCs equal to the original number
             thre = 1e-6
+            np.set_printoptions(precision=3)
             while True:
                 U = []
                 for iv in range(V.shape[1]):
@@ -3124,6 +3249,12 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
                         U[-1] -= ui * np.dot(ui, v)
                     if np.linalg.norm(U[-1]) < thre:
                         U = U[:-1]
+                        if len(projPrims) > len(U):
+                            # Untested code - automatically remove redundant constraints
+                            if self.Prims.Internals[projPrims[len(U)]] in self.Prims.cPrims:
+                                del self.Prims.cVals[self.Prims.cPrims.index(self.Prims.Internals[projPrims[len(U)]])]
+                                del self.Prims.cPrims[self.Prims.cPrims.index(self.Prims.Internals[projPrims[len(U)]])]
+                            del projPrims[len(U)]
                         continue
                     U[-1] /= np.linalg.norm(U[-1])
                 if len(U) > self.Vecs.shape[1]:
@@ -3137,7 +3268,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
             # Constrained DLCs are on the left of self.Vecs.
             self.cDLC = [i for i in range(len(self.Prims.cPrims))]
             if self.rigid:
-                self.rigDLC = [i for i in range(len(self.Prims.cPrims) + len(TRNonCon), self.Vecs.shape[1])]
+                self.rigDLC = [i for i in range(len(projPrims), self.Vecs.shape[1])]
                 self.rxyz = xyz.copy()
             else:
                 self.rigDLC = []
@@ -3643,6 +3774,8 @@ class ChainCoordinates(PrimitiveInternalCoordinates):
         self.cVals = []
         if 'constraints' in kwargs and kwargs['constraints'] is not None:
             raise RuntimeError('Do not use constraints with Cartesian coordinates')
+        if 'rigid' in kwargs and kwargs['rigid'] is not None:
+            raise RuntimeError('Do not use rigid molecules with Cartesian coordinates')
         self.elem = molecule.elem
         self.ImageICs = [EmptyCoordinates(molecule[0], **kwargs)]
         for i in range(1, len(molecule)-1):
