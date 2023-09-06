@@ -1,5 +1,5 @@
 """
-A set of tests for using the OpenMM engine
+A set of tests for using the CFOUR engine
 """
 
 import copy
