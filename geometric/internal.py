@@ -2286,7 +2286,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                             if np.abs(np.cos(Ang1.value(coords))) > LinThre: continue
                             if np.abs(np.cos(Ang2.value(coords))) > LinThre: continue
                             self.add(Dihedral(a, b, c, d))
-            
+
         ### Following are codes that evaluate angles and dihedrals involving entire lines-of-atoms
         ### as single degrees of freedom
         ### Unfortunately, they do not seem to improve the performance
