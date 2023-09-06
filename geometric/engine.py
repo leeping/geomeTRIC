@@ -946,13 +946,13 @@ class CFOUR(Engine):
                     if self.template_props['cfour_oneline']:
                         line = line[:-1]
                     if not self.template_props['have_coord_cartesian']:
-                        line = line+",COORD=CARTESIAN"
+                        line = line+"\nCOORD=CARTESIAN"
                     if not self.template_props['have_deriv_lev1']:
-                        line = line+",DERIV_LEV=1"
+                        line = line+"\nDERIV_LEV=1"
                     if not self.template_props['have_print']:
-                        line = line+",PRINT=1"
+                        line = line+"\nPRINT=1"
                     if not self.template_props['have_symmetry_off']:
-                        line = line+",SYMMETRY=OFF"
+                        line = line+"\nSYMMETRY=OFF"
                     if self.template_props['cfour_oneline']:
                         line = line + ")"
                 print(line, file=f)
@@ -1198,10 +1198,7 @@ class QUICK(Engine):
     def __init__(self, molecule, exe=None, threads=None):
         super(QUICK, self).__init__(molecule)
         self.threads = threads
-        if exe.lower() in ("quick", "quick.cuda", "quick.mpi", "quick.cuda.mpi"):
-            self.quick_exe = exe.lower()
-        else:
-            raise ValueError("Only quick.cuda and quick are supported.")
+        self.quick_exe = exe
 
     def load_quick_input(self, quick_input):
         """

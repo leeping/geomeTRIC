@@ -321,7 +321,7 @@ def get_molecule_engine(**kwargs):
                 exe = "quick.cuda.MPI"
             elif shutil.which("quick.cuda") is not None:
                 exe = "quick.cuda"
-            elif shutil.which("quick") is not None:
+            elif shutil.which("quick.MPI") is not None:
                 exe = "quick.MPI"
             elif shutil.which("quick") is not None:
                 exe = "quick"
@@ -329,7 +329,7 @@ def get_molecule_engine(**kwargs):
                 raise ValueError("Neither quick.cuda.MPI, quick.cuda, quick.MPI or quick was found, please check the environment.")
             engine = QUICK(molecule=M, exe=exe, threads=threads)
             threads_enabled = True
-            logger.info("The quick engine exe is set as %s" % engine.quick_exe)
+            logger.info("The quick engine exe is set as %s\n" % engine.quick_exe)
             # load the template into the engine
             engine.load_quick_input(inputf)
         elif engine_str == 'qcengine':

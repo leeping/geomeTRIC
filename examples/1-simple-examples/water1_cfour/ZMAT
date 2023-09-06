@@ -1,0 +1,10 @@
+Geometry optimization of H2O at HF-SCF level
+O       -0.00000000       0.00000000       0.06563855
+H        0.00000000      -0.75748074      -0.52086570
+H        0.00000000       0.75748074      -0.52086570
+
+*ACES2(CALC=HF,BASIS=svp
+COORD=CARTESIAN
+CONV=-5
+SCF_CONV=14)
+
