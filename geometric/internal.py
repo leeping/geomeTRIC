@@ -2129,6 +2129,29 @@ class InternalCoordinates(object):
         '''
         self._conmethod = val
 
+    @property
+    def rigid(self):
+        ''' Flag for rigid optimizations (valid for DLC only)
+
+        Notes:
+            - `0`: Rigid optimizations off
+            - `1`: Rigid optimizations on
+
+        Returns:
+            None | bool: True if rigid optimizations are enabled, or else `None` is returned
+        '''
+        if hasattr(self, '_rigid'):
+            return self._rigid
+        return None
+        
+    @rigid.setter
+    def rigid(self, val):
+        ''' set the flag for rigid optimizations
+
+        Args:
+            val (None | bool): Whether rigid optimizations are on, off or undefined
+        '''
+        self._rigid = val
 
 class PrimitiveInternalCoordinates(InternalCoordinates):
     def __init__(self, molecule, connect=False, addcart=False, constraints=None, cvals=None, **kwargs):
@@ -3059,12 +3082,12 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
             # For a differential change in the DLC, the primitive that we are constraining changes by:
             cT[ic, self.cDLC[ic]] = 1.0/self.Vecs[iPrim, self.cDLC[ic]]
             # The new constraint algorithm satisfies constraints too quickly and could cause
-            # the energy to blow up. Thus, constraint steps are restricted to 0.1 au/radian
+            # the energy to blow up. Thus, constraint steps are restricted to 0.3 au/radian (about 0.16 A / 17 degrees)
             if self.conmethod == 1:
-                if c0[ic] < -0.1:
-                    c0[ic] = -0.1
-                if c0[ic] > 0.1:
-                    c0[ic] = 0.1
+                if c0[ic] < -0.3:
+                    c0[ic] = -0.3
+                if c0[ic] > 0.3:
+                    c0[ic] = 0.3
         for ir, r in enumerate(self.rDLC):
             # print("rigid: cT[%i, %i] -> 1.0" % (nc+ir, r))
             cT[nc+ir, r] = 1.0
