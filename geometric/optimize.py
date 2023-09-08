@@ -216,7 +216,7 @@ class Optimizer(object):
                 raise ValueError("Cannot continue a constrained optimization; please implement constrained optimization in Cartesian coordinates")
             IC1 = CartesianCoordinates(newmol)
         else:
-            IC1 = self.IC.__class__(newmol, connect=self.IC.connect, addcart=self.IC.addcart, build=False, conmethod=self.IC.conmethod)
+            IC1 = self.IC.__class__(newmol, connect=self.IC.connect, addcart=self.IC.addcart, build=False, conmethod=self.IC.conmethod, rigid=self.IC.rigid)
             if self.IC.haveConstraints(): IC1.getConstraints_from(self.IC)
         # Check for differences
         changed = (IC1 != self.IC)
@@ -245,7 +245,23 @@ class Optimizer(object):
 
     def calcGradNorm(self):
         gradxc = self.IC.calcGradProj(self.X, self.gradx) if self.IC.haveConstraints() else self.gradx.copy()
-        atomgrad = np.sqrt(np.sum((gradxc.reshape(-1,3))**2, axis=1))
+        if self.IC.rigid:
+            mol = deepcopy(self.molecule)
+            mol.xyzs = [self.X.reshape(-1, 3)*bohr2ang]
+            mol.qm_grads = [gradxc.reshape(-1,3)]
+            atomgrad = []
+            print("Net forces / torques:")
+            netfrcs = []
+            torques = []
+            for i, frag in enumerate(self.IC.frags):
+                frag_mol = mol.atom_select(frag)
+                netfrc, torque = frag_mol.calc_netforce_torque(mass=True)
+                netfrcs.append(netfrc[0])
+                torques.append(torque[0])
+                print("Frag %i: % 9.3e % 9.3e % 9.3e ; % 9.3e % 9.3e % 9.3e" % (i, *netfrc[0], *torque[0]))
+            atomgrad = np.sqrt(np.sum((np.array(netfrcs + torques).reshape(-1,3))**2, axis=1))
+        else:
+            atomgrad = np.sqrt(np.sum((gradxc.reshape(-1,3))**2, axis=1))
         rms_gradient = np.sqrt(np.mean(atomgrad**2))
         max_gradient = np.max(atomgrad)
         return rms_gradient, max_gradient

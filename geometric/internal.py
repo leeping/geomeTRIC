@@ -2917,8 +2917,6 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         # Make molecules rigid during optimization?
         self.rigid = rigid
         if self.rigid:
-            if self.conmethod != 0:
-                raise RuntimeError("Rigid optimizations only available with conmethod=0")
             if connect or addcart:
                 raise RuntimeError("Rigid optimizations not available using non-TRIC coordinates")
         # The DLC contains an instance of primitive internal coordinates.
@@ -2943,7 +2941,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
     def __repr__(self):
         outstr = self.Prims.__repr__()
         if self.rigid:
-            outstr += '\nRigid IC system defined: %i non-translation-rotation coordinates will be constrained.' % len(self.rigDLC)
+            outstr += '\nRigid IC system defined: %i non-translation-rotation coordinates will be constrained.' % len(self.rDLC)
         return outstr
             
     def update(self, other):
@@ -3018,7 +3016,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         # Number of constraints
         nc = len(self.Prims.cPrims)
         # Number of rigidified DLCs
-        nr = len(self.rigDLC)
+        nr = len(self.rDLC)
         # Total dimension
         nt = ni+nc+nr
         # Lower block of the augmented Hessian
@@ -3041,7 +3039,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
                     c0[ic] = -0.1
                 if c0[ic] > 0.1:
                     c0[ic] = 0.1
-        for ir, r in enumerate(self.rigDLC):
+        for ir, r in enumerate(self.rDLC):
             # print("rigid: cT[%i, %i] -> 1.0" % (nc+ir, r))
             cT[nc+ir, r] = 1.0
         # Construct augmented Hessian
@@ -3139,7 +3137,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         # Remove the directions that are along the DLCs that we are constraining
         for i in self.cDLC:
             Gqc[i] = 0.0
-        for i in self.rigDLC:
+        for i in self.rDLC:
             Gqc[i] = 0.0
         # Gxc = np.array(np.matrix(Bmat.T)*np.matrix(Gqc).T).flatten()
         Gxc = multi_dot([Bmat.T, Gqc.T]).flatten()
@@ -3239,7 +3237,6 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
             # Apply Gram-Schmidt to V, and produce U.
             # The Gram-Schmidt process should produce a number of orthogonal DLCs equal to the original number
             thre = 1e-6
-            np.set_printoptions(precision=3)
             while True:
                 U = []
                 for iv in range(V.shape[1]):
@@ -3268,10 +3265,10 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
             # Constrained DLCs are on the left of self.Vecs.
             self.cDLC = [i for i in range(len(self.Prims.cPrims))]
             if self.rigid:
-                self.rigDLC = [i for i in range(len(projPrims), self.Vecs.shape[1])]
+                self.rDLC = [i for i in range(len(projPrims), self.Vecs.shape[1])]
                 self.rxyz = xyz.copy()
             else:
-                self.rigDLC = []
+                self.rDLC = []
         # Now self.Internals is no longer a list of InternalCoordinate objects but only a list of strings.
         # We do not create objects for individual DLCs but 
         self.Internals = ["Constraint-DLC" if i < ncon else "DLC" + " %i" % (i+1) for i in range(self.Vecs.shape[1])]
@@ -3321,7 +3318,6 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         xyz : np.ndarray
             Flat array containing Cartesian coordinates in atomic units
         """
-        click()
         G = self.Prims.GMatrix(xyz)
         nprim = len(self.Prims.Internals)
         cPrimIdx = []
@@ -3332,14 +3328,34 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         ncon = len(self.Prims.cPrims)
         if cPrimIdx != list(range(ncon)):
             raise RuntimeError("The constraint primitives should be at the start of the list")
+
+        TRNonCon = []
+        if self.rigid:
+            for iPrim, Prim in enumerate(self.Prims.Internals):
+                if not IsTR(Prim): continue
+                if Prim in self.Prims.cPrims: continue
+                TRNonCon.append(iPrim)
+
+        # In case of rigid opts, the TR-primitives should be excluded from the "residual" DLCs.
+        # Here we include the TR-primitives with the constrained DoFs, in order to separate
+        # them from the others.
+        sel_con_plusTR = list(range(ncon)) + TRNonCon
+        not_sel = [i for i in range(G.shape[0]) if i not in sel_con_plusTR]
+        reorder_idx = sel_con_plusTR + not_sel
+        invmap = []
+        for i in range(len(reorder_idx)):
+            invmap.append(reorder_idx.index(i))
+        ncon = len(sel_con_plusTR)
+
+        # Reorder the G matrix so that constraints and TRNonCon are in front.
+        G = G[np.ix_(reorder_idx, reorder_idx)]
+
         # Form a sub-G-matrix that doesn't include the constrained primitives and diagonalize it to form DLCs.
         Gsub = G[ncon:, ncon:]
-        time_G = click()
         L, Q = np.linalg.eigh(Gsub)
         # Sort eigenvalues and eigenvectors in descending order (for cleanliness)
         L = L[::-1]
         Q = Q[:, ::-1]
-        time_eig = click()
         # print "Build G: %.3f Eig: %.3f" % (time_G, time_eig)
         # Figure out which eigenvectors from the G submatrix to include
         LargeVals = 0
@@ -3366,8 +3382,8 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         # Perform Gram-Schmidt orthogonalization
         def ov(vi, vj):
             return multi_dot([vi, G, vj])
-        if self.haveConstraints():
-            click()
+
+        if self.haveConstraints() or self.rigid:
             V = self.Vecs.copy()
             nv = V.shape[1]
             Vnorms = np.array([np.sqrt(ov(V[:,ic], V[:, ic])) for ic in range(nv)])
@@ -3375,50 +3391,37 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
             U = np.zeros((V.shape[0], Expect), dtype=float)
             Unorms = np.zeros(Expect, dtype=float)
             
-            for ic in range(ncon):
+            icu = 0
+            for ic in range(ncon+len(LargeIdx)):
                 # At the top of the loop, V columns are orthogonal to U columns up to ic.
                 # Copy V column corresponding to the next constraint to U.
-                U[:, ic] = V[:, ic].copy()
-                ui = U[:, ic]
-                Unorms[ic] = np.sqrt(ov(ui, ui))
-                if Unorms[ic]/Vnorms[ic] < 0.1:
-                    logger.warning("Constraint %i is almost redundant; after projection norm is %.3f of original\n" % (ic, Unorms[ic]/Vnorms[ic]))
-                V0 = V.copy()
+                U[:, icu] = V[:, ic].copy()
+                ui = U[:, icu]
+                Unorms[icu] = np.sqrt(ov(ui, ui)) if ov(ui, ui) > 0 else 0.0
+                if Unorms[icu]/Vnorms[ic] < 0.1:
+                    logger.warning("Dropping DLC %i (almost redundant); after projection norm is %.3e of original - ov(ui, ui) = %.3e\n" % (icu, Unorms[icu]/Vnorms[ic], ov(ui, ui)))
+                    ncon -= 1
+                    continue
                 # Project out newest U column from all remaining V columns.
                 for jc in range(ic+1, nv):
                     vj = V[:, jc]
-                    vj -= ui * ov(ui, vj)/Unorms[ic]**2
-                
-            for ic in range(ncon, Expect):
-                # Pick out the V column with the largest norm
-                norms = np.array([np.sqrt(ov(V[:, jc], V[:, jc])) for jc in range(ncon, nv)])
-                imax = ncon+np.argmax(norms)
-                # Add this column to U
-                U[:, ic] = V[:, imax].copy()
-                ui = U[:, ic]
-                Unorms[ic] = np.sqrt(ov(ui, ui))
-                # Project out the newest U column from all V columns
-                for jc in range(ncon, nv):
-                    V[:, jc] -= ui * ov(ui, V[:, jc])/Unorms[ic]**2
+                    vj -= ui * ov(ui, vj)/Unorms[icu]**2
+                icu += 1
                 
             # self.Vecs contains the linear combination coefficients that are our new DLCs
-            self.Vecs = U.copy()
+            self.Vecs = U[:, :icu].copy()
+            self.Vecs = self.Vecs[invmap]
             # Constrained DLCs are on the left of self.Vecs.
+            # Note that at this point, "ncon" is a misnomer and len(self.cDLC) < ncon if rigid optimization is active.
             self.cDLC = [i for i in range(len(self.Prims.cPrims))]
+            # Rigid DLCs 
+            if self.rigid:
+                self.rDLC = list(range(ncon, Expect))
+                self.rxyz = xyz.copy()
+            else:
+                self.rDLC = []
 
-        self.Internals = ["Constraint" if i < ncon else "DLC" + " %i" % (i+1) for i in range(self.Vecs.shape[1])]
-        # # LPW: Coefficients of DLC's are in each column and DLCs corresponding to constraints should basically be like (0 1 0 0 0 ..)
-        # pmat2d(self.Vecs, format='f', precision=2)
-        # B = self.Prims.wilsonB(xyz)
-        # Bdlc = np.einsum('ji,jk->ik', self.Vecs, B)
-        # Gdlc = np.dot(Bdlc, Bdlc.T)
-        # # Expect to see a diagonal matrix here
-        # print("Gdlc")
-        # pmat2d(Gdlc, format='e', precision=2)
-        # # Expect to see "large" eigenvalues here (no less than 0.1 ideally)
-        # print("L, Q")
-        # L, Q = np.linalg.eigh(Gdlc)
-        # print(L)
+        self.Internals = ["Constraint" if i < len(self.cDLC) else "DLC" + " %i" % (i+1) for i in range(self.Vecs.shape[1])]
 
     def build_dlc(self, xyz):
         if self.conmethod == 1:
