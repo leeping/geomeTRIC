@@ -2001,7 +2001,33 @@ class InternalCoordinates(object):
             # Figure out the further change needed
             dQ1 = dQ1 - dQ_actual
             xyz1 = xyz2.copy()
-            
+
+    @property
+    def conmethod(self):
+        ''' algorithm for constraint satisfaction
+
+        Notes:
+            - `0`: Original algorithm implemented in 2016
+            - `1`: Updated algorithm implemented on 2019-03-20
+
+        Returns:
+            None | int: integer if the algorithm is applicable and indicate the revision of method,
+                        or else `None` is returned
+        '''
+        if hasattr(self, '_conmethod'):
+            return self._conmethod
+        return None
+
+    @conmethod.setter
+    def conmethod(self, val):
+        ''' set the algorithm for constraint satisfaction
+
+        Args:
+            val (None | int): algorithm revision
+        '''
+        self._conmethod = val
+
+
 class PrimitiveInternalCoordinates(InternalCoordinates):
     def __init__(self, molecule, connect=False, addcart=False, constraints=None, cvals=None, **kwargs):
         super(PrimitiveInternalCoordinates, self).__init__()
