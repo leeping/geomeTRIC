@@ -258,7 +258,7 @@ class Optimizer(object):
                 netfrc, torque = frag_mol.calc_netforce_torque(mass=True)
                 netfrcs.append(netfrc[0])
                 torques.append(torque[0])
-                print("Frag %i: % 9.3e % 9.3e % 9.3e ; % 9.3e % 9.3e % 9.3e" % (i, *netfrc[0], *torque[0]))
+                # print("Frag %i: % 9.3e % 9.3e % 9.3e ; % 9.3e % 9.3e % 9.3e" % (i, *netfrc[0], *torque[0]))
             atomgrad = np.sqrt(np.sum((np.array(netfrcs + torques).reshape(-1,3))**2, axis=1))
         else:
             atomgrad = np.sqrt(np.sum((gradxc.reshape(-1,3))**2, axis=1))
