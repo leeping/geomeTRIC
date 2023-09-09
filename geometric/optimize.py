@@ -250,7 +250,7 @@ class Optimizer(object):
             mol.xyzs = [self.X.reshape(-1, 3)*bohr2ang]
             mol.qm_grads = [gradxc.reshape(-1,3)]
             atomgrad = []
-            print("Net forces / torques:")
+            # print("Net forces / torques:")
             netfrcs = []
             torques = []
             for i, frag in enumerate(self.IC.frags):
