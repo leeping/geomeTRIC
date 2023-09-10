@@ -236,6 +236,11 @@ To set one or more convergence criteria individually, provide one or more pairs 
 Hard-coded sets of convergence criteria can also be specified by providing ``--converge set SET_NAME``
 where ``set`` must be entered exactly and ``SET_NAME`` is one of the entries in the following table:
 
+Additionally, the special word ``maxiter`` may be provided as one of the values in this list, which will
+enable the optimization to return a success status when the maximum number of iterations is reached.
+This can be used in workflows where a small number of steps is needed to relax large forces.
+Set the maximum number of iterations separately with ``--maxiter``.
+
 +----------------------+----------------+--------------+--------------+--------------+--------------+
 | Set name             | Energy         | Grad RMS     | Grad Max     | Disp RMS     | Disp Max     |
 +======================+================+==============+==============+==============+==============+

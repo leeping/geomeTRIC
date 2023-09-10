@@ -1198,7 +1198,10 @@ class QUICK(Engine):
     def __init__(self, molecule, exe=None, threads=None):
         super(QUICK, self).__init__(molecule)
         self.threads = threads
-        self.quick_exe = exe
+        if exe.lower() in ("quick", "quick.cuda", "quick.mpi", "quick.cuda.mpi"):
+            self.quick_exe = exe
+        else:
+            raise ValueError("The only valid values for exe are quick, quick.cuda, quick.cuda.MPI and quick.MPI.")
 
     def load_quick_input(self, quick_input):
         """

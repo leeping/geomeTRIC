@@ -151,8 +151,15 @@ class OptParams(object):
 
     def convergence_criteria(self, **kwargs):
         criteria = kwargs.get('converge', [])
+        # Whether to converge successfully on reaching maximum number of iterations
+        self.Converge_maxiter = False
+        # Iterate backward through the list, in case someone lists maxiter twice.
+        for i in list(range(len(criteria)))[::-1]:
+            if criteria[i].lower() == 'maxiter':
+                criteria.pop(i)
+                self.Converge_maxiter = True
         if len(criteria)%2 != 0:
-            raise RuntimeError('Please pass an even number of options to --converge')
+            raise RuntimeError('Please pass an even number of options to --converge (excluding maxiter)')
         for i in range(int(len(criteria)/2)):
             key = 'convergence_' + criteria[2*i].lower()
             try:
@@ -351,7 +358,8 @@ def parse_optimizer_args(*args):
     grp_optparam.add_argument('--maxiter', type=int, help='Maximum number of optimization steps, default 300.\n ')
     grp_optparam.add_argument('--converge', type=str, nargs="+", help='Custom convergence criteria as key/value pairs.\n'
                               'Provide the name of a criteria set as "set GAU_LOOSE" or "set TURBOMOLE",\n'
-                              'and/or set specific criteria using key/value pairs e.g. "energy 1e-5 grms 1e-3"\n ')
+                              'and/or set specific criteria using key/value pairs e.g. "energy 1e-5 grms 1e-3"\n '
+                              'and/or add the MAXITER keyword to enable successful convergence on maximum iterations reached')
     grp_optparam.add_argument('--trust', type=float, help='Starting trust radius, defaults to 0.1 (energy minimization) or 0.01 (TS optimization).\n ')
     grp_optparam.add_argument('--tmax', type=float, help='Maximum trust radius, defaults to 0.3 (energy minimization) or 0.03 (TS optimization).\n ')
     grp_optparam.add_argument('--tmin', type=float, help='Minimum trust radius, do not reject steps trust radius is below this threshold (method-dependent).\n ')
