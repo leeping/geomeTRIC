@@ -41,7 +41,7 @@ class TestCFOURWorkQueue:
 
     @addons.using_cfour
     @addons.using_workqueue
-    def test_cfour_workqueue(localizer):
+    def test_cfour_workqueue(self, localizer):
         """
         Compute the gradient using Work Queue.
         """
@@ -53,7 +53,9 @@ class TestCFOURWorkQueue:
         geometric.nifty.createWorkQueue(9191, debug=False)
         # Start the WQ worker program
         worker_program = geometric.nifty.which('work_queue_worker')
-        subprocess.Popen([os.path.join(worker_program, "work_queue_worker"), "localhost", "9191"], stdout=subprocess.PIPE)
+        # Assume 1 thread is available
+        self.workers = [subprocess.Popen([os.path.join(worker_program, "work_queue_worker"), "localhost", str(9191)],
+                                         stdout=subprocess.PIPE) for i in range(1)]
         # Submit the calculation to the queue
         engine.calc_wq(coords, 'run.tmp')
         # Wait for the calc to finish

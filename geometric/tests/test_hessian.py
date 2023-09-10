@@ -57,8 +57,6 @@ class TestPsi4WorkQueueHessian:
     @addons.using_psi4
     @addons.using_workqueue
     def test_psi4_work_queue_hessian(self, localizer):
-        import work_queue
-
         shutil.copy2(os.path.join(datad, 'hcn_minimized.psi4in'), os.getcwd())
 
         geometric.nifty.createWorkQueue(9191, debug=False)
@@ -91,7 +89,6 @@ class TestASEWorkQueueHessian:
     @addons.using_ase
     @addons.using_workqueue
     def test_ase_work_queue_hessian(self, localizer):
-        import work_queue
 
         shutil.copy2(os.path.join(datad, 'water1_coords_gfn2-xtb.xyz'), os.path.join(os.getcwd(), "start.xyz"))
 
