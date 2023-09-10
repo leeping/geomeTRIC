@@ -99,7 +99,7 @@ for example, to use ``xz`` or ``trans-xz`` two numbers are required for ``$set``
 
 ....
 
-``rotation`` : The orientation of the specified fragment is constrained. *This is a new feature in geomeTRIC*.
+``rotation`` : The orientation of the specified fragment is constrained. *This is a new feature only available in geomeTRIC (at time of writing)*.
 
 The atom selection uses comma and dash syntax to specify a range of atoms (see above).
 
@@ -128,6 +128,12 @@ The constraints for the calculation in the middle panel is as follows::
     $scan
     rotation 37-72 0.0 1.0 0.0 0.0 175.0 36
 
+....
+
+``centroid_distance`` : The distance between centroids of two molecules or fragments is constrained.
+Two atom selections should be used to define the fragments, using the comma and dash syntax.
+Values provided to ``$set`` and ``$scan`` are in Angstrom.
+
 Enforcing constraint satisfaction
 ---------------------------------
 
@@ -135,4 +141,21 @@ In the default constrained optimization algorithm, the constrained degrees of fr
 This behavior can be adjusted using the ``--enforce`` command line option.
 By passing a parameter such as ``--enforce 0.1`` (for example), the optimizer will switch to an algorithm that `exactly` enforces constraint satisfaction once the current values are within 0.1 of the target.
 The units are in bohr/radians, so exact constraint enforcement is turned on when bond length constraints are within 0.1 bohr (about 0.529 Angstrom) and angle/dihedral constraints are within 0.1 rad (about 6.28 degrees) of the target values.
-Activating exact constraint enforcement may improve performance in many cases, and it is expected to become the default algorithm after more testing.
+
+Rigid optimizations
+-------------------
+
+GeomeTRIC supports rigid-body optimizations in which the intermolecular positions and orientations of rigid molecules or fragments are optimized.
+Together with the centroid distance constraint, this may be used for calculating interaction energy curves of molecular dimers while excluding the effects of intramolecular deformations.
+
+To enable this feature, use the command line option ``--rigid yes``.  When this option is turned on, molecular net forces and torques will be used instead of atomistic gradients for the convergence criteria.
+The net force and torque vectors for each molecule are concatenated into an array, then the RMS and maximum norms are computed (the unit of torque is Hartree/bohr * bohr).
+
+It is highly recommended that the revised constraint algorithm is also activated by passing ``--conmethod 1``, as this may improve convergence for structures in the repulsive region of the interaction energy curve.
+
+.. image:: images/bucky-rigid.png
+   :width: 800
+
+The above image shows the comparison of rigid and flexible geometry optimizations of the "bucky-catcher" complex in which the centroid distance is scanned a range from 3.2 to 10.0 Angstrom.
+Left and middle panel: Rigid scan with structures aligned using the mitt and the ball, respectively.  Note how the ball rolls off one side of the mitt.
+Right panel: Flexible scan. The mitt closes as the ball is pulled away, and the ball remains centered on the mitt's symmetry axis.

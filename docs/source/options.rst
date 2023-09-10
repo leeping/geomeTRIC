@@ -63,6 +63,7 @@ The "engine" is the software to be used for computing energies and gradients, wh
 - ``openmm`` : Use OpenMM. Provide an OpenMM force field or system ``.xml`` file and a PDB file using ``--pdb`` for the initial structure and topology.
 - ``ase`` : Use ASE. Also requires the ``--ase-class`` and ``--ase-kwargs`` options to be specified.
 - ``quick`` : Use QUICK. Provide a QUICK input file with Cartesian coordinates.
+- ``cfour`` : Use CFOUR. Provide a CFOUR input file with Cartesian coordinates. A Python script is provided to convert Z-matrix input prior to running the optimization.
 - ``gmx`` : Use Gromacs (experimental). Provide a Gromacs ``.gro`` file. A topology file ``topol.top`` and run parameters ``shot.mdp`` are required, with those exact names.
 
 ``--nt [1]``
@@ -84,6 +85,13 @@ This option changes the behavior of the optimization algorithm and convergence c
 Also, a numerical Hessian will be computed at the start of the optimization (not the end) unless otherwise specified.
 
     Note: Transition state optimizations are notorious for requiring an initial guess in order to arrive at the desired structure, so it is recommended to start with a high-quality initial guess from constraint scanning or other approaches.
+
+....
+
+``--rigid [yes/no]``
+
+Provide ``yes`` to keep molecules / fragments rigid during the optimization.
+See :ref:`Constraints <constraints>` for more details.
 
 ....
 
@@ -293,8 +301,8 @@ If tested widely enough, setting a threshold of 0.1 may become the default behav
 
 ``--conmethod [0]``
 
-Provide a value of ``1`` to use an alternative way of building the delocalized internal coordinates that satisfies constraints more rapidly, but may be less stable.
-Use only if the default method fails for constrained optimizations.
+Provide a value of ``1`` to use an alternative way of building the delocalized internal coordinates that satisfies constraints more rapidly.
+Use for rigid optimizations, or if the default method fails for constrained optimizations.
 
 ....
 
