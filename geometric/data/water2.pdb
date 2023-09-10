@@ -1,0 +1,9 @@
+REMARK   1 CREATED WITH FORCEBALANCE 2019-02-17
+HETATM    1  O   HOH A   1       0.856  -1.382   0.317  0.00  0.00           O  
+HETATM    2  H1  HOH A   1       1.675  -1.848   0.486  0.00  0.00           H  
+HETATM    3  H2  HOH A   1       1.118  -0.468   0.206  0.00  0.00           H  
+TER
+HETATM    4  O   HOH A   2      -0.801  -2.091  -1.573  0.00  0.00           O  
+HETATM    5  H1  HOH A   2      -0.220  -1.830  -0.858  0.00  0.00           H  
+HETATM    6  H2  HOH A   2      -0.328  -1.846  -2.368  0.00  0.00           H  
+TER

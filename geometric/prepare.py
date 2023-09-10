@@ -45,7 +45,7 @@ import os
 
 from .ase_engine import EngineASE
 from .errors import EngineError, InputError
-from .internal import Distance, Angle, Dihedral, CartesianX, CartesianY, CartesianZ, TranslationX, TranslationY, TranslationZ, RotationA, RotationB, RotationC
+from .internal import Distance, Angle, Dihedral, CartesianX, CartesianY, CartesianZ, TranslationX, TranslationY, TranslationZ, RotationA, RotationB, RotationC, CentroidDistance
 from .engine import set_tcenv, load_tcin, TeraChem, ConicalIntersection, Psi4, QChem, Gromacs, Molpro, OpenMM, QCEngineAPI, Gaussian, QUICK, CFOUR
 from .molecule import Molecule, Elements
 from .nifty import logger, isint, uncommadash, bohr2ang, ang2bohr
@@ -466,7 +466,8 @@ def parse_constraints(molecule, constraints_string):
                  "trans-xz":([TranslationX, TranslationZ], 1),
                  "trans-yz":([TranslationY, TranslationZ], 1),
                  "trans-xyz":([TranslationX, TranslationY, TranslationZ], 1),
-                 "rotation":([RotationA, RotationB, RotationC], 1)
+                 "rotation":([RotationA, RotationB, RotationC], 1),
+                 "centroid_distance":([CentroidDistance], 2)
                  }
     AtomKeys = ["x", "y", "z", "xy", "yz", "xz", "xyz"]
     TransKeys = ["trans-x", "trans-y", "trans-z", "trans-xy", "trans-yz", "trans-xz", "trans-xyz"]
@@ -598,6 +599,24 @@ def parse_constraints(molecule, constraints_string):
                         if key == "distance": x2 = float(s[2+n_atom]) * ang2bohr
                         else: x2 = float(s[2+n_atom])*np.pi/180.0
                         nstep = int(s[3+n_atom])
+                        vals.append([[i] for i in list(np.linspace(x1,x2,nstep))])
+            elif key in ["centroid_distance"]:
+                atoms_a = uncommadash(s[1])
+                atoms_b = uncommadash(s[2])
+                if atoms_a[0] > atoms_b[0]:
+                    atoms_c = atoms_a[:]
+                    atoms_a = atoms_b[:]
+                    atoms_b = atoms_c[:]
+                objs.append([classes[0](atoms_a, atoms_b)])
+                if mode == "freeze":
+                    vals.append([[None]])
+                elif mode in ["set", "scan"]:
+                    x1 = float(s[3]) * ang2bohr
+                    if mode == "set":
+                        vals.append([[x1]])
+                    else:
+                        x2 = float(s[4]) * ang2bohr
+                        nstep = int(s[5])
                         vals.append([[i] for i in list(np.linspace(x1,x2,nstep))])
             elif key in ["rotation"]:
                 # User can only specify ranges of atoms
