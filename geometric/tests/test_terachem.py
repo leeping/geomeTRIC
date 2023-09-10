@@ -55,7 +55,7 @@ class TestTerachemWorkQueue:
         geometric.nifty.createWorkQueue(9191, debug=False)
         # Start the WQ worker program
         worker_program = geometric.nifty.which('work_queue_worker')
-        subprocess.Popen([os.path.join(worker_program, "work_queue_worker"), "localhost", "9191"], stdout=subprocess.PIPE)
+        self.workers = [subprocess.Popen([os.path.join(worker_program, "work_queue_worker"), "localhost", "9191"], stdout=subprocess.PIPE)]
         # Submit the calculation to the queue
         engine.calc_wq(coords, 'run.tmp')
         # Wait for the calc to finish

@@ -56,9 +56,7 @@ class TestWorkQueueHessian:
 
     @addons.using_psi4
     @addons.using_workqueue
-    def test_work_queue_hessian(self, localizer):
-        import work_queue
-
+    def test_psi4_work_queue_hessian(self, localizer):
         shutil.copy2(os.path.join(datad, 'hcn_minimized.psi4in'), os.getcwd())
 
         geometric.nifty.createWorkQueue(9191, debug=False)

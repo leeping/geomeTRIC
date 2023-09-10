@@ -95,7 +95,10 @@ class TestWorkQueue:
     @addons.using_workqueue
     def test_work_queue_functions(self, localizer):
         """Check work_queue functions behave as expected"""
-        import work_queue
+        try:
+            import ndcctools.work_queue as work_queue
+        except ImportError:
+            import work_queue
 
         # Work Queue will no longer be initialized to None
         assert nifty.WORK_QUEUE is None, "Unexpected initialization of nifty.WORK_QUEUE to %s" % str(nifty.WORK_QUEUE)

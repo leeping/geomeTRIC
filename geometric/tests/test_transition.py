@@ -87,7 +87,8 @@ class TestTransitionQchemWorkQueue:
     @addons.using_qchem
     @addons.using_workqueue
     def test_transition_qchem_workqueue(self, localizer):
-        import work_queue
+        # Do not start the WQ master because geometric.optimize.run_optimizer does that
+        # geometric.nifty.createWorkQueue(9191, debug=False)
 
         shutil.copy2(os.path.join(datad, 'propynimine-tsguess.qcin'), os.path.join(os.getcwd(), 'run.qcin'))
         shutil.copy2(os.path.join(datad, 'propynimine-tsguess-hessian.txt'), os.path.join(os.getcwd(), 'hessian.txt'))
@@ -99,7 +100,8 @@ class TestTransitionQchemWorkQueue:
 
         progress = geometric.optimize.run_optimizer(engine='qchem', port=9191, transition=True, input='run.qcin',
                                                     converge=['gmax', '1.0e-5'], trust=0.1, tmax=0.3, hessian='file+last:hessian.txt')
-
+        # Likewise, no need to run destroyWorkQueue()
+        # geometric.nifty.destroyWorkQueue(9191)
         M_ref = geometric.molecule.Molecule(os.path.join(datad, 'propynimine-ts-optimized.xyz'))
 
         # Check that the optimization converged in less than 10 steps

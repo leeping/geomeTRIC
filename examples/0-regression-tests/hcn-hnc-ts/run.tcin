@@ -4,3 +4,4 @@ charge 0
 spinmult 1
 method rhf
 basis 3-21g
+gpus 1

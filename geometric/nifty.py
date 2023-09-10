@@ -803,7 +803,10 @@ def lp_load(fnm):
 #|      Work Queue stuff      |#
 #==============================#
 try:
-    import work_queue
+    try:
+        import ndcctools.work_queue as work_queue
+    except ImportError:
+        import work_queue
 except:
     pass
     #logger.warning("Work Queue library import fail (You can't queue up jobs using Work Queue)\n")
@@ -839,6 +842,9 @@ def createWorkQueue(wq_port, debug=True, name=package):
 def destroyWorkQueue():
     # Convenience function to destroy the Work Queue objects.
     global WORK_QUEUE, WQIDS
+    if hasattr(WORK_QUEUE, '_free'): 
+        print("Freeing Work Queue")
+        WORK_QUEUE._free()
     WORK_QUEUE = None
     WQIDS = defaultdict(list)
 
