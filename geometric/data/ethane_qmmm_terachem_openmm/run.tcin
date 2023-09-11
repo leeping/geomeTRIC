@@ -1,0 +1,34 @@
+run            gradient
+coordinates    state.xml
+system_xml     system.xml 
+qmindices      qmindices.txt
+charge         0
+spinmult       1
+precision      mixed
+basis          3-21g
+method         hf
+threspdp       1.0e-5
+threall        1.0e-16
+gpus           1
+
+# casscf settings
+casscf yes
+castarget 0
+cassinglets 2
+active 2
+closed 4
+casscfconvthre 1e-6
+
+casscfmaxiter             500
+casscflambdagrow         2.0
+casscflambdashrink       0.5
+casscftrustthresh       0.25
+cpsacasscfconvthre      1e-6
+cpsacasscfmaxiter       500
+
+amoeba yes
+amoeba_delocal yes
+amoeba_omega 1.0
+printmmgrad mmindices.txt
+
+end

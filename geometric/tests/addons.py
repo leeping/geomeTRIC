@@ -45,6 +45,8 @@ def get_gaussian_version():
     else:
         return None
 
+def workqueue_found():
+    return (_plugin_import("work_queue") is True) and (geometric.nifty.which('work_queue_worker'))
 
 # Modify paths for testing
 os.environ["DQM_CONFIG_PATH"] = os.path.dirname(os.path.abspath(__file__))
@@ -62,7 +64,7 @@ using_qcengine = pytest.mark.skipif(
 using_openmm = pytest.mark.skipif(
     _plugin_import("openmm") is False and _plugin_import("simtk.openmm") is False, reason="could not find openmm. please install the package to enable tests")
 using_workqueue = pytest.mark.skipif(
-    (_plugin_import("work_queue") is False) or (not geometric.nifty.which('work_queue_worker')), reason="could not find work_queue module or work_queue_worker executable. please install the package to enable tests")
+    (not workqueue_found()), reason="could not find work_queue module or work_queue_worker executable. please install the package to enable tests")
 using_terachem = pytest.mark.skipif(
     not geometric.nifty.which("terachem"), reason="could not find terachem. please make sure TeraChem is installed for these tests")
 using_qchem = pytest.mark.skipif(

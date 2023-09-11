@@ -15,6 +15,7 @@ exclude_lines =
     except np.linalg.LinAlgError
     raise NotImplementedError
     raise RuntimeError
+    raise .*EngineError
     def visualize
     verbose:
     if verbose >=

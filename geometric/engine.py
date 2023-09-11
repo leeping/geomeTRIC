@@ -454,11 +454,10 @@ class TeraChem(Engine):
                 # remove redundant and sort indices 
                 self.grdindices = list(set(self.grdindices))
                 self.grdindices.sort()
-            print("grdindices", self.grdindices)
+            logger.info("grdindices = " + str(self.grdindices) + "\n")
             # update molecule coordinates from "state.xml"
             self.M_full = Molecule(pdb, build_topology=True)
             self.state_xml = read_coors_from_xml(self.M_full, os.path.abspath(tcin["coordinates"])) 
-            print("finish reading from state_xml")
 
         super(TeraChem, self).__init__(molecule)
 
@@ -538,6 +537,7 @@ class TeraChem(Engine):
                 shutil.copy2(os.path.join(dirname, self.scr, f+".sav"), os.path.join(dirname, self.scr, f))
 
     def calc_new(self, coords, dirname):
+        if not os.path.exists(dirname): os.makedirs(dirname)
         # Ensure guess files are in the correct locations
         self.copy_guess_files(dirname)
         # Set coordinate file name
