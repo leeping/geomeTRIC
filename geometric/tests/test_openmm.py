@@ -56,6 +56,23 @@ def test_dlc_openmm_water3(localizer):
     assert ((rmsd < 0.03 and maxd < 0.05) or (rmsd2 < 0.03 and maxd2 < 0.05))
 
 @addons.using_openmm
+def test_dlc_openmm_water12(localizer):
+    """
+    Optimize the geometry of twelve water molecules using DLC. 
+    The coordinate system is expected to break down and the optimizer should skip the optimization step
+    after rebuilding the coordinate system.
+    """
+    progress = geometric.optimize.run_optimizer(engine='openmm', pdb=os.path.join(datad,'water12.pdb'), 
+                                                coordsys='dlc', input='tip3p.xml', maxiter=20, converge=['maxiter'])
+
+    have_skip_step = False
+    for line in open('tip3p.log').readlines():
+        if 'Skipping optimization step' in line:
+            have_skip_step = True
+    assert have_skip_step
+
+
+@addons.using_openmm
 def test_tric_openmm_water6(localizer):
     """
     Optimize the geometry of six water molecules using translation-rotation internal coordinates.

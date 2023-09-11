@@ -25,3 +25,5 @@ exclude_lines =
     main()
     engine_str == 'gmx'
     if False
+    if self.viz_rotations
+    if self.ForceRebuild:
