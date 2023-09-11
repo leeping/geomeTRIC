@@ -227,7 +227,7 @@ def test_hcn_neb_service_special(localizer):
     Testing neb.nextchain() bad quality step
     """
 
-    # Bad quality
+    # 1) Bad quality step
     with open(os.path.join(datad, "nextchain_json_in.json")) as prepare_in:
         in_dict = json.load(prepare_in)
 
@@ -248,3 +248,36 @@ def test_hcn_neb_service_special(localizer):
     assert len(in_dict["Ys"]) == len(out_dict["Ys"])
     assert len(in_dict["GWs"]) == len(out_dict["GWs"])
     assert len(in_dict["GPs"]) == len(out_dict["GPs"])
+
+    # 2) Triggering recover
+    input_dict = copy.deepcopy(in_dict)
+
+    # If the smallest eigenvalue is smaller than epsilon, it will try to recover.
+    input_dict["params"]["epsilon"] = 100
+
+    new_coords, out_dict = geometric.qcf_neb.nextchain(input_dict)
+
+    new_coords_ang = np.array(new_coords) * geometric.nifty.bohr2ang
+    old_coords_ang = in_dict["coord_ang_prev"]
+
+    prev_results = input_dict["result_prev"]
+    new_results = out_dict["result_prev"]
+
+    # Gradients and energies should stay the same
+    assert len(prev_results) == len(new_results)
+    for i in range(len(prev_results)):
+        assert np.allclose(prev_results[i]["gradient"], new_results[i]["gradient"])
+        assert np.isclose(prev_results[i]["energy"], new_results[i]["energy"])
+
+    # Only two images should be the same (first and last). It takes a step after the recover.
+    count = sum(
+        [1 if np.allclose(i, j) else 0 for i, j in zip(old_coords_ang, new_coords_ang)]
+    )
+    assert 2 == count
+    assert np.allclose(new_coords_ang[0], old_coords_ang[0])
+    assert np.allclose(new_coords_ang[-1], old_coords_ang[-1])
+
+    # There should be only one IC and gradients after the recover.
+    assert 1 == len(out_dict["Ys"])
+    assert 1 == len(out_dict["GWs"])
+    assert 1 == len(out_dict["GPs"])
