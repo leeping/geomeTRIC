@@ -126,8 +126,8 @@ class Optimizer(object):
         # IRC related attributes
         self.IRC_direction = 1
         self.IRC_opt = False
-        self.IRC_substep_success = True
         self.IRC_total_disp = 0.0
+        self.IRC_substep_success = True
         self.IC_changed = False
         self.prevQ = 1.0
         if print_info:
@@ -585,8 +585,11 @@ class Optimizer(object):
                 self.IRC_total_disp += mwdx
                 const = self.find_lambda(min_lambda, Heig, Hvecs, g_M, p_M)
                 cnorm = self.get_cartesian_norm(dy) # Angstrom
-                if ((const > 1 or min_lambda > Heig[0]) and irc_sub_iteration > 100) :
-                    if (mwdx > self.IRC_stepsize*1.5 or mwdx_1 > self.IRC_stepsize*1.5) and cnorm > self.trust and self.IRC_substep_success:
+                if ((const > 1 or min_lambda > Heig[0]) and irc_sub_iteration > 100) or mwdx > self.IRC_stepsize*1.5:
+                    #logger.info("mwdx_1: %f \n" %np.linalg.norm(mwdx_1))
+                    #logger.info("mwdx: %f \n" %mwdx)
+                    #logger.info("cnorm: %f \n" %cnorm)
+                    if self.IRC_substep_success:
                         logger.info("IRC second sub-step failed. Rejecting the step.\n")
                         self.IRC_substep_success = False
                     else:
@@ -600,6 +603,8 @@ class Optimizer(object):
                     logger.info('X Failed total cnorm: %.5f \n' %cnorm)
                     logger.info('Constraint: %.5f \n' %const)
                     logger.info('dq_new: %.5f \n' %np.linalg.norm(dq_new))
+                else:
+                    self.IRC_substep_success = True
                 break
             irc_sub_iteration += 1
             p_prime += dq_new
@@ -773,6 +778,7 @@ class Optimizer(object):
             self.IRC_opt = False
             self.trustprint = "="
             #self.params.tmax = self.trust
+            self.IRC_substep_success = True
             self.IC_changed = False
             self.IRC_total_disp = 0.0
             self.prevQ = 1.0
