@@ -1,5 +1,5 @@
 """
-A set of tests for using the OpenMM engine
+A set of tests for using the TeraChem engine
 """
 
 import copy
@@ -28,7 +28,7 @@ def test_meci_qmmm_terachem(localizer):
     e_ref = -251.9957148967
     assert progress.qm_energies[-1] < (e_ref + 0.001)
 
-class TestTerachemWorkQueue:
+class TestTerachemQMMM:
 
     """ Tests are put into class so that the fixture can terminate the worker process. """
 
@@ -39,10 +39,12 @@ class TestTerachemWorkQueue:
         if self.workers is not None:
             for worker in self.workers:
                 worker.terminate()
-    
+
+    @pytest.mark.parametrize("workqueue", [0, 1])
     @addons.using_terachem
-    @addons.using_workqueue
-    def test_terachem_workqueue(self, localizer):
+    def test_terachem_qmmm_amber(self, localizer, workqueue):
+        if workqueue and not addons.workqueue_found():
+            pytest.skip("Work Queue not found")
         # Copy needed files
         for fnm in ['x.prmtop', 'qmindices.txt', 'run.tcin']:
             shutil.copy(os.path.join(exampled, '0-performance-tests', 'psb3-qmmm-meci', fnm), os.getcwd())
@@ -51,19 +53,22 @@ class TestTerachemWorkQueue:
         # Create molecule and engine object
         molecule, engine = geometric.prepare.get_molecule_engine(engine='terachem', input='run.tcin')
         coords = molecule.xyzs[0].flatten()*geometric.nifty.ang2bohr
-        # Start the WQ master
-        geometric.nifty.createWorkQueue(9191, debug=False)
-        # Start the WQ worker program
-        worker_program = geometric.nifty.which('work_queue_worker')
-        subprocess.Popen([os.path.join(worker_program, "work_queue_worker"), "localhost", "9191"], stdout=subprocess.PIPE)
-        # Submit the calculation to the queue
-        engine.calc_wq(coords, 'run.tmp')
-        # Wait for the calc to finish
-        geometric.nifty.wq_wait(geometric.nifty.getWorkQueue(), print_time=10)
-        # Read the result
-        result = engine.read_wq(coords, 'run.tmp')['gradient']
-        # Destroy Work Queue object
-        geometric.nifty.destroyWorkQueue()
+        if workqueue:
+            # Start the WQ master
+            geometric.nifty.createWorkQueue(9191, debug=False)
+            # Start the WQ worker program
+            worker_program = geometric.nifty.which('work_queue_worker')
+            self.workers = [subprocess.Popen([os.path.join(worker_program, "work_queue_worker"), "localhost", "9191"], stdout=subprocess.PIPE)]
+            # Submit the calculation to the queue
+            engine.calc_wq(coords, 'run.tmp')
+            # Wait for the calc to finish
+            geometric.nifty.wq_wait(geometric.nifty.getWorkQueue(), print_time=10)
+            # Read the result
+            result = engine.read_wq(coords, 'run.tmp')['gradient']
+            # Destroy Work Queue object
+            geometric.nifty.destroyWorkQueue()
+        else:
+            result = engine.calc_new(coords, 'run.tmp')['gradient']
         # Compare result
         refgrad = np.array([[ 0.0183380081, -0.0045038141,  0.0007505074],
                             [-0.0165195434,  0.0049289444,  0.0097964202],
@@ -80,6 +85,46 @@ class TestTerachemWorkQueue:
                             [-0.0052052918,  0.0010504165, -0.0097522852],
                             [ 0.0404225583,  0.0116268521, -0.0007552128]]).flatten()
         np.testing.assert_almost_equal(result, refgrad, decimal=5)
+
+    @pytest.mark.parametrize("workqueue", [0, 1])
+    @addons.using_terachem
+    def test_terachem_qmmm_openmm(self, localizer, workqueue):
+        if workqueue and not addons.workqueue_found():
+            pytest.skip("Work Queue not found")
+        # Test interface to TeraChem using QM/MM interface from OpenMM files
+        for fnm in ['ethane.pdb', 'qmindices.txt', 'mmindices.txt', 'system.xml', 'state.xml', 'run.tcin']:
+            shutil.copy(os.path.join(datad, 'ethane_qmmm_terachem_openmm', fnm), os.getcwd())
+        shutil.copy(os.path.join(exampled, '0-performance-tests', 'psb3-qmmm-meci', 'converged.inpcrd'), 
+                    os.path.join(os.getcwd(), 'x.inpcrd'))
+        # Create molecule and engine object
+        molecule, engine = geometric.prepare.get_molecule_engine(engine='terachem', input='run.tcin', pdb='ethane.pdb')
+        coords = molecule.xyzs[0].flatten()*geometric.nifty.ang2bohr
+        if workqueue:
+            # Start the WQ master
+            geometric.nifty.createWorkQueue(9191, debug=False)
+            # Start the WQ worker program
+            worker_program = geometric.nifty.which('work_queue_worker')
+            self.workers = [subprocess.Popen([os.path.join(worker_program, "work_queue_worker"), "localhost", "9191"], stdout=subprocess.PIPE)]
+            # Submit the calculation to the queue
+            engine.calc_wq(coords, 'run.tmp')
+            # Wait for the calc to finish
+            geometric.nifty.wq_wait(geometric.nifty.getWorkQueue(), print_time=10)
+            # Read the result
+            result = engine.read_wq(coords, 'run.tmp')['gradient']
+            # Destroy Work Queue object
+            geometric.nifty.destroyWorkQueue()
+        else:
+            result = engine.calc_new(coords, 'run.tmp')['gradient']
+        # Compare result
+        refgrad = np.array([[-0.0146181655,  0.0413077637, -0.0000000018],
+                            [-0.0035848878, -0.0059011543, -0.0092284233],
+                            [-0.0035848900, -0.0059011520,  0.0092284240],
+                            [ 0.0116421807, -0.0005882161, -0.0000000007],
+                            [ 0.0082058550, -0.0232158055,  0.0000000018],
+                            [-0.0016073291, -0.0027339830,  0.0043185120],
+                            [-0.0016073291, -0.0027339829, -0.0043185120],
+                            [ 0.0051545658, -0.0002334698, -0.0000000000]]).flatten()
+        np.testing.assert_almost_equal(result, refgrad, decimal=6)
 
 def test_edit_tcin(localizer):
     read_tcin_1 = geometric.engine.edit_tcin(fin=os.path.join(exampled, '0-performance-tests', 'ivermectin', 'run.tcin'), fout='test.tcin', 

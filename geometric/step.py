@@ -456,7 +456,7 @@ def get_delta_prime_trm(v, X, G, H, IC, verbose=0):
     # LPW 2020-01-24 Testing whether the image potential can be combined with NR for transition state optimization
     # Gs, Hs = image_gradient_hessian(G, H, [0])
     if IC is not None:
-        GC, HC = IC.augmentGH(X, G, H) if IC.haveConstraints() else (G, H)
+        GC, HC = IC.augmentGH(X, G, H) if (IC.haveConstraints() or IC.rigid) else (G, H)
     else:
         GC, HC = (G, H)
     HT = HC + v*np.eye(len(HC))
