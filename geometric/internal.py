@@ -2089,8 +2089,6 @@ class InternalCoordinates(object):
         # Perform singular value decomposition
         click()
         loops = 0
-        # The expected number of nonzero eigenvalues.
-        Expect = self.expected_dof()
         while True:
             try:
                 G = self.GMatrix(xyz)
@@ -2121,23 +2119,12 @@ class InternalCoordinates(object):
         #     print("%3i degrees of freedom; %i/%i singular values are > 1e-6" % (3*xyz.shape[0], LargeVals, len(S)))
         Sinv = np.diag(Sinv)
         Inv = multi_dot([V, Sinv, UT])
-        if G.shape[0] < Expect:
-            # Return a very large number if the G-matrix dimension is actually smaller than expected.
-            # This can happen if we lost a DoF at the stage of forming the DLCs.
-            self.GCond_Inverse = S[0]/S[-1]
-        else:
-            self.GCond_Inverse = S[0]/S[Expect-1]
+        self.GCond_Inverse = S[0]/S[-1]
         return Inv
 
     def G_condition(self, xyz):
         # Calculate the condition number of the G matrix.
         G = self.GMatrix(xyz)
-        # The expected number of nonzero eigenvalues.
-        # Expect = self.expected_dof()
-        # if G.shape[0] < Expect:
-        #     # Return a very large number if the G-matrix dimension is actually smaller than expected.
-        #     # This can happen if we lost a DoF at the stage of forming the DLCs.
-        #     return 1e15
         U, S, VT = np.linalg.svd(G)
         return S[0]/S[-1]
 
