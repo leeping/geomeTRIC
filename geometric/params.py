@@ -90,8 +90,6 @@ class OptParams(object):
         self.trust = max(self.tmin, self.trust)
         # Maximum number of optimization cycles
         self.maxiter = kwargs.get('maxiter', 300)
-        # Use updated constraint algorithm implemented 2019-03-20
-        self.conmethod = kwargs.get('conmethod', 0)
         # Write Hessian matrix at optimized structure to text file
         self.write_cart_hess = kwargs.get('write_cart_hess', None)
         # Output .xyz is deliberately not set here in order to give run_optimizer()
@@ -155,8 +153,15 @@ class OptParams(object):
 
     def convergence_criteria(self, **kwargs):
         criteria = kwargs.get('converge', [])
+        # Whether to converge successfully on reaching maximum number of iterations
+        self.Converge_maxiter = False
+        # Iterate backward through the list, in case someone lists maxiter twice.
+        for i in list(range(len(criteria)))[::-1]:
+            if criteria[i].lower() == 'maxiter':
+                criteria.pop(i)
+                self.Converge_maxiter = True
         if len(criteria)%2 != 0:
-            raise RuntimeError('Please pass an even number of options to --converge')
+            raise RuntimeError('Please pass an even number of options to --converge (excluding maxiter)')
         for i in range(int(len(criteria)/2)):
             key = 'convergence_' + criteria[2*i].lower()
             try:
@@ -349,6 +354,7 @@ def parse_optimizer_args(*args):
                             'Not used if the engine computes the MECI objective function directly.\n ')
     grp_jobtype.add_argument('--meci_alpha', type=float, help='Alpha parameter for MECI penalty function (default 0.025).\n'
                              'Not used if the engine computes the MECI objective function directly.\n ')
+    grp_jobtype.add_argument('--rigid', type=str2bool, help='Provide "yes" to keep molecules rigid during optimization (only with TRIC)')
 
     grp_hessian = parser.add_argument_group('hessian', 'Control the calculation of Hessian (force constant) matrices and derived quantities')
     grp_hessian.add_argument('--hessian', type=str, help='Specify when to calculate Cartesian Hessian using finite difference of gradient.\n'
@@ -373,13 +379,14 @@ def parse_optimizer_args(*args):
     grp_optparam.add_argument('--maxiter', type=int, help='Maximum number of optimization steps, default 300.\n ')
     grp_optparam.add_argument('--converge', type=str, nargs="+", help='Custom convergence criteria as key/value pairs.\n'
                               'Provide the name of a criteria set as "set GAU_LOOSE" or "set TURBOMOLE",\n'
-                              'and/or set specific criteria using key/value pairs e.g. "energy 1e-5 grms 1e-3"\n ')
+                              'and/or set specific criteria using key/value pairs e.g. "energy 1e-5 grms 1e-3"\n '
+                              'and/or add the MAXITER keyword to enable successful convergence on maximum iterations reached')
     grp_optparam.add_argument('--trust', type=float, help='Starting trust radius, defaults to 0.1 (energy minimization) or 0.01 (TS optimization).\n ')
     grp_optparam.add_argument('--tmax', type=float, help='Maximum trust radius, defaults to 0.3 (energy minimization) or 0.03 (TS optimization).\n ')
     grp_optparam.add_argument('--tmin', type=float, help='Minimum trust radius, do not reject steps trust radius is below this threshold (method-dependent).\n ')
     grp_optparam.add_argument('--usedmax', type=str2bool, help='Use maximum component instead of RMS displacement when applying trust radius.\n ')
     grp_optparam.add_argument('--enforce', type=float, help='Enforce exact constraints when within provided tolerance (in a.u./radian, default 0.0)\n ')
-    grp_optparam.add_argument('--conmethod', type=int, help='Set to 1 to enable updated constraint algorithm (default 0).\n ')
+    grp_optparam.add_argument('--conmethod', type=int, help='Set to 1 to enable alternate constraint algorithm (default 0).\n ')
     grp_optparam.add_argument('--reset', type=str2bool, help='Reset approximate Hessian to guess when eigenvalues are under epsilon.\n '
                               'Defaults to True for minimization and False for transition states.\n ')
     grp_optparam.add_argument('--epsilon', type=float, help='Small eigenvalue threshold for resetting Hessian, default 1e-5.\n ')
@@ -564,4 +571,3 @@ def parse_interpolate_args(*args):
             args_dict[k] = v
 
     return args_dict
-

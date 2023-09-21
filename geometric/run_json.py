@@ -210,6 +210,7 @@ def geometric_run_json(in_json_dict):
     constraints_dict = input_opts.get('constraints', {})
     if "scan" in constraints_dict:
         raise KeyError("The constraint 'scan' keyword is not yet supported by the JSON interface")
+    rigid = input_opts.get('rigid', False) # Whether to keep molecules rigid during optimization (TRIC only)
 
     constraints_string = make_constraints_string(constraints_dict)
     Cons, CVals = None, None
@@ -233,6 +234,7 @@ def geometric_run_json(in_json_dict):
         connect=connect,
         addcart=addcart,
         constraints=Cons,
+        rigid=rigid,
         cvals=CVals[0] if CVals is not None else None)
 
     # Print out information about the coordinate system
@@ -264,7 +266,7 @@ def geometric_run_json(in_json_dict):
             for ic, CVal in enumerate(CVals):
                 if len(CVals) > 1:
                     logger.info("---=== Scan %i/%i : Constrained Optimization ===---\n" % (ic + 1, len(CVals)))
-                IC = CoordClass(M, build=True, connect=connect, addcart=addcart, constraints=Cons, cvals=CVal)
+                IC = CoordClass(M, build=True, connect=connect, addcart=addcart, constraints=Cons, cvals=CVal, rigid=rigid)
                 IC.printConstraints(coords, thre=-1)
                 geometric.optimize.Optimize(coords, M, IC, engine, dirname, params, print_info = (ic==0))
 

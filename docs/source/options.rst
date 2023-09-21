@@ -63,6 +63,7 @@ The "engine" is the software to be used for computing energies and gradients, wh
 - ``openmm`` : Use OpenMM. Provide an OpenMM force field or system ``.xml`` file and a PDB file using ``--pdb`` for the initial structure and topology.
 - ``ase`` : Use ASE. Also requires the ``--ase-class`` and ``--ase-kwargs`` options to be specified.
 - ``quick`` : Use QUICK. Provide a QUICK input file with Cartesian coordinates.
+- ``cfour`` : Use CFOUR. Provide a CFOUR input file with Cartesian coordinates. A Python script is provided to convert Z-matrix input prior to running the optimization.
 - ``gmx`` : Use Gromacs (experimental). Provide a Gromacs ``.gro`` file. A topology file ``topol.top`` and run parameters ``shot.mdp`` are required, with those exact names.
 
 ``--nt [1]``
@@ -84,6 +85,13 @@ This option changes the behavior of the optimization algorithm and convergence c
 Also, a numerical Hessian will be computed at the start of the optimization (not the end) unless otherwise specified.
 
     Note: Transition state optimizations are notorious for requiring an initial guess in order to arrive at the desired structure, so it is recommended to start with a high-quality initial guess from constraint scanning or other approaches.
+
+....
+
+``--rigid [yes/no]``
+
+Provide ``yes`` to keep molecules / fragments rigid during the optimization.
+See :ref:`Constraints <constraints>` for more details.
 
 ....
 
@@ -228,6 +236,11 @@ To set one or more convergence criteria individually, provide one or more pairs 
 Hard-coded sets of convergence criteria can also be specified by providing ``--converge set SET_NAME``
 where ``set`` must be entered exactly and ``SET_NAME`` is one of the entries in the following table:
 
+Additionally, the special word ``maxiter`` may be provided as one of the values in this list, which will
+enable the optimization to return a success status when the maximum number of iterations is reached.
+This can be used in workflows where a small number of steps is needed to relax large forces.
+Set the maximum number of iterations separately with ``--maxiter``.
+
 +----------------------+----------------+--------------+--------------+--------------+--------------+
 | Set name             | Energy         | Grad RMS     | Grad Max     | Disp RMS     | Disp Max     |
 +======================+================+==============+==============+==============+==============+
@@ -288,8 +301,8 @@ If tested widely enough, setting a threshold of 0.1 may become the default behav
 
 ``--conmethod [0]``
 
-Provide a value of ``1`` to use an alternative way of building the delocalized internal coordinates that satisfies constraints more rapidly, but may be less stable.
-Use only if the default method fails for constrained optimizations.
+Provide a value of ``1`` to use an alternative way of building the delocalized internal coordinates that satisfies constraints more rapidly.
+Use for rigid optimizations, or if the default method fails for constrained optimizations.
 
 ....
 

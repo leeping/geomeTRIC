@@ -91,6 +91,7 @@ def arrange(qcel_mols):
     M = Molecule()
     M.elem = sym
     M.xyzs = [mol.geometry*bohr2ang for mol in qcel_mols]
+    M.build_topology()
 
     # Getting parameters and the chain
     neb_param = NEBParams()
@@ -185,21 +186,16 @@ def prepare(info_dict):
 
     GW = chain.get_global_grad("total", "working")
     GP = chain.get_global_grad("total", "plain")
-    HW = chain.guess_hessian_working.copy()
-    HP = chain.guess_hessian_plain.copy()
-    dy, expect, expectG, ForceRebuild = chain.CalcInternalStep(trust, HW, HP)
-    new_chain = chain.TakeStep(dy)
-    respaced = new_chain.delete_insert(1.5)
-    newcoords = chaintocoords(new_chain)
-    attrs_new = check_attr(new_chain)
+    oldcoords = chaintocoords(chain)
+    attrs_new = check_attr(chain)
     attrs_prev = check_attr(chain)
 
     temp = {"Ys": [chain.get_internal_all().tolist()], "GWs": [GW.tolist()], "GPs": [GP.tolist()], "attrs_new": attrs_new,
-        "attrs_prev": attrs_prev, "trust": trust, "expect": expect, "expectG": expectG.tolist(), "respaced": respaced,
+        "attrs_prev": attrs_prev, "trust": trust, "expect": None, "expectG": None, "respaced": False,
         "trustprint": "=", "frocerebuild": False,"lastforce": 0, "coord_ang_prev": chaintocoords(chain, True),
         "result_prev": result, "geometry": []}
     info_dict.update(temp)
-    return newcoords, info_dict
+    return oldcoords, info_dict
 
 
 def nextchain(info_dict):
@@ -258,18 +254,34 @@ def nextchain(info_dict):
     GP = chain.get_global_grad("total", "plain")
     Y = chain.get_internal_all()
 
+    if iteration == 1:
+        logger.info("Taking the first NEB step\n")
+        dy, expect, expectG, ForceRebuild = chain.CalcInternalStep(trust, HW0, HP0)
+        newchain = chain.TakeStep(dy)
+        respaced = newchain.delete_insert(1.5)
+        newcoords = chaintocoords(newchain)
+        attrs_new = check_attr(newchain)
+        attrs_prev = check_attr(chain)
+        temp = {"Ys": [chain.get_internal_all().tolist()], "GWs": [GW.tolist()], "GPs": [GP.tolist()],
+                "attrs_new": attrs_new, "attrs_prev": attrs_prev, "trust": trust, "expect": expect,
+                "expectG": expectG.tolist(), "respaced": respaced, "trustprint": "=", "frocerebuild": False,
+                "lastforce": 0, "coord_ang_prev": chaintocoords(chain, True), "result_prev": result, "geometry": []}
+        info_dict.update(temp)
+        return newcoords, info_dict
+
+
     # Building the Hessian up to the previous iteration.
     for i in range(len(Ys) - 1):
-        BFGSUpdate(np.array(Ys[i + 1]), np.array(Ys[i]), np.array(GPs[i + 1]), np.array(GPs[i]), HP0, params, Eig=False)
-        BFGSUpdate(np.array(Ys[i + 1]), np.array(Ys[i]), np.array(GWs[i + 1]), np.array(GWs[i]), HW0, params, Eig=False)
+        BFGSUpdate(np.array(Ys[i + 1]), np.array(Ys[i]), np.array(GPs[i + 1]), np.array(GPs[i]), HP0, params)
+        BFGSUpdate(np.array(Ys[i + 1]), np.array(Ys[i]), np.array(GWs[i + 1]), np.array(GWs[i]), HW0, params)
 
     # Saving the Hessians for special cases such as rejecting a step.
     HW_bak = deepcopy(HW0)
     HP_bak = deepcopy(HP0)
 
     # Updating the Hessian for the current iteration
-    BFGSUpdate(Y, np.array(Ys[-1]), GP, np.array(GPs[-1]), HP0, params, Eig=False)
-    BFGSUpdate(Y, np.array(Ys[-1]), GW, np.array(GWs[-1]), HW0, params, Eig=False)
+    BFGSUpdate(Y, np.array(Ys[-1]), GP, np.array(GPs[-1]), HP0, params)
+    BFGSUpdate(Y, np.array(Ys[-1]), GW, np.array(GWs[-1]), HW0, params)
 
     HW_prev = HW0
     HP_prev = HP0
@@ -280,7 +292,7 @@ def nextchain(info_dict):
     if respaced:
         # 1-1) If the chain was respaced, take a new step using the guessed Hessians.
         (chain_prev, chain, expect, expectG, ForceRebuild, LastForce, Y_prev, GW_prev, GP_prev, respaced, _) \
-            = takestep(chain_prev, chain, iteration, LastForce, ForceBuild, trust, Y, GW, GP, HW, HP, result_prev)
+            = takestep([chain_prev], chain, iteration, LastForce, ForceBuild, trust, Y, GW, GP, HW, HP, result_prev)
         attrs_new = check_attr(chain)
         attrs_prev = check_attr(chain_prev)
         newcoords = chaintocoords(chain)
@@ -305,7 +317,7 @@ def nextchain(info_dict):
         # 2-1) If the quality is bad, reject the step and take a new step with a decreased stepsize.
         chain.ComputeChain(result=result_prev)
         (chain_prev, chain, expect, expectG, ForceRebuild, LastForce, Y_prev, GW_prev, GP_prev, respaced, _) \
-        = takestep(chain_prev, chain, iteration, LastForce, ForceBuild, trust, Y, GW, GP, HW_bak, HP_bak, result_prev)
+        = takestep([chain_prev], chain, iteration, LastForce, ForceBuild, trust, Y, GW, GP, HW_bak, HP_bak, result_prev)
         attrs_new = check_attr(chain)
         attrs_prev = check_attr(chain_prev)
         newcoords = chaintocoords(chain)
@@ -332,14 +344,14 @@ def nextchain(info_dict):
             )
 
             chain, Y, GW, GP, HW, HP = recover([chain_prev], LastForce, result_prev)
-            Ys = [Y.tolist()]
-            GWs = [GW.tolist()]
-            GPs = [GP.tolist()]
+            Ys = []
+            GWs = []
+            GPs = []
             result = result_prev
 
     # 4) Take the step based on the current Hessians and gradients. Pass the result Cartesian coordinates to QCFractal.
     (chain_prev, chain, expect, expectG, ForceRebuild, LastForce, Y_prev, GW_prev, GP_prev, respaced, _) \
-        = takestep(chain_prev, chain, iteration, LastForce, ForceBuild, trust, Y, GW, GP, HW, HP, result_prev)
+        = takestep([chain_prev], chain, iteration, LastForce, ForceBuild, trust, Y, GW, GP, HW, HP, result_prev)
     attrs_new = check_attr(chain)
     attrs_prev = check_attr(chain_prev)
     Ys.append(Y.tolist())

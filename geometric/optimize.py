@@ -54,7 +54,7 @@ from .normal_modes import calc_cartesian_hessian, frequency_analysis
 from .step import brent_wiki, Froot, calc_drms_dmax, get_cartesian_norm, get_delta_prime, trust_step, force_positive_definite, update_hessian
 from .prepare import get_molecule_engine, parse_constraints
 from .params import OptParams, parse_optimizer_args
-from .nifty import row, col, flat, bohr2ang, ang2bohr, logger, bak, createWorkQueue, destroyWorkQueue
+from .nifty import row, col, flat, bohr2ang, ang2bohr, logger, bak, createWorkQueue, destroyWorkQueue, printcool_dictionary
 from .errors import InputError, HessianExit, EngineError, GeomOptNotConvergedError, GeomOptStructureError, LinearTorsionError
 
 class Optimizer(object):
@@ -169,6 +169,9 @@ class Optimizer(object):
             logger.info("> Constraints are requested. The following criterion is added:\n")
             logger.info(">  Max Constraint Violation (in Angstroms/degrees) < %.2e \n" % self.params.Convergence_cmax)
 
+        if params.Converge_maxiter:
+            logger.info(">  Converge-on-maxiter set: Will exit with success if maximum number of iterations (%i) is reached.\n" % params.maxiter)
+
         logger.info("> === End Optimization Info ===\n")
         
     def get_cartesian_norm(self, dy, verbose=None):
@@ -216,7 +219,7 @@ class Optimizer(object):
                 raise ValueError("Cannot continue a constrained optimization; please implement constrained optimization in Cartesian coordinates")
             IC1 = CartesianCoordinates(newmol)
         else:
-            IC1 = self.IC.__class__(newmol, connect=self.IC.connect, addcart=self.IC.addcart, build=False, conmethod=self.IC.conmethod)
+            IC1 = self.IC.__class__(newmol, connect=self.IC.connect, addcart=self.IC.addcart, build=False, conmethod=self.IC.conmethod, rigid=self.IC.rigid)
             if self.IC.haveConstraints(): IC1.getConstraints_from(self.IC)
         # Check for differences
         changed = (IC1 != self.IC)
@@ -245,7 +248,23 @@ class Optimizer(object):
 
     def calcGradNorm(self):
         gradxc = self.IC.calcGradProj(self.X, self.gradx) if self.IC.haveConstraints() else self.gradx.copy()
-        atomgrad = np.sqrt(np.sum((gradxc.reshape(-1,3))**2, axis=1))
+        if self.IC.rigid:
+            mol = deepcopy(self.molecule)
+            mol.xyzs = [self.X.reshape(-1, 3)*bohr2ang]
+            mol.qm_grads = [gradxc.reshape(-1,3)]
+            atomgrad = []
+            # print("Net forces / torques:")
+            netfrcs = []
+            torques = []
+            for i, frag in enumerate(self.IC.frags):
+                frag_mol = mol.atom_select(frag)
+                netfrc, torque = frag_mol.calc_netforce_torque(mass=True)
+                netfrcs.append(netfrc[0])
+                torques.append(torque[0])
+                # print("Frag %i: % 9.3e % 9.3e % 9.3e ; % 9.3e % 9.3e % 9.3e" % (i, *netfrc[0], *torque[0]))
+            atomgrad = np.sqrt(np.sum((np.array(netfrcs + torques).reshape(-1,3))**2, axis=1))
+        else:
+            atomgrad = np.sqrt(np.sum((gradxc.reshape(-1,3))**2, axis=1))
         rms_gradient = np.sqrt(np.mean(atomgrad**2))
         max_gradient = np.max(atomgrad)
         return rms_gradient, max_gradient
@@ -334,6 +353,14 @@ class Optimizer(object):
                     self.frequency_analysis(self.Hx0, 'first', False)
                 if self.Hx0.shape != (self.X.shape[0], self.X.shape[0]):
                     raise IOError('hess_data passed in via OptParams does not have the right shape')
+            if self.params.maxiter == 0:
+                logger.info("Maximum iterations reached (%i); increase --maxiter for more\n" % self.params.maxiter)
+                if self.params.Converge_maxiter:
+                    logger.info("Exiting normally because --converge maxiter was set.\n")
+                    self.state = OPT_STATE.CONVERGED
+                else:
+                    self.state = OPT_STATE.FAILED
+
             # self.Hx = self.Hx0.copy()
         # Add new Cartesian coordinates, energies, and gradients to history
         if self.viz_rotations:
@@ -576,10 +603,14 @@ class Optimizer(object):
             self.state = OPT_STATE.CONVERGED
             return
 
-        if self.Iteration > params.maxiter:
+        if self.Iteration >= params.maxiter:
             self.SortedEigenvalues(self.H)
             logger.info("Maximum iterations reached (%i); increase --maxiter for more\n" % params.maxiter)
-            self.state = OPT_STATE.FAILED
+            if params.Converge_maxiter:
+                logger.info("Exiting normally because --converge maxiter was set.\n")
+                self.state = OPT_STATE.CONVERGED
+            else:
+                self.state = OPT_STATE.FAILED
             return
 
         if params.qccnv and Converged_grms and (Converged_drms or Converged_energy) and self.conSatisfied:
@@ -841,6 +872,7 @@ def run_optimizer(**kwargs):
     now = datetime.now()
     logger.info('-=# \x1b[1;94m geomeTRIC started. Version: %s \x1b[0m #=-\n' % (geometric.__version__))
     logger.info('Current date and time: %s\n' % now.strftime("%Y-%m-%d %H:%M:%S"))
+    printcool_dictionary(kwargs, 'Arguments passed to driver run_optimizer():')
     
     if backed_up:
         logger.info('Backed up existing log file: %s -> %s\n' % (logfilename, os.path.basename(backed_up)))
@@ -869,7 +901,9 @@ def run_optimizer(**kwargs):
     coords = M.xyzs[0].flatten() * ang2bohr
 
     # Read in the constraints
-    constraints = kwargs.get('constraints', None) #Constraint input file (optional)
+    constraints = kwargs.get('constraints', None) # Constraint input file (optional)
+    conmethod = kwargs.get('conmethod', 0) # Constraint algorithm - 0, original; 1, alternative
+    rigid = kwargs.get('rigid', False) # Whether to keep molecules rigid during optimization (TRIC only)
 
     if constraints is not None:
         Cons, CVals = parse_constraints(M, open(constraints).read())
@@ -915,7 +949,7 @@ def run_optimizer(**kwargs):
         logger.info("Bonds will be generated from interatomic distances less than %.2f times sum of covalent radii\n" % M.top_settings['Fac'])
 
     IC = CoordClass(M, build=True, connect=connect, addcart=addcart, constraints=Cons, cvals=CVals[0] if CVals is not None else None,
-                    conmethod=params.conmethod)
+                    conmethod=conmethod, rigid=rigid)
     
     #========================================#
     #| End internal coordinate system setup |#
@@ -971,7 +1005,7 @@ def run_optimizer(**kwargs):
         for ic, CVal in enumerate(CVals):
             if len(CVals) > 1:
                 logger.info("---=== Scan %i/%i : Constrained Optimization ===---\n" % (ic+1, len(CVals)))
-            IC = CoordClass(M, build=True, connect=connect, addcart=addcart, constraints=Cons, cvals=CVal, conmethod=params.conmethod)
+            IC = CoordClass(M, build=True, connect=connect, addcart=addcart, constraints=Cons, cvals=CVal, conmethod=conmethod, rigid=rigid)
             IC.printConstraints(coords, thre=-1)
             if len(CVals) > 1:
                 params.xyzout = prefix+"_scan-%03i.xyz" % (ic+1)

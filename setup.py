@@ -26,6 +26,7 @@ setup(
         'numpy>=1.11',
         'networkx',
         'six',
+        'scipy',
     ],
     tests_require=[
         'pytest',
