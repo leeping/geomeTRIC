@@ -853,10 +853,14 @@ class Optimizer(object):
                 self.state = OPT_STATE.CONVERGED
                 return
 
-            if self.Iteration > params.maxiter:
+            if self.Iteration >= params.maxiter:
                 self.SortedEigenvalues(self.H)
                 logger.info("Maximum iterations reached (%i); increase --maxiter for more\n" % params.maxiter)
-                self.state = OPT_STATE.FAILED
+                if params.Converge_maxiter:
+                    logger.info("Exiting normally because --converge maxiter was set.\n")
+                    self.state = OPT_STATE.CONVERGED
+                else:
+                    self.state = OPT_STATE.FAILED
                 return
 
             if params.qccnv and Converged_grms and (Converged_drms or Converged_energy) and self.conSatisfied:
