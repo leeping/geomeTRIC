@@ -3906,7 +3906,11 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
 
         # Perform Gram-Schmidt orthogonalization
         def ov(vi, vj):
-            return np.abs(multi_dot([vi, G, vj]))
+            answer = multi_dot([vi, G, vj])
+            if (vi == vj).all():
+                return max(0.0, answer)
+            else:
+                return answer
 
         if self.haveConstraints() or self.rigid:
             V = self.Vecs.copy()
@@ -4006,7 +4010,12 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         # Carry out Gram-Schmidt orthogonalization
         # Define a function for computing overlap
         def ov(vi, vj):
-            return multi_dot([vi, G, vj])
+            answer = multi_dot([vi, G, vj])
+            if (vi == vj).all():
+                return max(0.0, answer)
+            else:
+                return answer
+
         V = self.Vecs.copy()
         nv = V.shape[1]
         Vnorms = np.array([np.sqrt(ov(V[:, ic], V[:, ic])) for ic in range(nv)])
