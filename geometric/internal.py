@@ -2442,7 +2442,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         # connect = False, addcart = False corresponds to TRIC
         self.addcart = addcart
         self.connect_isolated = connect_isolated
-        if 'rigid' in kwargs and kwargs['rigid'] is not None:
+        if 'rigid' in kwargs and kwargs['rigid'] not in (None, False):
             raise RuntimeError('Do not use rigid molecules with PrimitiveInternalCoordinates')
         self.Internals = []
         self.repulsions = repulsions
@@ -4309,7 +4309,7 @@ class ChainCoordinates(PrimitiveInternalCoordinates):
         self.cVals = []
         if 'constraints' in kwargs and kwargs['constraints'] is not None:
             raise RuntimeError('Do not use constraints with Cartesian coordinates')
-        if 'rigid' in kwargs and kwargs['rigid'] is not None:
+        if 'rigid' in kwargs and kwargs['rigid'] not in (None, False):
             raise RuntimeError('Do not use rigid molecules with Cartesian coordinates')
         self.elem = molecule.elem
         self.ImageICs = [EmptyCoordinates(molecule[0], **kwargs)]
