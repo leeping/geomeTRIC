@@ -2329,13 +2329,16 @@ class InternalCoordinates(object):
             return xyzsave.flatten()
         fail_counter = 0
         # Start iterations.
+        reuse_BG = False
         while True:
             microiter += 1
             # Get generalized inverse of Wilson B-matrix
-            Bmat = self.wilsonB(xyz1)
-            Ginv = self.GInverse(xyz1)
+            if not reuse_BG:
+                Bmat = self.wilsonB(xyz1)
+                Ginv = self.GInverse(xyz1)
+                dxyz1 = multi_dot([Bmat.T,Ginv,dQ1.T])
             # Get new Cartesian coordinates
-            dxyz = damp*multi_dot([Bmat.T,Ginv,dQ1.T])
+            dxyz = damp*dxyz1
             xyz2 = xyz1 + np.array(dxyz).flatten()
             rmsd = np.sqrt(np.mean((np.array(xyz2-xyz1).flatten())**2))
             # The coordinates after the first step are saved no matter good or bad.
@@ -2345,22 +2348,18 @@ class InternalCoordinates(object):
                 rmsdt = rmsd
             # Calculate the actual change in internal coordinates
             dQ_actual = self.calcDiff(xyz2, xyz1)
-            if hasattr(self, 'Prims'):
-                Prims = self.Prims
-            else:
-                Prims = self
-            dQ_Prims = Prims.calcDiff(xyz2, xyz1)
             # dQ1-dQ_actual is the remaining IC step needed to achieve convergence
             ndq = np.linalg.norm(dQ1-dQ_actual)
             if ndq > ndqt:
                 # Bad result: |dQ1-dQ_actual| increases from previous iteration
                 # Discard the IC step and retry with damping.
-                if verbose >= 2: logger.info("      newCartesian Iter: %i |dQ(Step)| = %.5e Err-dQ (Best) = %.5e (%.5e) RMSD: %.5e Damp: %.5e Gcond: %.5e (Bad)\n" 
-                                             % (microiter, np.linalg.norm(dQ_actual), ndq, ndqt, rmsd, damp, self.GCond_Inverse))
+                if verbose >= 2: logger.info("      newCartesian Iter: %i |dQ(Step)| = %.5e Err-dQ (Best) = %.5e (%.5e) RMSD: %.5e Damp: %s%.5e\x1b[0m Gcond: %.5e (Bad)\n" 
+                                             % (microiter, np.linalg.norm(dQ_actual), ndq, ndqt, rmsd, "\x1b[91m" if damp < 0.1 else "", damp, self.GCond_Inverse))
                 damp /= 2
                 fail_counter += 1
                 xyz2 = xyz1.copy()
                 dQ_actual *= 0
+                reuse_BG = True
             else:
                 if verbose >= 2: logger.info("      newCartesian Iter: %i |dQ(Step)| = %.5e Err-dQ (Best) = %.5e (%.5e) RMSD: %.5e Damp: %.5e Gcond: %.5e (Good)\n" 
                                              % (microiter, np.linalg.norm(dQ_actual), ndq, ndqt, rmsd, damp, self.GCond_Inverse))
@@ -2369,6 +2368,7 @@ class InternalCoordinates(object):
                 rmsdt = rmsd
                 ndqt = ndq
                 xyzsave = xyz2.copy()
+                reuse_BG = False
             ndqs.append(ndq)
             rmsds.append(rmsd)
             # Check convergence / fail criteria
@@ -2376,6 +2376,8 @@ class InternalCoordinates(object):
                 return finish(microiter, rmsdt, ndqt, xyzsave, xyz_iter1)
             if fail_counter >= 5:
                 return finish(microiter, rmsdt, ndqt, xyzsave, xyz_iter1)
+            # if microiter == 10 and ndqt > 1e-1:
+            #     return finish(microiter, rmsdt, ndqt, xyzsave, xyz_iter1)
             if microiter == 50:
                 return finish(microiter, rmsdt, ndqt, xyzsave, xyz_iter1)
             # The next IC step required to reach convergence.
