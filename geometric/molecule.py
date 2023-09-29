@@ -905,15 +905,18 @@ def arc(Mol, begin=None, end=None, RMSD=True, align=True):
     if RMSD:
         Arc = Mol.pathwise_rmsd(align)
     else:
+        # The commented line isn't desirable because sometimes it will give zero elements if Mol.xyzs[i+1] and Mol.xyzs[i] are the same,
+        # causing downstream codes such as EqualSpacing() to fail.
+        # Arc = [np.max([np.linalg.norm(Mol.xyzs[i+1][j]-Mol.xyzs[i][j]) for j in range(Mol.na)]) for i in range(begin, end-1)])
         Arc = []
         for i in range(begin, end-1):
             dmax = np.max([np.linalg.norm(Mol.xyzs[i+1][j]-Mol.xyzs[i][j]) for j in range(Mol.na)])
             if dmax < 1e-15: dmax = 1e-15
             Arc.append(dmax)
-        Arc = np.array(Arc) #[np.max([np.linalg.norm(Mol.xyzs[i+1][j]-Mol.xyzs[i][j]) for j in range(Mol.na)]) for i in range(begin, end-1)])
+        Arc = np.array(Arc) 
     return Arc
 
-def EqualSpacing(Mol, frames=0, dx=0, RMSD=True, align=True):
+def EqualSpacing(Mol, frames=0, dx=0, RMSD=True, align=True, spline=False):
     """
     Equalize the spacing of frames in a trajectory with linear interpolation.
     This is done in a very simple way, first calculating the arc length
@@ -954,9 +957,11 @@ def EqualSpacing(Mol, frames=0, dx=0, RMSD=True, align=True):
     xyznew = np.zeros((frames, Mol.na, 3))
     for a in range(Mol.na):
         for i in range(3):
-            cs = scipy.interpolate.CubicSpline(ArcMolCumul, xyzold[:, a, i])
-            xyznew[:,a,i] = cs(ArcMolEqual)
-            # xyznew[:,a,i] = np.interp(ArcMolEqual, ArcMolCumul, xyzold[:, a, i])
+            if spline:
+                cs = scipy.interpolate.CubicSpline(ArcMolCumul, xyzold[:, a, i])
+                xyznew[:,a,i] = cs(ArcMolEqual)
+            else:
+                xyznew[:,a,i] = np.interp(ArcMolEqual, ArcMolCumul, xyzold[:, a, i])
     if len(xyzold) == len(xyznew):
         Mol1 = copy.deepcopy(Mol)
     else:

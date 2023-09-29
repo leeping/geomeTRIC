@@ -741,10 +741,10 @@ class Interpolator(object):
             xyz0_stage = segment_reac[-1].copy()
             xyz1_stage = segment_prod[-1].copy()
 
-        M_reac_frames = EqualSpacing(M_reac, frames=self.n_frames//2+1, RMSD=False)
-        M_prod_frames = EqualSpacing(M_prod, frames=self.n_frames//2+1, RMSD=False)
-        M_reac_dx = EqualSpacing(M_reac, dx=0.1, RMSD=False)
-        M_prod_dx = EqualSpacing(M_prod, dx=0.1, RMSD=False)
+        M_reac_frames = EqualSpacing(M_reac, frames=self.n_frames//2+1, RMSD=False, spline=True)
+        M_prod_frames = EqualSpacing(M_prod, frames=self.n_frames//2+1, RMSD=False, spline=True)
+        M_reac_dx = EqualSpacing(M_reac, dx=0.1, RMSD=False, spline=True)
+        M_prod_dx = EqualSpacing(M_prod, dx=0.1, RMSD=False, spline=True)
         # Keep the shorter of the dmax=0.1 or n_frames//2 segments
         M_reac = M_reac_dx if len(M_reac_dx) < len(M_reac_frames) else M_reac_frames
         M_prod = M_prod_dx if len(M_prod_dx) < len(M_prod_frames) else M_prod_frames
@@ -1106,7 +1106,7 @@ class Interpolator(object):
                     M_append = M_reac[:-1] + M + M_prod[1:]
                     if len(M_append) != len(M):
                         M_append.align()
-                        M = EqualSpacing(M_append, frames=len(M), RMSD=False)
+                        M = EqualSpacing(M_append, frames=len(M), RMSD=False, spline=True)
                 else:
                     if len(M_reac) > 1:
                         M = M_reac[0] + M
