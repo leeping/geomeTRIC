@@ -650,7 +650,7 @@ class TeraChem(Engine):
         out_scr += ['grad.xyz', 'mullpop']
         for f in out_scr:
             out_files.append((os.path.join(dirname, self.scr, f), os.path.join(self.scr, f)))
-        queue_up_src_dest(wq, "terachem run.in &> run.out", in_files, out_files, verbose=False, print_time=600)
+        queue_up_src_dest(wq, "terachem run.in > run.out 2>&1", in_files, out_files, verbose=False, print_time=600)
 
     def number_output(self, dirname, calcNum):
         if not os.path.exists(os.path.join(dirname, 'run.out')):
@@ -1455,7 +1455,7 @@ class Psi4(Engine):
         out_files = [('%s/output.dat' % dirname, 'output.dat'), ('%s/run.log' % dirname, 'run.log')]
         # We will assume that the number of threads on the worker is 1, as this maximizes efficiency
         # in the limit of large numbers of jobs, although it may be controlled via environment variables.
-        queue_up_src_dest(wq, 'psi4 input.dat &> run.log', in_files, out_files, verbose=False)
+        queue_up_src_dest(wq, 'psi4 input.dat > run.log 2>&1', in_files, out_files, verbose=False)
     
     def read_result(self, dirname, check_coord=None):
         """ Read Psi4 calculation output. """
@@ -1604,13 +1604,15 @@ class QChem(Engine):
         self.M.edit_qcrems({'jobtype':'force'})
         in_files = [('%s/run.in' % dirname, 'run.in')]
         out_files = [('%s/run.out' % dirname, 'run.out'), ('%s/run.log' % dirname, 'run.log')]
+        out_files += [('%s/run.d/131.0' % dirname, 'run.d/131.0')]
         if self.qcdir:
             self.M.edit_qcrems({'scf_guess':'read'})
             in_files += [('%s/run.d/53.0' % dirname, '53.0')]
-            out_files += [('%s/run.d/131.0' % dirname, 'run.d/131.0')]
-            cmdstr = "mkdir -p run.d ; mv 53.0 run.d ; qchem run.in run.out run.d &> run.log"
+            cmdstr = "mkdir -p run.d ; mv 53.0 run.d ; qchem run.in run.out run.d > run.log 2>&1"
         else:
-            cmdstr = "qchem%s run.in run.out &> run.log" % self.nt()
+            if not os.path.exists('%s/run.d' % dirname): 
+                os.makedirs('%s/run.d' % dirname)
+            cmdstr = "qchem%s run.in run.out run.d > run.log 2>&1" % self.nt()
         self.M[0].write(os.path.join(dirname, 'run.in'))
         queue_up_src_dest(wq, cmdstr, in_files, out_files, verbose=False)
 
@@ -1638,7 +1640,7 @@ class QChem(Engine):
             gradient = np.fromfile('%s/run.d/131.0' % dirname)
         except FileNotFoundError:
             logger.info("Reading gradient from Q-Chem output instead of run.d/131.0 because the latter cannot be found. Please report this to the developer.\n")
-            gradient = M1.qm_grads[-1]
+            gradient = M1.qm_grads[-1].flatten()
         # Assume that the last occurence of "S^2" is what we want.
         s2 = 0.0
         # The 'iso-8859-1' prevents some strange errors that show up when reading the Archival summary line
