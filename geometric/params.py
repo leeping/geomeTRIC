@@ -482,8 +482,9 @@ def parse_neb_args(*args):
     grp_nebparam.add_argument('--trust', type=float, help='Starting trust radius, defaults to 0.1 (energy minimization) or 0.01 (TS optimization).\n ')
     grp_nebparam.add_argument('--tmax', type=float, help='Maximum trust radius, defaults to 0.3 (energy minimization) or 0.03 (TS optimization).\n ')
     grp_nebparam.add_argument('--tmin', type=float, help='Minimum trust radius, do not reject steps trust radius is below this threshold (method-dependent).\n ')
-    grp_nebparam.add_argument('--skip', action='store_true', help='Skip Hessian updates that would introduce negative eigenvalues.')
+    grp_nebparam.add_argument('--skip', action='store_true', help='Skip Hessian updates that would introduce negative eigenvalues.\n ')
     grp_nebparam.add_argument('--epsilon', type=float, help='Small eigenvalue threshold for resetting Hessian, default 1e-5.\n ')
+    grp_nebparam.add_argument('--port', type=int, help='Work Queue port used to distribute singlepoint calculations. Workers must be started separately.\n')
 
     grp_output = parser.add_argument_group('output', 'Control the format and amount of the output')
     grp_output.add_argument('--prefix', type=str, help='Specify a prefix for log file and temporary directory.\n'
@@ -491,7 +492,6 @@ def parse_neb_args(*args):
     grp_output.add_argument('--verbose', type=int, help='Set to positive for more verbose printout.\n'
                             '0 = Default print level.     1 = Basic info about optimization step.\n'
                             '2 = Include microiterations. 3 = Lots of printout from low-level functions.\n ')
-
     grp_help = parser.add_argument_group('help', 'Get help')
     grp_help.add_argument('-h', '--help', action='help', help='Show this help message and exit')
 
