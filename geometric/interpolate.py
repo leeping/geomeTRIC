@@ -35,6 +35,11 @@ logger.setLevel(INFO)
 handler = RawStreamHandler()
 logger.addHandler(handler)
 
+def write_coord_segment(M, coord_segment, output_filename):
+    M_copy = deepcopy(M)
+    M_copy.xyzs = [x.reshape(-1, 3)*bohr2ang for x in coord_segment]
+    M_copy.write(output_filename)
+
 # Need to refactor this so that it uses the minimum of the equilibrium bond length and the sum of covalent radii.
 def get_rab(M, i, j, bohr=True):
     if bohr:
@@ -404,23 +409,20 @@ def dq_scale_prims(IC, dest_coords, curr_coords, scale_factors={}, sync=0):
     dq = np.dot(dqPrims, IC.Vecs)
     return dq
 
-def interpolate_segment(IC, curr_coords, dest_coords, nDiv, backward=False, rebuild_dlc=False, err_thre=1e-2):
+def interpolate_segment(IC, curr_coords, dest_coords, nDiv, backward=False, rebuild_dlc=False, err_thre=1e-2, verbose=0):
     if backward:
         tmp = curr_coords.copy()
         curr_coords = dest_coords.copy()
         dest_coords = tmp.copy()
-        sync = -1
-    else:
-        sync = 1
-    dq = IC.calcDiff(dest_coords, curr_coords, sync=sync)
+    dq = IC.calcDiff(dest_coords, curr_coords, sync=1)
     coord_segment = [curr_coords]
     for k in range(nDiv):
         if rebuild_dlc:
             IC.build_dlc(curr_coords)
-            dq = IC.calcDiff(dest_coords, curr_coords, sync=sync)
-            new_coords = IC.newCartesian(curr_coords, dq/(nDiv-k), verbose=0)
+            dq = IC.calcDiff(dest_coords, curr_coords, sync=1)
+            new_coords = IC.newCartesian(curr_coords, dq/(nDiv-k), verbose=verbose)
         else:
-            new_coords = IC.newCartesian(curr_coords, dq/nDiv, verbose=0)
+            new_coords = IC.newCartesian(curr_coords, dq/nDiv, verbose=verbose)
         coord_segment.append(new_coords)
         curr_coords = new_coords.copy()
     _, endpt_err = calc_drms_dmax(curr_coords, dest_coords, align=True)
@@ -494,7 +496,7 @@ def print_map(mtx, title, colorscheme=0):
             print()
 
 class Interpolator(object):
-    def __init__(self, M_in, n_frames = 50, use_midframes = False, align_system=False, do_prealign=False):
+    def __init__(self, M_in, n_frames = 50, use_midframes = False, align_system=False, do_prealign=False, verbose=0):
         # The input molecule; it should not be modified.
         self.M_in = deepcopy(M_in)
         # Check the length of the input molecule
@@ -549,6 +551,7 @@ class Interpolator(object):
         self.atom_pairs = [list(pair) for pair in atom_pairs.copy()]
         # The smaller of the distances at either endpoint for each pair
         self.min_enddists = np.min(np.array(self.enddists), axis=0)
+        self.verbose = verbose
 
     def get_splice_length(self):
         # Determine the splice length
@@ -721,8 +724,6 @@ class Interpolator(object):
         xyz1_stage = xyz1.copy()
         IC0 = DelocalizedInternalCoordinates(M0, build=True, connect=False, addcart=False, connect_isolated=False)
         IC1 = DelocalizedInternalCoordinates(M1, build=True, connect=False, addcart=False, connect_isolated=False)
-        IC0.syncDihedrals(xyz0, xyz1)
-        IC1.syncDihedrals(xyz0, xyz1)
         self.endICs = [IC0, IC1]
         M_reac = None
         M_prod = None
@@ -845,7 +846,6 @@ class Interpolator(object):
         # Finalize the IC system.
         IC.Prims.Internals = newPrims
         IC.Prims.reorderPrimitives()
-        IC.Prims.syncDihedrals(xyz1, xyz0)
         IC.build_dlc(xyz_IC)
         # print("=== Primitives for method %i ===" % method)
         # print(IC.Prims)
@@ -997,7 +997,6 @@ class Interpolator(object):
         for i in range(len(M)):
             M_i = M[i]
             IC = DelocalizedInternalCoordinates(M_i, build=True, connect=False, addcart=False, transfers=transfers, connect_isolated=False)
-            IC.Prims.syncDihedrals(xyzs[-1], xyzs[0])
             IC.build_dlc(xyzs[i])
             ICs.append(IC)
 
@@ -1057,11 +1056,27 @@ class Interpolator(object):
                 nDiv = j-i
                 success = False
                 for c, (iic, IC) in enumerate(segment_to_ICs[a]):
+                    if self.verbose: 
+                        print("In splice_iterations: c = %i, iic = %i, IC = %s" % (c, iic, IC.__repr__()))
+                        if self.verbose >= 2:
+                            vali = IC.Prims.calculate(xyzi)
+                            valj = IC.Prims.calculate(xyzj)
+                            primDiff = IC.Prims.calcDiff(xyzj, xyzi, sync=1)
+                            for iPrim in range(len(IC.Prims.Internals)):
+                                print("%3i %25s % 9.5f % 9.5f % 9.5f" % (iPrim, IC.Prims.Internals[iPrim], vali[iPrim], valj[iPrim], primDiff[iPrim]))
                     attempt = 0
-                    coord_segment, endpt_err, success = interpolate_segment(IC, xyzi, xyzj, nDiv, backward=backwards[a][c], rebuild_dlc=False)
+                    coord_segment, endpt_err, success = interpolate_segment(IC, xyzi, xyzj, nDiv, backward=backwards[a][c], rebuild_dlc=False, verbose=self.verbose)
+                    if self.verbose: 
+                        print("forward direction: endpt_err = %8.3f success = %i" % (endpt_err, success))
+                        if self.verbose >= 2:
+                            write_coord_segment(M, coord_segment, "cycle%i_segment%i_IC%i_attempt%i.xyz" % (cycle, a, c, attempt))
                     if success: break
                     attempt = 1
-                    coord_segment, endpt_err, success = interpolate_segment(IC, xyzi, xyzj, nDiv, backward=not backwards[a][c], rebuild_dlc=False)
+                    coord_segment, endpt_err, success = interpolate_segment(IC, xyzi, xyzj, nDiv, backward=not backwards[a][c], rebuild_dlc=False, verbose=self.verbose)
+                    if self.verbose: 
+                        print("backward direction: endpt_err = %8.3f success = %i" % (endpt_err, success))
+                        if self.verbose >= 2:
+                            write_coord_segment(M, coord_segment, "cycle%i_segment%i_IC%i_attempt%i.xyz" % (cycle, a, c, attempt))
                     if success: 
                         backwards[a][c] = not backwards[a][c]
                         break
@@ -1144,7 +1159,6 @@ class Interpolator(object):
                         new_repulsions = sorted(list(set(IC.Prims.repulsions).union(set(clash_pairs))))
                         IC1 = DelocalizedInternalCoordinates(M_in[iic], build=True, connect=False, addcart=False,
                                                              repulsions=new_repulsions, transfers=IC.Prims.transfers, connect_isolated=False)
-                        IC1.syncDihedrals(xyz1, xyz0)
                         IC1.build_dlc(M_in.xyzs[iic].flatten()*ang2bohr)
                         rebuilt_segment_to_ICs.append((iic, IC1))
                     segment_to_ICs[a] = rebuilt_segment_to_ICs
@@ -1183,9 +1197,9 @@ class Interpolator(object):
 def main():
     args = parse_interpolate_args(sys.argv[1:])
     params = InterpParams(**args)
-    M0 = Molecule(sys.argv[1])
+    M0 = Molecule(args['input'])
     #interpolator = Interpolator(M0, use_midframes=True, n_frames=0, align_system=True, do_prealign=False)
-    interpolator = Interpolator(M0, n_frames= params.nframes, use_midframes=params.optimize, align_system=params.align, do_prealign=params.prealign)
+    interpolator = Interpolator(M0, n_frames= params.nframes, use_midframes=params.optimize, align_system=params.align, do_prealign=params.prealign, verbose=params.verbose)
     interpolator.run_workflow()
     
 if __name__ == "__main__":

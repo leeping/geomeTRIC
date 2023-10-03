@@ -1,7 +1,7 @@
 """
 internal.py: Internal coordinate systems
 
-Copyright 2016-2020 Regents of the University of California and the Authors
+Copyright 2016-2023 Regents of the University of California and the Authors
 
 Authors: Lee-Ping Wang, Chenchen Song
 
@@ -2034,8 +2034,9 @@ def convert_angstroms_degrees(prims, values):
 CacheWarning = False
 
 class InternalCoordinates(object):
-    def __init__(self):
+    def __init__(self, verbose=0):
         self.stored_wilsonB = OrderedDict()
+        self.verbose = verbose
 
     def addConstraint(self, cPrim, cVal):
         raise NotImplementedError("Constraints not supported with Cartesian coordinates")
@@ -2434,8 +2435,8 @@ class InternalCoordinates(object):
         self._rigid = val
 
 class PrimitiveInternalCoordinates(InternalCoordinates):
-    def __init__(self, molecule, connect=False, addcart=False, constraints=None, cvals=None, repulsions=[], transfers=[], connect_isolated=True, **kwargs):
-        super(PrimitiveInternalCoordinates, self).__init__()
+    def __init__(self, molecule, connect=False, addcart=False, constraints=None, cvals=None, repulsions=[], transfers=[], connect_isolated=True, verbose=0, **kwargs):
+        super(PrimitiveInternalCoordinates, self).__init__(verbose=verbose)
         # connect = True corresponds to "traditional" internal coordinates with minimum spanning bonds
         self.connect = connect
         # connect = False, addcart = True corresponds to HDLC
@@ -2453,7 +2454,6 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         self.transfers = transfers
         self.cPrims = []
         self.cVals = []
-        self.sync = []
         self.Rotators = OrderedDict()
         self.elem = molecule.elem
         # List of fragments as determined by residue ID, distance criteria or bond order
@@ -3122,50 +3122,117 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         # 5) 3
         return np.array(answer)
     
-    def calcDiff(self, xyz1, xyz2, sync=0):
+    def calcDiff(self, xyz1, xyz2, sync=False):
         """ Calculate difference in internal coordinates (coord1-coord2), accounting for changes in 2*pi of angles. """
         answer = []
         for i, Internal in enumerate(self.Internals):
             diff = Internal.calcDiff(xyz1, xyz2)
-            if sync != 0 and i in self.sync:
-                # Sometimes, e.g. during interpolation, multiple dihedrals can change in opposite directions
-                # resulting in clashes. By turning on the sync flag we ensure the change is always in the same direction.
-                if sync == 1 and diff < -np.pi/2:
-                    # print("dihedral-sync %i: %50s %.3f -> %.3f" % (sync, Internal, diff, diff+2*np.pi))
-                    diff += 2*np.pi
-                elif sync == -1 and diff > np.pi/2:
-                    # print("dihedral-sync %i: %50s %.3f -> %.3f" % (sync, Internal, diff, diff-2*np.pi))
-                    diff -= 2*np.pi
-                elif sync not in [-1, 1]:
-                    raise RuntimeError("Invalid value of sync")
             answer.append(diff)
-        return np.array(answer)
+        answer = np.array(answer)
+        if sync:
+            answer = self.syncDihedrals(xyz1, xyz2, answer)
+        return answer
 
-    def syncDihedrals(self, xyz1, xyz2):
-        answer = self.calcDiff(xyz1, xyz2)
-        dih_by_trip = {}
+    def syncDihedrals(self, xyz1, xyz2, primdiff, distthre=1.0, linthre=0.95, diffthre=np.pi/3):
+        rotors = {}
+        val1 = self.calculate(xyz1)
+
         for i, Prim in enumerate(self.Internals):
             if type(Prim) is Dihedral:
-                dih_by_trip.setdefault((Prim.a, Prim.b, Prim.c), []).append(i)
-                dih_by_trip.setdefault((Prim.d, Prim.c, Prim.b), []).append(i)
-        for (a, b, c), dihIdx in dih_by_trip.items():
-            # Being conservative here; only sync dihedrals where a-b-c are bonded and angles are not linear.
-            if np.abs(Distance(a, b).calcDiff(xyz2, xyz1)) > 0.5: continue
-            if np.abs(Distance(b, c).calcDiff(xyz2, xyz1)) > 0.5: continue
-            if np.abs(np.cos(Angle(a, b, c).value(xyz1))) > 0.95: continue
-            if np.abs(np.cos(Angle(a, b, c).value(xyz2))) > 0.95: continue
-            diffs = np.array([answer[i] for i in dihIdx])
-            if all(np.abs(diffs) > np.pi/2) and len(np.unique(np.sign(diffs))) > 1:
-                for i in dihIdx:
-                    self.sync.append(i)
-                    # print("Turning on dihedral sync for", self.Internals[i])
-                    # self.Internals[i].sync = True
-                    # if answer[i] < 0:
-                    #     answer[i] += 2*np.pi
-                # print("Dihedrals with center bond %s:" % str(bond))
-                # for i in dihIdx:
-                #     print("%50s %.3f" % (self.Internals[i], answer[i]))
-     
+                if Prim.b < Prim.c:
+                    a, b, c, d = (Prim.a, Prim.b, Prim.c, Prim.d)
+                else:
+                    a, b, c, d = (Prim.d, Prim.c, Prim.b, Prim.a)
+                if np.abs(Distance(a, b).calcDiff(xyz2, xyz1)) > distthre: continue
+                if np.abs(Distance(b, c).calcDiff(xyz2, xyz1)) > distthre: continue
+                if np.abs(Distance(c, d).calcDiff(xyz2, xyz1)) > distthre: continue
+                if np.abs(np.cos(Angle(a, b, c).value(xyz1))) > linthre: continue
+                if np.abs(np.cos(Angle(a, b, c).value(xyz2))) > linthre: continue
+                if np.abs(np.cos(Angle(b, c, d).value(xyz1))) > linthre: continue
+                if np.abs(np.cos(Angle(b, c, d).value(xyz2))) > linthre: continue
+                rotors.setdefault((b, c), []).append(i)
+                
+        newdiff = primdiff.copy()
+        newdiffAlt = primdiff.copy()
+
+        def dihedral_clash(dih_by_abc, dih_by_bcd, diff_):
+            clashPrims = []
+            for dih_by_trip in (dih_by_abc, dih_by_bcd):
+                for iEnd, tPrims in dih_by_trip.items():
+                    # print("Dihedral angles pairs with %i, %i central bond and %i end atom:" % (b+1, c+1, iEnd+1))
+                    for i in range(len(tPrims)):
+                        for j in range(i):
+                            iPrim = tPrims[i]
+                            jPrim = tPrims[j]
+                            iDih = self.Internals[iPrim]
+                            jDih = self.Internals[jPrim]
+                            A = iDih.value(xyz1)
+                            B = A + diff_[iPrim]
+                            C = jDih.value(xyz1)
+                            D = C + diff_[jPrim]
+                            xzero = (C-A)/(B+C-D-A)
+                            xplus = (C-A+2*np.pi)/(B+C-D-A)
+                            xminus = (C-A-2*np.pi)/(B+C-D-A)
+                            xarray = np.array([xzero, xplus, xminus])
+                            if ((xarray<1)*(xarray>0)).any():
+                                # print("\x1b[1;91mWarning:\x1b[0m %20s - %-20s may clash" % (self.Internals[iPrim], self.Internals[jPrim]), end=' ')
+                                if self.verbose >= 2:
+                                    print("%20s - %-20s may clash" % (self.Internals[iPrim], self.Internals[jPrim]), end=' ')
+                                    print("% 10.5f -> % 10.5f ; % 10.5f -> % 10.5f" % (A*180/np.pi, B*180/np.pi, C*180/np.pi, D*180/np.pi))
+                                # print("Crossing points: % 10.5f % 10.5f % 10.5f" % (xzero, xplus, xminus))
+                                clashPrims.append((iDih, jDih))
+            return clashPrims
+
+        for (b, c), iPrims in rotors.items():
+            if len(iPrims) < 2: continue
+            dih_by_abc = {}
+            dih_by_bcd = {}
+            for iPrim in iPrims:
+                Prim = self.Internals[iPrim]
+                if Prim.b < Prim.c:
+                    a, b, c, d = (Prim.a, Prim.b, Prim.c, Prim.d)
+                else:
+                    a, b, c, d = (Prim.d, Prim.c, Prim.b, Prim.a)
+                dih_by_abc.setdefault(a, []).append(iPrim)
+                dih_by_bcd.setdefault(d, []).append(iPrim)
+            # The "unchanged" delta(dihedral angles) that come from calcDiff
+            diffzero = primdiff[iPrims]
+            # Modified dihedral angle deltas where deltas larger than a threshold are forced to be all positive
+            diffplus = primdiff[iPrims] + 2*np.pi*(primdiff[iPrims]<0) * (np.abs(primdiff[iPrims])>diffthre)
+            # Modified dihedral angle deltas where deltas larger than a threshold are forced to be all negative
+            diffminus = primdiff[iPrims] - 2*np.pi*(primdiff[iPrims]>0) * (np.abs(primdiff[iPrims])>diffthre)
+            # Choose the set of deltas that has a smaller overall rotation.
+            # The "alternatives" correspond to rotating the other way.
+            print_changes = False
+            if np.allclose(diffzero, diffplus, atol=1e-6, rtol=0) or np.allclose(diffzero, diffminus, atol=1e-6, rtol=0):
+                print_changes = False
+            elif np.abs(np.mean(diffplus)) < np.abs(np.mean(diffminus)):
+                newdiff[iPrims] = diffplus
+                newdiffAlt[iPrims] = diffminus
+                print_changes = True
+            elif np.abs(np.mean(diffminus)) < np.abs(np.mean(diffplus)):
+                newdiff[iPrims] = diffminus
+                newdiffAlt[iPrims] = diffplus
+                print_changes = True
+            # Detect if any dihedral pairs that share 3 atoms will clash (i.e. have the same value) somewhere along the pathway
+            clash = dihedral_clash(dih_by_abc, dih_by_bcd, newdiff)
+            clash_alt = dihedral_clash(dih_by_abc, dih_by_bcd, newdiffAlt)
+            # If the clash is removed in the alternate direction, then go in the alternate direction.
+            # Otherwise the clash is unavoidable (think swapping two H's bonded to the same C in cyclopropane).
+            if clash:
+                if clash_alt:
+                    if self.verbose >= 2: print("Warning: Unavoidable clash in %i dihedral angles." % len(clash))
+                else:
+                    if self.verbose >= 2: print("Warning: Dihedral clash in one direction, reversing.")
+                    newdiff = newdiffAlt.copy()
+                    clash = clash_alt
+            if print_changes:
+                print("Dihedral sign change detected around bond %i-%i %s" % (b+1, c+1, "with %i clashes" % len(clash) if len(clash) > 0 else ""))
+                for iPrim in iPrims:
+                    Prim = self.Internals[iPrim]
+                    if self.verbose >= 2: print("%-20s init final diff -> newdiff = % 10.5f % 10.5f % 10.5f -> % 10.5f" % (Prim, Prim.value(xyz1)*180/np.pi, Prim.value(xyz2)*180/np.pi, primdiff[iPrim]*180/np.pi, newdiff[iPrim]*180/np.pi))
+        return newdiff
+
     def GInverse(self, xyz):
         return self.GInverse_SVD(xyz)
 
@@ -3215,19 +3282,15 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
     def reorderPrimitives(self):
         # Reorder primitives to be in line with cc's code
         newPrims = []
-        newSync = []
         for cPrim in self.cPrims:
             newPrims.append(cPrim)
         for typ in [Distance, DistanceDifference, ReducedDistance, Angle, LinearAngle, MultiAngle, OutOfPlane, Dihedral, MultiDihedral, CartesianX, CartesianY, CartesianZ, TranslationX, TranslationY, TranslationZ, RotationA, RotationB, RotationC]:
             for i, p in enumerate(self.Internals):
                 if type(p) is typ and p not in self.cPrims:
                     newPrims.append(p)
-                    if i in self.sync:
-                        newSync.append(len(newPrims)-1)
         if len(newPrims) != len(self.Internals):
             raise RuntimeError("Not all internal coordinates have been accounted for. You may need to add something to reorderPrimitives()")
         self.Internals = newPrims
-        self.sync = newSync
 
     def getConstraints_from(self, other):
         if other.haveConstraints():
@@ -3418,8 +3481,8 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
 
     
 class DelocalizedInternalCoordinates(InternalCoordinates):
-    def __init__(self, molecule, imagenr=0, build=False, connect=False, addcart=False, constraints=None, cvals=None, rigid=False, remove_tr=False, cart_only=False, conmethod=0, repulsions=[], transfers=[], connect_isolated=True):
-        super(DelocalizedInternalCoordinates, self).__init__()
+    def __init__(self, molecule, imagenr=0, build=False, connect=False, addcart=False, constraints=None, cvals=None, rigid=False, remove_tr=False, cart_only=False, conmethod=0, repulsions=[], transfers=[], connect_isolated=True, verbose=0):
+        super(DelocalizedInternalCoordinates, self).__init__(verbose=verbose)
         # cart_only is just because of how I set up the class structure.
         if cart_only: return
         # Set the algorithm for constraint satisfaction.
@@ -4106,9 +4169,6 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         Answer = np.dot(PMDiff, self.Vecs)
         return np.array(Answer).flatten()
 
-    def syncDihedrals(self, xyz1, xyz2):
-        self.Prims.syncDihedrals(xyz1, xyz2)
-
     def calculate(self, coords):
         """ Calculate the DLCs given the Cartesian coordinates. """
         PrimVals = self.Prims.calculate(coords)
@@ -4172,8 +4232,8 @@ class CartesianCoordinates(PrimitiveInternalCoordinates):
     This one does not support constraints, because that requires adding some 
     primitive internal coordinates.
     """
-    def __init__(self, molecule, **kwargs):
-        super(CartesianCoordinates, self).__init__(molecule)
+    def __init__(self, molecule, verbose=0, **kwargs):
+        super(CartesianCoordinates, self).__init__(molecule, verbose=verbose)
         self.Internals = []
         self.cPrims = []
         self.cVals = []
