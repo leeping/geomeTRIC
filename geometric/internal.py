@@ -3221,9 +3221,9 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
             # Otherwise the clash is unavoidable (think swapping two H's bonded to the same C in cyclopropane).
             if clash:
                 if clash_alt:
-                    if self.verbose >= 2: print("Warning: Unavoidable clash in %i dihedral angles." % len(clash))
+                    print("Warning: Unavoidable clash in %i dihedral angles." % len(clash))
                 else:
-                    if self.verbose >= 2: print("Warning: Dihedral clash in one direction, reversing.")
+                    print("Warning: Dihedral clash in one direction, reversing.")
                     newdiff = newdiffAlt.copy()
                     clash = clash_alt
             if print_changes:
