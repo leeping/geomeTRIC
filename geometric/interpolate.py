@@ -409,17 +409,17 @@ def dq_scale_prims(IC, dest_coords, curr_coords, scale_factors={}, sync=0):
     dq = np.dot(dqPrims, IC.Vecs)
     return dq
 
-def interpolate_segment(IC, curr_coords, dest_coords, nDiv, backward=False, rebuild_dlc=False, err_thre=1e-2, verbose=0):
+def interpolate_segment(IC, curr_coords, dest_coords, nDiv, backward=False, rebuild_dlc=False, err_thre=1e-2, verbose=0, sync=0):
     if backward:
         tmp = curr_coords.copy()
         curr_coords = dest_coords.copy()
         dest_coords = tmp.copy()
-    dq = IC.calcDiff(dest_coords, curr_coords, sync=1)
+    dq = IC.calcDiff(dest_coords, curr_coords, sync=sync)
     coord_segment = [curr_coords]
     for k in range(nDiv):
         if rebuild_dlc:
             IC.build_dlc(curr_coords)
-            dq = IC.calcDiff(dest_coords, curr_coords, sync=1)
+            dq = IC.calcDiff(dest_coords, curr_coords, sync=sync)
             new_coords = IC.newCartesian(curr_coords, dq/(nDiv-k), verbose=verbose)
         else:
             new_coords = IC.newCartesian(curr_coords, dq/nDiv, verbose=verbose)
@@ -870,18 +870,26 @@ class Interpolator(object):
         clash_pairs = []
         nDiv = n_frames - 1
         for clash_round in range(5):
-            coord_segment, endpt_err, _ = interpolate_segment(IC, xyz0, xyz1, nDiv, backward=(method%2==1), rebuild_dlc=True)
+            coord_segment, endpt_err, _ = interpolate_segment(IC, xyz0, xyz1, nDiv, backward=(method%2==1), rebuild_dlc=True, sync=1)
             dq_segment = np.array([IC_Chk.calcDiff(coord_segment[i], coord_segment[i+1]) for i in range(n_frames-1)])
+            # Don't evaluate dq_segment for primitives that have a diagnostic of 2 or higher because the result will be invalid.
+            prim_diag = np.max([[Prim.diagnostic(coord_segment[i])[0] for Prim in IC_Chk.Internals] for i in range(n_frames)], axis=0)
             # Setting to -1e-6 essentially ignores the checking primitives if they evaluate to +/- inf.
+            dq_segment[:, prim_diag >= 2] = -1e-6
             dq_segment[dq_segment == -np.inf] = -1e-6
             dq_segment[dq_segment == np.inf] = 1e-6
             dq_max = np.max(np.abs(dq_segment), axis=0)
             dq_med = np.median(np.abs(dq_segment), axis=0)
             dq_med[dq_med<0.01] = 0.01
             dq_ratio = max(dq_max/dq_med)
-    
+            
             M.xyzs = [x.reshape(-1, 3)*bohr2ang for x in coord_segment]
             M.comms = ['Interpolated frame %i' % k for k in range(len(coord_segment))]
+
+            # Perform equal spacing of the pathway according to the largest change in any primitive coordinate
+            dq_relative = dq_segment / dq_med[np.newaxis, :]
+            M = EqualSpacing(M, RMSD=False, align=False, custom=np.max(dq_relative, axis=1))
+
             # Fail if the endpt_err is greater than the threshold
             if endpt_err > err_thre:
                 M.align()
@@ -1010,6 +1018,42 @@ class Interpolator(object):
 
         print_map(diag_matrix, "IC diagnostic map", colorscheme=0)
         segments = find_path(diag_matrix)
+        
+        # For each point k on the path, compute the maximum dihedral angle change for i ... k and k ... j
+        # And if the dihedral angle change i ... j is greater than the threshold, split at k
+        # Repeat these steps until there are no dihedral angle changes larger than the threshold
+        # in the intervals i ... k1 ... k2 ... j .
+        while True:
+            splitted = False
+            new_segments = []
+            for isegment, (i, j) in enumerate(segments):
+                dih_ij = []
+                for k in range(i, j+1):
+                    for Prim in ICs[k].Prims.Internals:
+                        if type(Prim) is Dihedral and Prim not in dih_ij:
+                            dih_ij.append(Prim)
+                if len(dih_ij) == 0: 
+                    new_segments.append((i, j))
+                    continue
+                dihArcs = [[0.0 for Prim in dih_ij]]
+                for k in range(i, j-1):
+                    dihArcs.append([np.abs(Prim.calcDiff(xyzs[k+1], xyzs[k]) * (Prim.diagnostic(xyzs[k+1])[0] < 2)) for Prim in dih_ij])
+                dihArcs = np.cumsum(np.array(dihArcs), axis=0)
+                dMax = np.max(np.abs(dihArcs))
+                dThre = 5*np.pi/6
+                if dMax > dThre:
+                    dSplits = []
+                    for k in range(j-i):
+                        dSplits.append(max(np.max(dihArcs[k]), np.max(dihArcs[-1]-dihArcs[k])))
+                    split_k = i + np.argmin(dSplits)
+                    print("maximum dihedral difference between %i-%i is %.3f; splitting at %i (reduce to %.3f)" % (i, j, dMax, split_k, np.min(dSplits)))
+                    new_segments.append((i, split_k))
+                    new_segments.append((split_k+1, j))
+                else:
+                    new_segments.append((i, j))
+            if segments == new_segments: break
+            segments = new_segments[:]
+
         segments_filled, segments_spliced = fill_splice_segments(segments, splice_length)
         print("The frame numbers of the spliced segments are:")
         print(segments_spliced)
@@ -1061,18 +1105,18 @@ class Interpolator(object):
                         if self.verbose >= 2:
                             vali = IC.Prims.calculate(xyzi)
                             valj = IC.Prims.calculate(xyzj)
-                            primDiff = IC.Prims.calcDiff(xyzj, xyzi, sync=1)
+                            primDiff = IC.Prims.calcDiff(xyzj, xyzi, sync=0)
                             for iPrim in range(len(IC.Prims.Internals)):
                                 print("%3i %25s % 9.5f % 9.5f % 9.5f" % (iPrim, IC.Prims.Internals[iPrim], vali[iPrim], valj[iPrim], primDiff[iPrim]))
                     attempt = 0
-                    coord_segment, endpt_err, success = interpolate_segment(IC, xyzi, xyzj, nDiv, backward=backwards[a][c], rebuild_dlc=False, verbose=self.verbose)
+                    coord_segment, endpt_err, success = interpolate_segment(IC, xyzi, xyzj, nDiv, backward=backwards[a][c], rebuild_dlc=False, verbose=self.verbose, sync=0)
                     if self.verbose: 
                         print("forward direction: endpt_err = %8.3f success = %i" % (endpt_err, success))
                         if self.verbose >= 2:
                             write_coord_segment(M, coord_segment, "cycle%i_segment%i_IC%i_attempt%i.xyz" % (cycle, a, c, attempt))
                     if success: break
                     attempt = 1
-                    coord_segment, endpt_err, success = interpolate_segment(IC, xyzi, xyzj, nDiv, backward=not backwards[a][c], rebuild_dlc=False, verbose=self.verbose)
+                    coord_segment, endpt_err, success = interpolate_segment(IC, xyzi, xyzj, nDiv, backward=not backwards[a][c], rebuild_dlc=False, verbose=self.verbose, sync=0)
                     if self.verbose: 
                         print("backward direction: endpt_err = %8.3f success = %i" % (endpt_err, success))
                         if self.verbose >= 2:

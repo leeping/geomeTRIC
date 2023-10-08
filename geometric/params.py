@@ -269,7 +269,7 @@ class InterpParams(object):
             # Whether we want to align the molecules in reactant and product frames.
             self.prealign = kwargs.get('prealign', False)
         # Whether we want to align the initial interpolate trajectory before optimization.
-        self.align = kwargs.get('align', False)
+        self.align = kwargs.get('align', True)
         # Verbose printout
         self.verbose = kwargs.get('verbose', 0)
 

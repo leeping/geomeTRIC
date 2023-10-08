@@ -916,7 +916,7 @@ def arc(Mol, begin=None, end=None, RMSD=True, align=True):
         Arc = np.array(Arc) 
     return Arc
 
-def EqualSpacing(Mol, frames=0, dx=0, RMSD=True, align=True, spline=False):
+def EqualSpacing(Mol, frames=0, dx=0, RMSD=True, align=True, spline=False, custom=None):
     """
     Equalize the spacing of frames in a trajectory with linear interpolation.
     This is done in a very simple way, first calculating the arc length
@@ -935,6 +935,8 @@ def EqualSpacing(Mol, frames=0, dx=0, RMSD=True, align=True, spline=False):
         Return a Molecule object with this number of frames.
     RMSD : bool
         Use RMSD in the arc length calculation. 
+    custom : np.array or None
+        Provide custom spacings between frames.
 
     Returns
     -------
@@ -943,7 +945,12 @@ def EqualSpacing(Mol, frames=0, dx=0, RMSD=True, align=True, spline=False):
         or with equally spaced frames.
     """
     import scipy.interpolate
-    ArcMol = arc(Mol, RMSD=RMSD, align=align)
+    if type(custom) is np.ndarray:
+        ArcMol = custom.copy()
+        if ArcMol.shape != (len(Mol)-1, ):
+            raise RuntimeError("Custom spacing needs to match Molecule-length - 1")
+    else:
+        ArcMol = arc(Mol, RMSD=RMSD, align=align)
     ArcMolCumul = np.insert(np.cumsum(ArcMol), 0, 0.0)
     if frames != 0 and dx != 0:
         logger.error("Provide dx or frames or neither")

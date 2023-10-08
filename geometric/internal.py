@@ -2803,7 +2803,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                             aline.append(az)
             if atom_lines == atom_lines0: break
         atom_lines_uniq = []
-        for i in atom_lines:    # 
+        for i in atom_lines:
             if tuple(i) not in set(atom_lines_uniq):
                 atom_lines_uniq.append(tuple(i))
         lthree = [l for l in atom_lines_uniq if len(l) > 2]
@@ -3221,13 +3221,15 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
             # Otherwise the clash is unavoidable (think swapping two H's bonded to the same C in cyclopropane).
             if clash:
                 if clash_alt:
-                    print("Warning: Unavoidable clash in %i dihedral angles." % len(clash))
+                    if not hasattr(self, 'dihedral_warning_printed'):
+                        print("Warning: Unavoidable clash in %i dihedral angles." % len(clash))
+                        self.dihedral_warning_printed = True
                 else:
-                    print("Warning: Dihedral clash in one direction, reversing.")
+                    if self.verbose: print("Warning: Dihedral clash in one direction, reversing.")
                     newdiff = newdiffAlt.copy()
                     clash = clash_alt
             if print_changes:
-                print("Dihedral sign change detected around bond %i-%i %s" % (b+1, c+1, "with %i clashes" % len(clash) if len(clash) > 0 else ""))
+                if self.verbose: print("Dihedral sign change detected around bond %i-%i %s" % (b+1, c+1, "with %i clashes" % len(clash) if len(clash) > 0 else ""))
                 for iPrim in iPrims:
                     Prim = self.Internals[iPrim]
                     if self.verbose >= 2: print("%-20s init final diff -> newdiff = % 10.5f % 10.5f % 10.5f -> % 10.5f" % (Prim, Prim.value(xyz1)*180/np.pi, Prim.value(xyz2)*180/np.pi, primdiff[iPrim]*180/np.pi, newdiff[iPrim]*180/np.pi))
