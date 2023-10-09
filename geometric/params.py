@@ -265,7 +265,7 @@ class InterpParams(object):
             self.prealign = False
         else:
             # Number of frames that will be used for the interpolation.
-            self.nframes = kwargs.get('nframes', False)
+            self.nframes = kwargs.get('nframes', 50)
             # Whether we want to align the molecules in reactant and product frames.
             self.prealign = kwargs.get('prealign', False)
         # Whether we want to align the initial interpolate trajectory before optimization.
