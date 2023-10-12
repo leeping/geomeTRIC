@@ -1741,7 +1741,7 @@ class Dihedral(PrimitiveCoordinate):
         # result = 3 or above: failure of the IC system is imminent
         # result = 2: IC may fail for small perturbations from the provided geometry
         # result = 1: IC is unsuitable for the provided geometry, should pay attention
-        LinThres = [0.95, 0.98, 0.995]
+        LinThres = [np.abs(np.cos(theta*np.pi/180)) for theta in [155, 165, 175]]
         descrips = ["close to linear", "very close to linear", "extremely close to linear"]
         a = self.a
         b = self.b

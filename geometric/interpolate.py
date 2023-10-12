@@ -1028,7 +1028,7 @@ class Interpolator(object):
             new_segments = []
             for isegment, (i, j) in enumerate(segments):
                 dih_ij = []
-                for k in range(i, j+1):
+                for k in [i, j]:
                     for Prim in ICs[k].Prims.Internals:
                         if type(Prim) is Dihedral and Prim not in dih_ij:
                             dih_ij.append(Prim)
@@ -1183,8 +1183,13 @@ class Interpolator(object):
             else:
                 increase_count += 1
                 decrease_count = 0
-                print(">> Mismatch fails to decrease; increasing damping")
-                damping *= 0.8
+                if damping <= 0.2: 
+                    print(">> Mismatch fails to decrease but damping at maximum (% .3e)" % damping)
+                    raise RuntimeError
+                else:
+                    damping = max(0.2, damping*0.8)
+                    print(">> Mismatch fails to decrease; increasing damping (currently % .3e)" % damping)
+                
             last_max_mismatch = max_mismatch
                 
             segment_endpoints, _ = splice_segment_endpoints(coord_segments, segment_endpoints, segments_spliced, splice_length, damping, verbose=False)
