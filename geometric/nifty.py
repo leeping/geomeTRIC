@@ -27,7 +27,7 @@ import sys
 from select import select
 
 # distutils has been removed as of python 3.12
-if sys.version_info < (3, 11):
+if sys.version_info < (3, 8):
     import distutils.dir_util
 
 import numpy as np
@@ -1310,7 +1310,7 @@ def copy_tree_over(src, dest):
     the destination folder, which can reduce the number of times
     shutil.rmtree needs to be called.
     """
-    if sys.version_info < (3, 11):
+    if sys.version_info < (3, 8):
         # From https://stackoverflow.com/questions/9160227/dir-util-copy-tree-fails-after-shutil-rmtree/28055993 : 
         # If you copy folder, then remove it, then copy again it will fail, because it caches all the created dirs. 
         # To workaround you can clear _path_created before copy:
