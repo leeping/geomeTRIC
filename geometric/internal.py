@@ -1758,7 +1758,7 @@ class Dihedral(PrimitiveCoordinate):
             thre = LinThres[i]
             desc = descrips[i]
             if cos1 > thre and cos2 > thre:
-                result = i+2
+                result = i+1
                 message = "%s and %s angles are %s (|cos(theta)| %.4f, %.4f > %.4f threshold)" % (repr(Ang1), repr(Ang2), desc, cos1, cos2, thre)
             elif cos1 > thre:
                 result = i+1

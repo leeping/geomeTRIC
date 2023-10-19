@@ -155,7 +155,7 @@ def find_path(mtx, thre=1):
 
     # If the starting point or end point is blocked, we can't escape.
     if not okay[n-1, n-1] or not okay[0, 0]:
-        raise RuntimeError("Spoo!")
+        raise RuntimeError("Failed to find a path through the diagnostic map!")
 
     okay2 = okay.copy()
     for niter in range(n**2):
@@ -496,7 +496,7 @@ def print_map(mtx, title, colorscheme=0):
             print()
 
 class Interpolator(object):
-    def __init__(self, M_in, n_frames = 50, use_midframes = False, align_system=False, do_prealign=False, verbose=0):
+    def __init__(self, M_in, n_frames = 50, use_midframes = False, align_system=False, align_frags=False, verbose=0):
         # The input molecule; it should not be modified.
         self.M_in = deepcopy(M_in)
         # Check the length of the input molecule
@@ -504,7 +504,7 @@ class Interpolator(object):
         if use_midframes:
             self.do_init = False
             assert len(self.M_in) >= 5, "When setting use_midframes, input molecule must have >= 5 structures"
-            assert do_prealign is False, "Do not pass do_prealign if using intermediate frames"
+            assert align_frags is False, "Do not pass align_frags if using intermediate frames"
             assert n_frames == 0, "Do not pass n_frames when setting use_midframes"
             self.n_frames = len(self.M_in)
         else:
@@ -517,9 +517,9 @@ class Interpolator(object):
         self.M = deepcopy(self.M_in)
         self.n_atoms = len(self.M.elem)
         # Whether to pre-align the fragments in the reactant and product structure
-        self.do_prealign = do_prealign
+        self.align_frags = align_frags
         # Whether to align the input frames to the reactant structure upon input and before writing output
-        self.align_system = True if self.do_prealign else align_system
+        self.align_system = True if self.align_frags else align_system
         if self.align_system:
             self.M.align()
         # Atom pairs that are not bonded (resp. bonded) in either the reactant or product
@@ -1183,11 +1183,11 @@ class Interpolator(object):
             else:
                 increase_count += 1
                 decrease_count = 0
-                if damping <= 0.2: 
-                    print(">> Mismatch fails to decrease but damping at maximum (% .3e)" % damping)
-                    raise RuntimeError
+                min_damping = 0.2
+                if damping <= min_damping: 
+                    print(">> Mismatch fails to decrease but damping at maximum (% .3e) - continuing" % damping)
                 else:
-                    damping = max(0.2, damping*0.8)
+                    damping = max(min_damping, damping*0.8)
                     print(">> Mismatch fails to decrease; increasing damping (currently % .3e)" % damping)
                 
             last_max_mismatch = max_mismatch
@@ -1230,7 +1230,7 @@ class Interpolator(object):
         self.segment_endpoints = get_segment_endpoints(self.M, self.segments_spliced)
     
     def run_workflow(self):
-        if self.do_prealign:
+        if self.align_frags:
             self.prealign_fragments()
         if self.do_init:
             self.initial_guess()
@@ -1247,8 +1247,8 @@ def main():
     args = parse_interpolate_args(sys.argv[1:])
     params = InterpParams(**args)
     M0 = Molecule(args['input'])
-    #interpolator = Interpolator(M0, use_midframes=True, n_frames=0, align_system=True, do_prealign=False)
-    interpolator = Interpolator(M0, n_frames= params.nframes, use_midframes=params.optimize, align_system=params.align, do_prealign=params.prealign, verbose=params.verbose)
+    #interpolator = Interpolator(M0, use_midframes=True, n_frames=0, align_system=True, align_frags=False)
+    interpolator = Interpolator(M0, n_frames= params.nframes, use_midframes=params.optimize, align_system=params.align_system, align_frags=params.align_frags, verbose=params.verbose)
     interpolator.run_workflow()
     
 if __name__ == "__main__":

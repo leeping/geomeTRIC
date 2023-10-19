@@ -262,14 +262,14 @@ class InterpParams(object):
         self.optimize = kwargs.get('optimize', False)
         if self.optimize:
             self.nframes = 0
-            self.prealign = False
+            self.align_frags = False
         else:
             # Number of frames that will be used for the interpolation.
             self.nframes = kwargs.get('nframes', 50)
             # Whether we want to align the molecules in reactant and product frames.
-            self.prealign = kwargs.get('prealign', False)
+            self.align_frags = kwargs.get('align_frags', False)
         # Whether we want to align the initial interpolate trajectory before optimization.
-        self.align = kwargs.get('align', True)
+        self.align_system = kwargs.get('align_system', True)
         # Verbose printout
         self.verbose = kwargs.get('verbose', 0)
 
@@ -550,8 +550,8 @@ def parse_interpolate_args(*args):
                                                             'The followting two arguments, nframes and prealign, will be ignored.\n'
                                                             'The input xyz file must contain 5 or more structures.\n')
     grp_univ.add_argument('--nframes', type=int, help='Number of frames, needs to be bigger than 5, that will be used to interpolate, default 50\n')
-    grp_univ.add_argument('--prealign', type=str2bool, help='Provide "yes" to align the molecules in reactant and product before the interpolation.\n')
-    grp_univ.add_argument('--align', type=str2bool, help='Provide "yes" to align the initial interpolated trajectory.\n')
+    grp_univ.add_argument('--align_frags', type=str2bool, help='Provide "yes" to align fragments in reactant and product structure prior to interpolation.\n')
+    grp_univ.add_argument('--align_system', type=str2bool, help='Provide "yes" to align the entire system prior to interpolation.\n')
 
     grp_output = parser.add_argument_group('output', 'Control the format and amount of the output')
     grp_output.add_argument('--prefix', type=str, help='Specify a prefix for log file and temporary directory.\n'
