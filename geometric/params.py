@@ -262,14 +262,14 @@ class InterpParams(object):
         self.optimize = kwargs.get('optimize', False)
         if self.optimize:
             self.nframes = 0
-            self.prealign = False
+            self.align_frags = False
         else:
             # Number of frames that will be used for the interpolation.
             self.nframes = kwargs.get('nframes', 50)
             # Whether we want to align the molecules in reactant and product frames.
-            self.prealign = kwargs.get('prealign', False)
+            self.align_frags = kwargs.get('align_frags', False)
         # Whether we want to align the initial interpolate trajectory before optimization.
-        self.align = kwargs.get('align', False)
+        self.align_system = kwargs.get('align_system', True)
         # Verbose printout
         self.verbose = kwargs.get('verbose', 0)
 
@@ -504,8 +504,9 @@ def parse_neb_args(*args):
     grp_nebparam.add_argument('--trust', type=float, help='Starting trust radius, defaults to 0.1 (energy minimization) or 0.01 (TS optimization).\n ')
     grp_nebparam.add_argument('--tmax', type=float, help='Maximum trust radius, defaults to 0.3 (energy minimization) or 0.03 (TS optimization).\n ')
     grp_nebparam.add_argument('--tmin', type=float, help='Minimum trust radius, do not reject steps trust radius is below this threshold (method-dependent).\n ')
-    grp_nebparam.add_argument('--skip', action='store_true', help='Skip Hessian updates that would introduce negative eigenvalues.')
+    grp_nebparam.add_argument('--skip', action='store_true', help='Skip Hessian updates that would introduce negative eigenvalues.\n ')
     grp_nebparam.add_argument('--epsilon', type=float, help='Small eigenvalue threshold for resetting Hessian, default 1e-5.\n ')
+    grp_nebparam.add_argument('--port', type=int, help='Work Queue port used to distribute singlepoint calculations. Workers must be started separately.\n')
 
     grp_output = parser.add_argument_group('output', 'Control the format and amount of the output')
     grp_output.add_argument('--prefix', type=str, help='Specify a prefix for log file and temporary directory.\n'
@@ -513,7 +514,6 @@ def parse_neb_args(*args):
     grp_output.add_argument('--verbose', type=int, help='Set to positive for more verbose printout.\n'
                             '0 = Default print level.     1 = Basic info about optimization step.\n'
                             '2 = Include microiterations. 3 = Lots of printout from low-level functions.\n ')
-
     grp_help = parser.add_argument_group('help', 'Get help')
     grp_help.add_argument('-h', '--help', action='help', help='Show this help message and exit')
 
@@ -550,8 +550,8 @@ def parse_interpolate_args(*args):
                                                             'The followting two arguments, nframes and prealign, will be ignored.\n'
                                                             'The input xyz file must contain 5 or more structures.\n')
     grp_univ.add_argument('--nframes', type=int, help='Number of frames, needs to be bigger than 5, that will be used to interpolate, default 50\n')
-    grp_univ.add_argument('--prealign', type=str2bool, help='Provide "yes" to align the molecules in reactant and product before the interpolation.\n')
-    grp_univ.add_argument('--align', type=str2bool, help='Provide "yes" to align the initial interpolated trajectory.\n')
+    grp_univ.add_argument('--align_frags', type=str2bool, help='Provide "yes" to align fragments in reactant and product structure prior to interpolation.\n')
+    grp_univ.add_argument('--align_system', type=str2bool, help='Provide "yes" to align the entire system prior to interpolation.\n')
 
     grp_output = parser.add_argument_group('output', 'Control the format and amount of the output')
     grp_output.add_argument('--prefix', type=str, help='Specify a prefix for log file and temporary directory.\n'
@@ -569,5 +569,7 @@ def parse_interpolate_args(*args):
     for k, v in vars(parser.parse_args(*args)).items():
         if v is not None:
             args_dict[k] = v
+
+    print("LPW debug:", args_dict)
 
     return args_dict

@@ -35,6 +35,11 @@ logger.setLevel(INFO)
 handler = RawStreamHandler()
 logger.addHandler(handler)
 
+def write_coord_segment(M, coord_segment, output_filename):
+    M_copy = deepcopy(M)
+    M_copy.xyzs = [x.reshape(-1, 3)*bohr2ang for x in coord_segment]
+    M_copy.write(output_filename)
+
 # Need to refactor this so that it uses the minimum of the equilibrium bond length and the sum of covalent radii.
 def get_rab(M, i, j, bohr=True):
     if bohr:
@@ -150,7 +155,7 @@ def find_path(mtx, thre=1):
 
     # If the starting point or end point is blocked, we can't escape.
     if not okay[n-1, n-1] or not okay[0, 0]:
-        raise RuntimeError("Spoo!")
+        raise RuntimeError("Failed to find a path through the diagnostic map!")
 
     okay2 = okay.copy()
     for niter in range(n**2):
@@ -404,23 +409,20 @@ def dq_scale_prims(IC, dest_coords, curr_coords, scale_factors={}, sync=0):
     dq = np.dot(dqPrims, IC.Vecs)
     return dq
 
-def interpolate_segment(IC, curr_coords, dest_coords, nDiv, backward=False, rebuild_dlc=False, err_thre=1e-2):
+def interpolate_segment(IC, curr_coords, dest_coords, nDiv, backward=False, rebuild_dlc=False, err_thre=1e-2, verbose=0, sync=0):
     if backward:
         tmp = curr_coords.copy()
         curr_coords = dest_coords.copy()
         dest_coords = tmp.copy()
-        sync = -1
-    else:
-        sync = 1
     dq = IC.calcDiff(dest_coords, curr_coords, sync=sync)
     coord_segment = [curr_coords]
     for k in range(nDiv):
         if rebuild_dlc:
             IC.build_dlc(curr_coords)
             dq = IC.calcDiff(dest_coords, curr_coords, sync=sync)
-            new_coords = IC.newCartesian(curr_coords, dq/(nDiv-k), verbose=0)
+            new_coords = IC.newCartesian(curr_coords, dq/(nDiv-k), verbose=verbose)
         else:
-            new_coords = IC.newCartesian(curr_coords, dq/nDiv, verbose=0)
+            new_coords = IC.newCartesian(curr_coords, dq/nDiv, verbose=verbose)
         coord_segment.append(new_coords)
         curr_coords = new_coords.copy()
     _, endpt_err = calc_drms_dmax(curr_coords, dest_coords, align=True)
@@ -494,7 +496,7 @@ def print_map(mtx, title, colorscheme=0):
             print()
 
 class Interpolator(object):
-    def __init__(self, M_in, n_frames = 50, use_midframes = False, align_system=False, do_prealign=False):
+    def __init__(self, M_in, n_frames = 50, use_midframes = False, align_system=False, align_frags=False, verbose=0):
         # The input molecule; it should not be modified.
         self.M_in = deepcopy(M_in)
         # Check the length of the input molecule
@@ -502,7 +504,7 @@ class Interpolator(object):
         if use_midframes:
             self.do_init = False
             assert len(self.M_in) >= 5, "When setting use_midframes, input molecule must have >= 5 structures"
-            assert do_prealign is False, "Do not pass do_prealign if using intermediate frames"
+            assert align_frags is False, "Do not pass align_frags if using intermediate frames"
             assert n_frames == 0, "Do not pass n_frames when setting use_midframes"
             self.n_frames = len(self.M_in)
         else:
@@ -515,9 +517,9 @@ class Interpolator(object):
         self.M = deepcopy(self.M_in)
         self.n_atoms = len(self.M.elem)
         # Whether to pre-align the fragments in the reactant and product structure
-        self.do_prealign = do_prealign
+        self.align_frags = align_frags
         # Whether to align the input frames to the reactant structure upon input and before writing output
-        self.align_system = True if self.do_prealign else align_system
+        self.align_system = True if self.align_frags else align_system
         if self.align_system:
             self.M.align()
         # Atom pairs that are not bonded (resp. bonded) in either the reactant or product
@@ -549,6 +551,7 @@ class Interpolator(object):
         self.atom_pairs = [list(pair) for pair in atom_pairs.copy()]
         # The smaller of the distances at either endpoint for each pair
         self.min_enddists = np.min(np.array(self.enddists), axis=0)
+        self.verbose = verbose
 
     def get_splice_length(self):
         # Determine the splice length
@@ -721,8 +724,6 @@ class Interpolator(object):
         xyz1_stage = xyz1.copy()
         IC0 = DelocalizedInternalCoordinates(M0, build=True, connect=False, addcart=False, connect_isolated=False)
         IC1 = DelocalizedInternalCoordinates(M1, build=True, connect=False, addcart=False, connect_isolated=False)
-        IC0.syncDihedrals(xyz0, xyz1)
-        IC1.syncDihedrals(xyz0, xyz1)
         self.endICs = [IC0, IC1]
         M_reac = None
         M_prod = None
@@ -845,7 +846,6 @@ class Interpolator(object):
         # Finalize the IC system.
         IC.Prims.Internals = newPrims
         IC.Prims.reorderPrimitives()
-        IC.Prims.syncDihedrals(xyz1, xyz0)
         IC.build_dlc(xyz_IC)
         # print("=== Primitives for method %i ===" % method)
         # print(IC.Prims)
@@ -870,18 +870,26 @@ class Interpolator(object):
         clash_pairs = []
         nDiv = n_frames - 1
         for clash_round in range(5):
-            coord_segment, endpt_err, _ = interpolate_segment(IC, xyz0, xyz1, nDiv, backward=(method%2==1), rebuild_dlc=True)
+            coord_segment, endpt_err, _ = interpolate_segment(IC, xyz0, xyz1, nDiv, backward=(method%2==1), rebuild_dlc=True, sync=1)
             dq_segment = np.array([IC_Chk.calcDiff(coord_segment[i], coord_segment[i+1]) for i in range(n_frames-1)])
+            # Don't evaluate dq_segment for primitives that have a diagnostic of 2 or higher because the result will be invalid.
+            prim_diag = np.max([[Prim.diagnostic(coord_segment[i])[0] for Prim in IC_Chk.Internals] for i in range(n_frames)], axis=0)
             # Setting to -1e-6 essentially ignores the checking primitives if they evaluate to +/- inf.
+            dq_segment[:, prim_diag >= 2] = -1e-6
             dq_segment[dq_segment == -np.inf] = -1e-6
             dq_segment[dq_segment == np.inf] = 1e-6
             dq_max = np.max(np.abs(dq_segment), axis=0)
             dq_med = np.median(np.abs(dq_segment), axis=0)
             dq_med[dq_med<0.01] = 0.01
             dq_ratio = max(dq_max/dq_med)
-    
+            
             M.xyzs = [x.reshape(-1, 3)*bohr2ang for x in coord_segment]
             M.comms = ['Interpolated frame %i' % k for k in range(len(coord_segment))]
+
+            # Perform equal spacing of the pathway according to the largest change in any primitive coordinate
+            dq_relative = dq_segment / dq_med[np.newaxis, :]
+            M = EqualSpacing(M, RMSD=False, align=False, custom=np.max(dq_relative, axis=1))
+
             # Fail if the endpt_err is greater than the threshold
             if endpt_err > err_thre:
                 M.align()
@@ -997,7 +1005,6 @@ class Interpolator(object):
         for i in range(len(M)):
             M_i = M[i]
             IC = DelocalizedInternalCoordinates(M_i, build=True, connect=False, addcart=False, transfers=transfers, connect_isolated=False)
-            IC.Prims.syncDihedrals(xyzs[-1], xyzs[0])
             IC.build_dlc(xyzs[i])
             ICs.append(IC)
 
@@ -1011,6 +1018,42 @@ class Interpolator(object):
 
         print_map(diag_matrix, "IC diagnostic map", colorscheme=0)
         segments = find_path(diag_matrix)
+        
+        # For each point k on the path, compute the maximum dihedral angle change for i ... k and k ... j
+        # And if the dihedral angle change i ... j is greater than the threshold, split at k
+        # Repeat these steps until there are no dihedral angle changes larger than the threshold
+        # in the intervals i ... k1 ... k2 ... j .
+        while True:
+            splitted = False
+            new_segments = []
+            for isegment, (i, j) in enumerate(segments):
+                dih_ij = []
+                for k in [i, j]:
+                    for Prim in ICs[k].Prims.Internals:
+                        if type(Prim) is Dihedral and Prim not in dih_ij:
+                            dih_ij.append(Prim)
+                if len(dih_ij) == 0: 
+                    new_segments.append((i, j))
+                    continue
+                dihArcs = [[0.0 for Prim in dih_ij]]
+                for k in range(i, j-1):
+                    dihArcs.append([np.abs(Prim.calcDiff(xyzs[k+1], xyzs[k]) * (Prim.diagnostic(xyzs[k+1])[0] < 2)) for Prim in dih_ij])
+                dihArcs = np.cumsum(np.array(dihArcs), axis=0)
+                dMax = np.max(np.abs(dihArcs))
+                dThre = 5*np.pi/6
+                if dMax > dThre:
+                    dSplits = []
+                    for k in range(j-i):
+                        dSplits.append(max(np.max(dihArcs[k]), np.max(dihArcs[-1]-dihArcs[k])))
+                    split_k = i + np.argmin(dSplits)
+                    print("maximum dihedral difference between %i-%i is %.3f; splitting at %i (reduce to %.3f)" % (i, j, dMax, split_k, np.min(dSplits)))
+                    new_segments.append((i, split_k))
+                    new_segments.append((split_k+1, j))
+                else:
+                    new_segments.append((i, j))
+            if segments == new_segments: break
+            segments = new_segments[:]
+
         segments_filled, segments_spliced = fill_splice_segments(segments, splice_length)
         print("The frame numbers of the spliced segments are:")
         print(segments_spliced)
@@ -1057,11 +1100,27 @@ class Interpolator(object):
                 nDiv = j-i
                 success = False
                 for c, (iic, IC) in enumerate(segment_to_ICs[a]):
+                    if self.verbose: 
+                        print("In splice_iterations: c = %i, iic = %i, IC = %s" % (c, iic, IC.__repr__()))
+                        if self.verbose >= 2:
+                            vali = IC.Prims.calculate(xyzi)
+                            valj = IC.Prims.calculate(xyzj)
+                            primDiff = IC.Prims.calcDiff(xyzj, xyzi, sync=0)
+                            for iPrim in range(len(IC.Prims.Internals)):
+                                print("%3i %25s % 9.5f % 9.5f % 9.5f" % (iPrim, IC.Prims.Internals[iPrim], vali[iPrim], valj[iPrim], primDiff[iPrim]))
                     attempt = 0
-                    coord_segment, endpt_err, success = interpolate_segment(IC, xyzi, xyzj, nDiv, backward=backwards[a][c], rebuild_dlc=False)
+                    coord_segment, endpt_err, success = interpolate_segment(IC, xyzi, xyzj, nDiv, backward=backwards[a][c], rebuild_dlc=False, verbose=self.verbose, sync=0)
+                    if self.verbose: 
+                        print("forward direction: endpt_err = %8.3f success = %i" % (endpt_err, success))
+                        if self.verbose >= 2:
+                            write_coord_segment(M, coord_segment, "cycle%i_segment%i_IC%i_attempt%i.xyz" % (cycle, a, c, attempt))
                     if success: break
                     attempt = 1
-                    coord_segment, endpt_err, success = interpolate_segment(IC, xyzi, xyzj, nDiv, backward=not backwards[a][c], rebuild_dlc=False)
+                    coord_segment, endpt_err, success = interpolate_segment(IC, xyzi, xyzj, nDiv, backward=not backwards[a][c], rebuild_dlc=False, verbose=self.verbose, sync=0)
+                    if self.verbose: 
+                        print("backward direction: endpt_err = %8.3f success = %i" % (endpt_err, success))
+                        if self.verbose >= 2:
+                            write_coord_segment(M, coord_segment, "cycle%i_segment%i_IC%i_attempt%i.xyz" % (cycle, a, c, attempt))
                     if success: 
                         backwards[a][c] = not backwards[a][c]
                         break
@@ -1124,8 +1183,13 @@ class Interpolator(object):
             else:
                 increase_count += 1
                 decrease_count = 0
-                print(">> Mismatch fails to decrease; increasing damping")
-                damping *= 0.8
+                min_damping = 0.2
+                if damping <= min_damping: 
+                    print(">> Mismatch fails to decrease but damping at maximum (% .3e) - continuing" % damping)
+                else:
+                    damping = max(min_damping, damping*0.8)
+                    print(">> Mismatch fails to decrease; increasing damping (currently % .3e)" % damping)
+                
             last_max_mismatch = max_mismatch
                 
             segment_endpoints, _ = splice_segment_endpoints(coord_segments, segment_endpoints, segments_spliced, splice_length, damping, verbose=False)
@@ -1144,7 +1208,6 @@ class Interpolator(object):
                         new_repulsions = sorted(list(set(IC.Prims.repulsions).union(set(clash_pairs))))
                         IC1 = DelocalizedInternalCoordinates(M_in[iic], build=True, connect=False, addcart=False,
                                                              repulsions=new_repulsions, transfers=IC.Prims.transfers, connect_isolated=False)
-                        IC1.syncDihedrals(xyz1, xyz0)
                         IC1.build_dlc(M_in.xyzs[iic].flatten()*ang2bohr)
                         rebuilt_segment_to_ICs.append((iic, IC1))
                     segment_to_ICs[a] = rebuilt_segment_to_ICs
@@ -1167,7 +1230,7 @@ class Interpolator(object):
         self.segment_endpoints = get_segment_endpoints(self.M, self.segments_spliced)
     
     def run_workflow(self):
-        if self.do_prealign:
+        if self.align_frags:
             self.prealign_fragments()
         if self.do_init:
             self.initial_guess()
@@ -1183,9 +1246,9 @@ class Interpolator(object):
 def main():
     args = parse_interpolate_args(sys.argv[1:])
     params = InterpParams(**args)
-    M0 = Molecule(sys.argv[1])
-    #interpolator = Interpolator(M0, use_midframes=True, n_frames=0, align_system=True, do_prealign=False)
-    interpolator = Interpolator(M0, n_frames= params.nframes, use_midframes=params.optimize, align_system=params.align, do_prealign=params.prealign)
+    M0 = Molecule(args['input'])
+    #interpolator = Interpolator(M0, use_midframes=True, n_frames=0, align_system=True, align_frags=False)
+    interpolator = Interpolator(M0, n_frames= params.nframes, use_midframes=params.optimize, align_system=params.align_system, align_frags=params.align_frags, verbose=params.verbose)
     interpolator.run_workflow()
     
 if __name__ == "__main__":
