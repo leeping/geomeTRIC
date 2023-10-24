@@ -2006,7 +2006,7 @@ class Molecule(object):
         self.qm_mulliken_charges = list(np.array(QS.xyzs)[:, :, 0])
         self.qm_mulliken_spins = list(np.array(QS.xyzs)[:, :, 1])
 
-    def align(self, smooth = False, center = True, center_mass = False, atom_select=None):
+    def align(self, smooth = False, refidx = 0, center = True, center_mass = False, atom_select=None):
         """ Align molecules.
 
         Has the option to create smooth trajectories
@@ -2036,7 +2036,7 @@ class Molecule(object):
             if smooth:
                 ref = index2-1
             else:
-                ref = 0
+                ref = refidx
             if atom_select is not None:
                 tr, rt = get_rotate_translate(xyz2[atom_select],self.xyzs[ref][atom_select])
             else:

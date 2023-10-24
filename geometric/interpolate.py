@@ -431,6 +431,24 @@ def interpolate_segment(IC, curr_coords, dest_coords, nDiv, backward=False, rebu
     success = endpt_err < err_thre
     return coord_segment, endpt_err, success
 
+def extrapolate_segment(IC, curr_coords, dest_coords, nDiv, nDivExt, backward=False, verbose=0, sync=0):
+    if backward:
+        tmp = curr_coords.copy()
+        curr_coords = dest_coords.copy()
+        dest_coords = tmp.copy()
+    dq = IC.calcDiff(dest_coords, curr_coords, sync=sync)
+    dq *= nDivExt/nDiv
+    # For extrapolation, we want to go beyond dest_coords
+    curr_coords = dest_coords.copy()
+    coord_segment = [curr_coords]
+    for k in range(nDivExt):
+        new_coords = IC.newCartesian(curr_coords, dq/nDivExt, verbose=verbose)
+        coord_segment.append(new_coords)
+        curr_coords = new_coords.copy()
+    if backward:
+        coord_segment = coord_segment[::-1]
+    return coord_segment
+
 def get_segment_endpoints(M, segments_spliced):
     segment_endpoints = []
     for a, (i, j) in enumerate(segments_spliced):
@@ -496,7 +514,7 @@ def print_map(mtx, title, colorscheme=0):
             print()
 
 class Interpolator(object):
-    def __init__(self, M_in, n_frames = 50, use_midframes = False, align_system=False, align_frags=False, verbose=0):
+    def __init__(self, M_in, n_frames = 50, use_midframes = False, align_system=False, align_frags=False, extrapolate=None, verbose=0):
         # The input molecule; it should not be modified.
         self.M_in = deepcopy(M_in)
         # Check the length of the input molecule
@@ -552,6 +570,11 @@ class Interpolator(object):
         # The smaller of the distances at either endpoint for each pair
         self.min_enddists = np.min(np.array(self.enddists), axis=0)
         self.verbose = verbose
+        # Whether to extrapolate endpoints - give a number of frames
+        if extrapolate is not None:
+            assert type(extrapolate) is tuple
+            assert len(extrapolate) == 2
+            self.extrapolate = extrapolate
 
     def get_splice_length(self):
         # Determine the splice length
@@ -1088,6 +1111,7 @@ class Interpolator(object):
         damping = 1.0
         backwards = [[False for c in range(len(segment_to_ICs[a]))] for a in range(len(segments_spliced))]
         clash_pairs = []
+        M_extra = {}
         for cycle in range(n_cycles):
             coord_segments = []
             endpt_errs = []
@@ -1125,6 +1149,21 @@ class Interpolator(object):
                         backwards[a][c] = not backwards[a][c]
                         break
                 if success:
+                    # At this point, IC is the one that was used to successfully interpolate the segment.
+                    if self.extrapolate:
+                        if a == 0 and self.extrapolate[0] > 0:
+                            nDivExt = self.extrapolate[0]
+                            extra = extrapolate_segment(IC, xyzi, xyzj, nDiv, nDivExt, backward=True, verbose=self.verbose, sync=0)
+                            M_extra[0] = copy.deepcopy(M)
+                            M_extra[0].xyzs = [x.reshape(-1, 3)*bohr2ang for x in extra[:-1]]
+                            M_extra[0].comms = ["Extrapolated from head; frame %i/%i" % (nDivExt-i, nDivExt) for i in range(nDivExt)]
+                        if a == (len(segments_spliced) - 1) and self.extrapolate[1] > 0:
+                            nDivExt = self.extrapolate[1]
+                            extra = extrapolate_segment(IC, xyzi, xyzj, nDiv, nDivExt, backward=False, verbose=self.verbose, sync=0)
+                            M_extra[1] = copy.deepcopy(M)
+                            M_extra[1].xyzs = [x.reshape(-1, 3)*bohr2ang for x in extra[1:]]
+                            M_extra[1].comms = ["Extrapolated from tail; frame %i/%i" % (i+1, nDivExt) for i in range(nDivExt)]
+
                     # Reorder the segment_to_ICs so the successful one is at the front.
                     reordered_segment_to_ICs = []
                     for cc, (iic, IC) in enumerate(segment_to_ICs[a]):
@@ -1172,7 +1211,20 @@ class Interpolator(object):
                     if len(M_prod) > 1:
                         M = M + M_prod[-1]
                     M.align()
+                        
                 M.write("interpolated_splice.xyz")
+                if self.extrapolate:
+                    M_with_extra = deepcopy(M)
+                    refidx = 0
+                    if self.extrapolate[0] > 0:
+                        refidx += self.extrapolate[0]
+                        M_with_extra = M_extra[0] + M_with_extra
+                    if self.extrapolate[1] > 0:
+                        M_with_extra = M_with_extra + M_extra[1]
+                    M_with_extra.align(refidx=refidx)
+                        
+                    print(">> Path with (%i head, %i tail) extrapolated frames saved to interpolated_splice_extra.xyz" % (self.extrapolate[0], self.extrapolate[1]))
+                    M_with_extra.write("interpolated_splice_extra.xyz")
     
             if max_mismatch < last_max_mismatch:
                 increase_count = 0
@@ -1248,7 +1300,7 @@ def main():
     params = InterpParams(**args)
     M0 = Molecule(args['input'])
     #interpolator = Interpolator(M0, use_midframes=True, n_frames=0, align_system=True, align_frags=False)
-    interpolator = Interpolator(M0, n_frames= params.nframes, use_midframes=params.optimize, align_system=params.align_system, align_frags=params.align_frags, verbose=params.verbose)
+    interpolator = Interpolator(M0, n_frames= params.nframes, use_midframes=params.optimize, align_system=params.align_system, align_frags=params.align_frags, extrapolate=params.extrapolate, verbose=params.verbose)
     interpolator.run_workflow()
     
 if __name__ == "__main__":

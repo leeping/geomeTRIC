@@ -272,6 +272,10 @@ class InterpParams(object):
         self.align_system = kwargs.get('align_system', True)
         # Verbose printout
         self.verbose = kwargs.get('verbose', 0)
+        if 'extrapolate' in kwargs:
+            self.extrapolate = tuple(kwargs['extrapolate'])
+        else:
+            self.extrapolate = None
 
 def str2bool(v):
     """ Allows command line options such as "yes" and "True" to be converted into Booleans. """
@@ -552,7 +556,9 @@ def parse_interpolate_args(*args):
     grp_univ.add_argument('--nframes', type=int, help='Number of frames, needs to be bigger than 5, that will be used to interpolate, default 50\n')
     grp_univ.add_argument('--align_frags', type=str2bool, help='Provide "yes" to align fragments in reactant and product structure prior to interpolation.\n')
     grp_univ.add_argument('--align_system', type=str2bool, help='Provide "yes" to align the entire system prior to interpolation.\n')
-
+    grp_univ.add_argument('--extrapolate', type=int, nargs=2, help='Provide two integers to generate extrapolated frames at the head and tail ends.\n'
+                          'The displacement norm between extrapolated frames is the same as for interpolated frames.\n')
+    
     grp_output = parser.add_argument_group('output', 'Control the format and amount of the output')
     grp_output.add_argument('--prefix', type=str, help='Specify a prefix for log file and temporary directory.\n'
                             'Defaults to the input file path (incl. file name with extension removed).\n ')
