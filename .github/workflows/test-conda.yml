@@ -14,23 +14,44 @@ on:
 
 jobs:
   build-linux:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          # - macOS-latest
+          - ubuntu-latest
+        python-version:
+          - "3.8"
+          - "3.9"
+    env:
+      CI_OS: ${{ matrix.os }}
+      PYVER: ${{ matrix.python-version }}
+      PACKAGE: geometric
 
     steps:
       - uses: actions/checkout@v3
 
-      - name: Add conda to system path
-        run: |
-          # $CONDA is an environment variable pointing to the root of the miniconda directory
-          echo $CONDA/bin >> $GITHUB_PATH
+      - name: Set up conda environment
+        uses: mamba-org/setup-micromamba@v1
+        with:
+          environment-file: devtools/conda-envs/latest.yaml
+          create-args: >- # beware the >- instead of |, we don't split on newlines but on spaces
+            python=${{ matrix.python-version }}
 
-      # - name: Configure Conda
-      #   run: conda config --set channel_priority flexible
-      - name: Install Mamba
-        run: conda install -c conda-forge mamba
-        
-      - name: Install Dependencies
-        run: mamba env update --file=devtools/conda-envs/latest.yaml --name=base
+      # Old version commented out 2023-10-25
+      # - name: Add conda to system path
+      #   run: |
+      #     # $CONDA is an environment variable pointing to the root of the miniconda directory
+      #     echo $CONDA/bin >> $GITHUB_PATH
+      # 
+      # # - name: Configure Conda
+      # #   run: conda config --set channel_priority flexible
+      # - name: Install Mamba
+      #   run: conda install -c conda-forge mamba
+      # 
+      # - name: Install Dependencies
+      #   run: mamba env update --file=devtools/conda-envs/latest.yaml --name=base
 
       - name: pytest
         run: pytest -v --cov=geometric  geometric/tests/
