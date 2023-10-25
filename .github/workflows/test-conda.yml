@@ -53,6 +53,10 @@ jobs:
       # - name: Install Dependencies
       #   run: mamba env update --file=devtools/conda-envs/latest.yaml --name=base
 
+      - name: Activate environment
+        run: |
+          conda activate geometric-test
+
       - name: Install package
         run: |
           python -c "import numpy; print(numpy.__version__)"
