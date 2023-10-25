@@ -55,7 +55,9 @@ jobs:
 
       - name: Install package
         run: |
+          python -c "import numpy; print(numpy.__version__)"
           python -m pip install --no-deps .
+          python -c "import numpy; print(numpy.__version__)"
           python -c "import geometric; print(geometric.__version__)"
 
       - name: pytest
