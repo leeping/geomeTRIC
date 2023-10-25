@@ -53,9 +53,9 @@ jobs:
       # - name: Install Dependencies
       #   run: mamba env update --file=devtools/conda-envs/latest.yaml --name=base
       # 
-      - name: Activate environment
-        run: |
-          micromamba activate geometric-test
+      # - name: Activate environment
+      #   run: |
+      #     micromamba activate geometric-test
 
       - name: Environment Information
         run: |
