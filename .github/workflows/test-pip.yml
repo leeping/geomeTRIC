@@ -30,9 +30,9 @@ jobs:
       # most of the dependencies
       - name: Install dependencies with PIP
         run: |
-          pip install numpy networkx six pytest pytest-cov ase
+          pip install packaging numpy networkx six pytest pytest-cov ase
 
-      # rdkit: PyPi only supplies it for 3.7 and above
+      # rdkit: PyPi only supplies it for 3.7-3.11
       - name: Install rdkit
         if: matrix.python-version != '3.12'
         run: |

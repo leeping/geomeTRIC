@@ -28,6 +28,7 @@ dependencies:
   # geomeTRIC base depends
   - numpy
   - networkx
+  - packaging
 
   # Testing
   - pytest

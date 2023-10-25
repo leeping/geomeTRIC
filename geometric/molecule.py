@@ -2,7 +2,6 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import copy
 import itertools
 import os
 import re
@@ -12,12 +11,11 @@ import json
 from collections import OrderedDict, namedtuple, Counter
 from ctypes import *
 from datetime import date
-from warnings import warn
 
 import numpy as np
 from numpy import sin, cos, arccos
 from numpy.linalg import multi_dot
-from pkg_resources import parse_version
+from packaging.version import parse as parse_version
 
 # For Python 3 compatibility
 try:

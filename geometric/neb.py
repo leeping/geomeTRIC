@@ -6,7 +6,6 @@ from collections import OrderedDict
 import numpy as np
 from copy import deepcopy
 from datetime import datetime
-import pkg_resources
 from .info import print_logo, print_citation
 from .prepare import get_molecule_engine
 from .optimize import Optimize
@@ -17,6 +16,7 @@ from .internal import CartesianCoordinates, PrimitiveInternalCoordinates, Deloca
 from .nifty import flat, row, col, createWorkQueue, getWorkQueue, wq_wait, ang2bohr, bohr2ang, kcal2au, au2kcal, au2evang, logger
 from .molecule import EqualSpacing
 from .errors import NEBStructureError, NEBChainShapeError, NEBChainRespaceError, NEBBandTangentError, NEBBandGradientError
+from .config import config_dir
 
 def print_forces(chain, avgg, maxg):
     """Check average and maximum chain forces and return color coded string"""
@@ -1648,8 +1648,7 @@ def main():
     params = NEBParams(**args)
 
     if args.get('logIni') is None:
-        import geometric.neb
-        logIni = pkg_resources.resource_filename(geometric.neb.__name__, r'config/log.ini')
+        logIni = os.path.join(config_dir, 'logJson.ini')
     else:
         logIni = args.get('logIni')
 

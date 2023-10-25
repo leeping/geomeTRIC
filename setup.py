@@ -26,6 +26,7 @@ setup(
         'networkx',
         'six',
         'scipy',
+        'packaging',
     ],
     tests_require=[
         'pytest',
