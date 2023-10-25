@@ -1,13 +1,11 @@
 name: test
 channels:
-  - psi4
-  - rdkit
-  - defaults
   - conda-forge
 dependencies:
   # LPW 2023-1-23: Added this line because
   # conda would otherwise report lots of conflicts.
-  - python=3.9
+  # LPW 2023-10-25: Commenting out because we're going to let the user (or the GitHub Action) handle it.
+  # - python=3.9
 
   # ASE tests
   - ase
