@@ -1,6 +1,7 @@
 name: test
 channels:
   - conda-forge
+  - conda-forge/label/libint_dev  # needed for psi4/libint2
 dependencies:
   # LPW 2023-1-23: Added this line because
   # conda would otherwise report lots of conflicts.
