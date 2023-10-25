@@ -1,4 +1,4 @@
-name: test
+name: geometric-test
 channels:
   - conda-forge
   - conda-forge/label/libint_dev  # needed for psi4/libint2
