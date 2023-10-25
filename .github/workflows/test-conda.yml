@@ -52,10 +52,15 @@ jobs:
       # 
       # - name: Install Dependencies
       #   run: mamba env update --file=devtools/conda-envs/latest.yaml --name=base
+      # 
+      # - name: Activate environment
+      #   run: |
+      #     conda activate geometric-test
 
-      - name: Activate environment
+      - name: Environment Information
         run: |
-          conda activate geometric-test
+          conda info --all
+          conda list
 
       - name: Install package
         run: |
