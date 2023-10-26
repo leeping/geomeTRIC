@@ -12,6 +12,10 @@ on:
   schedule:
     - cron: '36 21 * * 6'
 
+defaults:
+  run:
+    shell: bash -l {0}
+
 jobs:
   build-linux:
     runs-on: ${{ matrix.os }}
