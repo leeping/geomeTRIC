@@ -6,8 +6,6 @@ import shutil
 import geometric
 import pytest
 import os
-import logging.config
-import pkg_resources
 
 
 def _plugin_import(plug):
