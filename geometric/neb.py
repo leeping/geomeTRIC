@@ -1648,7 +1648,7 @@ def main():
     params = NEBParams(**args)
 
     if args.get('logIni') is None:
-        logIni = os.path.join(config_dir, 'logJson.ini')
+        logIni = os.path.join(config_dir, 'log.ini')
     else:
         logIni = args.get('logIni')
 

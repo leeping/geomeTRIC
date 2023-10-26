@@ -828,7 +828,7 @@ def run_optimizer(**kwargs):
     # This behavior may be changed by editing the log.ini file.
     # Output will only be written to log files after the 'logConfig' line is called!
     if kwargs.get('logIni') is None:
-        logIni = os.path.join(config_dir, 'logJson.ini')
+        logIni = os.path.join(config_dir, 'log.ini')
     else:
         logIni = kwargs.get('logIni')
     logfilename = kwargs.get('prefix')

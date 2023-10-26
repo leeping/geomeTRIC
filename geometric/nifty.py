@@ -1311,8 +1311,8 @@ def copy_tree_over(src, dest):
     shutil.rmtree needs to be called.
     """
     if sys.version_info < (3, 8):
-        # From https://stackoverflow.com/questions/9160227/dir-util-copy-tree-fails-after-shutil-rmtree/28055993 : 
-        # If you copy folder, then remove it, then copy again it will fail, because it caches all the created dirs. 
+        # From https://stackoverflow.com/questions/9160227/dir-util-copy-tree-fails-after-shutil-rmtree/28055993 :
+        # If you copy folder, then remove it, then copy again it will fail, because it caches all the created dirs.
         # To workaround you can clear _path_created before copy:
         distutils.dir_util._path_created = {}
         distutils.dir_util.copy_tree(src, dest, verbose=0)
