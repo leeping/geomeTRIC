@@ -1377,26 +1377,28 @@ class Psi4(Engine):
                     coords.append(ls[1:4])
                 elif '--' in line:
                     fragn.append(len(elems))
-                elif 'symmetry' in line:
-                    found_symmetry = True
-                    if line.split()[1].lower() != 'c1':
-                        raise Psi4EngineError("Symmetry must be set to c1 to prevent rotations of the coordinate frame.")
-                elif 'no_reorient' in line or 'noreorient' in line:
-                    found_no_reorient = True
-                elif 'no_com' in line or 'nocom' in line:
-                    found_no_com = True
-                elif 'units' in line:
-                    if line.split()[1].lower()[:3] != 'ang':
-                        raise Psi4EngineError("Must use Angstroms as coordinate input.")
                 else:
-                    if '}' in line:
-                        found_molecule = False
-                        if not found_no_com:
-                            psi4_temp.append("no_com\n")
-                        if not found_no_reorient:
-                            psi4_temp.append("no_reorient\n")
-                        if not found_symmetry:
-                            psi4_temp.append("symmetry c1\n")
+                    # All other lines belong to the template.
+                    if 'symmetry' in line:
+                        found_symmetry = True
+                        if line.split()[1].lower() != 'c1':
+                            raise Psi4EngineError("Symmetry must be set to c1 to prevent rotations of the coordinate frame.")
+                    elif 'no_reorient' in line or 'noreorient' in line:
+                        found_no_reorient = True
+                    elif 'no_com' in line or 'nocom' in line:
+                        found_no_com = True
+                    elif 'units' in line:
+                        if line.split()[1].lower()[:3] != 'ang':
+                            raise Psi4EngineError("Must use Angstroms as coordinate input.")
+                    else:
+                        if '}' in line:
+                            found_molecule = False
+                            if not found_no_com:
+                                psi4_temp.append("no_com\n")
+                            if not found_no_reorient:
+                                psi4_temp.append("no_reorient\n")
+                            if not found_symmetry:
+                                psi4_temp.append("symmetry c1\n")
                     psi4_temp.append(line)
             else:
                 psi4_temp.append(line)
