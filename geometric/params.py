@@ -71,15 +71,19 @@ class OptParams(object):
         # Also sets the maximum step size that can be rejected
         # LPW: Add to documentation later:
         # This parameter is complicated.  It represents the length scale below which the PES is expected to be smooth.
-        # If set too small, the trust radius can decrease without limit and make the optimization impossible.
+        # If set too small, the optimization could get "stuck" in a small divot on the PES and be unable to escape.
         # This could happen for example if the potential energy surface contains a "step", which occurs infrequently;
         # we don't want the optimization to stop there completely, but rather we accept a bad step and keep going.
         # If set too large, then the rejection algorithm becomes ineffective as too-large low-quality steps will be kept.
-        # It should also not be smaller than 2*Convergence_drms because that could artifically cause convergence.
-        # Because MECI optimizations have more "sharpness" in their PES, it is set
+        # It should also not be smaller than Convergence_drms because that could artifically cause convergence.
         # PS: If the PES is inherently rough on extremely small length scales,
         # then the optimization is not expected to converge regardless of tmin.
-        self.tmin = kwargs.get('tmin', min(1.0e-4 if (self.meci or self.transition) else 1.2e-3, self.Convergence_drms))
+        # Note 2023-10-29: Testing has shown that DFT calculations can have gradient errors on the order of 1e-4 
+        # in various engines when the default grid is used. This could lead to failures if the attempted 
+        # optimization step is larger than Convergence_drms, the step is rejected, then (almost) the same step
+        # is attempted again. Therefore, the minimum trust radius should be set smaller than the convergence
+        # criterion to avoid this infinite loop scenario.
+        self.tmin = kwargs.get('tmin', min(1.0e-4, self.Convergence_drms*0.1))
         # Use maximum component instead of RMS displacement when applying trust radius.
         self.usedmax = kwargs.get('usedmax', False)
         # Sanity checks on trust radius
