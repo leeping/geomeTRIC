@@ -4001,6 +4001,7 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
                     vj = V[:, jc]
                     vj -= ui * ov(ui, vj)/Unorms[icu]**2
                 icu += 1
+                if icu >= U.shape[1]: break
                 
             # self.Vecs contains the linear combination coefficients that are our new DLCs
             self.Vecs = U[:, :icu].copy()
