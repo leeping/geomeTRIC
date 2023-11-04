@@ -575,6 +575,8 @@ class Interpolator(object):
             assert type(extrapolate) is tuple
             assert len(extrapolate) == 2
             self.extrapolate = extrapolate
+        else:
+            self.extrapolate = None
 
     def get_splice_length(self):
         # Determine the splice length
