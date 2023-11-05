@@ -46,7 +46,7 @@ Internal coordinate (IC) system to be used. Valid values for this argument are:
 - ``prim`` : Primitive (a.k.a. redundant) internal coordinates.  Distances, angles, and dihedral angles are used to span the whole system.  The number of ICs can exceed the number of degrees of freedom.
 - ``dlc`` : Delocalized internal coordinates.  Same as ``prim`` but a set of non-redundant linear combinations of "delocalized" internal coordinates is formed by diagonalizing the G matrix and keeping only the eigenvectors with non-zero eigenvalues.  The default for native optimization codes in several quantum chemistry programs.
 - ``hdlc`` : Hybrid delocalized internal coordinates.  Distances, angles, and dihedral angles are used to span individual molecules in the system, Cartesian coordinates for all atoms are added, then delocalized internal coordinates are formed.
-- ``tric`` (**default**) : Translation-rotation internal coordinates.  Distances, angles, and dihedral angle¯s are used to span individual molecules in the system, three translation and three rotation coordinates are added for each molecule, then delocalized internal coordinates are formed.
+- ``tric`` (**default, recommended**) : Translation-rotation internal coordinates.  Distances, angles, and dihedral angle¯s are used to span individual molecules in the system, three translation and three rotation coordinates are added for each molecule, then delocalized internal coordinates are formed.
 - ``tric-p`` : A primitive (redundant) version of translation-rotation internal coordinates where the delocalization step is not applied.
 
 ....

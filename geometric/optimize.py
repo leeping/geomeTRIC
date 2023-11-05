@@ -597,6 +597,8 @@ class Optimizer(object):
         if Converged_energy and Converged_grms and Converged_drms and Converged_gmax and Converged_dmax and self.conSatisfied:
             self.SortedEigenvalues(self.H)
             logger.info("Converged! =D\n")
+            if self.trust < min(1.2e-3, params.Convergence_drms):
+                logger.info("*_* Trust radius is lower than RMS displacement convergence criterion; please check gradient accuracy. *_*\n")
             self.state = OPT_STATE.CONVERGED
             return
 
