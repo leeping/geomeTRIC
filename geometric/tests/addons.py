@@ -6,8 +6,6 @@ import shutil
 import geometric
 import pytest
 import os
-import logging.config
-import pkg_resources
 
 
 def _plugin_import(plug):
@@ -45,6 +43,8 @@ def get_gaussian_version():
     else:
         return None
 
+def workqueue_found():
+    return (_plugin_import("work_queue") is True) and (geometric.nifty.which('work_queue_worker'))
 
 # Modify paths for testing
 os.environ["DQM_CONFIG_PATH"] = os.path.dirname(os.path.abspath(__file__))
@@ -55,18 +55,22 @@ using_psi4 = pytest.mark.skipif(
     _plugin_import("psi4") is False, reason="could not find psi4. please install the package to enable tests")
 using_rdkit = pytest.mark.skipif(
     _plugin_import("rdkit") is False, reason="could not find rdkit. please install the package to enable tests")
+using_qcelemental = pytest.mark.skipif(
+    _plugin_import("qcelemental") is False, reason="could not find qcelemental. please install the package to enable tests")
 using_qcengine = pytest.mark.skipif(
     _plugin_import("qcengine") is False, reason="could not find qcengine. please install the package to enable tests")
 using_openmm = pytest.mark.skipif(
     _plugin_import("openmm") is False and _plugin_import("simtk.openmm") is False, reason="could not find openmm. please install the package to enable tests")
 using_workqueue = pytest.mark.skipif(
-    (_plugin_import("work_queue") is False) or (not geometric.nifty.which('work_queue_worker')), reason="could not find work_queue module or work_queue_worker executable. please install the package to enable tests")
+    (not workqueue_found()), reason="could not find work_queue module or work_queue_worker executable. please install the package to enable tests")
 using_terachem = pytest.mark.skipif(
     not geometric.nifty.which("terachem"), reason="could not find terachem. please make sure TeraChem is installed for these tests")
 using_qchem = pytest.mark.skipif(
     not geometric.nifty.which("qchem"), reason="could not find qchem. please make sure Q-Chem is installed for these tests")
 using_quick = pytest.mark.skipif(
     not geometric.nifty.which("quick"), reason="could not find quick. please install the package to enable tests")
+using_cfour = pytest.mark.skipif(
+    not geometric.nifty.which("xcfour"), reason="could not find cfour. please install the package to enable tests")
 using_gaussian = pytest.mark.skipif(
     get_gaussian_version() is None,
     reason="could not find Gaussian. please make sure Gaussian is installed for these tests",

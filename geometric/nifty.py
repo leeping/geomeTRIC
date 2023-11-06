@@ -20,12 +20,15 @@ from __future__ import print_function
 
 import filecmp
 import itertools
-import distutils.dir_util
 import os
 import re
 import shutil
 import sys
 from select import select
+
+# distutils has been removed as of python 3.12
+if sys.version_info < (3, 8):
+    import distutils.dir_util
 
 import numpy as np
 from numpy.linalg import multi_dot
@@ -800,7 +803,10 @@ def lp_load(fnm):
 #|      Work Queue stuff      |#
 #==============================#
 try:
-    import work_queue
+    try:
+        import ndcctools.work_queue as work_queue
+    except ImportError:
+        import work_queue
 except:
     pass
     #logger.warning("Work Queue library import fail (You can't queue up jobs using Work Queue)\n")
@@ -836,8 +842,12 @@ def createWorkQueue(wq_port, debug=True, name=package):
 def destroyWorkQueue():
     # Convenience function to destroy the Work Queue objects.
     global WORK_QUEUE, WQIDS
+    if hasattr(WORK_QUEUE, '_free'): 
+        WORK_QUEUE._free()
     WORK_QUEUE = None
     WQIDS = defaultdict(list)
+    print("Freed Work Queue, sleeping for 5 seconds...")
+    time.sleep(5)
 
 def queue_up(wq, command, input_files, output_files, tag=None, tgt=None, verbose=True, print_time=60):
     """
@@ -1301,11 +1311,14 @@ def copy_tree_over(src, dest):
     the destination folder, which can reduce the number of times
     shutil.rmtree needs to be called.
     """
-    # From https://stackoverflow.com/questions/9160227/dir-util-copy-tree-fails-after-shutil-rmtree/28055993 : 
-    # If you copy folder, then remove it, then copy again it will fail, because it caches all the created dirs. 
-    # To workaround you can clear _path_created before copy:
-    distutils.dir_util._path_created = {}
-    distutils.dir_util.copy_tree(src, dest)
+    if sys.version_info < (3, 8):
+        # From https://stackoverflow.com/questions/9160227/dir-util-copy-tree-fails-after-shutil-rmtree/28055993 :
+        # If you copy folder, then remove it, then copy again it will fail, because it caches all the created dirs.
+        # To workaround you can clear _path_created before copy:
+        distutils.dir_util._path_created = {}
+        distutils.dir_util.copy_tree(src, dest, verbose=0)
+    else:
+        shutil.copytree(src, dest, dirs_exist_ok=True)
 
 # Thanks to cesarkawakami on #python (IRC freenode) for this code.
 class LineChunker(object):

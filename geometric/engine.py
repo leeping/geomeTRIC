@@ -46,10 +46,11 @@ import numpy as np
 import re
 import os
 
-from .molecule import Molecule
+from .molecule import Molecule, format_xyz_coord
 from .nifty import bak, au2ev, eqcgmx, fqcgmx, bohr2ang, logger, getWorkQueue, queue_up_src_dest, rootdir, copy_tree_over
 from .errors import EngineError, CheckCoordError, Psi4EngineError, QChemEngineError, TeraChemEngineError, \
-    ConicalIntersectionEngineError, OpenMMEngineError, GromacsEngineError, MolproEngineError, QCEngineAPIEngineError, GaussianEngineError, QUICKEngineError
+    ConicalIntersectionEngineError, OpenMMEngineError, GromacsEngineError, MolproEngineError, QCEngineAPIEngineError, GaussianEngineError, QUICKEngineError, CFOUREngineError
+from .xml_helper import read_coors_from_xml, write_coors_to_xml
 
 # Strings matching common DFT functionals
 # exclude "pw", "scan" because they might cause false positives
@@ -98,6 +99,7 @@ def edit_tcin(fin=None, fout=None, options=None, defaults=None, reqxyz=True, ign
         tcin_dirname = os.path.dirname(os.path.abspath(fin))
         section_mode = False
         for line in open(fin).readlines():
+            line = line.expandtabs(4)
             line = line.split("#")[0].strip()
             if len(line) == 0: continue
             if line == '$end':
@@ -181,7 +183,7 @@ def load_tcin(f_tcin):
     # tcdef['dftgrid'] = "1"
     # tcdef['precision'] = "mixed"
     # tcdef['threspdp'] = "1.0e-8"
-    tcin = edit_tcin(fin=f_tcin, options={'run':'gradient'}, defaults=tcdef)
+    tcin = edit_tcin(fin=f_tcin, options={'run':'gradient', 'keep_scr':'yes', 'scrdir':'scr'}, defaults=tcdef)
     return tcin
 
 #====================================#
@@ -192,7 +194,11 @@ def load_tcin(f_tcin):
 class Engine(object):
     def __init__(self, molecule):
         if len(molecule) != 1:
-            raise RuntimeError('Please pass only length-1 molecule objects to engine creation')
+            # In NEB calculations, length > 1 molecule objects may be passed.  In keeping with the CLI, the last structure
+            # is used for Engine creation.  The Engine behavior shouldn't depend on which structure is used, but if it does,
+            # we would need to rethink this design.
+            molecule = molecule[-1]
+            # raise RuntimeError('Please pass only length-1 molecule objects to engine creation')
         self.M = deepcopy(molecule)
         self.stored_calcs = OrderedDict()
 
@@ -370,13 +376,15 @@ class TeraChem(Engine):
     """
     Run a TeraChem energy and gradient calculation.
     """
-    def __init__(self, molecule, tcin, dirname=None):
+    def __init__(self, molecule, tcin, dirname=None, pdb=None):
         self.tcin = tcin.copy()
         # Scratch folder
         if 'scrdir' in self.tcin:
             self.scr = self.tcin['scrdir']
         else:
             self.scr = 'scr'
+        # Always specify the TeraChem scratch folder name
+        self.tcin['scrdir'] = self.scr
         # A few notes about the electronic structure method
         self.casscf = self.tcin.get('casscf', 'no').lower() == 'yes'
         self.unrestricted = (self.tcin['method'][0] == 'u')
@@ -404,10 +412,9 @@ class TeraChem(Engine):
         for f in self.initguess_files:
             if not os.path.exists(f):
                 raise TeraChemEngineError('%s guess file is missing' % f)
-        # Management of QM/MM: Read qmindices and 
-        # store locations of prmtop and qmindices files,
-        self.qmmm = 'qmindices' in tcin
-        if self.qmmm:
+        # Management of QM/MM with AMBER: Read qmindices and store locations of prmtop and qmindices files
+        self.qmmm_amber = 'prmtop' in tcin
+        if self.qmmm_amber:
             if not os.path.exists(tcin['coordinates']):
                 raise RuntimeError("TeraChem QM/MM coordinate file does not exist")
             if not os.path.exists(tcin['prmtop']):
@@ -418,6 +425,40 @@ class TeraChem(Engine):
             self.prmtop_name = os.path.abspath(tcin['prmtop'])
             self.qmindices = [int(i.split()[0]) for i in open(self.qmindices_name).readlines()]
             self.M_full = Molecule(tcin['coordinates'], ftype='inpcrd', build_topology=False)
+        
+        # Management of QM/MM with openmm XML files
+        self.qmmm_openmm = 'system_xml' in tcin
+        if self.qmmm_openmm:
+            if not pdb:
+                raise RuntimeError("when system_xml is specified, pdb keyword arg must be provided to TC engine")
+            if self.qmmm_amber:
+                raise RuntimeError("prmtop and system_xml cannot both be in TC input file")
+            if not os.path.exists(tcin['coordinates']):
+                raise RuntimeError("TeraChem state XML file does not exist")
+            if not os.path.exists(tcin['system_xml']):
+                raise RuntimeError("TeraChem system XML file does not exist")
+            if not os.path.exists(tcin['qmindices']):
+                raise RuntimeError("TeraChem QM/MM qmindices file does not exist")
+            self.qmindices_name = os.path.abspath(tcin['qmindices'])
+            self.systemxml_name = os.path.abspath(tcin['system_xml'])
+            self.grdindices = [int(i.split()[0]) for i in open(self.qmindices_name).readlines()]
+            # test if "mmgrdindices.txt" exists
+        
+            self.mmgrdindices_name = None
+            if "printmmgrad" in tcin:
+                if not os.path.exists(tcin['printmmgrad']):
+                    raise RuntimeError("TeraChem printmmgrad file does not exist")
+                self.mmgrdindices_name = os.path.abspath(tcin['printmmgrad'])
+                mmgrdindices = [int(i.split()[0]) for i in open(self.mmgrdindices_name).readlines()]
+                self.grdindices += mmgrdindices
+                # remove redundant and sort indices 
+                self.grdindices = list(set(self.grdindices))
+                self.grdindices.sort()
+            logger.info("grdindices = " + str(self.grdindices) + "\n")
+            # update molecule coordinates from "state.xml"
+            self.M_full = Molecule(pdb, build_topology=True)
+            self.state_xml = read_coors_from_xml(self.M_full, os.path.abspath(tcin["coordinates"])) 
+
         super(TeraChem, self).__init__(molecule)
 
     def orbital_filenames(self):
@@ -496,10 +537,16 @@ class TeraChem(Engine):
                 shutil.copy2(os.path.join(dirname, self.scr, f+".sav"), os.path.join(dirname, self.scr, f))
 
     def calc_new(self, coords, dirname):
+        if not os.path.exists(dirname): os.makedirs(dirname)
         # Ensure guess files are in the correct locations
         self.copy_guess_files(dirname)
         # Set coordinate file name
-        start_xyz = 'start.rst7' if self.qmmm else 'start.xyz'
+        if self.qmmm_amber:
+            start_xyz = 'start.rst7'
+        elif self.qmmm_openmm:
+            start_xyz = 'start.xml'
+        else:
+            start_xyz = 'start.xyz'
         self.tcin['coordinates'] = start_xyz
         self.tcin['run'] = 'gradient'
         # Write the TeraChem input file
@@ -510,12 +557,20 @@ class TeraChem(Engine):
         # bak(start_xyz, cwd=dirname, start=0)
         # Convert coordinates back to the xyz file
         self.M.xyzs[0] = coords.reshape(-1, 3) * bohr2ang
-        if self.qmmm:
+        if self.qmmm_amber:
             # Copy QMMM files to the correct locations and set positions in inpcrd/rst7 file
             shutil.copy2(self.qmindices_name, dirname)
             shutil.copy2(self.prmtop_name, dirname)
             self.M_full.xyzs[0][self.qmindices, :] = self.M.xyzs[0]
             self.M_full[0].write(os.path.join(dirname, start_xyz), ftype='inpcrd')
+        elif self.qmmm_openmm:
+            # Copy OpenMM Files
+            shutil.copy2(self.qmindices_name, dirname)
+            shutil.copy2(self.systemxml_name, dirname)
+            if self.mmgrdindices_name is not None:
+                shutil.copy2(self.mmgrdindices_name, dirname)
+            self.M_full.xyzs[0][self.grdindices, :] = self.M.xyzs[0]
+            write_coors_to_xml(self.M_full, self.state_xml, os.path.join(dirname, start_xyz)) 
         else:
             self.M[0].write(os.path.join(dirname, start_xyz))
         # Run TeraChem
@@ -543,7 +598,12 @@ class TeraChem(Engine):
         # Ensure guess files are in the correct locations
         guessfnms = self.copy_guess_files(dirname)
         # Set coordinate file name
-        start_xyz = 'start.rst7' if self.qmmm else 'start.xyz'
+        if self.qmmm_amber:
+            start_xyz = 'start.rst7'
+        elif self.qmmm_openmm:
+            start_xyz = 'start.xml'
+        else:
+            start_xyz = 'start.xyz'
         self.tcin['coordinates'] = start_xyz
         self.tcin['run'] = 'gradient'
         # For queueing up jobs, delete GPU key and let the worker decide
@@ -552,21 +612,37 @@ class TeraChem(Engine):
         edit_tcin(fout="%s/run.in" % dirname, options=self.tcin)
         # Convert coordinates back to the xyz file
         self.M.xyzs[0] = coords.reshape(-1, 3) * bohr2ang
-        if self.qmmm:
+        if self.qmmm_amber:
             # Copy QMMM files to the correct locations and set positions in inpcrd/rst7 file
             shutil.copy2(self.qmindices_name, dirname)
             shutil.copy2(self.prmtop_name, dirname)
             self.M_full.xyzs[0][self.qmindices, :] = self.M.xyzs[0]
             self.M_full[0].write(os.path.join(dirname, start_xyz), ftype='inpcrd')
+        elif self.qmmm_openmm:
+            # Copy OpenMM Files
+            shutil.copy2(self.qmindices_name, dirname)
+            shutil.copy2(self.systemxml_name, dirname)
+            if self.mmgrdindices_name is not None:
+                shutil.copy2(self.mmgrdindices_name, dirname)
+            self.M_full.xyzs[0][self.grdindices, :] = self.M.xyzs[0]
+            write_coors_to_xml(self.M_full, self.state_xml, os.path.join(dirname, start_xyz)) 
         else:
             self.M[0].write(os.path.join(dirname, start_xyz))
         # Specify WQ input and output files
         in_files = [('%s/run.in' % dirname, 'run.in'), ('%s/%s' % (dirname, start_xyz), start_xyz)]
-        if self.qmmm:
+        if self.qmmm_amber:
             qmindices_filename = os.path.split(self.qmindices_name)[1]
             prmtop_filename = os.path.split(self.prmtop_name)[1]
             in_files += [("%s/%s" % (dirname, qmindices_filename), qmindices_filename)]
             in_files += [("%s/%s" % (dirname, prmtop_filename), prmtop_filename)]
+        elif self.qmmm_openmm:
+            qmindices_filename = os.path.split(self.qmindices_name)[1]
+            systemxml_filename = os.path.split(self.systemxml_name)[1]
+            in_files += [("%s/%s" % (dirname, qmindices_filename), qmindices_filename)]
+            in_files += [("%s/%s" % (dirname, systemxml_filename), systemxml_filename)]
+            if self.mmgrdindices_name is not None:
+                mmgrdindices_filename = os.path.split(self.mmgrdindices_name)[1]
+                in_files += [("%s/%s" % (dirname, mmgrdindices_filename), mmgrdindices_filename)]
         for f in guessfnms:
             in_files.append((os.path.join(dirname, f), f))
         out_files = [('%s/run.out' % dirname, 'run.out')]
@@ -574,22 +650,33 @@ class TeraChem(Engine):
         out_scr += ['grad.xyz', 'mullpop']
         for f in out_scr:
             out_files.append((os.path.join(dirname, self.scr, f), os.path.join(self.scr, f)))
-        queue_up_src_dest(wq, "terachem run.in &> run.out", in_files, out_files, verbose=False, print_time=600)
+        queue_up_src_dest(wq, "terachem run.in > run.out 2>&1", in_files, out_files, verbose=False, print_time=600)
 
     def number_output(self, dirname, calcNum):
         if not os.path.exists(os.path.join(dirname, 'run.out')):
             raise RuntimeError('run.out does not exist')
+        start_xyz = 'start.rst7' if self.qmmm else 'start.xyz'
         shutil.copy2(os.path.join(dirname,start_xyz), os.path.join(dirname,'start_%03i.%s' % (calcNum, os.path.splitext(start_xyz)[1])))
         shutil.copy2(os.path.join(dirname,'run.out'), os.path.join(dirname,'run_%03i.out' % calcNum))
 
     def read_result(self, dirname, check_coord=None):
         if check_coord is not None:
             read_xyz_success = False
-            start_xyz = 'start.rst7' if self.qmmm else 'start.xyz'
+            if self.qmmm_amber:
+                start_xyz = 'start.rst7'
+            elif self.qmmm_openmm:
+                start_xyz = 'start.xml'
+            else:
+                start_xyz = 'start.xyz'
             if os.path.exists(os.path.join(dirname, start_xyz)):
                 try:
                     M = Molecule(os.path.join(dirname, start_xyz))
-                    read_xyz = M.xyzs[0][self.qmindices] if self.qmmm else M.xyzs[0]
+                    if self.qmmm_amber:
+                        read_xyz = M.xyzs[0][self.qmindices] 
+                    elif self.qmmm_openmm:
+                        read_xyz = M.xyzs[0][self.grdindices]
+                    else: 
+                        read_xyz = M.xyzs[0]
                     read_xyz = read_xyz.flatten() / bohr2ang
                     read_xyz_success = True
                 except: pass
@@ -609,7 +696,12 @@ class TeraChem(Engine):
             subprocess.call("awk '/Gradient units are Hartree/,/Net gradient|Point charge part/ {if ($1 ~ /^-?[0-9]/) {print}}' run.out > grad.txt", cwd=dirname, shell=True)
             subprocess.call("awk 'BEGIN {s=0} /SPIN S-SQUARED/ {s=$3} END {printf \"%.6f\\n\", s}' run.out > s-squared.txt", cwd=dirname, shell=True)
             energy = float(open(os.path.join(dirname,'energy.txt')).readlines()[0].strip())
-            na = len(self.qmindices) if self.qmmm else self.M.na
+            if self.qmmm_amber:
+                na = len(self.qmindices)
+            elif self.qmmm_openmm:
+                na = len(self.grdindices)
+            else:
+                na = self.M.na
             gradient = np.loadtxt(os.path.join(dirname,'grad.txt'))[:na].flatten()
             s2 = float(open(os.path.join(dirname,'s-squared.txt')).readlines()[0].strip())
             assert gradient.shape[0] == self.M.na*3
@@ -756,6 +848,177 @@ class OpenMM(Engine):
 
     def copy_scratch(self, src, dest):
         return
+
+class CFOUR(Engine):
+    """
+    Run a CFOUR energy and gradient calculation.
+    """
+    def __init__(self, cfour_input, threads=None):
+        if threads is not None and threads > 1:
+            raise ValueError("When using cfour engine, do not specify threads with --nt, but you may specify OMP_NUM_THREADS outside of geomeTRIC.")
+        molecule = self.load_cfour_input(cfour_input)
+        super(CFOUR, self).__init__(molecule)
+
+    def load_cfour_input(self, cfour_input):
+        """
+        Load CFOUR input file (CFOUR requires this to be called ZMAT).
+        The user does not have to name it ZMAT for geomeTRIC however.
+        """
+        coord_mode = 0
+        after_coord = 0
+        ln = 0
+        elem = []
+        template = []
+        # Line number in the "template" (the portion that comes after Cartesian coords.)
+        templn = 0
+        # The line number containing *CFOUR( or *ACES2( within the template
+        cfourln = -1
+        # Are all the arguments to *CFOUR() in a single line?
+        cfour_oneline = False
+        have_coord_cartesian = False
+        have_deriv_lev1 = False
+        have_symmetry_off = False
+        have_print = False
+        xyz = []
+        for line in open(cfour_input):
+            line = line.strip().expandtabs()
+            if ln == 0:
+                comment_line = line
+            elif ln == 1:
+                coord_mode = 1
+            if coord_mode:
+                if len(line.strip()) == 0:
+                    coord_mode = 0
+                    after_coord = 1
+                elif re.match(r"^ *[A-Z][A-Za-z]?( +[-+]?([0-9]*\.)?[0-9]+){3}$", line):
+                    s = line.split()
+                    elem.append(s[0])
+                    xyz.append([float(s[1]), float(s[2]), float(s[3])])
+                else:
+                    raise CFOUREngineError("Failed to parse coordinates; make sure to use"
+                                           "Cartesian coordinates in Angstrom without any asterisks.")
+            if after_coord:
+                template.append(line)
+                if line.startswith("*CFOUR(") or line.startswith("*ACES2("):
+                    cfourln = templn
+                    if line.endswith(")"):
+                        cfour_oneline = True
+                if "COORD=CARTESIAN" in line:
+                    have_coord_cartesian = True
+                if "DERIV_LEV=1" in line:
+                    have_deriv_lev1 = True
+                elif "DERIV_LEV=" in line:
+                    raise CFOUREngineError("DERIV_LEV is set to something other than 1.")
+                if "SYMMETRY=OFF" in line or "SYMMETRY=1" in line:
+                    have_symmetry_off = True
+                elif "SYMMETRY=" in line:
+                    raise CFOUREngineError("SYMMETRY is set to something other than OFF.")
+                if "PRINT=" in line:
+                    if "PRINT=0" in line:
+                        raise CFOUREngineError("PRINT=0 is set; please set to 1 or larger.")
+                    have_print = True
+                if "%grid" in line.lower():
+                    raise CFOUREngineError("%grid found, but geomeTRIC can only call CFOUR for single point calculations.")
+                templn += 1
+            ln += 1
+        if cfourln == -1:
+            raise CFOUREngineError("Failed to find *CFOUR( or *ACES2( in input.\n")
+        M = Molecule()
+        M.elem = elem
+        M.xyzs = [np.array(xyz)]
+        # Properties of the template file that are needed for writing the new ZMAT file
+        self.template_props = {'cfour_oneline': cfour_oneline, 'have_coord_cartesian': have_coord_cartesian,
+                               'cfourln' : cfourln, 'have_deriv_lev1' : have_deriv_lev1, 'comment': comment_line,
+                               'have_print': have_print, 'have_symmetry_off': have_symmetry_off}
+        self.template = template
+        return M
+
+    def write_zmat(self, coords, dirname):
+        if not os.path.exists(dirname): os.makedirs(dirname)
+        # Convert coordinates back to Angstrom
+        self.M.xyzs[0] = coords.reshape(-1, 3) * bohr2ang
+        with open(os.path.join(dirname, 'ZMAT'), 'w') as f:
+            print(self.template_props['comment'], file=f)
+            for i in range(self.M.na):
+                print(format_xyz_coord(self.M.elem[i], self.M.xyzs[0][i]), file=f)
+            for ln, line in enumerate(self.template):
+                if ln == self.template_props['cfourln']:
+                    if self.template_props['cfour_oneline']:
+                        line = line[:-1]
+                    if not self.template_props['have_coord_cartesian']:
+                        line = line+"\nCOORD=CARTESIAN"
+                    if not self.template_props['have_deriv_lev1']:
+                        line = line+"\nDERIV_LEV=1"
+                    if not self.template_props['have_print']:
+                        line = line+"\nPRINT=1"
+                    if not self.template_props['have_symmetry_off']:
+                        line = line+"\nSYMMETRY=OFF"
+                    if self.template_props['cfour_oneline']:
+                        line = line + ")"
+                print(line, file=f)
+
+    def read_result(self, dirname, check_coord=None):
+        if check_coord is not None:
+            raise CheckCoordError("Coordinate check not implemented")
+        # Parse energy and gradient from the output file
+        # Read the file backwards for speed - however, does require fitting it in memory.
+        energy = None
+        gradient = []
+        for line in open(os.path.join(dirname, 'xcfour.out')).readlines()[::-1]:
+            line = line.strip().expandtabs()
+            if 'The final electronic energy is' in line:
+                s = line.split()
+                energy = float(s[-2])
+            if 'reordered gradient in QCOM coords for ZMAT order' in line:
+                gradient = gradient[::-1]
+                break
+            # The first number in the gradient may not be preceded by a space
+            if re.match(r"^ *[-+]?([0-9]*\.)?[0-9]+( +[-+]?([0-9]*\.)?[0-9]+){2}$", line):
+                s = line.split()
+                gradient.append([float(s[0]), float(s[1]), float(s[2])])
+            else:
+                # If we encounter any line that doesn't match, then we have read in
+                # an array that doesn't contain the gradient we want. Discard it.
+                gradient = []
+        if energy is None:
+            raise CFOUREngineError("Failed to parse electronic energy from CFOUR output file.")
+        if not gradient:
+            raise CFOUREngineError("Failed to parse gradient from CFOUR output file.")
+        result = {'energy':energy, 'gradient':np.array(gradient).flatten()}
+        return result
+
+    def calc_new(self, coords, dirname):
+        """
+        Run the gaussian single point calculation using the given exe.
+        """
+        if not os.path.exists(dirname): os.makedirs(dirname)
+        self.write_zmat(coords, dirname)
+        try:
+            # Before removing tmp-files, check to see if NEWMOS file exists (from a previous single point run).
+            # and back it up if needed.
+            if os.path.exists(os.path.join(dirname, 'NEWMOS')):
+                shutil.copy2(os.path.join(dirname, 'NEWMOS'), os.path.join(dirname, 'newmos_bak'))
+            # Run xclean to remove tmp-files
+            subprocess.check_call('xclean', cwd=dirname, shell=True)
+            # If the NEWMOS file was backed up, now rename it to OLDMOS so the next single point run will read it.
+            if os.path.exists(os.path.join(dirname, 'newmos_bak')):
+                shutil.move(os.path.join(dirname, 'newmos_bak'), os.path.join(dirname, 'OLDMOS'))
+            subprocess.check_call('xcfour > xcfour.out 2> xcfour.err', cwd=dirname, shell=True)
+            result = self.read_result(dirname)
+        except (OSError, IOError, RuntimeError, subprocess.CalledProcessError):
+            raise CFOUREngineError("CFOUR executation failed")
+        return result
+
+    def calc_wq_new(self, coords, dirname):
+        wq = getWorkQueue()
+        if not os.path.exists(dirname): os.makedirs(dirname)
+        self.write_zmat(coords, dirname)
+        in_files = [('%s/ZMAT' % dirname, 'ZMAT')]
+        # If NEWMOS file exists, then 
+        if os.path.exists(os.path.join(dirname, 'NEWMOS')):
+            in_files += [('%s/NEWMOS' % dirname, 'OLDMOS')]
+        out_files = [('%s/xcfour.out' % dirname, 'xcfour.out'), ('%s/xcfour.err' % dirname, 'xcfour.err')]
+        queue_up_src_dest(wq, 'xcfour > xcfour.out 2> xcfour.err', in_files, out_files, verbose=False)
 
 class Gaussian(Engine):
     """
@@ -936,9 +1199,9 @@ class QUICK(Engine):
         super(QUICK, self).__init__(molecule)
         self.threads = threads
         if exe.lower() in ("quick", "quick.cuda", "quick.mpi", "quick.cuda.mpi"):
-            self.quick_exe = exe.lower()
+            self.quick_exe = exe
         else:
-            raise ValueError("Only quick.cuda and quick are supported.")
+            raise ValueError("The only valid values for exe are quick, quick.cuda, quick.cuda.MPI and quick.MPI.")
 
     def load_quick_input(self, quick_input):
         """
@@ -1114,26 +1377,28 @@ class Psi4(Engine):
                     coords.append(ls[1:4])
                 elif '--' in line:
                     fragn.append(len(elems))
-                elif 'symmetry' in line:
-                    found_symmetry = True
-                    if line.split()[1].lower() != 'c1':
-                        raise Psi4EngineError("Symmetry must be set to c1 to prevent rotations of the coordinate frame.")
-                elif 'no_reorient' in line or 'noreorient' in line:
-                    found_no_reorient = True
-                elif 'no_com' in line or 'nocom' in line:
-                    found_no_com = True
-                elif 'units' in line:
-                    if line.split()[1].lower()[:3] != 'ang':
-                        raise Psi4EngineError("Must use Angstroms as coordinate input.")
                 else:
-                    if '}' in line:
-                        found_molecule = False
-                        if not found_no_com:
-                            psi4_temp.append("no_com\n")
-                        if not found_no_reorient:
-                            psi4_temp.append("no_reorient\n")
-                        if not found_symmetry:
-                            psi4_temp.append("symmetry c1\n")
+                    # All other lines belong to the template.
+                    if 'symmetry' in line:
+                        found_symmetry = True
+                        if line.split()[1].lower() != 'c1':
+                            raise Psi4EngineError("Symmetry must be set to c1 to prevent rotations of the coordinate frame.")
+                    elif 'no_reorient' in line or 'noreorient' in line:
+                        found_no_reorient = True
+                    elif 'no_com' in line or 'nocom' in line:
+                        found_no_com = True
+                    elif 'units' in line:
+                        if line.split()[1].lower()[:3] != 'ang':
+                            raise Psi4EngineError("Must use Angstroms as coordinate input.")
+                    else:
+                        if '}' in line:
+                            found_molecule = False
+                            if not found_no_com:
+                                psi4_temp.append("no_com\n")
+                            if not found_no_reorient:
+                                psi4_temp.append("no_reorient\n")
+                            if not found_symmetry:
+                                psi4_temp.append("symmetry c1\n")
                     psi4_temp.append(line)
             else:
                 psi4_temp.append(line)
@@ -1192,7 +1457,7 @@ class Psi4(Engine):
         out_files = [('%s/output.dat' % dirname, 'output.dat'), ('%s/run.log' % dirname, 'run.log')]
         # We will assume that the number of threads on the worker is 1, as this maximizes efficiency
         # in the limit of large numbers of jobs, although it may be controlled via environment variables.
-        queue_up_src_dest(wq, 'psi4 input.dat &> run.log', in_files, out_files, verbose=False)
+        queue_up_src_dest(wq, 'psi4 input.dat > run.log 2>&1', in_files, out_files, verbose=False)
     
     def read_result(self, dirname, check_coord=None):
         """ Read Psi4 calculation output. """
@@ -1341,13 +1606,15 @@ class QChem(Engine):
         self.M.edit_qcrems({'jobtype':'force'})
         in_files = [('%s/run.in' % dirname, 'run.in')]
         out_files = [('%s/run.out' % dirname, 'run.out'), ('%s/run.log' % dirname, 'run.log')]
+        out_files += [('%s/run.d/131.0' % dirname, 'run.d/131.0')]
         if self.qcdir:
             self.M.edit_qcrems({'scf_guess':'read'})
             in_files += [('%s/run.d/53.0' % dirname, '53.0')]
-            out_files += [('%s/run.d/131.0' % dirname, 'run.d/131.0')]
-            cmdstr = "mkdir -p run.d ; mv 53.0 run.d ; qchem run.in run.out run.d &> run.log"
+            cmdstr = "mkdir -p run.d ; mv 53.0 run.d ; qchem run.in run.out run.d > run.log 2>&1"
         else:
-            cmdstr = "qchem%s run.in run.out &> run.log" % self.nt()
+            if not os.path.exists('%s/run.d' % dirname): 
+                os.makedirs('%s/run.d' % dirname)
+            cmdstr = "qchem%s run.in run.out run.d > run.log 2>&1" % self.nt()
         self.M[0].write(os.path.join(dirname, 'run.in'))
         queue_up_src_dest(wq, cmdstr, in_files, out_files, verbose=False)
 
@@ -1375,7 +1642,7 @@ class QChem(Engine):
             gradient = np.fromfile('%s/run.d/131.0' % dirname)
         except FileNotFoundError:
             logger.info("Reading gradient from Q-Chem output instead of run.d/131.0 because the latter cannot be found. Please report this to the developer.\n")
-            gradient = M1.qm_grads[-1]
+            gradient = M1.qm_grads[-1].flatten()
         # Assume that the last occurence of "S^2" is what we want.
         s2 = 0.0
         # The 'iso-8859-1' prevents some strange errors that show up when reading the Archival summary line

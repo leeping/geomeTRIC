@@ -95,7 +95,10 @@ class TestWorkQueue:
     @addons.using_workqueue
     def test_work_queue_functions(self, localizer):
         """Check work_queue functions behave as expected"""
-        import work_queue
+        try:
+            import ndcctools.work_queue as work_queue
+        except ImportError:
+            import work_queue
 
         # Work Queue will no longer be initialized to None
         assert nifty.WORK_QUEUE is None, "Unexpected initialization of nifty.WORK_QUEUE to %s" % str(nifty.WORK_QUEUE)
@@ -329,3 +332,34 @@ def test_wopen_link_copy(localizer):
     # nifty.link_dir_contents(datad, os.getcwd())
     # for fnm in os.listdir(datad):
     #     assert os.path.exists(fnm)
+
+def test_copy_tree_over(tmpdir):
+    # tmpdir is a object
+    tmpdir_str = str(tmpdir)
+
+    src_dir = os.path.join(tmpdir_str, 'src')
+    dest_dir = os.path.join(tmpdir_str, 'dest')
+
+    # populate the source directory
+    os.makedirs(os.path.join(src_dir, 'a', 'b'))
+    with open(os.path.join(src_dir, 'a.txt'), 'w') as f:
+        f.write('test file a')
+    with open(os.path.join(src_dir, 'a', 'b', 'b.txt'), 'w') as f:
+        f.write('test file b')
+
+    nifty.copy_tree_over(src_dir, dest_dir)
+
+    # Check the destination dir
+    with open(os.path.join(dest_dir, 'a.txt'), 'r') as f:
+        assert f.read() == 'test file a'
+    with open(os.path.join(dest_dir, 'a', 'b', 'b.txt'), 'r') as f:
+        assert f.read() == 'test file b'
+
+    # Modify a file on the destination, then, and copy again
+    with open(os.path.join(dest_dir, 'a', 'b', 'b.txt'), 'w') as f:
+        assert f.write('test file b MODIFIED')
+
+    nifty.copy_tree_over(src_dir, dest_dir)
+
+    with open(os.path.join(dest_dir, 'a', 'b', 'b.txt'), 'r') as f:
+        assert f.read() == 'test file b'

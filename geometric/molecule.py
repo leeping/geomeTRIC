@@ -12,12 +12,10 @@ import json
 from collections import OrderedDict, namedtuple, Counter
 from ctypes import *
 from datetime import date
-from warnings import warn
 
 import numpy as np
 from numpy import sin, cos, arccos
 from numpy.linalg import multi_dot
-from pkg_resources import parse_version
 
 # For Python 3 compatibility
 try:
@@ -364,9 +362,14 @@ if "forcebalance" in __name__:
     #| OpenMM interface functions |#
     #==============================#
     try:
-        from simtk.unit import *
-        from simtk.openmm import *
-        from simtk.openmm.app import *
+        try:
+            from openmm.unit import *
+            from openmm import *
+            from openmm.app import *
+        except ImportError:
+            from simtk.unit import *
+            from simtk.openmm import *
+            from simtk.openmm.app import *
     except ImportError:
         logger.debug('Note: Cannot import optional OpenMM module.\n')
 
@@ -545,7 +548,7 @@ def MolEqual(mol1, mol2):
     if Counter(mol1.elem) != Counter(mol2.elem) : return False
     return Counter(mol1.molecules) == Counter(mol2.molecules)
 
-def format_xyz_coord(element,xyz,tinker=False):
+def format_xyz_coord(element,xyz,tinker=False,precision=None):
     """ Print a line consisting of (element, x, y, z) in accordance with .xyz file format
 
     @param[in] element A chemical element of a single atom
@@ -553,9 +556,15 @@ def format_xyz_coord(element,xyz,tinker=False):
 
     """
     if tinker:
-        return "%-3s % 13.8f % 13.8f % 13.8f" % (element,xyz[0],xyz[1],xyz[2])
+        if precision is None: precision = 8
+        fmtstr = "%%-%is %% %i.%if %% %i.%if %% %i.%if" % (3, precision+5, precision, precision+5, precision, precision+5, precision)
+        return fmtstr % (element,xyz[0],xyz[1],xyz[2])
+        # return "%-3s % 13.8f % 13.8f % 13.8f" % (element,xyz[0],xyz[1],xyz[2])
     else:
-        return "%-5s % 15.10f % 15.10f % 15.10f" % (element,xyz[0],xyz[1],xyz[2])
+        if precision is None: precision = 10
+        fmtstr = "%%-%is %% %i.%if %% %i.%if %% %i.%if" % (5, precision+5, precision, precision+5, precision, precision+5, precision)
+        return fmtstr % (element,xyz[0],xyz[1],xyz[2])
+        # return "%-5s % 15.10f % 15.10f % 15.10f" % (element,xyz[0],xyz[1],xyz[2])
 
 def _format_83(f):
     """Format a single float into a string of width 8, with ideally 3 decimal
@@ -899,15 +908,18 @@ def arc(Mol, begin=None, end=None, RMSD=True, align=True):
     if RMSD:
         Arc = Mol.pathwise_rmsd(align)
     else:
+        # The commented line isn't desirable because sometimes it will give zero elements if Mol.xyzs[i+1] and Mol.xyzs[i] are the same,
+        # causing downstream codes such as EqualSpacing() to fail.
+        # Arc = [np.max([np.linalg.norm(Mol.xyzs[i+1][j]-Mol.xyzs[i][j]) for j in range(Mol.na)]) for i in range(begin, end-1)])
         Arc = []
         for i in range(begin, end-1):
             dmax = np.max([np.linalg.norm(Mol.xyzs[i+1][j]-Mol.xyzs[i][j]) for j in range(Mol.na)])
             if dmax < 1e-15: dmax = 1e-15
             Arc.append(dmax)
-        Arc = np.array(Arc) #[np.max([np.linalg.norm(Mol.xyzs[i+1][j]-Mol.xyzs[i][j]) for j in range(Mol.na)]) for i in range(begin, end-1)])
+        Arc = np.array(Arc) 
     return Arc
 
-def EqualSpacing(Mol, frames=0, dx=0, RMSD=True, align=True):
+def EqualSpacing(Mol, frames=0, dx=0, RMSD=True, align=True, spline=False, custom=None):
     """
     Equalize the spacing of frames in a trajectory with linear interpolation.
     This is done in a very simple way, first calculating the arc length
@@ -926,6 +938,8 @@ def EqualSpacing(Mol, frames=0, dx=0, RMSD=True, align=True):
         Return a Molecule object with this number of frames.
     RMSD : bool
         Use RMSD in the arc length calculation. 
+    custom : np.array or None
+        Provide custom spacings between frames.
 
     Returns
     -------
@@ -934,7 +948,12 @@ def EqualSpacing(Mol, frames=0, dx=0, RMSD=True, align=True):
         or with equally spaced frames.
     """
     import scipy.interpolate
-    ArcMol = arc(Mol, RMSD=RMSD, align=align)
+    if type(custom) is np.ndarray:
+        ArcMol = custom.copy()
+        if ArcMol.shape != (len(Mol)-1, ):
+            raise RuntimeError("Custom spacing needs to match Molecule-length - 1")
+    else:
+        ArcMol = arc(Mol, RMSD=RMSD, align=align)
     ArcMolCumul = np.insert(np.cumsum(ArcMol), 0, 0.0)
     if frames != 0 and dx != 0:
         logger.error("Provide dx or frames or neither")
@@ -948,9 +967,11 @@ def EqualSpacing(Mol, frames=0, dx=0, RMSD=True, align=True):
     xyznew = np.zeros((frames, Mol.na, 3))
     for a in range(Mol.na):
         for i in range(3):
-            cs = scipy.interpolate.CubicSpline(ArcMolCumul, xyzold[:, a, i])
-            xyznew[:,a,i] = cs(ArcMolEqual)
-            # xyznew[:,a,i] = np.interp(ArcMolEqual, ArcMolCumul, xyzold[:, a, i])
+            if spline:
+                cs = scipy.interpolate.CubicSpline(ArcMolCumul, xyzold[:, a, i])
+                xyznew[:,a,i] = cs(ArcMolEqual)
+            else:
+                xyznew[:,a,i] = np.interp(ArcMolEqual, ArcMolCumul, xyzold[:, a, i])
     if len(xyzold) == len(xyznew):
         Mol1 = copy.deepcopy(Mol)
     else:
@@ -1988,7 +2009,7 @@ class Molecule(object):
         self.qm_mulliken_charges = list(np.array(QS.xyzs)[:, :, 0])
         self.qm_mulliken_spins = list(np.array(QS.xyzs)[:, :, 1])
 
-    def align(self, smooth = False, center = True, center_mass = False, atom_select=None):
+    def align(self, smooth = False, refidx = 0, center = True, center_mass = False, atom_select=None):
         """ Align molecules.
 
         Has the option to create smooth trajectories
@@ -2018,7 +2039,7 @@ class Molecule(object):
             if smooth:
                 ref = index2-1
             else:
-                ref = 0
+                ref = refidx
             if atom_select is not None:
                 tr, rt = get_rotate_translate(xyz2[atom_select],self.xyzs[ref][atom_select])
             else:
@@ -2253,16 +2274,10 @@ class Molecule(object):
         G = MyG()
         for i, a in enumerate(self.elem):
             G.add_node(i)
-            if parse_version(nx.__version__) >= parse_version('2.0'):
-                if 'atomname' in self.Data:
-                    nx.set_node_attributes(G,{i:self.atomname[i]}, name='n')
-                nx.set_node_attributes(G,{i:a}, name='e')
-                nx.set_node_attributes(G,{i:self.xyzs[sn][i]}, name='x')
-            else:
-                if 'atomname' in self.Data:
-                    nx.set_node_attributes(G,'n',{i:self.atomname[i]})
-                nx.set_node_attributes(G,'e',{i:a})
-                nx.set_node_attributes(G,'x',{i:self.xyzs[sn][i]})
+            if 'atomname' in self.Data:
+                nx.set_node_attributes(G,{i:self.atomname[i]}, name='n')
+            nx.set_node_attributes(G,{i:a}, name='e')
+            nx.set_node_attributes(G,{i:self.xyzs[sn][i]}, name='x')
         for (i, j) in self.bonds:
             G.add_edge(i, j)
         # The Topology is simply the NetworkX graph object.
@@ -2272,6 +2287,139 @@ class Molecule(object):
         for g in self.molecules: g.__class__ = MyG
         # Deprecated in networkx 2.2
         # self.molecules = list(nx.connected_component_subgraphs(G))
+
+    def group_atoms_by_topology(self, bond_lim=10, verbose=False):
+        """
+        Determine topologically equivalent atoms.
+
+        bond_lim: Limit on the size of the fingerprint (default 10 bonds).
+        
+        Works like this: Suppose we have a molecular graph given as
+         H              H         H
+          \              \       /
+        H--C--C##C--H     C==C==C
+          /              /       \
+         H              H         H
+        
+        with numbers given as
+        
+         4              9         13
+          \              \        /
+        5--3--2##0--1     8==7==11
+          /              /        \
+         6             10         12
+        
+        The goal is to return a list of chemically equivalent atom groups as:
+        [[0], [1], [2], [3], [4, 5, 6], [7], [8, 11], [9, 10, 12, 13]]
+    
+        (Note: This grouping is by connectivity only, and does not distinguish
+         between bonds of different orders, enantiomers or cis/trans isomerism.)
+        
+        If we assign a fingerprint to an atom, given by a list where element 'i'
+        is the concatenated symbols of the atoms separated by 'i' bonds from that atom,
+        the fingerprints for the above system would be:
+    
+        0 C-CH-C-HHH
+        1 H-C-C-C-HHH
+        2 C-CC-HHHH
+        3 C-CHHH-C-H
+        4 H-C-CHH-C-H
+        5 H-C-CHH-C-H
+        6 H-C-CHH-C-H
+        7 C-CC-HHHH
+        8 C-CHH-C-HH
+        9 H-C-CH-C-HH
+        10 H-C-CH-C-HH
+        11 C-CHH-C-HH
+        12 H-C-CH-C-HH
+        13 H-C-CH-C-HH
+    
+        and a corresponding grouping of:
+        [[0], [1], [2, 7], [3], [4, 5, 6], [8, 11], [9, 10, 12, 13]]
+        
+        This doesn't distinguish atoms uniquely because atoms 2 and 7 (the central carbons)
+        have the same fingerprint even though they are chemically different.
+        This is because the fingerprint does not take into account the different topology
+        around carbons 0, 3 (i.e. bonded to 1 and 3 Hs respectively) and carbons
+        8, 11 (i.e. both bonded to two Hs).
+        
+        The solution is to do another iteration of the above but using the fingerprints 
+        in place of the atomic symbols.  This creates new, larger fingerprints as:
+    
+        0 C-CH-C-HHH_C-CC-HHHH,H-C-C-C-HHH_C-CHHH-C-H_H-C-CHH-C-H,H-C-CHH-C-H,H-C-CHH-C-H
+        1 H-C-C-C-HHH_C-CH-C-HHH_C-CC-HHHH_C-CHHH-C-H_H-C-CHH-C-H,H-C-CHH-C-H,H-C-CHH-C-H
+        2 C-CC-HHHH_C-CH-C-HHH,C-CHHH-C-H_H-C-C-C-HHH,H-C-CHH-C-H,H-C-CHH-C-H,H-C-CHH-C-H
+        3 C-CHHH-C-H_C-CC-HHHH,H-C-CHH-C-H,H-C-CHH-C-H,H-C-CHH-C-H_C-CH-C-HHH_H-C-C-C-HHH
+        4 H-C-CHH-C-H_C-CHHH-C-H_C-CC-HHHH,H-C-CHH-C-H,H-C-CHH-C-H_C-CH-C-HHH_H-C-C-C-HHH
+        5 H-C-CHH-C-H_C-CHHH-C-H_C-CC-HHHH,H-C-CHH-C-H,H-C-CHH-C-H_C-CH-C-HHH_H-C-C-C-HHH
+        6 H-C-CHH-C-H_C-CHHH-C-H_C-CC-HHHH,H-C-CHH-C-H,H-C-CHH-C-H_C-CH-C-HHH_H-C-C-C-HHH
+        7 C-CC-HHHH_C-CHH-C-HH,C-CHH-C-HH_H-C-CH-C-HH,H-C-CH-C-HH,H-C-CH-C-HH,H-C-CH-C-HH
+        8 C-CHH-C-HH_C-CC-HHHH,H-C-CH-C-HH,H-C-CH-C-HH_C-CHH-C-HH_H-C-CH-C-HH,H-C-CH-C-HH
+        9 H-C-CH-C-HH_C-CHH-C-HH_C-CC-HHHH,H-C-CH-C-HH_C-CHH-C-HH_H-C-CH-C-HH,H-C-CH-C-HH
+        10 H-C-CH-C-HH_C-CHH-C-HH_C-CC-HHHH,H-C-CH-C-HH_C-CHH-C-HH_H-C-CH-C-HH,H-C-CH-C-HH
+        11 C-CHH-C-HH_C-CC-HHHH,H-C-CH-C-HH,H-C-CH-C-HH_C-CHH-C-HH_H-C-CH-C-HH,H-C-CH-C-HH
+        12 H-C-CH-C-HH_C-CHH-C-HH_C-CC-HHHH,H-C-CH-C-HH_C-CHH-C-HH_H-C-CH-C-HH,H-C-CH-C-HH
+        13 H-C-CH-C-HH_C-CHH-C-HH_C-CC-HHHH,H-C-CH-C-HH_C-CHH-C-HH_H-C-CH-C-HH,H-C-CH-C-HH
+        
+        and a corresponding grouping of:
+        [[0], [1], [2], [3], [4, 5, 6], [7], [8, 11], [9, 10, 12, 13]]
+    
+        Now atoms 2 and 7 are considered to be different, and the differences in the topology
+        of the atoms bonded to atoms 2 and 7 are built into the representation.  It encodes that
+        atom 2 is bonded to atoms C-CH-C-HHH,C-CHHH-C-H
+        atom 7 is bonded to atoms C-CHH-C-HH,C-CHH-C-HH.
+        Note the separator characters have changed from '', '-' to ',', '_' as well.
+    
+        This process can be repeated until a self-consistent set of groups is found.
+        An upper limit on the number of cycles is imposed because the label size can blow up
+        very quickly.
+        """
+        
+        ids = [self.elem[i] for i in range(self.na)]
+        old_groups = None
+        cycle = 0
+    
+        bond_seps = ['-', '_', '#', '@', '$']
+        id_seps = ['', ',', '.', ';', ':']
+        while True:
+            group_dict = {}
+            for i in range(self.na):
+                group_dict.setdefault(ids[i], []).append(i)
+            groups = sorted(list(group_dict.values()))
+            if groups == old_groups: break
+            if cycle == 5: 
+                raise RuntimeError("Not designed to go for more than 5 cycles.")
+            if verbose:
+                logger.info("===Cycle %i===\n" % cycle)
+                logger.info("IDs of each atom:\n")
+                for i in range(self.na):
+                    logger.info("%3i %s\n" % (i, ids[i]))
+                logger.info("Atom groups:\n")
+                logger.info(str(groups)+"\n")
+        
+            # Dictionary that looks like:
+            # { anum1 : {anum2 : path_12}}
+            spl = dict(nx.all_pairs_shortest_path_length(self.topology))
+        
+            new_ids = []
+            
+            for key in sorted(spl.keys()):
+                val = spl[key]
+                fp_dict = {}
+                for key2, val2 in val.items():
+                    if val2 > (bond_lim-cycle): continue
+                    fp_dict.setdefault(val2, []).append(ids[key2])
+                    fp_dict[val2].sort()
+                fp_list = []
+                for dist in sorted(fp_dict.keys()):
+                    fp_list.append(id_seps[cycle].join(fp_dict[dist]))
+            
+                new_ids.append(bond_seps[cycle].join(fp_list))
+        
+            old_groups = copy.deepcopy(groups)
+            ids = new_ids[:]
+            cycle += 1
+        return groups
 
     def distance_matrix(self, pbc=True):
         """ Obtain distance matrix between all pairs of atoms. """
@@ -3811,7 +3959,8 @@ class Molecule(object):
                     line_rest = line_rest[5:]
                 for conect_B in conect_B_list:
                     bond = (min((conect_A, conect_B)), max((conect_A, conect_B)))
-                    bonds.append(bond)
+                    if bond not in bonds:
+                        bonds.append(bond)
 
         Answer={"xyzs":XYZList, "chain":list(ChainID), "altloc":list(AltLoc), "icode":list(ICode),
                 "atomname":[str(i) for i in AtomNames], "resid":list(ResidueID), "resname":list(ResidueNames),

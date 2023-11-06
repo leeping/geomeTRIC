@@ -456,7 +456,7 @@ def get_delta_prime_trm(v, X, G, H, IC, verbose=0):
     # LPW 2020-01-24 Testing whether the image potential can be combined with NR for transition state optimization
     # Gs, Hs = image_gradient_hessian(G, H, [0])
     if IC is not None:
-        GC, HC = IC.augmentGH(X, G, H) if IC.haveConstraints() else (G, H)
+        GC, HC = IC.augmentGH(X, G, H) if (IC.haveConstraints() or IC.rigid) else (G, H)
     else:
         GC, HC = (G, H)
     HT = HC + v*np.eye(len(HC))
@@ -834,7 +834,7 @@ def trust_step(target, v0, X, G, H, IC, rfo, verbose=0):
             m_sol = sol
         # Break out of infinite oscillation loops
         if niter%100 == 99:
-            logger.info("    trust_step Iter:  %4i, randomizing\n" % niter)
+            # logger.info("    trust_step Iter:  %4i, randomizing\n" % niter)
             v += np.random.random() * niter / 100
         if niter%1000 == 999:
             if verbose >= 3: get_delta_prime(v, X, G, H, IC, rfo, verbose+1)

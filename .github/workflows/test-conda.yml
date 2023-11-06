@@ -12,23 +12,46 @@ on:
   schedule:
     - cron: '36 21 * * 6'
 
+# 2023-10-26: Essential in the new setup-micromamba scheme.
+defaults:
+  run:
+    shell: bash -l {0}
+
 jobs:
   build-linux:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          # - macOS-latest
+          - ubuntu-latest
+        python-version:
+          - "3.8"
+          - "3.9"
+    env:
+      CI_OS: ${{ matrix.os }}
+      PYVER: ${{ matrix.python-version }}
+      PACKAGE: geometric
 
     steps:
       - uses: actions/checkout@v3
 
-      - name: Add conda to system path
+      - name: Set up conda environment
+        uses: mamba-org/setup-micromamba@v1
+        with:
+          environment-file: devtools/conda-envs/latest.yaml
+          create-args: >- # beware the >- instead of |, we don't split on newlines but on spaces
+            python=${{ matrix.python-version }}
+
+      - name: Install package
         run: |
-          # $CONDA is an environment variable pointing to the root of the miniconda directory
-          echo $CONDA/bin >> $GITHUB_PATH
-
-      # - name: Configure Conda
-      #   run: conda config --set channel_priority flexible
-
-      - name: Install Dependencies from Conda
-        run: conda env update --file=devtools/conda-envs/latest.yaml --name=base
+          python -c "import numpy; print(numpy.__version__)"
+          # This is the essential install line. The others are debugging statements.
+          python -m pip install --no-deps .
+          python -c "import numpy; print(numpy.__version__)"
+          python -c "import geometric; print(geometric.__version__)"
+          env | grep geometric-test
 
       - name: pytest
         run: pytest -v --cov=geometric  geometric/tests/
