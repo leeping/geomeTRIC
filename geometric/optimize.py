@@ -565,7 +565,8 @@ class Optimizer(object):
         # 2020-03-10: Step quality thresholds are hard-coded here.
         colors = {}
         if Quality > 0.75: step_state = StepState.Good
-        elif Quality > (0.5 if params.transition else 0.25): step_state = StepState.Okay
+        elif Converged_energy or (Quality > (0.5 if params.transition else 0.25)): 
+            step_state = StepState.Okay
         elif Quality > 0.0: step_state = StepState.Poor
         else:
             colors['energy'] = "\x1b[92m" if Converged_energy else "\x1b[91m"
@@ -634,6 +635,13 @@ class Optimizer(object):
         # if step_state in (StepState.Okay, StepState.Poor, StepState.Reject) and params.transition:
         #     logger.info("LPW: Recalculating Hessian\n")
         #     self.recalcHess = True
+        def activate_subfrctor():
+            if self.params.subfrctor == 1 and ((rms_displacement_noalign / rms_displacement) > self.lowq_tr_thre):
+                self.lowq_tr_count += 1
+                if self.lowq_tr_count == self.lowq_tr_limit :
+                    logger.info("Poor-quality step dominated by net translation/rotation detected; ")
+                    logger.info("will project out net forces and torques past this point.\n")
+
         if step_state in (StepState.Poor, StepState.Reject):
             new_trust = max(params.tmin, min(self.trust, self.cnorm)/2)
             # if (Converged_grms or Converged_gmax) or (params.molcnv and Converged_molpro_gmax):
@@ -642,17 +650,14 @@ class Optimizer(object):
             self.trust = new_trust
             # A poor quality step that is dominated by overall translation/rotation
             # is a sign that projecting out the net force and torque may be needed
-            if self.params.subfrctor == 1 and ((rms_displacement_noalign / rms_displacement) > self.lowq_tr_thre):
-                self.lowq_tr_count += 1
-                if self.lowq_tr_count == self.lowq_tr_limit :
-                    logger.info("Poor-quality step dominated by net translation/rotation detected; ")
-                    logger.info("will project out net forces and torques past this point.\n")
+            activate_subfrctor()
         elif step_state == StepState.Good:
             new_trust = min(params.tmax, np.sqrt(2)*self.trust)
             self.trustprint = "\x1b[92m+\x1b[0m" if new_trust > self.trust else "="
             self.trust = new_trust
         elif step_state == StepState.Okay:
             self.trustprint = "="
+            if (Quality < (0.5 if params.transition else 0.25)): activate_subfrctor()
 
         if step_state == StepState.Reject:
             if hasattr(self, 'X_rj') and np.allclose(self.X_rj, self.X, atol=1e-6):
