@@ -20,6 +20,7 @@ def test_meci_qmmm_terachem(localizer):
     """
     Find the MECI of a retinal protonated Schiff base model with static QM/MM water molecules.
     """
+    pytest.skip("Skipping because TeraChem QM/MM is being updated.")
     for fnm in ['x.prmtop', 'qmindices.txt', 'run.tcin', 'run1.tcin']:
         shutil.copy(os.path.join(exampled, '0-regression-tests', 'psb3-qmmm-meci', fnm), os.getcwd())
     shutil.copy(os.path.join(exampled, '0-regression-tests', 'psb3-qmmm-meci', 'converged.inpcrd'), 
@@ -43,6 +44,7 @@ class TestTerachemWorkQueue:
     @addons.using_terachem
     @addons.using_workqueue
     def test_terachem_workqueue(self, localizer):
+        pytest.skip("Skipping because TeraChem QM/MM is being updated.")
         # Copy needed files
         for fnm in ['x.prmtop', 'qmindices.txt', 'run.tcin']:
             shutil.copy(os.path.join(exampled, '0-regression-tests', 'psb3-qmmm-meci', fnm), os.getcwd())
