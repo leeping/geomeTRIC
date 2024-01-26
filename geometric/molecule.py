@@ -1381,8 +1381,8 @@ class Molecule(object):
                 # (Q-Chem input section name) and the second element
                 # is a list (Q-Chem input section data).
                 New.Data[key] = []
-                for SectName, SectData in self.Data[key]:
-                    New.Data[key].append((SectName, SectData[:]))
+                for SectName, SectData, SectInsert in self.Data[key]:
+                    New.Data[key].append((SectName, SectData[:], SectInsert))
             else:
                 raise RuntimeError("Failed to copy key %s" % key)
         return New
@@ -3595,11 +3595,14 @@ class Molecule(object):
         mult                 = 0
         Answer               = {}
         SectionData          = []
+        SectionInsert        = {}
         template_cut         = 0
+        section_ln           = 0  # Line number within a section
         readsuf              = True
         suffix               = [] # The suffix, which comes after every atom line in the $molecule section, is for determining the MM atom type and topology.
         ghost                = [] # If the element in the $molecule section is preceded by an '@' sign, it's a ghost atom for counterpoise calculations.
         infsm                = False
+        found_charge_mult    = False
 
         # The 'iso-8859-1' prevents some strange errors that show up when reading the Archival summary line
         for line in open(fnm, encoding='iso-8859-1').readlines():
@@ -3610,6 +3613,7 @@ class Molecule(object):
                 zmatrix = True
             if re.match(r'^\$',line):
                 wrd = re.sub(r'\$','',line).lower()
+                section_ln = 0
                 if zmatrix:
                     if wrd == 'end':
                         zmatrix = False
@@ -3630,7 +3634,7 @@ class Molecule(object):
                                 qcrem = OrderedDict()
                         if reading_template:
                             if section != 'external_charges': # Ignore the external charges section because it varies from frame to frame.
-                                template.append((section,SectionData))
+                                template.append((section,SectionData,SectionInsert))
                         SectionData = []
                     else:
                         section = wrd
@@ -3658,14 +3662,15 @@ class Molecule(object):
                             if readsuf and len(sline) > 4:
                                 whites      = re.split('[^ ]+',line)
                                 suffix.append(''.join([whites[j]+sline[j] for j in range(4,len(sline))]))
-                    elif re.match("[+-]?[0-9]+ +[0-9]+$",line.split('!')[0].strip()):
-                        if not found_first_mol:
-                            charge = int(sline[0])
-                            mult = int(sline[1])
+                    elif re.match("[+-]?[0-9]+ +[0-9]+$",line.split('!')[0].strip()) and not found_charge_mult:
+                        charge = int(sline[0])
+                        mult = int(sline[1])
+                        found_charge_mult = True
                     elif infsm and re.sub(r'\$','',line).lower() != 'end':
                         pass
                     else:
-                        SectionData.append(line)
+                        SectionInsert[section_ln] = line
+                        # SectionData.append(line)
                 elif reading_template:
                     if section == 'basis':
                         SectionData.append(line.split('!')[0])
@@ -3677,6 +3682,7 @@ class Molecule(object):
                             qcrem[S[0].lower()] = ''.join(S[2:])
                     else:
                         SectionData.append(line)
+                section_ln += 1
             elif re.match('^@+$', line) and reading_template:
                 template.append(('@@@', []))
             elif re.match('Welcome to Q-Chem', line) and reading_template and found_first_mol:
@@ -4209,6 +4215,14 @@ class Molecule(object):
             read = kwargs['read']
         else:
             read = False
+
+        def insert_section(linelist, section_ln, sect_insert):
+            section_ln += 1
+            while section_ln in sect_insert:
+                linelist.append(sect_insert[section_ln])
+                section_ln += 1
+            return section_ln
+
         for SI, I in enumerate(selection):
             fsm = False
             remidx = 0
@@ -4220,7 +4234,7 @@ class Molecule(object):
                 for i in range(len(extchg)):
                     out.append("% 15.10f % 15.10f % 15.10f %15.10f" % (extchg[i,0],extchg[i,1],extchg[i,2],extchg[i,3]))
                 out.append('$end')
-            for SectName, SectData in self.qctemplate:
+            for SectName, SectData, SectInsert in self.qctemplate:
                 if 'jobtype' in self.qcrems[remidx] and self.qcrems[remidx]['jobtype'].lower() == 'fsm':
                     fsm = True
                     if len(selection) != 2:
@@ -4233,15 +4247,19 @@ class Molecule(object):
                     if SectName == 'molecule':
                         if molecule_printed == False:
                             molecule_printed = True
+                            section_ln = 0
                             if read:
                                 out.append("read")
+                                section_ln = insert_section(out, section_ln, SectInsert)
                             elif self.na > 0:
                                 out.append("%i %i" % (self.charge, self.mult))
+                                section_ln = insert_section(out, section_ln, SectInsert)
                                 an = 0
                                 for e, x in zip(self.elem, self.xyzs[I]):
                                     pre = '@' if ('qm_ghost' in self.Data and self.Data['qm_ghost'][an]) else ''
                                     suf =  self.Data['qcsuf'][an] if 'qcsuf' in self.Data else ''
                                     out.append(pre + format_xyz_coord(e, x) + suf)
+                                    section_ln = insert_section(out, section_ln, SectInsert)
                                     an += 1
                                 if fsm:
                                     out.append("****")
@@ -4250,6 +4268,7 @@ class Molecule(object):
                                         pre = '@' if ('qm_ghost' in self.Data and self.Data['qm_ghost'][an]) else ''
                                         suf =  self.Data['qcsuf'][an] if 'qcsuf' in self.Data else ''
                                         out.append(pre + format_xyz_coord(e, x) + suf)
+                                        section_ln = insert_section(out, section_ln, SectInsert)
                                         an += 1
                     if SectName == 'rem':
                         for key, val in self.qcrems[remidx].items():
