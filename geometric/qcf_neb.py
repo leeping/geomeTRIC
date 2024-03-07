@@ -69,13 +69,16 @@ def chaintocoords(chain, ang=False):
     return newcoords
 
 
-def arrange(qcel_mols):
+def arrange(qcel_mols, align):
     """
     This function will respace a chain if images are too close to each other.
     Parameters
     ----------
     qcel_mols: [QCElemental Molecule object]
         QCElemental Molecule objects in a list.
+
+    align: bool
+        "True" will align the images.
 
     Returns
     -------
@@ -92,6 +95,10 @@ def arrange(qcel_mols):
     M.elem = sym
     M.xyzs = [mol.geometry*bohr2ang for mol in qcel_mols]
     M.build_topology()
+
+    if align:
+        logger.info("Aligning images \n")
+        M.align()
 
     # Getting parameters and the chain
     neb_param = NEBParams()
