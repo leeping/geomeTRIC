@@ -555,7 +555,7 @@ def parse_interpolate_args(*args):
     grp_univ = parser.add_argument_group('universal', 'Relevant to every job')
     grp_univ.add_argument('input', type=str, help='REQUIRED positional argument: xyz file containing reactant and product structures.\n')
     grp_univ.add_argument('--optimize', type=str2bool, help='Provide "yes" to optimize an interpolated trajectory.\n'
-                                                            'The followting two arguments, nframes and prealign, will be ignored.\n'
+                                                            'The following two arguments, nframes and prealign, will be ignored.\n'
                                                             'The input xyz file must contain 5 or more structures.\n')
     grp_univ.add_argument('--nframes', type=int, help='Number of frames, needs to be bigger than 5, that will be used to interpolate, default 50\n')
     grp_univ.add_argument('--align_frags', type=str2bool, help='Provide "yes" to align fragments in reactant and product structure prior to interpolation.\n')
