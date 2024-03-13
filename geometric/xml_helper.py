@@ -18,9 +18,16 @@ def read_coors_from_xml(M, state_xml):
                 M.xyzs[0][aid, 2] = z*10.0
     return root;
 
+def write_coors_to_xml(M, state_xml, out_xml):
+    if type(state_xml) is str:
+        with open(state_xml) as fobj:
+            xml = fobj.read()
+        root = ET.fromstring(xml)
+    elif type(state_xml) is ET.Element:
+        root = copy.deepcopy(state_xml)
+    else:
+        raise IOError("Expected second argument to write_coors_to_xml to be file name or xml.etree.ElementTree.Element type")
 
-def write_coors_to_xml(M, root_template, filename):
-    root = copy.deepcopy(root_template)   
     for child in root:
         if child.tag == "Positions":
             for aid in range(M.na):
@@ -30,8 +37,8 @@ def write_coors_to_xml(M, root_template, filename):
                 child[aid].attrib['x'] = "%.16e" % x
                 child[aid].attrib['y'] = "%.16e" % y
                 child[aid].attrib['z'] = "%.16e" % z
-    # write
-    fout = open(filename, "w")
+    # write to the output XML file.
+    fout = open(out_xml, "w")
     print(ET.tostring(root).decode("utf-8"), file=fout)
     fout.close()
 
