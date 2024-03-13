@@ -69,6 +69,7 @@ def test_hcn_neb_optimize_1(localizer):
     assert final_chain.maxg < params.maxg
     assert final_chain.avgg < params.avgg
 
+@addons.using_psi4
 def test_hcn_neb_optimize_2(localizer):
     """
     Optimize a HCN chain with alignment
