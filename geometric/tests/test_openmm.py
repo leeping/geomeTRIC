@@ -19,8 +19,10 @@ def test_dlc_openmm_water3(localizer):
     Optimize the geometry of three water molecules using standard delocalized internal coordinates.
     The coordinate system will break down and have to be rebuilt.
     """
-    progress = geometric.optimize.run_optimizer(engine='openmm', pdb=os.path.join(datad,'water3.pdb'), coordsys='dlc', input='tip3p.xml',
-                                                converge=['gmax', '1.0e-5'], check=50)
+    # LPW 2023-09-21 Increased check from 50 to 100; this was "perturbed" by the improvement to InternalCoordinates.newCartesian() .
+    progress = geometric.optimize.run_optimizer(engine='openmm', pdb=os.path.join(datad,'water3.pdb'), coordsys='dlc', input='tip3p.xml', 
+                                                converge=['gmax', '1.0e-5'], check=100) 
+
     # The results here are in Angstrom
     #
     ref = np.array([[ 1.19172917, -1.71174316,  0.79961878],
@@ -46,7 +48,8 @@ def test_dlc_openmm_water3(localizer):
     xdiff = (progress.xyzs[-1] - ref).flatten()
     rmsd, maxd = geometric.optimize.calc_drms_dmax(progress.xyzs[-1], ref, align=True)
     rmsd2, maxd2 = geometric.optimize.calc_drms_dmax(progress.xyzs[-1], ref2, align=True)    
-    print("RMS / Max displacement from reference:", rmsd, maxd)
+    print("RMS / Max displacement from reference 1:", rmsd, maxd)
+    print("RMS / Max displacement from reference 2:", rmsd2, maxd2)
     # This test is a bit stochastic and doesn't converge to the same minimized geometry every time.
     # Check that the energy is 0.01 a.u. above reference. Not really the qm_energy, this is a misnomer
     assert progress.qm_energies[-1] < (e_ref + 0.01)
@@ -62,14 +65,14 @@ def test_dlc_openmm_water12(localizer):
     The coordinate system is expected to break down and the optimizer should skip the optimization step
     after rebuilding the coordinate system.
     """
-    progress = geometric.optimize.run_optimizer(engine='openmm', pdb=os.path.join(datad,'water12.pdb'), 
+    progress = geometric.optimize.run_optimizer(engine='openmm', pdb=os.path.join(datad,'water12.pdb'),
                                                 coordsys='dlc', input='tip3p.xml', maxiter=20, converge=['maxiter'])
-
-    have_skip_step = False
-    for line in open('tip3p.log').readlines():
-        if 'Skipping optimization step' in line:
-            have_skip_step = True
-    assert have_skip_step
+    # LPW 2023-09-21: The coordinate system no longer breaks down after the improvement to newCartesian().
+    # have_skip_step = False
+    # for line in open('tip3p.log').readlines():
+    #     if 'Skipping optimization step' in line:
+    #         have_skip_step = True
+    # assert have_skip_step
 
 
 @addons.using_openmm

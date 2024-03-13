@@ -843,10 +843,11 @@ def destroyWorkQueue():
     # Convenience function to destroy the Work Queue objects.
     global WORK_QUEUE, WQIDS
     if hasattr(WORK_QUEUE, '_free'): 
-        print("Freeing Work Queue")
         WORK_QUEUE._free()
     WORK_QUEUE = None
     WQIDS = defaultdict(list)
+    print("Freed Work Queue, sleeping for 5 seconds...")
+    time.sleep(5)
 
 def queue_up(wq, command, input_files, output_files, tag=None, tgt=None, verbose=True, print_time=60):
     """

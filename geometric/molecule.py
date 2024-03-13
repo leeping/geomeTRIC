@@ -771,7 +771,7 @@ def get_rotate_translate(matrix1,matrix2):
 def cartesian_product2(arrays):
     """ Form a Cartesian product of two NumPy arrays. """
     la = len(arrays)
-    arr = np.empty([len(a) for a in arrays] + [la], dtype=np.int32)
+    arr = np.empty([len(a) for a in arrays] + [la], dtype=int)
     for i, a in enumerate(np.ix_(*arrays)):
         arr[...,i] = a
     return arr.reshape(-1, la)
@@ -908,10 +908,18 @@ def arc(Mol, begin=None, end=None, RMSD=True, align=True):
     if RMSD:
         Arc = Mol.pathwise_rmsd(align)
     else:
-        Arc = np.array([np.max([np.linalg.norm(Mol.xyzs[i+1][j]-Mol.xyzs[i][j]) for j in range(Mol.na)]) for i in range(begin, end-1)])
+        # The commented line isn't desirable because sometimes it will give zero elements if Mol.xyzs[i+1] and Mol.xyzs[i] are the same,
+        # causing downstream codes such as EqualSpacing() to fail.
+        # Arc = [np.max([np.linalg.norm(Mol.xyzs[i+1][j]-Mol.xyzs[i][j]) for j in range(Mol.na)]) for i in range(begin, end-1)])
+        Arc = []
+        for i in range(begin, end-1):
+            dmax = np.max([np.linalg.norm(Mol.xyzs[i+1][j]-Mol.xyzs[i][j]) for j in range(Mol.na)])
+            if dmax < 1e-15: dmax = 1e-15
+            Arc.append(dmax)
+        Arc = np.array(Arc) 
     return Arc
 
-def EqualSpacing(Mol, frames=0, dx=0, RMSD=True, align=True):
+def EqualSpacing(Mol, frames=0, dx=0, RMSD=True, align=True, spline=False, custom=None):
     """
     Equalize the spacing of frames in a trajectory with linear interpolation.
     This is done in a very simple way, first calculating the arc length
@@ -929,7 +937,9 @@ def EqualSpacing(Mol, frames=0, dx=0, RMSD=True, align=True):
     frames : int
         Return a Molecule object with this number of frames.
     RMSD : bool
-        Use RMSD in the arc length calculation.
+        Use RMSD in the arc length calculation. 
+    custom : np.array or None
+        Provide custom spacings between frames.
 
     Returns
     -------
@@ -937,21 +947,31 @@ def EqualSpacing(Mol, frames=0, dx=0, RMSD=True, align=True):
         New molecule object, either the same one (if frames > len(Mol))
         or with equally spaced frames.
     """
-    ArcMol = arc(Mol, RMSD=RMSD, align=align)
+    import scipy.interpolate
+    if type(custom) is np.ndarray:
+        ArcMol = custom.copy()
+        if ArcMol.shape != (len(Mol)-1, ):
+            raise RuntimeError("Custom spacing needs to match Molecule-length - 1")
+    else:
+        ArcMol = arc(Mol, RMSD=RMSD, align=align)
     ArcMolCumul = np.insert(np.cumsum(ArcMol), 0, 0.0)
     if frames != 0 and dx != 0:
         logger.error("Provide dx or frames or neither")
     elif dx != 0:
         frames = int(float(max(ArcMolCumul))/dx)
+        if frames == 0: frames = 1
     elif frames == 0:
         frames = len(ArcMolCumul)
-
     ArcMolEqual = np.linspace(0, max(ArcMolCumul), frames)
     xyzold = np.array(Mol.xyzs)
     xyznew = np.zeros((frames, Mol.na, 3))
     for a in range(Mol.na):
         for i in range(3):
-            xyznew[:,a,i] = np.interp(ArcMolEqual, ArcMolCumul, xyzold[:, a, i])
+            if spline:
+                cs = scipy.interpolate.CubicSpline(ArcMolCumul, xyzold[:, a, i])
+                xyznew[:,a,i] = cs(ArcMolEqual)
+            else:
+                xyznew[:,a,i] = np.interp(ArcMolEqual, ArcMolCumul, xyzold[:, a, i])
     if len(xyzold) == len(xyznew):
         Mol1 = copy.deepcopy(Mol)
     else:
@@ -1392,6 +1412,8 @@ class Molecule(object):
         The Molecule class has list-like behavior, so we can get slices of it.
         If we say MyMolecule[0:10], then we'll return a copy of MyMolecule with frames 0 through 9.
         """
+        if isinstance(key, np.int32) or isinstance(key, np.int64):
+            key = int(key)
         if isinstance(key, int) or isinstance(key, slice) or isinstance(key,np.ndarray) or isinstance(key,list):
             if isinstance(key, int):
                 key = [key]
@@ -1460,7 +1482,11 @@ class Molecule(object):
                 if type(other.Data[key]) is not list:
                     logger.error('Key %s in other is a FrameKey, it must be a list\n' % key)
                     raise RuntimeError
-                if isinstance(self.Data[key][0], np.ndarray):
+                if len(self.Data[key]) == 0:
+                    Sum.Data[key] = copy.deepcopy(other.Data[key])
+                elif len(other.Data[key]) == 0:
+                    Sum.Data[key] = copy.deepcopy(self.Data[key])
+                elif isinstance(self.Data[key][0], np.ndarray):
                     Sum.Data[key] = [i.copy() for i in self.Data[key]] + [i.copy() for i in other.Data[key]]
                 else:
                     Sum.Data[key] = list(self.Data[key] + other.Data[key])
@@ -1965,6 +1991,67 @@ class Molecule(object):
             New.Data['bonds'] = self.bonds + [(b[0]+self.na, b[1]+self.na) for b in other.bonds]
         return New
 
+    def delete_atoms(self, indices):
+        # Returns a copy of Molecule object with the indicated atoms deleted.
+        # An array of true or false indicating whether each atom is 
+        # to be included in the returned molecule
+        mask = np.ones(self.na, dtype=bool)
+        mask[indices] = False
+        
+        # Mapping old to new atom indices
+        old_to_new_idx = np.cumsum(mask)-1
+        new_na = old_to_new_idx[-1] + 1
+        
+        # Copy data fields that don't depend on number of atoms
+        New = Molecule()
+        for key in self.FrameKeys | self.MetaKeys:
+            New.Data[key] = copy.deepcopy(self.Data[key])
+
+        # Copy and modify data fields that contain numerical atom-wise data
+        for key in ['xyzs', 'qm_grads', 'qm_espxyzs', 'qm_espvals', 'qm_extchgs', 'qm_mulliken_charges', 'qm_mulliken_spins']:
+            if key in self.Data:
+                if key == 'qm_hessians':
+                    new_data = [self.Data[key][i].reshape(self.na, 3, self.na, 3)[mask, :, mask, :].reshape(new_na, new_na).copy() for i in range(len(self))]
+                elif key == 'qm_bondorder':
+                    new_data = [self.Data[key][i][mask, mask].copy() for i in range(len(self))]
+                else:
+                    new_data = [self.Data[key][i][mask].copy() for i in range(len(self))]
+            New.Data[key] = new_data
+
+        # Copy and modify other atom-wise data fields.
+        for key in self.AtomKeys:
+            if key == 'tinkersuf': # Tinker suffix is a bit tricky
+                NewSuf = []
+                for line in self.Data[key]:
+                    whites      = re.split('[^ ]+',line)
+                    s           = line.split()
+                    if len(s) > 1:
+                        for i in range(1,len(s)):
+                            # Convert the "bonded atom numbers" by changing string to integer,
+                            # subtracting 0, looking up corresponding new atom index, then adding 1
+                            s[i] = str(old_to_new_idx[int(s[i])-1]+1)
+                    NewSuf.append(''.join([whites[j]+s[j] for j in range(len(s))]))
+                New.Data[key] = NewSuf
+            else:
+                if type(self.Data[key]) is np.ndarray:
+                    new_data = self.Data[key][mask]
+                    New.Data[key] = new_data.copy()
+                elif type(self.Data[key]) is list:
+                    new_data = [self.Data[key][i] for i in range(self.na) if mask[i]]
+                    New.Data[key] = new_data[:]
+                else:
+                    logger.error('Cannot stack %s because it is of type %s\n' % (key, str(type(New.Data[key]))))
+                    raise RuntimeError
+        if 'bonds' in self.Data:
+            new_data = []
+            for b in self.bonds:
+                # Only keep bonds in non-deleted atoms
+                if mask[b[0]] and mask[b[1]]:
+                    new_data.append((old_to_new_idx[b[0]], old_to_new_idx[b[1]]))
+            New.Data['bonds'] = new_data
+
+        return New
+
     def get_populations(self):
         """ Return a cloned molecule object but with X-coordinates set
         to Mulliken charges and Y-coordinates set to Mulliken
@@ -1983,7 +2070,7 @@ class Molecule(object):
         self.qm_mulliken_charges = list(np.array(QS.xyzs)[:, :, 0])
         self.qm_mulliken_spins = list(np.array(QS.xyzs)[:, :, 1])
 
-    def align(self, smooth = False, center = True, center_mass = False, atom_select=None):
+    def align(self, smooth = False, refidx = 0, center = True, center_mass = False, atom_select=None):
         """ Align molecules.
 
         Has the option to create smooth trajectories
@@ -2013,7 +2100,7 @@ class Molecule(object):
             if smooth:
                 ref = index2-1
             else:
-                ref = 0
+                ref = refidx
             if atom_select is not None:
                 tr, rt = get_rotate_translate(xyz2[atom_select],self.xyzs[ref][atom_select])
             else:
@@ -2031,7 +2118,7 @@ class Molecule(object):
             for i in range(len(self)):
                 self.xyzs[i] -= self.xyzs[i].mean(0)
 
-    def build_bonds(self):
+    def build_bonds(self, extras=[]):
         """ Build the bond connectivity graph. """
         sn = self.top_settings['topframe']
         toppbc = self.top_settings['toppbc']
@@ -2147,7 +2234,7 @@ class Molecule(object):
         else:
             # Create a list of 2-tuples corresponding to combinations of atomic indices.
             # This is much faster than using itertools.combinations.
-            AtomIterator = np.ascontiguousarray(np.vstack((np.fromiter(itertools.chain(*[[i]*(self.na-i-1) for i in range(self.na)]),dtype=np.int32), np.fromiter(itertools.chain(*[range(i+1,self.na) for i in range(self.na)]),dtype=np.int32))).T)
+            AtomIterator = np.ascontiguousarray(np.vstack((np.fromiter(itertools.chain(*[[i]*(self.na-i-1) for i in range(self.na)]),dtype=int), np.fromiter(itertools.chain(*[range(i+1,self.na) for i in range(self.na)]),dtype=int))).T)
 
         # Create a list of thresholds for determining whether a certain interatomic distance is considered to be a bond.
         BT0 = R[AtomIterator[:,0]]
@@ -2158,6 +2245,10 @@ class Molecule(object):
             dxij = AtomContact(self.xyzs[sn][np.newaxis, :], AtomIterator, box=np.array([[self.boxes[sn].a, self.boxes[sn].b, self.boxes[sn].c]]))[0]
         else:
             dxij = AtomContact(self.xyzs[sn][np.newaxis, :], AtomIterator)[0]
+
+        warn_thre = 0.2
+        if np.min(dxij) < warn_thre:
+            logger.warning("*** %i distances are less than 0.2 Angstrom - check coordinates!! ***" % np.sum(dxij<warn_thre))
 
         # Update topology settings with what we learned
         self.top_settings['toppbc'] = toppbc
@@ -2181,6 +2272,9 @@ class Molecule(object):
                     bondlist.append((i, j))
                 else:
                     bondlist.append((j, i))
+        extras_standard = [(min(i, j), max(i, j)) for (i, j) in extras]
+        for extra in extras_standard:
+            bondlist.append(extra)
         bondlist = sorted(list(set(bondlist)))
         self.Data['bonds'] = sorted(list(set(bondlist)))
         self.built_bonds = True
@@ -2216,6 +2310,7 @@ class Molecule(object):
         """
         sn = kwargs.get('topframe', self.top_settings['topframe'])
         self.top_settings['topframe'] = sn
+        extras = kwargs.get('extra_bonds', [])
         if self.na > 100000:
             logger.warning("Warning: Large number of atoms (%i), topology building may take a long time" % self.na)
         if bond_order > 0.0:
@@ -2230,10 +2325,12 @@ class Molecule(object):
                     elif ((self.elem[i] in TransitionMetals or self.elem[j] in TransitionMetals)
                           and self.qm_bondorder[sn][i, j] > bond_order*metal_bo_factor):
                         bondlist.append((i, j))
+                    elif (i, j) in extras or (j, i) in extras:
+                        bondlist.append((i, j))
             self.Data['bonds'] = sorted(list(set(bondlist)))
         # Build bonds from connectivity graph.
         elif (not self.top_settings['read_bonds']) or force_bonds:
-            self.build_bonds()
+            self.build_bonds(extras=extras)
         # Create a NetworkX graph object to hold the bonds.
         G = MyG()
         for i, a in enumerate(self.elem):
@@ -2252,10 +2349,143 @@ class Molecule(object):
         # Deprecated in networkx 2.2
         # self.molecules = list(nx.connected_component_subgraphs(G))
 
+    def group_atoms_by_topology(self, bond_lim=10, verbose=False):
+        """
+        Determine topologically equivalent atoms.
+
+        bond_lim: Limit on the size of the fingerprint (default 10 bonds).
+        
+        Works like this: Suppose we have a molecular graph given as
+         H              H         H
+          \              \       /
+        H--C--C##C--H     C==C==C
+          /              /       \
+         H              H         H
+        
+        with numbers given as
+        
+         4              9         13
+          \              \        /
+        5--3--2##0--1     8==7==11
+          /              /        \
+         6             10         12
+        
+        The goal is to return a list of chemically equivalent atom groups as:
+        [[0], [1], [2], [3], [4, 5, 6], [7], [8, 11], [9, 10, 12, 13]]
+    
+        (Note: This grouping is by connectivity only, and does not distinguish
+         between bonds of different orders, enantiomers or cis/trans isomerism.)
+        
+        If we assign a fingerprint to an atom, given by a list where element 'i'
+        is the concatenated symbols of the atoms separated by 'i' bonds from that atom,
+        the fingerprints for the above system would be:
+    
+        0 C-CH-C-HHH
+        1 H-C-C-C-HHH
+        2 C-CC-HHHH
+        3 C-CHHH-C-H
+        4 H-C-CHH-C-H
+        5 H-C-CHH-C-H
+        6 H-C-CHH-C-H
+        7 C-CC-HHHH
+        8 C-CHH-C-HH
+        9 H-C-CH-C-HH
+        10 H-C-CH-C-HH
+        11 C-CHH-C-HH
+        12 H-C-CH-C-HH
+        13 H-C-CH-C-HH
+    
+        and a corresponding grouping of:
+        [[0], [1], [2, 7], [3], [4, 5, 6], [8, 11], [9, 10, 12, 13]]
+        
+        This doesn't distinguish atoms uniquely because atoms 2 and 7 (the central carbons)
+        have the same fingerprint even though they are chemically different.
+        This is because the fingerprint does not take into account the different topology
+        around carbons 0, 3 (i.e. bonded to 1 and 3 Hs respectively) and carbons
+        8, 11 (i.e. both bonded to two Hs).
+        
+        The solution is to do another iteration of the above but using the fingerprints 
+        in place of the atomic symbols.  This creates new, larger fingerprints as:
+    
+        0 C-CH-C-HHH_C-CC-HHHH,H-C-C-C-HHH_C-CHHH-C-H_H-C-CHH-C-H,H-C-CHH-C-H,H-C-CHH-C-H
+        1 H-C-C-C-HHH_C-CH-C-HHH_C-CC-HHHH_C-CHHH-C-H_H-C-CHH-C-H,H-C-CHH-C-H,H-C-CHH-C-H
+        2 C-CC-HHHH_C-CH-C-HHH,C-CHHH-C-H_H-C-C-C-HHH,H-C-CHH-C-H,H-C-CHH-C-H,H-C-CHH-C-H
+        3 C-CHHH-C-H_C-CC-HHHH,H-C-CHH-C-H,H-C-CHH-C-H,H-C-CHH-C-H_C-CH-C-HHH_H-C-C-C-HHH
+        4 H-C-CHH-C-H_C-CHHH-C-H_C-CC-HHHH,H-C-CHH-C-H,H-C-CHH-C-H_C-CH-C-HHH_H-C-C-C-HHH
+        5 H-C-CHH-C-H_C-CHHH-C-H_C-CC-HHHH,H-C-CHH-C-H,H-C-CHH-C-H_C-CH-C-HHH_H-C-C-C-HHH
+        6 H-C-CHH-C-H_C-CHHH-C-H_C-CC-HHHH,H-C-CHH-C-H,H-C-CHH-C-H_C-CH-C-HHH_H-C-C-C-HHH
+        7 C-CC-HHHH_C-CHH-C-HH,C-CHH-C-HH_H-C-CH-C-HH,H-C-CH-C-HH,H-C-CH-C-HH,H-C-CH-C-HH
+        8 C-CHH-C-HH_C-CC-HHHH,H-C-CH-C-HH,H-C-CH-C-HH_C-CHH-C-HH_H-C-CH-C-HH,H-C-CH-C-HH
+        9 H-C-CH-C-HH_C-CHH-C-HH_C-CC-HHHH,H-C-CH-C-HH_C-CHH-C-HH_H-C-CH-C-HH,H-C-CH-C-HH
+        10 H-C-CH-C-HH_C-CHH-C-HH_C-CC-HHHH,H-C-CH-C-HH_C-CHH-C-HH_H-C-CH-C-HH,H-C-CH-C-HH
+        11 C-CHH-C-HH_C-CC-HHHH,H-C-CH-C-HH,H-C-CH-C-HH_C-CHH-C-HH_H-C-CH-C-HH,H-C-CH-C-HH
+        12 H-C-CH-C-HH_C-CHH-C-HH_C-CC-HHHH,H-C-CH-C-HH_C-CHH-C-HH_H-C-CH-C-HH,H-C-CH-C-HH
+        13 H-C-CH-C-HH_C-CHH-C-HH_C-CC-HHHH,H-C-CH-C-HH_C-CHH-C-HH_H-C-CH-C-HH,H-C-CH-C-HH
+        
+        and a corresponding grouping of:
+        [[0], [1], [2], [3], [4, 5, 6], [7], [8, 11], [9, 10, 12, 13]]
+    
+        Now atoms 2 and 7 are considered to be different, and the differences in the topology
+        of the atoms bonded to atoms 2 and 7 are built into the representation.  It encodes that
+        atom 2 is bonded to atoms C-CH-C-HHH,C-CHHH-C-H
+        atom 7 is bonded to atoms C-CHH-C-HH,C-CHH-C-HH.
+        Note the separator characters have changed from '', '-' to ',', '_' as well.
+    
+        This process can be repeated until a self-consistent set of groups is found.
+        An upper limit on the number of cycles is imposed because the label size can blow up
+        very quickly.
+        """
+        
+        ids = [self.elem[i] for i in range(self.na)]
+        old_groups = None
+        cycle = 0
+    
+        bond_seps = ['-', '_', '#', '@', '$']
+        id_seps = ['', ',', '.', ';', ':']
+        while True:
+            group_dict = {}
+            for i in range(self.na):
+                group_dict.setdefault(ids[i], []).append(i)
+            groups = sorted(list(group_dict.values()))
+            if groups == old_groups: break
+            if cycle == 5: 
+                raise RuntimeError("Not designed to go for more than 5 cycles.")
+            if verbose:
+                logger.info("===Cycle %i===\n" % cycle)
+                logger.info("IDs of each atom:\n")
+                for i in range(self.na):
+                    logger.info("%3i %s\n" % (i, ids[i]))
+                logger.info("Atom groups:\n")
+                logger.info(str(groups)+"\n")
+        
+            # Dictionary that looks like:
+            # { anum1 : {anum2 : path_12}}
+            spl = dict(nx.all_pairs_shortest_path_length(self.topology))
+        
+            new_ids = []
+            
+            for key in sorted(spl.keys()):
+                val = spl[key]
+                fp_dict = {}
+                for key2, val2 in val.items():
+                    if val2 > (bond_lim-cycle): continue
+                    fp_dict.setdefault(val2, []).append(ids[key2])
+                    fp_dict[val2].sort()
+                fp_list = []
+                for dist in sorted(fp_dict.keys()):
+                    fp_list.append(id_seps[cycle].join(fp_dict[dist]))
+            
+                new_ids.append(bond_seps[cycle].join(fp_list))
+        
+            old_groups = copy.deepcopy(groups)
+            ids = new_ids[:]
+            cycle += 1
+        return groups
+
     def distance_matrix(self, pbc=True):
         """ Obtain distance matrix between all pairs of atoms. """
-        AtomIterator = np.ascontiguousarray(np.vstack((np.fromiter(itertools.chain(*[[i]*(self.na-i-1) for i in range(self.na)]),dtype=np.int32),
-                                                       np.fromiter(itertools.chain(*[range(i+1,self.na) for i in range(self.na)]),dtype=np.int32))).T)
+        AtomIterator = np.ascontiguousarray(np.vstack((np.fromiter(itertools.chain(*[[i]*(self.na-i-1) for i in range(self.na)]),dtype=int),
+                                                       np.fromiter(itertools.chain(*[range(i+1,self.na) for i in range(self.na)]),dtype=int))).T)
         if hasattr(self, 'boxes') and pbc:
             boxes = np.array([[self.boxes[i].a, self.boxes[i].b, self.boxes[i].c] for i in range(len(self))])
             drij = AtomContact(np.array(self.xyzs), AtomIterator, box=boxes)
@@ -2265,8 +2495,8 @@ class Molecule(object):
 
     def distance_displacement(self):
         """ Obtain distance matrix and displacement vectors between all pairs of atoms. """
-        AtomIterator = np.ascontiguousarray(np.vstack((np.fromiter(itertools.chain(*[[i]*(self.na-i-1) for i in range(self.na)]),dtype=np.int32),
-                                                       np.fromiter(itertools.chain(*[range(i+1,self.na) for i in range(self.na)]),dtype=np.int32))).T)
+        AtomIterator = np.ascontiguousarray(np.vstack((np.fromiter(itertools.chain(*[[i]*(self.na-i-1) for i in range(self.na)]),dtype=int),
+                                                       np.fromiter(itertools.chain(*[range(i+1,self.na) for i in range(self.na)]),dtype=int))).T)
         if hasattr(self, 'boxes') and pbc:
             boxes = np.array([[self.boxes[i].a, self.boxes[i].b, self.boxes[i].c] for i in range(len(self))])
             drij, dxij = AtomContact(np.array(self.xyzs), AtomIterator, box=boxes, displace=True)
@@ -2402,8 +2632,8 @@ class Molecule(object):
         if groups is not None:
             AtomIterator = np.ascontiguousarray([[min(g), max(g)] for g in itertools.product(groups[0], groups[1])])
         else:
-            AtomIterator = np.ascontiguousarray(np.vstack((np.fromiter(itertools.chain(*[[i]*(self.na-i-1) for i in range(self.na)]),dtype=np.int32),
-                                                           np.fromiter(itertools.chain(*[range(i+1,self.na) for i in range(self.na)]),dtype=np.int32))).T)
+            AtomIterator = np.ascontiguousarray(np.vstack((np.fromiter(itertools.chain(*[[i]*(self.na-i-1) for i in range(self.na)]),dtype=int),
+                                                           np.fromiter(itertools.chain(*[range(i+1,self.na) for i in range(self.na)]),dtype=int))).T)
         ang13 = [(min(a[0], a[2]), max(a[0], a[2])) for a in self.find_angles()]
         dih14 = [(min(d[0], d[3]), max(d[0], d[3])) for d in self.find_dihedrals()]
         bondedPairs = np.where([tuple(aPair) in (self.bonds+ang13+dih14) for aPair in AtomIterator])[0]
@@ -2848,6 +3078,7 @@ class Molecule(object):
                 tr, rt = get_rotate_translate(xyzj, xyzi)
                 xyzj = np.dot(xyzj, rt) + tr
             rmsd = np.sqrt(3*np.mean((xyzj - xyzi) ** 2))
+            if rmsd < 1e-15: rmsd = 1e-15
             Vec[i] = rmsd
         return Vec
 
@@ -3734,6 +3965,8 @@ class Molecule(object):
         X=PDBLines[0]
 
         XYZ=np.array([[x.x,x.y,x.z] for x in X])/10.0#Convert to nanometers
+
+        Serial=[x.serial for x in X] # Serial number - not the same as the atom index because it starts from 1 and TER takes up a serial number
         AltLoc=np.array([x.altLoc for x in X],'str') # Alternate location
         ICode=np.array([x.iCode for x in X],'str') # Insertion code
         ChainID=np.array([x.chainID for x in X],'str')
@@ -3778,17 +4011,21 @@ class Molecule(object):
         F2=open(fnm,'r')
         # QYD: Rewrite to support atom indices with 5 digits
         # i.e. CONECT143321433314334 -> 14332 connected to 14333 and 14334
+        # LPW: The serial numbers in the CONECT records start from 1 and include the TER records,
+        # so are not the same as the 'atom indices' in the Molecule object.
         for line in F2:
             if line[:6] == "CONECT":
-                conect_A = int(line[6:11]) - 1
+                conect_A = int(line[6:11])
                 conect_B_list = []
                 line_rest = line[11:]
                 while line_rest.strip():
                     # Take 5 characters a time until run out of characters
-                    conect_B_list.append(int(line_rest[:5]) - 1)
+                    conect_B_list.append(int(line_rest[:5]))
                     line_rest = line_rest[5:]
                 for conect_B in conect_B_list:
-                    bond = (min((conect_A, conect_B)), max((conect_A, conect_B)))
+                    idx_conect_A = Serial.index(conect_A)
+                    idx_conect_B = Serial.index(conect_B)
+                    bond = (min((idx_conect_A, idx_conect_B)), max((idx_conect_A, idx_conect_B)))
                     if bond not in bonds:
                         bonds.append(bond)
 
@@ -4550,7 +4787,7 @@ class Molecule(object):
         # Standardize formatting of residue IDs.
         resIds = []
         for resid in self.resid:
-            resIds.append("%4d" % (resid%10000))
+            resIds.append("%4d" % (resid%10000 if resid > 0 else resid))
         # Standardize record names.
         records = []
         for resname in resNames:

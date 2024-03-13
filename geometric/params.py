@@ -56,6 +56,8 @@ class OptParams(object):
         self.enforce = kwargs.get('enforce', 0.0)
         # Small eigenvalue threshold
         self.epsilon = kwargs.get('epsilon', 1e-5)
+        # Energy increase threshold; 3e-2 -> about 20 kcal/mol
+        self.erisemax = kwargs.get('erisemax', 3e-2)
         # Interval for checking the coordinate system for changes
         self.check = kwargs.get('check', 0)
         # More verbose printout
@@ -222,7 +224,6 @@ class OptParams(object):
         elif self.hessian.startswith('file+last:'):
             logger.info(' Hessian data will be read from file: %s, then computed for the last step.\n' % self.hessian[5:])
 
-
 class NEBParams(object):
     """
     Container for optimization parameters.
@@ -255,6 +256,32 @@ class NEBParams(object):
         self.trust = min(self.tmax, self.trust)
         self.trust = max(self.tmin, self.trust)
         self.xyzout = kwargs.get('xyzout', None)
+
+class InterpParams(object):
+    """
+    Container for interpolation parameters.
+    """
+    def __init__(self, **kwargs):
+        # Whether we are optimizing a given trajectory.
+        self.optimize = kwargs.get('optimize', False)
+        if self.optimize:
+            self.nframes = 0
+            self.align_frags = False
+        else:
+            # Number of frames that will be used for the interpolation.
+            self.nframes = kwargs.get('nframes', 50)
+            # Whether we want to align the molecules in reactant and product frames.
+            self.align_frags = kwargs.get('align_frags', False)
+        # Whether we want to align the initial interpolate trajectory before optimization.
+        self.align_system = kwargs.get('align_system', True)
+        # Run in fast mode
+        self.fast = kwargs.get('fast', False)
+        # Verbose printout
+        self.verbose = kwargs.get('verbose', 0)
+        if 'extrapolate' in kwargs:
+            self.extrapolate = tuple(kwargs['extrapolate'])
+        else:
+            self.extrapolate = None
 
 def str2bool(v):
     """ Allows command line options such as "yes" and "True" to be converted into Booleans. """
@@ -373,6 +400,7 @@ def parse_optimizer_args(*args):
     grp_optparam.add_argument('--reset', type=str2bool, help='Reset approximate Hessian to guess when eigenvalues are under epsilon.\n '
                               'Defaults to True for minimization and False for transition states.\n ')
     grp_optparam.add_argument('--epsilon', type=float, help='Small eigenvalue threshold for resetting Hessian, default 1e-5.\n ')
+    grp_optparam.add_argument('--erisemax', type=float, help='For energy minimization, the maximum value that energy can rise without step being rejected.\n ')
     grp_optparam.add_argument('--check', type=int, help='Check coordinates every <N> steps and rebuild coordinate system, disabled by default.\n')
     grp_optparam.add_argument('--subfrctor', type=int, help='Project out net force and torque components from nuclear gradient.\n'
                               '0 = never project; 1 = auto-detect (default); 2 = always project.')
@@ -514,5 +542,47 @@ def parse_neb_args(*args):
     # Set any defaults that are neither provided on the command line nor in the options file
     if 'engine' not in args_dict:
         args_dict['engine'] = 'tera'
+
+    return args_dict
+
+def parse_interpolate_args(*args):
+
+    """
+    Read user input from the command line interface.
+    Designed to be called by interpolate.main() passing in sys.argv[1:]
+    """
+
+    parser = ArgumentParserWithFile(add_help=False, formatter_class=argparse.RawTextHelpFormatter, fromfile_prefix_chars='@')
+
+    grp_univ = parser.add_argument_group('universal', 'Relevant to every job')
+    grp_univ.add_argument('input', type=str, help='REQUIRED positional argument: xyz file containing reactant and product structures.\n')
+    grp_univ.add_argument('--optimize', type=str2bool, help='Provide "yes" to optimize an interpolated trajectory.\n'
+                                                            'The following two arguments, nframes and prealign, will be ignored.\n'
+                                                            'The input xyz file must contain 5 or more structures.\n')
+    grp_univ.add_argument('--nframes', type=int, help='Number of frames, needs to be bigger than 5, that will be used to interpolate, default 50\n')
+    grp_univ.add_argument('--fast', type=str2bool, help='Provide "yes" to run in fast mode (no splicing).\n')
+    grp_univ.add_argument('--align_frags', type=str2bool, help='Provide "yes" to align fragments in reactant and product structure prior to interpolation.\n')
+    grp_univ.add_argument('--align_system', type=str2bool, help='Provide "yes" to align the entire system prior to interpolation.\n')
+    grp_univ.add_argument('--extrapolate', type=int, nargs=2, help='Provide two integers to generate extrapolated frames at the head and tail ends.\n'
+                          'The displacement norm between extrapolated frames is the same as for interpolated frames.\n')
+    
+    grp_output = parser.add_argument_group('output', 'Control the format and amount of the output')
+    grp_output.add_argument('--prefix', type=str, help='Specify a prefix for log file and temporary directory.\n'
+                            'Defaults to the input file path (incl. file name with extension removed).\n ')
+    grp_output.add_argument('--verbose', type=int, help='Set to positive for more verbose printout.\n'
+                            '0 = Default print level.     1 = Basic info about optimization step.\n'
+                            '2 = Include microiterations. 3 = Lots of printout from low-level functions.\n ')
+
+    grp_help = parser.add_argument_group('help', 'Get help')
+    grp_help.add_argument('-h', '--help', action='help', help='Show this help message and exit')
+
+    # Keep all arguments whose values are not None, so that the setting of default values
+    # in InterpParams() and get_molecule_engine() will work properly.
+    args_dict = {}
+    for k, v in vars(parser.parse_args(*args)).items():
+        if v is not None:
+            args_dict[k] = v
+
+    print("LPW debug:", args_dict)
 
     return args_dict
