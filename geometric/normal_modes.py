@@ -836,9 +836,9 @@ def wigner_sample(coords, mass, elem, freqs_wavenumber, normal_modes, temperatur
         print("Wigner distribution sample generation: %s samples %s" % (commadash(ovr_idx), 'overwritten' if overwrite else 'skipped'))
             
 def main(): # pragma: no cover
-    import logging.config, pkg_resources
-    import geometric.optimize
-    logIni = pkg_resources.resource_filename(geometric.optimize.__name__, 'config/logTest.ini')
+    from geometric.config import config_dir
+    import logging.config
+    logIni = os.path.join(config_dir, 'logTest.ini')
     logging.config.fileConfig(logIni,disable_existing_loggers=False)
     M = Molecule("start.xyz")
     coords = M.xyzs[0] / bohr2ang

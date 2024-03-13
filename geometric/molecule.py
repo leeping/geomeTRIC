@@ -12,12 +12,10 @@ import json
 from collections import OrderedDict, namedtuple, Counter
 from ctypes import *
 from datetime import date
-from warnings import warn
 
 import numpy as np
 from numpy import sin, cos, arccos
 from numpy.linalg import multi_dot
-from pkg_resources import parse_version
 
 # For Python 3 compatibility
 try:
@@ -364,9 +362,14 @@ if "forcebalance" in __name__:
     #| OpenMM interface functions |#
     #==============================#
     try:
-        from simtk.unit import *
-        from simtk.openmm import *
-        from simtk.openmm.app import *
+        try:
+            from openmm.unit import *
+            from openmm import *
+            from openmm.app import *
+        except ImportError:
+            from simtk.unit import *
+            from simtk.openmm import *
+            from simtk.openmm.app import *
     except ImportError:
         logger.debug('Note: Cannot import optional OpenMM module.\n')
 
@@ -2296,16 +2299,10 @@ class Molecule(object):
         G = MyG()
         for i, a in enumerate(self.elem):
             G.add_node(i)
-            if parse_version(nx.__version__) >= parse_version('2.0'):
-                if 'atomname' in self.Data:
-                    nx.set_node_attributes(G,{i:self.atomname[i]}, name='n')
-                nx.set_node_attributes(G,{i:a}, name='e')
-                nx.set_node_attributes(G,{i:self.xyzs[sn][i]}, name='x')
-            else:
-                if 'atomname' in self.Data:
-                    nx.set_node_attributes(G,'n',{i:self.atomname[i]})
-                nx.set_node_attributes(G,'e',{i:a})
-                nx.set_node_attributes(G,'x',{i:self.xyzs[sn][i]})
+            if 'atomname' in self.Data:
+                nx.set_node_attributes(G,{i:self.atomname[i]}, name='n')
+            nx.set_node_attributes(G,{i:a}, name='e')
+            nx.set_node_attributes(G,{i:self.xyzs[sn][i]}, name='x')
         for (i, j) in self.bonds:
             G.add_edge(i, j)
         # The Topology is simply the NetworkX graph object.
