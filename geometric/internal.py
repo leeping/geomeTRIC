@@ -3170,6 +3170,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                             B = A + diff_[iPrim]
                             C = jDih.value(xyz1)
                             D = C + diff_[jPrim]
+                            if (np.abs(diff_[iPrim]) < 1e-10 and np.abs(diff_[jPrim]) < 1e-10): continue
                             xzero = (C-A)/(B+C-D-A)
                             xplus = (C-A+2*np.pi)/(B+C-D-A)
                             xminus = (C-A-2*np.pi)/(B+C-D-A)

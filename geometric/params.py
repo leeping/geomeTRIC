@@ -274,6 +274,8 @@ class InterpParams(object):
             self.align_frags = kwargs.get('align_frags', False)
         # Whether we want to align the initial interpolate trajectory before optimization.
         self.align_system = kwargs.get('align_system', True)
+        # Run in fast mode
+        self.fast = kwargs.get('fast', False)
         # Verbose printout
         self.verbose = kwargs.get('verbose', 0)
         if 'extrapolate' in kwargs:
@@ -555,9 +557,10 @@ def parse_interpolate_args(*args):
     grp_univ = parser.add_argument_group('universal', 'Relevant to every job')
     grp_univ.add_argument('input', type=str, help='REQUIRED positional argument: xyz file containing reactant and product structures.\n')
     grp_univ.add_argument('--optimize', type=str2bool, help='Provide "yes" to optimize an interpolated trajectory.\n'
-                                                            'The followting two arguments, nframes and prealign, will be ignored.\n'
+                                                            'The following two arguments, nframes and prealign, will be ignored.\n'
                                                             'The input xyz file must contain 5 or more structures.\n')
     grp_univ.add_argument('--nframes', type=int, help='Number of frames, needs to be bigger than 5, that will be used to interpolate, default 50\n')
+    grp_univ.add_argument('--fast', type=str2bool, help='Provide "yes" to run in fast mode (no splicing).\n')
     grp_univ.add_argument('--align_frags', type=str2bool, help='Provide "yes" to align fragments in reactant and product structure prior to interpolation.\n')
     grp_univ.add_argument('--align_system', type=str2bool, help='Provide "yes" to align the entire system prior to interpolation.\n')
     grp_univ.add_argument('--extrapolate', type=int, nargs=2, help='Provide two integers to generate extrapolated frames at the head and tail ends.\n'

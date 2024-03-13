@@ -514,7 +514,7 @@ def print_map(mtx, title, colorscheme=0):
             print()
 
 class Interpolator(object):
-    def __init__(self, M_in, n_frames = 50, use_midframes = False, align_system=False, align_frags=False, extrapolate=None, verbose=0):
+    def __init__(self, M_in, n_frames = 50, use_midframes = False, align_system=False, align_frags=False, fast=False, extrapolate=None, verbose=0):
         # The input molecule; it should not be modified.
         self.M_in = deepcopy(M_in)
         # Check the length of the input molecule
@@ -540,6 +540,8 @@ class Interpolator(object):
         self.align_system = True if self.align_frags else align_system
         if self.align_system:
             self.M.align()
+        # Whether to run in "fast mode"
+        self.fast_mode = fast
         # Atom pairs that are not bonded (resp. bonded) in either the reactant or product
         self.nbpairs, self.union_bonds = find_nonbonded_pairs(self.M)
         # List of (donor, transfer, acceptor) triplets.
@@ -801,7 +803,7 @@ class Interpolator(object):
             atom_pairs, distance_matrix = mol.distance_matrix(pbc=False)
             self.enddists.append(distance_matrix[-1].copy())
 
-    def initial_guess_one_method(self, method = 0):
+    def end_to_end(self, method=0, rebuild_dlc=True, respace=True):
         # Class variables that are used in this method
         M = deepcopy(self.M)
         n_frames = self.n_frames
@@ -820,12 +822,16 @@ class Interpolator(object):
 
         # Build the IC system used to interpolate from one endpoint to the other.
         if method in [0, 1]:
+            # Use TRIC coordinate system
+            IC = DelocalizedInternalCoordinates(M_IC, build=True, connect=False, addcart=False, connect_isolated=False)
+            newPrims = IC.Prims.Internals
+        elif method in [2, 3]:
             # Use TRIC coordinate system, but use only the bonds that exist at both endpoints.
             M_IC.bonds = common_bonds
             M_IC.top_settings['read_bonds'] = True
             IC = DelocalizedInternalCoordinates(M_IC, build=True, connect=False, addcart=False, connect_isolated=False)
             newPrims = IC.Prims.Internals
-        elif method in [2, 3]:
+        elif method in [4, 5]:
             # Use HDLC coordinate system, but use only the bonds that exist at both endpoints.
             # Set weight of 0.5 to all Cartesian primitive ICs.
             M_IC.bonds = common_bonds
@@ -836,7 +842,7 @@ class Interpolator(object):
                 newPrims.append(CartesianX(i, w=0.5))
                 newPrims.append(CartesianY(i, w=0.5))
                 newPrims.append(CartesianZ(i, w=0.5))
-        elif method in [4, 5]:
+        elif method in [6, 7]:
             # Use all-inverse distances plus Cartesian coordinates with small weight.
             IC = DelocalizedInternalCoordinates(M_IC, build=True, connect=False, addcart=False)
             newPrims = []
@@ -895,7 +901,7 @@ class Interpolator(object):
         clash_pairs = []
         nDiv = n_frames - 1
         for clash_round in range(5):
-            coord_segment, endpt_err, _ = interpolate_segment(IC, xyz0, xyz1, nDiv, backward=(method%2==1), rebuild_dlc=True, sync=1)
+            coord_segment, endpt_err, _ = interpolate_segment(IC, xyz0, xyz1, nDiv, backward=(method%2==1), rebuild_dlc=rebuild_dlc, sync=1)
             dq_segment = np.array([IC_Chk.calcDiff(coord_segment[i], coord_segment[i+1]) for i in range(n_frames-1)])
             # Don't evaluate dq_segment for primitives that have a diagnostic of 2 or higher because the result will be invalid.
             prim_diag = np.max([[Prim.diagnostic(coord_segment[i])[0] for Prim in IC_Chk.Internals] for i in range(n_frames)], axis=0)
@@ -912,8 +918,9 @@ class Interpolator(object):
             M.comms = ['Interpolated frame %i' % k for k in range(len(coord_segment))]
 
             # Perform equal spacing of the pathway according to the largest change in any primitive coordinate
-            dq_relative = dq_segment / dq_med[np.newaxis, :]
-            M = EqualSpacing(M, RMSD=False, align=False, custom=np.max(dq_relative, axis=1))
+            if respace:
+                dq_relative = dq_segment / dq_med[np.newaxis, :]
+                M = EqualSpacing(M, RMSD=False, align=False, custom=np.max(dq_relative, axis=1))
 
             # Fail if the endpt_err is greater than the threshold
             if endpt_err > err_thre:
@@ -939,8 +946,8 @@ class Interpolator(object):
     def initial_guess(self):
         M = None
         dq_ratio_min = 1e6
-        for method in range(6):
-            M_, status, dq_ratio, endpt_err = self.initial_guess_one_method(method=method)
+        for method in range(8):
+            M_, status, dq_ratio, endpt_err = self.end_to_end(method=method)
             # M_.write('interpolated_endpoints_method%i.xyz' % method)
             # Keep the interpolation path with status=0 and the lowest dq_ratio
             print("Initial pathway generation using method %i %s; dq_ratio = %.3f endpt_err = %.3f" % 
@@ -956,6 +963,30 @@ class Interpolator(object):
         # Overwrite the Molecule object currently being processed
         self.M = deepcopy(M)
         print("Keeping the result from method %i" % keep_method)
+
+    def run_fast(self):
+        M = None
+        dq_ratio_min = 1e6
+        dq_stop_thre = 5
+        for method in range(8):
+            M_, status, dq_ratio, endpt_err = self.end_to_end(method=method, rebuild_dlc=False, respace=False)
+            # M_.write('interpolated_endpoints_method%i.xyz' % method)
+            # Keep the interpolation path with status=0 and the lowest dq_ratio
+            print("Initial pathway generation using method %i %s; dq_ratio = %.3f endpt_err = %.3f" % 
+                  (method, "success" if status == 0 else "failed", dq_ratio, endpt_err))
+            if status == 0 and dq_ratio < dq_ratio_min:
+                M = deepcopy(M_)
+                dq_ratio_min = dq_ratio
+                keep_method = method
+            if dq_ratio < dq_stop_thre: break
+        if M is None:
+            raise RuntimeError("Failed to generate an initial path")
+        M.comms = [c + " (method %i)" % keep_method for c in M.comms]
+        M.write("interpolated_fast_mode.xyz")
+        # Overwrite the Molecule object currently being processed
+        self.M = deepcopy(M)
+        print("Keeping the result from method %i" % keep_method)
+        return
 
     def assign_ICs_to_segments(self):
         M = self.M
@@ -1288,6 +1319,9 @@ class Interpolator(object):
         self.segment_endpoints = get_segment_endpoints(self.M, self.segments_spliced)
     
     def run_workflow(self):
+        if self.fast_mode:
+            self.run_fast()
+            return
         if self.align_frags:
             self.prealign_fragments()
         if self.do_init:
@@ -1306,7 +1340,7 @@ def main():
     params = InterpParams(**args)
     M0 = Molecule(args['input'])
     #interpolator = Interpolator(M0, use_midframes=True, n_frames=0, align_system=True, align_frags=False)
-    interpolator = Interpolator(M0, n_frames= params.nframes, use_midframes=params.optimize, align_system=params.align_system, align_frags=params.align_frags, extrapolate=params.extrapolate, verbose=params.verbose)
+    interpolator = Interpolator(M0, n_frames= params.nframes, use_midframes=params.optimize, align_system=params.align_system, align_frags=params.align_frags, fast=params.fast, extrapolate=params.extrapolate, verbose=params.verbose)
     interpolator.run_workflow()
     
 if __name__ == "__main__":
