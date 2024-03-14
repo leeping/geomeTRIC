@@ -1965,6 +1965,68 @@ class Molecule(object):
             New.Data['bonds'] = self.bonds + [(b[0]+self.na, b[1]+self.na) for b in other.bonds]
         return New
 
+    def delete_atoms(self, indices):
+        # Returns a copy of Molecule object with the indicated atoms deleted.
+        # An array of true or false indicating whether each atom is 
+        # to be included in the returned molecule
+        mask = np.ones(self.na, dtype=bool)
+        mask[indices] = False
+        
+        # Mapping old to new atom indices
+        old_to_new_idx = np.cumsum(mask)-1
+        new_na = old_to_new_idx[-1] + 1
+        
+        # Copy data fields that don't depend on number of atoms
+        New = Molecule()
+        for key in self.FrameKeys | self.MetaKeys:
+            New.Data[key] = copy.deepcopy(self.Data[key])
+
+        # Copy and modify data fields that contain numerical atom-wise data
+        for key in ['xyzs', 'qm_grads', 'qm_espxyzs', 'qm_espvals', 'qm_extchgs', 'qm_mulliken_charges', 'qm_mulliken_spins']:
+            if key in self.Data:
+                if key == 'qm_hessians':
+                    new_data = [self.Data[key][i].reshape(self.na, 3, self.na, 3)[mask, :, mask, :].reshape(new_na, new_na).copy() for i in range(len(self))]
+                elif key == 'qm_bondorder':
+                    new_data = [self.Data[key][i][mask, mask].copy() for i in range(len(self))]
+                else:
+                    new_data = [self.Data[key][i][mask].copy() for i in range(len(self))]
+            New.Data[key] = new_data
+
+        # Copy and modify other atom-wise data fields.
+        for key in self.AtomKeys:
+            if key == 'tinkersuf': # Tinker suffix is a bit tricky
+                NewSuf = []
+                for iline, line in enumerate(self.Data[key]):
+                    if not mask[iline]: continue
+                    whites      = re.split('[^ ]+',line)
+                    s           = line.split()
+                    if len(s) > 1:
+                        for i in range(1,len(s)):
+                            # Convert the "bonded atom numbers" by changing string to integer,
+                            # subtracting 1, looking up corresponding new atom index, then adding 1
+                            s[i] = str(old_to_new_idx[int(s[i])-1]+1)
+                    NewSuf.append(''.join([whites[j]+s[j] for j in range(len(s))]))
+                New.Data[key] = NewSuf
+            else:
+                if type(self.Data[key]) is np.ndarray:
+                    new_data = self.Data[key][mask]
+                    New.Data[key] = new_data.copy()
+                elif type(self.Data[key]) is list:
+                    new_data = [self.Data[key][i] for i in range(self.na) if mask[i]]
+                    New.Data[key] = new_data[:]
+                else:
+                    logger.error('Cannot stack %s because it is of type %s\n' % (key, str(type(New.Data[key]))))
+                    raise RuntimeError
+        if 'bonds' in self.Data:
+            new_data = []
+            for b in self.bonds:
+                # Only keep bonds in non-deleted atoms
+                if mask[b[0]] and mask[b[1]]:
+                    new_data.append((old_to_new_idx[b[0]], old_to_new_idx[b[1]]))
+            New.Data['bonds'] = new_data
+
+        return New
+
     def get_populations(self):
         """ Return a cloned molecule object but with X-coordinates set
         to Mulliken charges and Y-coordinates set to Mulliken
@@ -3734,6 +3796,8 @@ class Molecule(object):
         X=PDBLines[0]
 
         XYZ=np.array([[x.x,x.y,x.z] for x in X])/10.0#Convert to nanometers
+
+        Serial=[x.serial for x in X] # Serial number - not the same as the atom index because it starts from 1 and TER takes up a serial number
         AltLoc=np.array([x.altLoc for x in X],'str') # Alternate location
         ICode=np.array([x.iCode for x in X],'str') # Insertion code
         ChainID=np.array([x.chainID for x in X],'str')
@@ -3778,17 +3842,21 @@ class Molecule(object):
         F2=open(fnm,'r')
         # QYD: Rewrite to support atom indices with 5 digits
         # i.e. CONECT143321433314334 -> 14332 connected to 14333 and 14334
+        # LPW: The serial numbers in the CONECT records start from 1 and include the TER records,
+        # so are not the same as the 'atom indices' in the Molecule object.
         for line in F2:
             if line[:6] == "CONECT":
-                conect_A = int(line[6:11]) - 1
+                conect_A = int(line[6:11])
                 conect_B_list = []
                 line_rest = line[11:]
                 while line_rest.strip():
                     # Take 5 characters a time until run out of characters
-                    conect_B_list.append(int(line_rest[:5]) - 1)
+                    conect_B_list.append(int(line_rest[:5]))
                     line_rest = line_rest[5:]
                 for conect_B in conect_B_list:
-                    bond = (min((conect_A, conect_B)), max((conect_A, conect_B)))
+                    idx_conect_A = Serial.index(conect_A)
+                    idx_conect_B = Serial.index(conect_B)
+                    bond = (min((idx_conect_A, idx_conect_B)), max((idx_conect_A, idx_conect_B)))
                     if bond not in bonds:
                         bonds.append(bond)
 
@@ -4550,7 +4618,7 @@ class Molecule(object):
         # Standardize formatting of residue IDs.
         resIds = []
         for resid in self.resid:
-            resIds.append("%4d" % (resid%10000))
+            resIds.append("%4d" % (resid%10000 if resid > 0 else resid))
         # Standardize record names.
         records = []
         for resname in resNames:
