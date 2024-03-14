@@ -242,6 +242,7 @@ class NEBParams(object):
         self.climb = kwargs.get('climb', 0.5)
         self.ncimg = kwargs.get('ncimg', 1)
         self.optep = kwargs.get('optep', False)
+        self.align = kwargs.get('align', True)
         self.epsilon = kwargs.get('epsilon', 1e-5)
         self.verbose = kwargs.get('verbose', False)
         self.trust = kwargs.get('trust', 0.1)
@@ -460,7 +461,7 @@ def parse_neb_args(*args):
 
     grp_univ = parser.add_argument_group('universal', 'Relevant to every job')
     grp_univ.add_argument('input', type=str, help='REQUIRED positional argument: Quantum chemistry or MM input file for calculation\n ')
-    grp_univ.add_argument('chain_coords', type=str, help='REQUIRED positional argument: Coordinate file containing multiple frames for NEB\n')
+    grp_univ.add_argument('chain_coords', type=str, help='REQUIRED positional argument: Coordinate file containing multiple frames for NEB\n ')
     # TeraChem as a default option is only for the command line interface.
     grp_univ.add_argument('--engine', type=str, help='Specify engine for computing energies and gradients.\n'
                           '"tera" = TeraChem (default)         "qchem" = Q-Chem\n'
@@ -483,6 +484,7 @@ def parse_neb_args(*args):
     grp_nebparam.add_argument('--images', type=int, help='Number of NEB images to use (default 11).\n ')
     grp_nebparam.add_argument('--plain', type=int, help='1: Use plain elastic band for spring force. 2: Use plain elastic band for spring AND potential (default 0).\n ')
     grp_nebparam.add_argument('--optep', type=str2bool, help='Provide "yes" to optimize two end points of the initial input chain.\n ')
+    grp_nebparam.add_argument('--align', type=str2bool, help='Align images before starting the NEB method (default yes). If "--optep" is set to "yes", the images will be aligned after optimizing the end points.\n ')
     grp_nebparam.add_argument('--trust', type=float, help='Starting trust radius, defaults to 0.1 (energy minimization) or 0.01 (TS optimization).\n ')
     grp_nebparam.add_argument('--tmax', type=float, help='Maximum trust radius, defaults to 0.3 (energy minimization) or 0.03 (TS optimization).\n ')
     grp_nebparam.add_argument('--tmin', type=float, help='Minimum trust radius, do not reject steps trust radius is below this threshold (method-dependent).\n ')

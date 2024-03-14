@@ -30,10 +30,11 @@ def test_hcn_neb_input(localizer):
         engine="psi4",
     )
 
+    # The number of images can't exceed the maximum number of images in the input chain
     M2, engine = geometric.prepare.get_molecule_engine(
         input=os.path.join(datad, "hcn_neb_input.psi4in"),
         chain_coords=os.path.join(datad, "hcn_neb_input.xyz"),
-        images=50,
+        images=9999,
         neb=True,
         engine="psi4",
     )
@@ -43,9 +44,9 @@ def test_hcn_neb_input(localizer):
 
 
 @addons.using_psi4
-def test_hcn_neb_optimize(localizer):
+def test_hcn_neb_optimize_1(localizer):
     """
-    Optimize a HCN chain
+    Optimize a HCN chain without alignment
     """
     M, engine = geometric.prepare.get_molecule_engine(
         input=os.path.join(datad, "hcn_neb_input.psi4in"),
@@ -55,7 +56,34 @@ def test_hcn_neb_optimize(localizer):
         engine="psi4",
     )
 
-    params = geometric.params.NEBParams(**{"optep": True, "verbose": 1})
+    params = geometric.params.NEBParams(**{"optep": True, "align": False, "verbose": 1})
+    chain = geometric.neb.ElasticBand(
+        M, engine=engine, tmpdir=tempfile.mkdtemp(), params=params, plain=0
+    )
+
+    assert chain.coordtype == "cart"
+
+    final_chain, optCycle = geometric.neb.OptimizeChain(chain, engine, params)
+
+    assert optCycle < 10
+    assert final_chain.maxg < params.maxg
+    assert final_chain.avgg < params.avgg
+
+@addons.using_psi4
+def test_hcn_neb_optimize_2(localizer):
+    """
+    Optimize a HCN chain with alignment
+    """
+    M, engine = geometric.prepare.get_molecule_engine(
+        input=os.path.join(datad, "hcn_neb_input.psi4in"),
+        chain_coords=os.path.join(datad, "hcn_neb_input.xyz"),
+        images=7,
+        neb=True,
+        engine="psi4",
+    )
+
+    # maxg and avgg are increased here to make them converge faster after the alignment
+    params = geometric.params.NEBParams(**{"verbose": 1, "maxg": 3.0, "avgg": 2.0})
     chain = geometric.neb.ElasticBand(
         M, engine=engine, tmpdir=tempfile.mkdtemp(), params=params, plain=0
     )
@@ -90,7 +118,7 @@ class TestPsi4WorkQueueNEB:
             neb=True,
             engine="psi4",
         )
-        params = geometric.params.NEBParams(**{"optep": True, "verbose": 1})
+        params = geometric.params.NEBParams(**{"optep": True, "align": False, "verbose": 1})
         chain = geometric.neb.ElasticBand(
             M, engine=engine, tmpdir=tempfile.mkdtemp(), params=params, plain=0
         )
@@ -128,7 +156,7 @@ def test_hcn_neb_service_arrange(localizer):
         for coord in coords
     ]
 
-    new_qcel_mols = geometric.qcf_neb.arrange(qcel_mols)
+    new_qcel_mols = geometric.qcf_neb.arrange(qcel_mols, True)
     count = sum(
         [
             1 if not np.allclose(i.geometry, j.geometry) else 0

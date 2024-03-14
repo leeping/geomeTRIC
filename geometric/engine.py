@@ -541,12 +541,7 @@ class TeraChem(Engine):
         # Ensure guess files are in the correct locations
         self.copy_guess_files(dirname)
         # Set coordinate file name
-        if self.qmmm_amber:
-            start_xyz = 'start.rst7'
-        elif self.qmmm_openmm:
-            start_xyz = 'start.xml'
-        else:
-            start_xyz = 'start.xyz'
+        start_xyz = 'start.rst7' if self.qmmm_amber else 'start.xml' if self.qmmm_openmm else 'start.xyz'
         self.tcin['coordinates'] = start_xyz
         self.tcin['run'] = 'gradient'
         # Write the TeraChem input file
@@ -598,12 +593,7 @@ class TeraChem(Engine):
         # Ensure guess files are in the correct locations
         guessfnms = self.copy_guess_files(dirname)
         # Set coordinate file name
-        if self.qmmm_amber:
-            start_xyz = 'start.rst7'
-        elif self.qmmm_openmm:
-            start_xyz = 'start.xml'
-        else:
-            start_xyz = 'start.xyz'
+        start_xyz = 'start.rst7' if self.qmmm_amber else 'start.xml' if self.qmmm_openmm else 'start.xyz'
         self.tcin['coordinates'] = start_xyz
         self.tcin['run'] = 'gradient'
         # For queueing up jobs, delete GPU key and let the worker decide
@@ -655,19 +645,14 @@ class TeraChem(Engine):
     def number_output(self, dirname, calcNum):
         if not os.path.exists(os.path.join(dirname, 'run.out')):
             raise RuntimeError('run.out does not exist')
-        start_xyz = 'start.rst7' if self.qmmm else 'start.xyz'
+        start_xyz = 'start.rst7' if self.qmmm_amber else 'start.xml' if self.qmmm_openmm else 'start.xyz'
         shutil.copy2(os.path.join(dirname,start_xyz), os.path.join(dirname,'start_%03i.%s' % (calcNum, os.path.splitext(start_xyz)[1])))
         shutil.copy2(os.path.join(dirname,'run.out'), os.path.join(dirname,'run_%03i.out' % calcNum))
 
     def read_result(self, dirname, check_coord=None):
         if check_coord is not None:
             read_xyz_success = False
-            if self.qmmm_amber:
-                start_xyz = 'start.rst7'
-            elif self.qmmm_openmm:
-                start_xyz = 'start.xml'
-            else:
-                start_xyz = 'start.xyz'
+            start_xyz = 'start.rst7' if self.qmmm_amber else 'start.xml' if self.qmmm_openmm else 'start.xyz'
             if os.path.exists(os.path.join(dirname, start_xyz)):
                 try:
                     M = Molecule(os.path.join(dirname, start_xyz))

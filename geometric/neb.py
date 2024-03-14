@@ -486,6 +486,12 @@ class Chain(object):
         Cnew.haveMetric = True
         return Cnew
 
+    def align(self):
+        self.M.align()
+        self.Structures = [Structure(self.M[i], self.engine, os.path.join(self.tmpdir, "struct_%%0%ii" %  len(str(len(self))) % i),
+                          self.coordtype) for i in range(len(self))]
+        self.clearCalcs()
+
     def respace(self, thresh):
         """
         Space-out NEB images that are closer than the threshold.
@@ -1533,6 +1539,12 @@ def OptimizeChain(chain, engine, params):
     if params.optep:
         logger.info("Optimizing endpoint images \n")
         chain.OptimizeEndpoints(params.maxg)
+
+    # Align images
+    if params.align:
+        logger.info("Aligning images \n")
+        chain.align()
+
     logger.info("Optimizing the input chain \n")
     chain.respace(0.01)
     chain.delete_insert(1.0)
@@ -1660,6 +1672,7 @@ def main():
     logfilename = rf"{prefix}.log"
     # Create a backup if the log file already exists
     import logging.config
+    import geometric
     logging.config.fileConfig(logIni,defaults={'logfilename': logfilename},disable_existing_loggers=False)
     logger.info('geometric-neb called with the following command line:\n')
     logger.info(' '.join(sys.argv) + '\n')
