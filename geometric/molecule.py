@@ -1996,13 +1996,14 @@ class Molecule(object):
         for key in self.AtomKeys:
             if key == 'tinkersuf': # Tinker suffix is a bit tricky
                 NewSuf = []
-                for line in self.Data[key]:
+                for iline, line in enumerate(self.Data[key]):
+                    if not mask[iline]: continue
                     whites      = re.split('[^ ]+',line)
                     s           = line.split()
                     if len(s) > 1:
                         for i in range(1,len(s)):
                             # Convert the "bonded atom numbers" by changing string to integer,
-                            # subtracting 0, looking up corresponding new atom index, then adding 1
+                            # subtracting 1, looking up corresponding new atom index, then adding 1
                             s[i] = str(old_to_new_idx[int(s[i])-1]+1)
                     NewSuf.append(''.join([whites[j]+s[j] for j in range(len(s))]))
                 New.Data[key] = NewSuf

@@ -325,6 +325,20 @@ def test_rotate_bond(localizer):
     assert success1 == False
     assert success2 == True
 
+def test_delete_atoms(localizer):
+    """
+    Test that atom deletion behaves properly.
+    """
+    M = geometric.molecule.Molecule(os.path.join(datad, 'chromophore.xyz'), ftype='tinker')
+    M1 = M.delete_atoms([10, 26])
+    old_bonds = [(8, 12), (23, 27), (46, 50)]
+    new_bonds = [(8, 11), (22, 25), (44, 48)]
+    for i in range(len(old_bonds)):
+        assert old_bonds[i] in M.bonds
+        assert new_bonds[i] in M1.bonds
+    M1.write('test.xyz', ftype='tinker')
+    M2 = geometric.molecule.Molecule('test.xyz', ftype='tinker')
+    assert M2.bonds == M1.bonds
 
 def test_gaussian_input_single():
     """
