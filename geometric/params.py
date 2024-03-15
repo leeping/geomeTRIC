@@ -71,15 +71,19 @@ class OptParams(object):
         # Also sets the maximum step size that can be rejected
         # LPW: Add to documentation later:
         # This parameter is complicated.  It represents the length scale below which the PES is expected to be smooth.
-        # If set too small, the trust radius can decrease without limit and make the optimization impossible.
+        # If set too small, the optimization could get "stuck" in a small divot on the PES and be unable to escape.
         # This could happen for example if the potential energy surface contains a "step", which occurs infrequently;
         # we don't want the optimization to stop there completely, but rather we accept a bad step and keep going.
         # If set too large, then the rejection algorithm becomes ineffective as too-large low-quality steps will be kept.
-        # It should also not be smaller than 2*Convergence_drms because that could artifically cause convergence.
-        # Because MECI optimizations have more "sharpness" in their PES, it is set
+        # It should also not be smaller than Convergence_drms because that could artifically cause convergence.
         # PS: If the PES is inherently rough on extremely small length scales,
         # then the optimization is not expected to converge regardless of tmin.
-        self.tmin = kwargs.get('tmin', min(1.0e-4 if (self.meci or self.transition) else 1.2e-3, self.Convergence_drms))
+        # Note 2023-10-29: Testing has shown that DFT calculations can have gradient errors on the order of 1e-4 
+        # in various engines when the default grid is used. This could lead to failures if the attempted 
+        # optimization step is larger than Convergence_drms, the step is rejected, then (almost) the same step
+        # is attempted again. Therefore, the minimum trust radius should be set smaller than the convergence
+        # criterion to avoid this infinite loop scenario.
+        self.tmin = kwargs.get('tmin', min(1.0e-4, self.Convergence_drms*0.1))
         # Use maximum component instead of RMS displacement when applying trust radius.
         self.usedmax = kwargs.get('usedmax', False)
         # Sanity checks on trust radius
@@ -242,6 +246,7 @@ class NEBParams(object):
         self.climb = kwargs.get('climb', 0.5)
         self.ncimg = kwargs.get('ncimg', 1)
         self.optep = kwargs.get('optep', False)
+        self.align = kwargs.get('align', True)
         self.epsilon = kwargs.get('epsilon', 1e-5)
         self.verbose = kwargs.get('verbose', False)
         self.trust = kwargs.get('trust', 0.1)
@@ -461,7 +466,7 @@ def parse_neb_args(*args):
 
     grp_univ = parser.add_argument_group('universal', 'Relevant to every job')
     grp_univ.add_argument('input', type=str, help='REQUIRED positional argument: Quantum chemistry or MM input file for calculation\n ')
-    grp_univ.add_argument('chain_coords', type=str, help='REQUIRED positional argument: Coordinate file containing multiple frames for NEB\n')
+    grp_univ.add_argument('chain_coords', type=str, help='REQUIRED positional argument: Coordinate file containing multiple frames for NEB\n ')
     # TeraChem as a default option is only for the command line interface.
     grp_univ.add_argument('--engine', type=str, help='Specify engine for computing energies and gradients.\n'
                           '"tera" = TeraChem (default)         "qchem" = Q-Chem\n'
@@ -484,11 +489,13 @@ def parse_neb_args(*args):
     grp_nebparam.add_argument('--images', type=int, help='Number of NEB images to use (default 11).\n ')
     grp_nebparam.add_argument('--plain', type=int, help='1: Use plain elastic band for spring force. 2: Use plain elastic band for spring AND potential (default 0).\n ')
     grp_nebparam.add_argument('--optep', type=str2bool, help='Provide "yes" to optimize two end points of the initial input chain.\n ')
+    grp_nebparam.add_argument('--align', type=str2bool, help='Align images before starting the NEB method (default yes). If "--optep" is set to "yes", the images will be aligned after optimizing the end points.\n ')
     grp_nebparam.add_argument('--trust', type=float, help='Starting trust radius, defaults to 0.1 (energy minimization) or 0.01 (TS optimization).\n ')
     grp_nebparam.add_argument('--tmax', type=float, help='Maximum trust radius, defaults to 0.3 (energy minimization) or 0.03 (TS optimization).\n ')
     grp_nebparam.add_argument('--tmin', type=float, help='Minimum trust radius, do not reject steps trust radius is below this threshold (method-dependent).\n ')
-    grp_nebparam.add_argument('--skip', action='store_true', help='Skip Hessian updates that would introduce negative eigenvalues.')
+    grp_nebparam.add_argument('--skip', action='store_true', help='Skip Hessian updates that would introduce negative eigenvalues.\n ')
     grp_nebparam.add_argument('--epsilon', type=float, help='Small eigenvalue threshold for resetting Hessian, default 1e-5.\n ')
+    grp_nebparam.add_argument('--port', type=int, help='Work Queue port used to distribute singlepoint calculations. Workers must be started separately.\n')
 
     grp_output = parser.add_argument_group('output', 'Control the format and amount of the output')
     grp_output.add_argument('--prefix', type=str, help='Specify a prefix for log file and temporary directory.\n'
@@ -496,7 +503,6 @@ def parse_neb_args(*args):
     grp_output.add_argument('--verbose', type=int, help='Set to positive for more verbose printout.\n'
                             '0 = Default print level.     1 = Basic info about optimization step.\n'
                             '2 = Include microiterations. 3 = Lots of printout from low-level functions.\n ')
-
     grp_help = parser.add_argument_group('help', 'Get help')
     grp_help.add_argument('-h', '--help', action='help', help='Show this help message and exit')
 

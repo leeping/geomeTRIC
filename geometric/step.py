@@ -834,7 +834,7 @@ def trust_step(target, v0, X, G, H, IC, rfo, verbose=0):
             m_sol = sol
         # Break out of infinite oscillation loops
         if niter%100 == 99:
-            logger.info("    trust_step Iter:  %4i, randomizing\n" % niter)
+            # logger.info("    trust_step Iter:  %4i, randomizing\n" % niter)
             v += np.random.random() * niter / 100
         if niter%1000 == 999:
             if verbose >= 3: get_delta_prime(v, X, G, H, IC, rfo, verbose+1)

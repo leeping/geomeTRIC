@@ -39,17 +39,15 @@ import os
 import sys
 import time
 import traceback
-import pkg_resources
-import warnings
 from copy import deepcopy
 from datetime import datetime
 
 import numpy as np
 import scipy
+import warnings
 from scipy import optimize
 from numpy.linalg import multi_dot
 
-import geometric
 from .info import print_logo, print_citation
 from .internal import CartesianCoordinates, PrimitiveInternalCoordinates, DelocalizedInternalCoordinates
 from .ic_tools import check_internal_grad, check_internal_hess, write_displacements
@@ -59,6 +57,7 @@ from .prepare import get_molecule_engine, parse_constraints
 from .params import OptParams, parse_optimizer_args
 from .nifty import row, col, flat, bohr2ang, ang2bohr, logger, bak, createWorkQueue, destroyWorkQueue, printcool_dictionary
 from .errors import InputError, HessianExit, EngineError, IRCError, GeomOptNotConvergedError, GeomOptStructureError, LinearTorsionError
+from .config import config_dir
 
 class Optimizer(object):
     def __init__(self, coords, molecule, IC, engine, dirname, params, print_info=True):
@@ -659,7 +658,7 @@ class Optimizer(object):
         ### OBTAIN AN OPTIMIZATION STEP ###
         # The trust radius is to be computed in Cartesian coordinates.
         # First take a full-size optimization step
-        if params.verbose : logger.info("  Optimizer.step : Attempting full-size optimization step\n")
+        if params.verbose: logger.info("  Optimizer.step : Attempting full-size optimization step\n")
         dy, _, __ = self.get_delta_prime(v0, verbose=self.params.verbose)
         # Internal coordinate step size
         inorm = np.linalg.norm(dy)
@@ -1107,8 +1106,7 @@ def run_optimizer(**kwargs):
     # This behavior may be changed by editing the log.ini file.
     # Output will only be written to log files after the 'logConfig' line is called!
     if kwargs.get('logIni') is None:
-        import geometric.optimize
-        logIni = pkg_resources.resource_filename(geometric.optimize.__name__, r'config/log.ini')
+        logIni = os.path.join(config_dir, 'log.ini')
     else:
         logIni = kwargs.get('logIni')
     logfilename = kwargs.get('prefix')

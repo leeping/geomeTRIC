@@ -35,11 +35,11 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #!/usr/bin/env python
 
+import os
 import copy
 import geometric
 import json
 import traceback
-import pkg_resources
 import tempfile
 import numpy as np
 
@@ -48,8 +48,8 @@ try:
 except ImportError:
     from io import StringIO
 
-import logging
 from .nifty import logger, RawStreamHandler, commadash
+from geometric.config import config_dir
 
 
 def parse_input_json_dict(in_json_dict):
@@ -191,7 +191,7 @@ def geometric_run_json(in_json_dict):
     """ Take an input dictionary loaded from json, and return an output dictionary for json """
 
     # Default logger configuration (prevents extra newline from being printed)
-    logIni = pkg_resources.resource_filename(geometric.optimize.__name__, 'config/logJson.ini')
+    logIni = os.path.join(config_dir, 'logJson.ini')
     import logging.config
     logging.config.fileConfig(logIni,disable_existing_loggers=False)
 

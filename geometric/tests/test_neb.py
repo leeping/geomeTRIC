@@ -2,11 +2,13 @@
 A set of tests for NEB calculations
 """
 
-import os, json, copy
+import os, json, copy, shutil
 from . import addons
+import pytest
 import geometric
 import tempfile
 import numpy as np
+import subprocess
 
 localizer = addons.in_folder
 datad = addons.datad
@@ -28,10 +30,11 @@ def test_hcn_neb_input(localizer):
         engine="psi4",
     )
 
+    # The number of images can't exceed the maximum number of images in the input chain
     M2, engine = geometric.prepare.get_molecule_engine(
         input=os.path.join(datad, "hcn_neb_input.psi4in"),
         chain_coords=os.path.join(datad, "hcn_neb_input.xyz"),
-        images=50,
+        images=9999,
         neb=True,
         engine="psi4",
     )
@@ -41,9 +44,9 @@ def test_hcn_neb_input(localizer):
 
 
 @addons.using_psi4
-def test_hcn_neb_optimize(localizer):
+def test_hcn_neb_optimize_1(localizer):
     """
-    Optimize a HCN chain
+    Optimize a HCN chain without alignment
     """
     M, engine = geometric.prepare.get_molecule_engine(
         input=os.path.join(datad, "hcn_neb_input.psi4in"),
@@ -53,7 +56,7 @@ def test_hcn_neb_optimize(localizer):
         engine="psi4",
     )
 
-    params = geometric.params.NEBParams(**{"optep": True, "verbose": 1})
+    params = geometric.params.NEBParams(**{"optep": True, "align": False, "verbose": 1})
     chain = geometric.neb.ElasticBand(
         M, engine=engine, tmpdir=tempfile.mkdtemp(), params=params, plain=0
     )
@@ -66,6 +69,73 @@ def test_hcn_neb_optimize(localizer):
     assert final_chain.maxg < params.maxg
     assert final_chain.avgg < params.avgg
 
+@addons.using_psi4
+def test_hcn_neb_optimize_2(localizer):
+    """
+    Optimize a HCN chain with alignment
+    """
+    M, engine = geometric.prepare.get_molecule_engine(
+        input=os.path.join(datad, "hcn_neb_input.psi4in"),
+        chain_coords=os.path.join(datad, "hcn_neb_input.xyz"),
+        images=7,
+        neb=True,
+        engine="psi4",
+    )
+
+    # maxg and avgg are increased here to make them converge faster after the alignment
+    params = geometric.params.NEBParams(**{"verbose": 1, "maxg": 3.0, "avgg": 2.0})
+    chain = geometric.neb.ElasticBand(
+        M, engine=engine, tmpdir=tempfile.mkdtemp(), params=params, plain=0
+    )
+
+    assert chain.coordtype == "cart"
+
+    final_chain, optCycle = geometric.neb.OptimizeChain(chain, engine, params)
+
+    assert optCycle < 10
+    assert final_chain.maxg < params.maxg
+    assert final_chain.avgg < params.avgg
+
+class TestPsi4WorkQueueNEB:
+
+    """ Tests are put into class so that the fixture can terminate the worker process. """
+
+    @pytest.fixture(autouse=True)
+    def work_queue_cleanup(self):
+        self.workers = None
+        yield
+        if self.workers is not None:
+            for worker in self.workers:
+                worker.terminate()
+
+    @addons.using_psi4
+    @addons.using_workqueue
+    def test_psi4_work_queue_neb(self, localizer):
+        M, engine = geometric.prepare.get_molecule_engine(
+            input=os.path.join(datad, "hcn_neb_input.psi4in"),
+            chain_coords=os.path.join(datad, "hcn_neb_input.xyz"),
+            images=11,
+            neb=True,
+            engine="psi4",
+        )
+        params = geometric.params.NEBParams(**{"optep": True, "align": False, "verbose": 1})
+        chain = geometric.neb.ElasticBand(
+            M, engine=engine, tmpdir=tempfile.mkdtemp(), params=params, plain=0
+        )
+
+        geometric.nifty.createWorkQueue(9191, debug=False)
+        wq = geometric.nifty.getWorkQueue()
+        worker_program = geometric.nifty.which('work_queue_worker')
+        # Assume 4 threads are available
+        self.workers = [subprocess.Popen([os.path.join(worker_program, "work_queue_worker"), "localhost", str(wq.port)],
+                                         stdout=subprocess.PIPE) for i in range(4)]
+
+        final_chain, optCycle = geometric.neb.OptimizeChain(chain, engine, params)
+
+        assert optCycle < 10
+        assert final_chain.maxg < params.maxg
+        assert final_chain.avgg < params.avgg
+        geometric.nifty.destroyWorkQueue()
 
 @addons.using_qcelemental
 def test_hcn_neb_service_arrange(localizer):
@@ -75,7 +145,7 @@ def test_hcn_neb_service_arrange(localizer):
     from qcelemental.models import Molecule as qcmol
 
     chain_M = geometric.molecule.Molecule(os.path.join(datad, "hcn_neb_service.xyz"))
-    coords = [M.xyzs for M in chain_M]
+    coords = [M.xyzs/geometric.nifty.bohr2ang for M in chain_M]
     qcel_mols = [
         qcmol(
             symbols=chain_M[0].elem,
@@ -86,7 +156,7 @@ def test_hcn_neb_service_arrange(localizer):
         for coord in coords
     ]
 
-    new_qcel_mols = geometric.qcf_neb.arrange(qcel_mols)
+    new_qcel_mols = geometric.qcf_neb.arrange(qcel_mols, True)
     count = sum(
         [
             1 if not np.allclose(i.geometry, j.geometry) else 0
