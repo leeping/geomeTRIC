@@ -122,13 +122,9 @@ class Optimizer(object):
         self.lowq_tr_limit = 1
         # Recalculate the Hessian after a trigger - for example if the energy changes by a lot during TS optimization.
         self.recalcHess = False
-        # IRC related attributes
-        self.IRC_direction = 1
-        self.IRC_opt = False
-        self.IRC_total_disp = 0.0
-        self.IRC_substep_success = True
-        self.IC_changed = False
-        self.prevQ = 1.0
+        # IRC related information
+        self.IRC_info = {"direction" : 1, "opt" : False, "total_disp" : 0.0, 
+                        "substep_success" : True, "IC_changed" : False}
         if print_info:
             self.print_info()
         
@@ -452,54 +448,6 @@ class Optimizer(object):
         g_new = g + np.dot(H, disp)
         return g_new
 
-    def step(self):
-        if self.params.irc:
-            """
-            Take an IRC step.
-            """
-            if self.IRC_opt:
-                dy = self.optimize_step()
-            else:
-                dy = self.IRC_step()
-        else:
-            """
-            Take an optimization step.
-            """
-            dy = self.optimize_step()
-
-        if dy is None: return
-
-        ### Before updating any of our variables, copy current variables to "previous"
-        self.cnorm = self.get_cartesian_norm(dy)
-        ### DONE OBTAINING THE STEP ###
-        if isinstance(self.IC, PrimitiveInternalCoordinates):
-            idx = np.argmax(np.abs(dy))
-            iunit = np.zeros_like(dy)
-            iunit[idx] = 1.0
-            self.prim_msg = "Along %s %.3f" % (self.IC.Internals[idx], np.dot(dy/np.linalg.norm(dy), iunit))
-        ### These quantities, computed previously, are no longer used.
-        # Dot product of the gradient with the step direction
-        # Dot = -np.dot(dy/np.linalg.norm(dy), self.G/np.linalg.norm(self.G))
-        # Whether the Cartesian norm comes close to the trust radius
-        # bump = cnorm > 0.8 * self.trust
-        self.Yprev = self.Y.copy()
-        self.Xprev = self.X.copy()
-        self.Gxprev = self.gradx.copy()
-        self.Gprev = self.G.copy()
-        self.Eprev = self.E
-        ### Update the Internal Coordinates ###
-        X0 = self.X.copy()
-        self.newCartesian(dy)
-        ## The "actual" dy may be different from the one passed to newCartesian(),
-        ## for example if we enforce constraints or don't get the step we expect.
-        dy = self.IC.calcDiff(self.X, X0)
-        # dyp = self.IC.Prims.calcDiff(self.X, X0)
-        # print("Actual dy:", dy)
-        self.Y += dy
-        self.expect = flat(0.5*multi_dot([row(dy),self.H,col(dy)]))[0] + np.dot(dy,self.G)
-        # self.expectdG = np.dot(self.H, col(dy).flatten())
-        self.state = OPT_STATE.NEEDS_EVALUATION
-
     def IRC_step(self):
         self.farConstraints = self.IC.haveConstraints() and self.IC.maxConstraintViolation(self.X) > 1e-1
         logger.info("IRC sub-step 1: Finding the pivot point (q*_{k+1})\n")
@@ -526,7 +474,7 @@ class Optimizer(object):
 
             # Following the imaginary mode vector
             Im_mode = self.TSNormal_modes_x[0]
-            Im_mode *= self.IRC_direction
+            Im_mode *= self.IRC_info.get("direction")
             v = self.IC.calcDiff(X0 + Im_mode, X0)
             X = self.IC.newCartesian(X0, v)
             v = self.IC.calcDiff(X, X0)
@@ -541,9 +489,9 @@ class Optimizer(object):
             #    v = self.IRC_init_v
 
         else:
-            v = self.G.copy()  # Internal coordinate gradients
+            v = self.G.copy() # Internal coordinate gradients
 
-        invMW_v = np.dot(MWGMat, v)# Inverse mass-weighted vector
+        invMW_v = np.dot(MWGMat, v) # Inverse mass-weighted vector
         # Normalization factor
         N = 1 / np.sqrt(np.dot(v.T, np.dot(MWGMat, v)))
         self.IRC_stepsize = self.trust * ang2bohr * self.IRC_adjfactor
@@ -596,20 +544,20 @@ class Optimizer(object):
                 half_mwdx = np.linalg.norm(np.dot(MWGMat_sqrt_inv, p_prime))
                 self.IRC_dystep = dy_norm
                 self.IRC_mwdxstep = mwdx
-                self.IRC_total_disp += mwdx
+                self.IRC_info["total_disp"] += mwdx
                 const = self.find_lambda(min_lambda, Heig, Hvecs, g_M, p_M)
                 cnorm = self.get_cartesian_norm(dy) # Angstrom
                 if ((const > 1 or min_lambda > Heig[0]) and irc_sub_iteration > 100) or mwdx > self.IRC_stepsize*1.5:
                     #logger.info("mwdx_1: %f \n" %np.linalg.norm(mwdx_1))
                     #logger.info("mwdx: %f \n" %mwdx)
                     #logger.info("cnorm: %f \n" %cnorm)
-                    if self.IRC_substep_success:
+                    if self.IRC_info.get("substep_success"):
                         logger.info("IRC second sub-step failed. Rejecting the step.\n")
-                        self.IRC_substep_success = False
+                        self.IRC_info["substep_success"] = False
                     else:
                         logger.info("IRC second sub-step failed. Taking a half-step.\n")
                         dy = dy_to_pivot
-                        self.IRC_substep_success = True
+                        self.IRC_info["substep_success"] = True
                     logger.info('X Failed half step dy     = %.5f \n' % np.linalg.norm(p_prime))
                     logger.info('X Failed half step mw-dx  = %.5f Bohr*sqrt(amu)\n\n' % half_mwdx)
                     logger.info('X Failed total step dy: %.5f \n' %dy_norm)
@@ -618,7 +566,7 @@ class Optimizer(object):
                     logger.info('Constraint: %.5f \n' %const)
                     logger.info('dq_new: %.5f \n' %np.linalg.norm(dq_new))
                 else:
-                    self.IRC_substep_success = True
+                    self.IRC_info["substep_success"] = True
                 break
             irc_sub_iteration += 1
             p_prime += dq_new
@@ -632,6 +580,7 @@ class Optimizer(object):
         return dy
 
     def optimize_step(self):
+        # This function is identical to the previous version without IRC (a copy of lines 426-504)
         params = self.params
         if np.isnan(self.G).any():
             raise RuntimeError("Gradient contains nan - check output and temp-files for possible errors")
@@ -714,6 +663,56 @@ class Optimizer(object):
 
         return dy
 
+
+    def step(self):
+        if self.params.irc:
+            """
+            Take an IRC step.
+            """
+            if self.IRC_info.get("opt"):
+                # If the IRC switches to optimization, take an optimization step. () 
+                dy = self.optimize_step()
+            else:
+                dy = self.IRC_step()
+        else:
+            """
+            Take an optimization step.
+            """
+            dy = self.optimize_step()
+
+        if dy is None: return
+
+        ### Before updating any of our variables, copy current variables to "previous"
+        self.cnorm = self.get_cartesian_norm(dy)
+        ### DONE OBTAINING THE STEP ###
+        if isinstance(self.IC, PrimitiveInternalCoordinates):
+            idx = np.argmax(np.abs(dy))
+            iunit = np.zeros_like(dy)
+            iunit[idx] = 1.0
+            self.prim_msg = "Along %s %.3f" % (self.IC.Internals[idx], np.dot(dy/np.linalg.norm(dy), iunit))
+        ### These quantities, computed previously, are no longer used.
+        # Dot product of the gradient with the step direction
+        # Dot = -np.dot(dy/np.linalg.norm(dy), self.G/np.linalg.norm(self.G))
+        # Whether the Cartesian norm comes close to the trust radius
+        # bump = cnorm > 0.8 * self.trust
+        self.Yprev = self.Y.copy()
+        self.Xprev = self.X.copy()
+        self.Gxprev = self.gradx.copy()
+        self.Gprev = self.G.copy()
+        self.Eprev = self.E
+        ### Update the Internal Coordinates ###
+        X0 = self.X.copy()
+        self.newCartesian(dy)
+        ## The "actual" dy may be different from the one passed to newCartesian(),
+        ## for example if we enforce constraints or don't get the step we expect.
+        dy = self.IC.calcDiff(self.X, X0)
+        # dyp = self.IC.Prims.calcDiff(self.X, X0)
+        # print("Actual dy:", dy)
+        self.Y += dy
+        self.expect = flat(0.5*multi_dot([row(dy),self.H,col(dy)]))[0] + np.dot(dy,self.G)
+        # self.expectdG = np.dot(self.H, col(dy).flatten())
+        self.state = OPT_STATE.NEEDS_EVALUATION
+
     def evaluateStep(self):
         ### At this point, the state should be NEEDS_EVALUATION
         assert self.state == OPT_STATE.NEEDS_EVALUATION
@@ -777,10 +776,13 @@ class Optimizer(object):
 
         ### Check convergence criteria ###
         criteria_met = Converged_energy and Converged_grms and Converged_drms and Converged_gmax and Converged_dmax
+
+        # The IRC method often oscillates near the end point without converging. 
+        # If the energy, grms, and gmax converge, simple optimization procedure will be initiated. 
         IRC_converged = Converged_energy and Converged_grms and Converged_gmax
 
         def reset_irc():
-            self.IRC_direction = -1
+            self.IRC_info["direction"] = -1
             self.Iteration = 0
             self.X = self.X_hist[0].copy()
             self.IC = self.IC0
@@ -788,19 +790,16 @@ class Optimizer(object):
             self.gradx = self.progress.qm_grads[0]
             self.progress = self.progress[::-1]
             self.trust = self.params.trust
-            self.IRC_opt = False
+            self.IRC_info["opt"] = False
             self.trustprint = "="
-            #self.params.tmax = self.trust
-            self.IRC_substep_success = True
-            self.IC_changed = False
-            self.IRC_total_disp = 0.0
-            self.prevQ = 1.0
-            #self.calcEnergyForce()
+            self.IRC_info["substep_success"] = True 
+            self.IRC_info["IC_changed"] = False
+            self.IRC_info["total_disp"] = 0.0
             self.prepareFirstStep()
 
         if params.irc:
             if self.Iteration > params.maxiter:
-                if self.IRC_direction == -1:
+                if self.IRC_info.get("direction") == -1:
                     logger.info("\nIRC backward direction reached maximum iteration number\n")
                     logger.info("Terminating IRC\n")
                     self.state = OPT_STATE.FAILED
@@ -811,7 +810,7 @@ class Optimizer(object):
                 return
             
             IC_check = False
-            if step_state in (StepState.Reject, StepState.Poor) and not self.IRC_opt:
+            if step_state in (StepState.Reject, StepState.Poor) and not self.IRC_info.get("opt"):
                 step_state = StepState.Reject
                 if np.isclose(self.trust, params.tmin):
                     logger.info("IRC stuck with the minimum step-size and bad quality step. Forcing it to take a step.\n")
@@ -821,25 +820,24 @@ class Optimizer(object):
                     self.trust = params.tmin
                 IC_check = True
                 
-            if not self.IRC_substep_success:
+            if not self.IRC_info.get("substep_success"):
                 step_state = StepState.Reject
                 IC_check = True
 
-            self.prevQ = Quality
 
-            if self.IRC_total_disp > 5*self.IRC_init_step:
+            if self.IRC_info["total_disp"] > 5*self.IRC_init_step:
                 if criteria_met :
-                    if self.IRC_direction == 1:
+                    if self.IRC_info.get("direction") == 1:
                         logger.info("\nIRC forward direction converged\n")
                         logger.info("IRC backward direction starts here\n\n")
                         reset_irc()
-                    elif self.IRC_direction == -1:
+                    elif self.IRC_info.get("direction") == -1:
                         self.SortedEigenvalues(self.H)
                         logger.info("Converged! =D\n")
                         self.state = OPT_STATE.CONVERGED
                     return
-                elif IRC_converged and not self.IRC_opt:
-                    self.IRC_opt = True
+                elif IRC_converged and not self.IRC_info.get("opt"):
+                    self.IRC_info["opt"] = True
                     #if self.cnorm > 1e-4:
                     #    self.trust = self.cnorm
                     #self.params.tmax = self.params.trust*3
@@ -905,8 +903,8 @@ class Optimizer(object):
             self.trustprint = "="
 
         if step_state == StepState.Reject:
-            if params.irc and not self.IRC_opt and self.Iteration > 1:
-                self.IRC_total_disp -= self.IRC_mwdxstep
+            if params.irc and not self.IRC_info.get("opt") and self.Iteration > 1:
+                self.IRC_info["total_disp"] -= self.IRC_mwdxstep
                 self.Iteration -= 1
                 logger.info("\x1b[93mRejecting step - low quality IRC step\x1b[0m\n")
                 self.trustprint = "\x1b[1;91mx\x1b[0m"
@@ -928,8 +926,8 @@ class Optimizer(object):
                 if IC_check:
                     logger.info("Checking coordinate system\n")
                     IC_changed = self.checkCoordinateSystem(cartesian=isinstance(self.IC, CartesianCoordinates))
-                    if IC_changed and not self.IC_changed:
-                        self.IC_changed = IC_changed
+                    if IC_changed and not self.IRC_info.get("IC_changed"):
+                        self.IRC_info["IC_changed"] = IC_changed
                 return
             if hasattr(self, 'X_rj') and np.allclose(self.X_rj, self.X, atol=1e-6):
                 logger.info("\x1b[93mA previously rejected step was repeated; accepting to avoid infinite loop\x1b[0m\n")

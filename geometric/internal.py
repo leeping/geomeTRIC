@@ -1875,6 +1875,9 @@ class InternalCoordinates(object):
         # print "%i atoms; %i/%i singular values are > 1e-6" % (xyz.shape[0], LargeVals, len(S))
         Sinv = np.diag(Sinv)
         Inv = multi_dot([V, Sinv, UT])
+       
+        # When "sqrt" is True, return the sqrt of the G matrix along with its inverse.
+        # Sqrt of the G matrix is used to calculate gradients and Hessian in mass-weighted IC.
         if sqrt:
             Ssqrt = np.diag(Ssqrt)
             Sqrt = multi_dot([V, Ssqrt, UT])
