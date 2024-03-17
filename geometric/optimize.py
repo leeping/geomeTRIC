@@ -879,11 +879,11 @@ class Optimizer(object):
         IRC_converged = Converged_energy and Converged_grms and Converged_gmax
 
         if params.irc and not self.IRC_info.get("opt"):
-            to_next, step_state = self.evaluate_IRC_step(params, step_state, criteria_met, IRC_converged)
+            terminate, step_state = self.evaluate_IRC_step(params, step_state, criteria_met, IRC_converged)
         else:
-            to_next, step_state = self.evaluate_OPT_step(params, step_state, criteria_met, Converged_molpro_gmax, Converged_molpro_dmax)
+            terminate, step_state = self.evaluate_OPT_step(params, step_state, criteria_met, Converged_molpro_gmax, Converged_molpro_dmax)
 
-        if to_next: return
+        if terminate: return
 
         assert self.state == OPT_STATE.NEEDS_EVALUATION
         
