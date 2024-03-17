@@ -713,6 +713,103 @@ class Optimizer(object):
         # self.expectdG = np.dot(self.H, col(dy).flatten())
         self.state = OPT_STATE.NEEDS_EVALUATION
 
+    def reset_irc(self):
+        self.IRC_info["direction"] = -1
+        self.Iteration = 0
+        self.X = self.X_hist[0].copy()
+        self.IC = self.IC0
+        self.E = self.progress.qm_energies[0]
+        self.gradx = self.progress.qm_grads[0]
+        self.progress = self.progress[::-1]
+        self.trust = self.params.trust
+        self.IRC_info["opt"] = False
+        self.trustprint = "="
+        self.IRC_info["substep_success"] = True 
+        self.IRC_info["IC_changed"] = False
+        self.IRC_info["total_disp"] = 0.0
+        self.prepareFirstStep()
+
+
+    def evaluate_IRC_step(self, params, step_state, criteria_met, IRC_converged):
+
+        if self.Iteration > params.maxiter:
+            if self.IRC_info.get("direction") == -1:
+                logger.info("\nIRC backward direction reached maximum iteration number\n")
+                logger.info("Terminating IRC\n")
+                self.state = OPT_STATE.FAILED
+            else:
+                logger.info("\nIRC forward direction reached maximum iteration number\n")
+                logger.info("IRC backward direction starts here\n\n")
+                self.reset_irc()
+            return True, step_state
+        
+        self.IC_check = False
+        if step_state in (StepState.Reject, StepState.Poor) and not self.IRC_info.get("opt"):
+            step_state = StepState.Reject
+            if np.isclose(self.trust, params.tmin):
+                logger.info("IRC stuck with the minimum step-size and bad quality step. Forcing it to take a step.\n")
+                step_state = StepState.Okay
+            if self.Iteration < 3: 
+                logger.info("Bad quality IRC step detected near the starting point. Decreasing the step-size to the minimum.\n")
+                self.trust = params.tmin
+            self.IC_check = True
+            
+        if not self.IRC_info.get("substep_success"):
+            step_state = StepState.Reject
+            self.IC_check = True
+
+        if self.IRC_info["total_disp"] > 5*self.IRC_init_step:
+            if criteria_met :
+                if self.IRC_info.get("direction") == 1:
+                    logger.info("\nIRC forward direction converged\n")
+                    logger.info("IRC backward direction starts here\n\n")
+                    self.reset_irc()
+                elif self.IRC_info.get("direction") == -1:
+                    self.SortedEigenvalues(self.H)
+                    logger.info("Converged! =D\n")
+                    self.state = OPT_STATE.CONVERGED
+                return True, step_state
+            elif IRC_converged and not self.IRC_info.get("opt"):
+                self.IRC_info["opt"] = True
+                #if self.cnorm > 1e-4:
+                #    self.trust = self.cnorm
+                #self.params.tmax = self.params.trust*3
+                logger.info("Switching to optimization\n")
+
+        return False, step_state
+
+    def evaluate_OPT_step(self, params, step_state, criteria_met, Converged_molpro_gmax, Converged_molpro_dmax):
+        if criteria_met and self.conSatisfied:
+            self.SortedEigenvalues(self.H)
+            logger.info("Converged! =D\n")
+            self.state = OPT_STATE.CONVERGED
+            return True, step_state
+
+        if self.Iteration >= params.maxiter:
+            self.SortedEigenvalues(self.H)
+            logger.info("Maximum iterations reached (%i); increase --maxiter for more\n" % params.maxiter)
+            if params.Converge_maxiter:
+                logger.info("Exiting normally because --converge maxiter was set.\n")
+                self.state = OPT_STATE.CONVERGED
+            else:
+                self.state = OPT_STATE.FAILED
+            return True, step_state
+
+        if params.qccnv and Converged_grms and (Converged_drms or Converged_energy) and self.conSatisfied:
+            self.SortedEigenvalues(self.H)
+            logger.info("Converged! (Q-Chem style criteria requires grms and either drms or energy)\n")
+            self.state = OPT_STATE.CONVERGED
+            return True, step_state
+
+        if params.molcnv and Converged_molpro_gmax and (Converged_molpro_dmax or Converged_energy) and self.conSatisfied:
+            self.SortedEigenvalues(self.H)
+            logger.info("Converged! (Molpro style criteria requires gmax and either dmax or energy)\nThis is approximate since convergence checks are done in cartesian coordinates.\n")
+            self.state = OPT_STATE.CONVERGED
+            return True, step_state
+
+        return False, step_state
+
+
     def evaluateStep(self):
         ### At this point, the state should be NEEDS_EVALUATION
         assert self.state == OPT_STATE.NEEDS_EVALUATION
@@ -781,96 +878,12 @@ class Optimizer(object):
         # If the energy, grms, and gmax converge, simple optimization procedure will be initiated. 
         IRC_converged = Converged_energy and Converged_grms and Converged_gmax
 
-        def reset_irc():
-            self.IRC_info["direction"] = -1
-            self.Iteration = 0
-            self.X = self.X_hist[0].copy()
-            self.IC = self.IC0
-            self.E = self.progress.qm_energies[0]
-            self.gradx = self.progress.qm_grads[0]
-            self.progress = self.progress[::-1]
-            self.trust = self.params.trust
-            self.IRC_info["opt"] = False
-            self.trustprint = "="
-            self.IRC_info["substep_success"] = True 
-            self.IRC_info["IC_changed"] = False
-            self.IRC_info["total_disp"] = 0.0
-            self.prepareFirstStep()
-
-        if params.irc:
-            if self.Iteration > params.maxiter:
-                if self.IRC_info.get("direction") == -1:
-                    logger.info("\nIRC backward direction reached maximum iteration number\n")
-                    logger.info("Terminating IRC\n")
-                    self.state = OPT_STATE.FAILED
-                else:
-                    logger.info("\nIRC forward direction reached maximum iteration number\n")
-                    logger.info("IRC backward direction starts here\n\n")
-                    reset_irc()
-                return
-            
-            IC_check = False
-            if step_state in (StepState.Reject, StepState.Poor) and not self.IRC_info.get("opt"):
-                step_state = StepState.Reject
-                if np.isclose(self.trust, params.tmin):
-                    logger.info("IRC stuck with the minimum step-size and bad quality step. Forcing it to take a step.\n")
-                    step_state = StepState.Okay
-                if self.Iteration < 3: 
-                    logger.info("Bad quality IRC step detected near the starting point. Decreasing the step-size to the minimum.\n")
-                    self.trust = params.tmin
-                IC_check = True
-                
-            if not self.IRC_info.get("substep_success"):
-                step_state = StepState.Reject
-                IC_check = True
-
-
-            if self.IRC_info["total_disp"] > 5*self.IRC_init_step:
-                if criteria_met :
-                    if self.IRC_info.get("direction") == 1:
-                        logger.info("\nIRC forward direction converged\n")
-                        logger.info("IRC backward direction starts here\n\n")
-                        reset_irc()
-                    elif self.IRC_info.get("direction") == -1:
-                        self.SortedEigenvalues(self.H)
-                        logger.info("Converged! =D\n")
-                        self.state = OPT_STATE.CONVERGED
-                    return
-                elif IRC_converged and not self.IRC_info.get("opt"):
-                    self.IRC_info["opt"] = True
-                    #if self.cnorm > 1e-4:
-                    #    self.trust = self.cnorm
-                    #self.params.tmax = self.params.trust*3
-                    logger.info("Switching to optimization\n")
-
+        if params.irc and not self.IRC_info.get("opt"):
+            to_next, step_state = self.evaluate_IRC_step(params, step_state, criteria_met, IRC_converged)
         else:
-            if criteria_met and self.conSatisfied:
-                self.SortedEigenvalues(self.H)
-                logger.info("Converged! =D\n")
-                self.state = OPT_STATE.CONVERGED
-                return
+            to_next, step_state = self.evaluate_OPT_step(params, step_state, criteria_met, Converged_molpro_gmax, Converged_molpro_dmax)
 
-            if self.Iteration >= params.maxiter:
-                self.SortedEigenvalues(self.H)
-                logger.info("Maximum iterations reached (%i); increase --maxiter for more\n" % params.maxiter)
-                if params.Converge_maxiter:
-                    logger.info("Exiting normally because --converge maxiter was set.\n")
-                    self.state = OPT_STATE.CONVERGED
-                else:
-                    self.state = OPT_STATE.FAILED
-                return
-
-            if params.qccnv and Converged_grms and (Converged_drms or Converged_energy) and self.conSatisfied:
-                self.SortedEigenvalues(self.H)
-                logger.info("Converged! (Q-Chem style criteria requires grms and either drms or energy)\n")
-                self.state = OPT_STATE.CONVERGED
-                return
-
-            if params.molcnv and Converged_molpro_gmax and (Converged_molpro_dmax or Converged_energy) and self.conSatisfied:
-                self.SortedEigenvalues(self.H)
-                logger.info("Converged! (Molpro style criteria requires gmax and either dmax or energy)\nThis is approximate since convergence checks are done in cartesian coordinates.\n")
-                self.state = OPT_STATE.CONVERGED
-                return
+        if to_next: return
 
         assert self.state == OPT_STATE.NEEDS_EVALUATION
         
@@ -923,7 +936,7 @@ class Optimizer(object):
                 #else:
                 #    self.X_hist = self.X_hist[:-1]
                 #    self.Gx_hist = self.Gx_hist[:-1]
-                if IC_check:
+                if self.IC_check:
                     logger.info("Checking coordinate system\n")
                     IC_changed = self.checkCoordinateSystem(cartesian=isinstance(self.IC, CartesianCoordinates))
                     if IC_changed and not self.IRC_info.get("IC_changed"):
