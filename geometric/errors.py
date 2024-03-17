@@ -54,6 +54,9 @@ class ParamError(Error):
 class FrequencyError(Error):
     pass
 
+class IRCError(Error):
+    pass
+
 class CheckCoordError(Error):
     pass
 

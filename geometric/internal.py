@@ -44,7 +44,7 @@ import networkx as nx
 import numpy as np
 from numpy.linalg import multi_dot
 
-from geometric.molecule import Molecule, Elements, Radii
+from geometric.molecule import Molecule, PeriodicTable, Elements, Radii
 from geometric.nifty import click, commadash, ang2bohr, bohr2ang, logger, pvec1d, pmat2d
 from geometric.rotate import get_expmap, get_expmap_der, calc_rot_vec_diff, get_quat, build_F, sorted_eigh
 
@@ -1805,7 +1805,7 @@ class InternalCoordinates(object):
     def clearCache(self):
         self.stored_wilsonB = OrderedDict()
 
-    def wilsonB(self, xyz):
+    def wilsonB(self, xyz, invMW=False):
         """
         Given Cartesian coordinates xyz, return the Wilson B-matrix
         given by dq_i/dx_j where x is flattened (i.e. x1, y1, z1, x2, y2, z2)
@@ -1826,25 +1826,27 @@ class InternalCoordinates(object):
             logger.warning("\x1b[91mWarning: more than 1000 B-matrices stored, memory leaks likely\x1b[0m\n")
             CacheWarning = True
         ans = np.array(WilsonB)
+        if invMW:
+            ans /= np.tile(np.sqrt(self.mass), (len(self.Internals), 1))
         return ans
 
-    def GMatrix(self, xyz):
+    def GMatrix(self, xyz, invMW=False):
         """
         Given Cartesian coordinates xyz, return the G-matrix
         given by G = BuBt where u is an arbitrary matrix (default to identity)
         """
-        Bmat = self.wilsonB(xyz)
+        Bmat = self.wilsonB(xyz, invMW)
         BuBt = np.dot(Bmat,Bmat.T)
         return BuBt
 
-    def GInverse_SVD(self, xyz):
+    def GInverse_SVD(self, xyz, sqrt=False, invMW=False):
         xyz = xyz.reshape(-1,3)
         # Perform singular value decomposition
         click()
         loops = 0
         while True:
             try:
-                G = self.GMatrix(xyz)
+                G = self.GMatrix(xyz, invMW)
                 time_G = click()
                 U, S, VT = np.linalg.svd(G)
                 time_svd = click()
@@ -1860,15 +1862,26 @@ class InternalCoordinates(object):
         V = VT.T
         UT = U.T
         Sinv = np.zeros_like(S)
+        Ssqrt = np.zeros_like(S)
         LargeVals = 0
         for ival, value in enumerate(S):
             # print "%.5e % .5e" % (ival,value)
             if np.abs(value) > 1e-6:
+                if sqrt: value = np.sqrt(value)
                 LargeVals += 1
                 Sinv[ival] = 1/value
+                Ssqrt[ival] = value
+
         # print "%i atoms; %i/%i singular values are > 1e-6" % (xyz.shape[0], LargeVals, len(S))
         Sinv = np.diag(Sinv)
         Inv = multi_dot([V, Sinv, UT])
+       
+        # When "sqrt" is True, return the sqrt of the G matrix along with its inverse.
+        # Sqrt of the G matrix is used to calculate gradients and Hessian in mass-weighted IC.
+        if sqrt:
+            Ssqrt = np.diag(Ssqrt)
+            Sqrt = multi_dot([V, Ssqrt, UT])
+            return Inv, Sqrt
         return Inv
 
     def GInverse_EIG(self, xyz): # pragma: no cover
@@ -2168,6 +2181,8 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         self.cVals = []
         self.Rotators = OrderedDict()
         self.elem = molecule.elem
+        # Atomic mass array
+        self.mass = np.repeat([PeriodicTable[i] for i in self.elem], 3)
         # List of fragments as determined by residue ID, distance criteria or bond order
         self.frags = []
         for i in range(len(molecule)):
@@ -2972,6 +2987,8 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
         self.Prims = PrimitiveInternalCoordinates(molecule, connect=connect, addcart=addcart, constraints=constraints, cvals=cvals)
         self.frags = self.Prims.frags
         self.na = molecule.na
+        # Atomic mass array
+        self.mass = np.repeat([PeriodicTable[i] for i in molecule.elem], 3)
         # Whether constraints have been enforced previously
         self.enforced = False
         self.enforce_fail_printed = False
