@@ -383,6 +383,11 @@ class TeraChem(Engine):
             self.scr = self.tcin['scrdir']
         else:
             self.scr = 'scr'
+
+        # Getting method and basis
+        self.method = self.tcin['method']
+        self.basis = self.tcin['basis']
+
         # Always specify the TeraChem scratch folder name
         self.tcin['scrdir'] = self.scr
         # A few notes about the electronic structure method
@@ -1388,7 +1393,10 @@ class Psi4(Engine):
             else:
                 psi4_temp.append(line)
             if "gradient(" in line:
+                self.method = re.findall(r'\((.*?)\)', line)[0].replace("'","").replace('"','')
                 found_gradient = True
+            if "set basis" in line:
+                self.basis = line.split(" ")[-1].replace('\n', '')
         if found_gradient == False:
             raise RuntimeError("Psi4 inputfile %s should have gradient() command." % psi4in)
         self.M = Molecule()
@@ -1517,6 +1525,8 @@ class QChem(Engine):
         super(QChem, self).__init__(molecule)
         self.threads = threads
         self.prep_temp_folder(dirname, qcdir)
+        self.method = self.M.qcrems[0].get('exchange')
+        self.basis = self.M.qcrems[0].get('basis')
 
     def prep_temp_folder(self, dirname, qcdir):
         # Provide an initial qchem scratch folder (e.g. supplied initial guess)
@@ -1855,13 +1865,21 @@ class QCEngineAPI(Engine):
         new_schema["molecule"]["geometry"] = coords.tolist()
         new_schema.pop("program", None)
         ret = qcengine.compute(new_schema, self.program, return_dict=True)
-        # store the schema_traj for run_json to pick up
-        self.schema_traj.append(ret)
+
         if ret["success"] is False:
             raise QCEngineAPIEngineError("QCEngineAPI computation did not execute correctly. Message: " + ret["error"]["error_message"])
         # Unpack the energy and gradient
-        energy = ret["properties"]["return_energy"]
+        if "return_energy" not in ret["properties"]:
+            # SinglepointRecord dictionary from terachem.py in QCEngine won't have 'return_energy' key.
+            # Setting 'scf_total_energy' as 'return_energy' here, otherwise energies in OptimizationResult will be None.
+            ret["properties"]["return_energy"] = ret["properties"]["scf_total_energy"]
+
+        energy = ret["properties"]["scf_total_energy"]
         gradient = np.array(ret["return_result"])
+
+        # store the schema_traj for run_json to pick up
+        self.schema_traj.append(ret)
+
         return {'energy':energy, 'gradient':gradient}
 
     def calc(self, coords, dirname, **kwargs):

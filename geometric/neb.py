@@ -292,18 +292,18 @@ class Chain(object):
         """Compute energies and gradients for each structure."""
         # This is the parallel point.
         wq = getWorkQueue()
-        if wq is None:
-            for i in range(len(self)):
-                if result:
-                    self.Structures[i].ComputeEnergyGradient(result=result[i])
-                else:
-                    self.Structures[i].ComputeEnergyGradient()
-        else:  # If work queue is available, handle jobs with the work queue.
+        if wq:  # If work queue is available, handle jobs with the work queue.
             for i in range(len(self)):
                 self.Structures[i].QueueEnergyGradient()
             wq_wait(wq, print_time=600)
             for i in range(len(self)):
                 self.Structures[i].GetEnergyGradient()
+        else:
+            for i in range(len(self)):
+                if result:
+                    self.Structures[i].ComputeEnergyGradient(result=result[i])
+                else:
+                    self.Structures[i].ComputeEnergyGradient()
         if cyc is not None:
             for i in range(len(self)):
                 self.Structures[i].engine.number_output(self.Structures[i].tmpdir, cyc)

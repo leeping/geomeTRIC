@@ -67,7 +67,7 @@ class Optimizer(object):
         Parameters
         ----------
         coords : np.ndarray
-            Nx3 array of Cartesian coordinates in atomic units
+            1-dimensional array of shape (3*N_atoms) containing atomic coordinates in Bohr
         molecule : Molecule
             Molecule object (Units Angstrom)
         IC : InternalCoordinates
@@ -465,7 +465,7 @@ class Optimizer(object):
             logger.info('\nFirst, following the imaginary mode vector\n')
             if self.TSWavenum[1] < 0:
                 raise IRCError("There are more than one imaginary vibrational mode. Please optimize the structure and try again.\n")
-            elif self.TSWavenum[0] > 0:
+            elif self.TSWavenum[0] >= 0:
                 raise IRCError("No imaginary mode detected. Please optimize the structure and try again.\n")
 
             self.IRC_adjfactor = np.linalg.norm(self.TSNormal_modes_x[0] * np.sqrt(self.IC.mass))
@@ -1083,7 +1083,7 @@ def Optimize(coords, molecule, IC, engine, dirname, params, print_info=True):
     Parameters
     ----------
     coords : np.ndarray
-        Nx3 array of Cartesian coordinates in atomic units
+        1-dimensional array of shape (3*N_atoms) containing atomic coordinates in Bohr
     molecule : Molecule
         Molecule object
     IC : InternalCoordinates

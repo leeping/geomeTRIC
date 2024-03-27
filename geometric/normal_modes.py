@@ -37,6 +37,8 @@ POSSIBILITY OF SUCH DAMAGE.
 from __future__ import division
 from __future__ import print_function
 import os, shutil
+import pkgutil
+
 import numpy as np
 from .errors import FrequencyError
 from .molecule import Molecule, PeriodicTable
@@ -51,7 +53,7 @@ def calc_cartesian_hessian(coords, molecule, engine, dirname, read_data=True, ve
     Parameters
     ----------
     coords : np.ndarray
-        Nx3 array of Cartesian coordinates in atomic units
+        1-dimensional array of shape (3*N_atoms) containing atomic coordinates in Bohr
     molecule : Molecule
         Molecule object
     engine : Engine
@@ -134,6 +136,50 @@ def calc_cartesian_hessian(coords, molecule, engine, dirname, read_data=True, ve
             gbak = engine.read_wq(coords, dirname_d)['gradient']
             coords[i] += h
             Hx[i] = (gfwd-gbak)/(2*h)
+
+    elif pkgutil.find_loader('bigchem') is not None:
+        # If BigChem is installed, it will be used to parallelize the Hessian calculation.
+        logger.info("BigChem will be used to calculate the Hessian. \n")
+        from qcio import Molecule as qcio_Molecule, ProgramInput
+        from bigchem import compute, group
+
+        elems = molecule[0].elem
+
+        # Uncommenting the following 6 lines will use BigChem's parallel_hessian function.
+        #from bigchem.algos import parallel_hessian
+        #qcio_M = qcio_Molecule(symbols=elems, geometry=coords.reshape(-1,3))
+        #input = ProgramInput(molecule=qcio_M, model={"method":engine.method, "basis": engine.basis}, calctype='hessian')
+        #output = parallel_hessian("psi4", input).delay()
+        #rec = output.get()
+        #Hx = rec.results.hessian
+
+
+        molecules = []
+        for i in range(nc):
+            coords[i] += h
+            molecules.append(qcio_Molecule(symbols=elems, geometry=coords.reshape(-1,3)))
+            coords[i] -= 2*h
+            molecules.append(qcio_Molecule(symbols=elems, geometry=coords.reshape(-1,3)))
+            coords[i] += h
+
+        outputs = group(compute.s(engine.__class__.__name__.lower(),
+                        ProgramInput(molecule=qcio_M, calctype='gradient',
+                                     model={"method":engine.method, "basis": engine.basis}),
+                        ) for qcio_M in molecules).apply_async()
+
+        outputs.join()
+        records = outputs.get()
+        grouped_records = list(zip(records[::2], records[1::2]))
+
+        assert len(grouped_records) == nc
+
+        for i, (fwd_rec, bak_rec) in enumerate(grouped_records):
+            gfwd = fwd_rec.results.gradient.flatten()
+            gbak = bak_rec.results.gradient.flatten()
+            Hx[i] = (gfwd-gbak)/(2*h)
+
+        outputs.forget()
+
     else:
         # First calculate a gradient at the central point, for linking scratch files.
         engine.calc(coords, dirname, read_data=read_data)
