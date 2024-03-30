@@ -36,8 +36,7 @@ POSSIBILITY OF SUCH DAMAGE.
 
 from __future__ import division
 from __future__ import print_function
-import os, shutil
-import pkgutil
+import os, shutil, pkgutil
 
 import numpy as np
 from .errors import FrequencyError
@@ -140,6 +139,7 @@ def calc_cartesian_hessian(coords, molecule, engine, dirname, read_data=True, ve
     elif pkgutil.find_loader('bigchem') is not None:
         # If BigChem is installed, it will be used to parallelize the Hessian calculation.
         logger.info("BigChem will be used to calculate the Hessian. \n")
+        logger.info("Please ensure that the workers are running properly. \n")
         from qcio import Molecule as qcio_Molecule, ProgramInput
         from bigchem import compute, group
 
@@ -153,7 +153,6 @@ def calc_cartesian_hessian(coords, molecule, engine, dirname, read_data=True, ve
         #rec = output.get()
         #Hx = rec.results.hessian
 
-
         molecules = []
         for i in range(nc):
             coords[i] += h
@@ -164,18 +163,19 @@ def calc_cartesian_hessian(coords, molecule, engine, dirname, read_data=True, ve
 
         outputs = group(compute.s(engine.__class__.__name__.lower(),
                         ProgramInput(molecule=qcio_M, calctype='gradient',
-                                     model={"method":engine.method, "basis": engine.basis}),
-                        ) for qcio_M in molecules).apply_async()
+                                     model={"method":engine.method, "basis": engine.basis},
+                                     extras={'order':i}),
+                        ) for i, qcio_M in enumerate(molecules)).apply_async()
 
-        outputs.join()
         records = outputs.get()
+        assert len(records) == nc*2
+
         grouped_records = list(zip(records[::2], records[1::2]))
 
-        assert len(grouped_records) == nc
-
         for i, (fwd_rec, bak_rec) in enumerate(grouped_records):
-            gfwd = fwd_rec.results.gradient.flatten()
-            gbak = bak_rec.results.gradient.flatten()
+            assert bak_rec.input_data.extras['order'] == fwd_rec.input_data.extras['order'] + 1
+            gfwd = fwd_rec.results.gradient.ravel()
+            gbak = bak_rec.results.gradient.ravel()
             Hx[i] = (gfwd-gbak)/(2*h)
 
         outputs.forget()

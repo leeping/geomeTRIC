@@ -1074,7 +1074,8 @@ class Gaussian(Engine):
 
                 elif line.startswith('#'):
                     self.route_line = line
-
+                    method_basis = line.split(' ')[1]
+                    self.method, self.basis = method_basis.split('/')
                     found_force_nostep = "force=nostep" in line.lower()
                     found_force = "force=" in line.lower()
                     found_symmetry_none = "symmetry=none" in line.lower()
