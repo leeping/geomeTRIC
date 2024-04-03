@@ -1883,7 +1883,7 @@ class QCEngineAPI(Engine):
             # Setting 'scf_total_energy' as 'return_energy' here, otherwise energies in OptimizationResult will be None.
             ret["properties"]["return_energy"] = ret["properties"]["scf_total_energy"]
 
-        energy = ret["properties"]["scf_total_energy"]
+        energy = ret["properties"]["return_energy"]
         gradient = np.array(ret["return_result"])
 
         # store the schema_traj for run_json to pick up

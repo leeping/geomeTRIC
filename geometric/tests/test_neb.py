@@ -119,7 +119,6 @@ def test_psi4_bigchem(localizer):
         engine="psi4",
     )
 
-    # maxg and avgg are increased here to make them converge faster after the alignment
     params = geometric.params.NEBParams(**{"align": False, "verbose": 1})
     chain = geometric.neb.ElasticBand(
         M, engine=engine, tmpdir=tempfile.mkdtemp(), params=params, plain=0
@@ -154,7 +153,6 @@ def test_qchem_bigchem(localizer):
         engine="qchem",
     )
 
-    # maxg and avgg are increased here to make them converge faster after the alignment
     params = geometric.params.NEBParams(**{"align": False, "verbose": 1})
     chain = geometric.neb.ElasticBand(
         M, engine=engine, tmpdir=tempfile.mkdtemp(), params=params, plain=0
