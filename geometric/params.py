@@ -5,7 +5,7 @@ Copyright 2016-2020 Regents of the University of California and the Authors
 
 Authors: Lee-Ping Wang, Chenchen Song
 
-Contributors: Yudong Qiu, Daniel G. A. Smith, Alberto Gobbi, Josh Horton
+Contributors: Heejune Park, Yudong Qiu, Daniel G. A. Smith, Alberto Gobbi, Josh Horton
 
 Redistribution and use in source and binary forms, with or without modification,
 are permitted provided that the following conditions are met:
@@ -37,7 +37,7 @@ from __future__ import division
 import os, argparse
 import numpy as np
 from .errors import ParamError
-from .nifty import logger
+from .nifty import logger, CheckBigChem
 
 class OptParams(object):
     """
@@ -107,6 +107,10 @@ class OptParams(object):
         self.bothre = kwargs.get('bothre', 0.6 if self.transition else 0.0)
         # Whether to calculate or read a Hessian matrix.
         self.hessian = kwargs.get('hessian', None)
+        # Check BigChem.
+        if kwargs.get('bigchem', False):
+            CheckBigChem(kwargs.get('engine', 'terachem'))
+        #self.bigchem = kwargs.get('bigchem', False)
         if self.hessian is None:
             # Default is to calculate Hessian in the first step if searching for a transition state.
             # Otherwise the default is to never calculate the Hessian.
@@ -232,7 +236,6 @@ class NEBParams(object):
     Container for optimization parameters.
     """
     def __init__(self, **kwargs):
-        self.port = kwargs.get('port', 0)
         self.prefix = kwargs.get('prefix', None)
         self.images = kwargs.get('images', 11)
         self.plain = kwargs.get('plain', 0)
@@ -253,6 +256,8 @@ class NEBParams(object):
         self.tmax = kwargs.get('tmax', 0.3)
         self.tmin = kwargs.get('tmin', 1.2e-3)
         self.skip = kwargs.get('skip', False)
+        if kwargs.get('bigchem', False):
+            CheckBigChem(kwargs.get('engine', 'terachem'))
         # Sanity checks on trust radius
         if self.tmax < self.tmin:
             raise ParamError("Max trust radius must be larger than min")
@@ -355,8 +360,10 @@ def parse_optimizer_args(*args):
                              '"stop" : Calculate Hessian for initial structure, then exit.\n'
                              'file:<path> : Read initial Hessian data in NumPy format from path, e.g. file:folder/hessian.txt\n'
                              'file+last:<path> : Read initial Hessian data as above, then compute for the last structure.\n ')
-    grp_hessian.add_argument('--port', type=int, help='Work Queue port used to distribute Hessian calculations. Workers must be started separately.')
-    grp_hessian.add_argument('--frequency', type=str2bool, help='Perform frequency analysis whenever Hessian is calculated, default is yes/true.\n ')
+    grp_hessian.add_argument('--wqport', type=int, help='Work Queue port used to distribute Hessian calculations. Workers must be started separately. \n ')
+    grp_hessian.add_argument('--bigchem', type=str2bool, help='Provide "Yes" to use BigChem for performing the Hessian calculation in parallel. \n'
+                                                              'Please ensure that BigChem is running with workers properly. \n ')
+    grp_hessian.add_argument('--frequency', type=str2bool, help='Perform frequency analysis whenever Hessian is calculated, default is yes/true. \n')
     grp_hessian.add_argument('--thermo', type=float, nargs=2, help='Temperature (K) and pressure (bar) for harmonic free energy\n'
                              'following frequency analysis, default is 300 K and 1.0 bar.\n ')
     grp_hessian.add_argument('--wigner', type=int, help='Number of desired samples from Wigner distribution after frequency analysis.\n'
@@ -495,8 +502,9 @@ def parse_neb_args(*args):
     grp_nebparam.add_argument('--tmin', type=float, help='Minimum trust radius, do not reject steps trust radius is below this threshold (method-dependent).\n ')
     grp_nebparam.add_argument('--skip', action='store_true', help='Skip Hessian updates that would introduce negative eigenvalues.\n ')
     grp_nebparam.add_argument('--epsilon', type=float, help='Small eigenvalue threshold for resetting Hessian, default 1e-5.\n ')
-    grp_nebparam.add_argument('--port', type=int, help='Work Queue port used to distribute singlepoint calculations. Workers must be started separately.\n')
-
+    grp_nebparam.add_argument('--wqport', type=int, help='Work Queue port used to distribute singlepoint calculations. Workers must be started separately.\n ')
+    grp_nebparam.add_argument('--bigchem', type=str2bool, help='Provide "Yes" to use BigChem for performing the NEB calculation in parallel. \n'
+                                                               'Please ensure that BigChem is running with workers properly. \n')
     grp_output = parser.add_argument_group('output', 'Control the format and amount of the output')
     grp_output.add_argument('--prefix', type=str, help='Specify a prefix for log file and temporary directory.\n'
                             'Defaults to the input file path (incl. file name with extension removed).\n ')

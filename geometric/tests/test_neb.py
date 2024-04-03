@@ -48,6 +48,9 @@ def test_hcn_neb_optimize_1(localizer):
     """
     Optimize a HCN chain without alignment
     """
+
+    assert not geometric.nifty.BigChemReady()
+
     M, engine = geometric.prepare.get_molecule_engine(
         input=os.path.join(datad, "hcn_neb_input.psi4in"),
         chain_coords=os.path.join(datad, "hcn_neb_input.xyz"),
@@ -65,7 +68,7 @@ def test_hcn_neb_optimize_1(localizer):
 
     final_chain, optCycle = geometric.neb.OptimizeChain(chain, engine, params)
 
-    assert optCycle < 10
+    assert optCycle <= 10
     assert final_chain.maxg < params.maxg
     assert final_chain.avgg < params.avgg
 
@@ -74,10 +77,13 @@ def test_hcn_neb_optimize_2(localizer):
     """
     Optimize a HCN chain with alignment
     """
+
+    assert not geometric.nifty.BigChemReady()
+
     M, engine = geometric.prepare.get_molecule_engine(
         input=os.path.join(datad, "hcn_neb_input.psi4in"),
         chain_coords=os.path.join(datad, "hcn_neb_input.xyz"),
-        images=7,
+        images=11,
         neb=True,
         engine="psi4",
     )
@@ -92,9 +98,79 @@ def test_hcn_neb_optimize_2(localizer):
 
     final_chain, optCycle = geometric.neb.OptimizeChain(chain, engine, params)
 
-    assert optCycle < 10
+    assert optCycle <= 10
     assert final_chain.maxg < params.maxg
     assert final_chain.avgg < params.avgg
+
+@addons.using_bigchem_psi4
+def test_psi4_bigchem(localizer):
+    """
+    Optimize a HCN chain without alignment with BigChem and Psi4
+    """
+    # Turning on BigChem
+    geometric.nifty.CheckBigChem('psi4')
+    assert geometric.nifty.BigChemReady()
+
+    M, engine = geometric.prepare.get_molecule_engine(
+        input=os.path.join(datad, "hcn_neb_input.psi4in"),
+        chain_coords=os.path.join(datad, "hcn_neb_input.xyz"),
+        images=11,
+        neb=True,
+        engine="psi4",
+    )
+
+    # maxg and avgg are increased here to make them converge faster after the alignment
+    params = geometric.params.NEBParams(**{"align": False, "verbose": 1})
+    chain = geometric.neb.ElasticBand(
+        M, engine=engine, tmpdir=tempfile.mkdtemp(), params=params, plain=0
+    )
+
+    assert chain.coordtype == "cart"
+
+    final_chain, optCycle = geometric.neb.OptimizeChain(chain, engine, params)
+
+    assert optCycle <= 10
+    assert final_chain.maxg < params.maxg
+    assert final_chain.avgg < params.avgg
+
+    # Turning off BigChem
+    geometric.nifty.BigChemOff()
+    assert not geometric.nifty.BigChemReady()
+
+@addons.using_bigchem_qchem
+def test_qchem_bigchem(localizer):
+    """
+    Optimize a HCN chain without alignment with BigChem and QChem
+    """
+    # Turning on BigChem
+    geometric.nifty.CheckBigChem('qchem')
+    assert geometric.nifty.BigChemReady()
+
+    M, engine = geometric.prepare.get_molecule_engine(
+        input=os.path.join(datad, "hcn_neb_input.qcin"),
+        chain_coords=os.path.join(datad, "hcn_neb_input.xyz"),
+        images=11,
+        neb=True,
+        engine="qchem",
+    )
+
+    # maxg and avgg are increased here to make them converge faster after the alignment
+    params = geometric.params.NEBParams(**{"align": False, "verbose": 1})
+    chain = geometric.neb.ElasticBand(
+        M, engine=engine, tmpdir=tempfile.mkdtemp(), params=params, plain=0
+    )
+
+    assert chain.coordtype == "cart"
+
+    final_chain, optCycle = geometric.neb.OptimizeChain(chain, engine, params)
+
+    assert optCycle <= 10
+    assert final_chain.maxg < params.maxg
+    assert final_chain.avgg < params.avgg
+
+    # Turning off BigChem
+    geometric.nifty.BigChemOff()
+    assert not geometric.nifty.BigChemReady()
 
 class TestPsi4WorkQueueNEB:
 

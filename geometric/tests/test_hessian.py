@@ -7,6 +7,7 @@ import geometric
 import subprocess
 import os, shutil
 import numpy as np
+import tempfile
 from . import addons
 from geometric.internal import *
 
@@ -42,37 +43,43 @@ def test_hessian_assort():
     assert np.allclose(fgrad_dlc, agrad_dlc, atol=1.e-6)
     assert np.allclose(fhess_dlc, ahess_dlc, atol=1.e-6)
 
-@addons.using_psi4
-@addons.using_bigchem
+@addons.using_bigchem_psi4
 def test_psi4_bigchem_hessian():
-    shutil.copy2(os.path.join(datad, 'hcn_minimized.psi4in'), os.getcwd())
+    # Turning on BigChem
+    geometric.nifty.CheckBigChem('psi4')
+    assert geometric.nifty.BigChemReady()
 
-    molecule, engine = geometric.prepare.get_molecule_engine(engine="psi4", input="hcn_minimized.psi4in")
+    molecule, engine = geometric.prepare.get_molecule_engine(engine="psi4", input=os.path.join(datad, 'hcn_minimized.psi4in'))
     coords = molecule.xyzs[0].flatten()*geometric.nifty.ang2bohr
-    hessian = geometric.normal_modes.calc_cartesian_hessian(coords, molecule, engine, os.getcwd())
+    hessian = geometric.normal_modes.calc_cartesian_hessian(coords, molecule, engine, tempfile.mkdtemp())
     freqs, modes, G = geometric.normal_modes.frequency_analysis(coords, hessian, elem=molecule.elem, verbose=True)
-    shutil.rmtree('hessian')
-    os.remove('hcn_minimized.psi4in')
 
     np.testing.assert_almost_equal(freqs, [989.5974, 989.5992, 2394.0352, 3690.5745], decimal=0)
     assert len(freqs) == 4
 
-@addons.using_qchem
-@addons.using_bigchem
-def test_qchem_bigchem_hessian():
-    # Optimized TS structure of HCN -> CNH reaction. 
-    shutil.copy2(os.path.join(datad, 'hcn_minimized_ts.qcin'), os.getcwd())
+    # Turning off BigChem
+    geometric.nifty.BigChemOff()
+    assert not geometric.nifty.BigChemReady()
 
-    molecule, engine = geometric.prepare.get_molecule_engine(engine="qchem", input="hcn_minimized_ts.qcin")
+@addons.using_bigchem_qchem
+def test_qchem_bigchem_hessian():
+    # Turning on BigChem
+    geometric.nifty.CheckBigChem('qchem')
+    assert geometric.nifty.BigChemReady()
+
+    # Optimized TS structure of HCN -> CNH reaction. 
+    molecule, engine = geometric.prepare.get_molecule_engine(engine="qchem", input=os.path.join(datad, 'hcn_minimized_ts.qcin'))
     coords = molecule.xyzs[0].flatten()*geometric.nifty.ang2bohr
-    hessian = geometric.normal_modes.calc_cartesian_hessian(coords, molecule, engine, os.getcwd())
+    hessian = geometric.normal_modes.calc_cartesian_hessian(coords, molecule, engine, tempfile.mkdtemp())
     freqs, modes, G = geometric.normal_modes.frequency_analysis(coords, hessian, elem=molecule.elem, verbose=True)
-    shutil.rmtree('hessian')
-    os.remove('hcn_minimized_ts.qcin')
 
     np.testing.assert_almost_equal(freqs, [-1215.8587, 2126.6551, 2451.8600], decimal=0)
     assert freqs[0] < 0
     assert len(freqs) == 3
+
+    # Turning off BigChem
+    geometric.nifty.BigChemOff()
+    assert not geometric.nifty.BigChemReady()
 
 class TestPsi4WorkQueueHessian:
 

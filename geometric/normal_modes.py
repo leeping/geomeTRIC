@@ -36,12 +36,12 @@ POSSIBILITY OF SUCH DAMAGE.
 
 from __future__ import division
 from __future__ import print_function
-import os, shutil, pkgutil
+import os, shutil
 
 import numpy as np
 from .errors import FrequencyError
 from .molecule import Molecule, PeriodicTable
-from .nifty import logger, kb, kb_si, hbar, au2kj, au2kcal, ang2bohr, bohr2ang, c_lightspeed, avogadro, cm2au, amu2au, ambervel2au, wq_wait, getWorkQueue, commadash, bak
+from .nifty import logger, kb, kb_si, hbar, au2kj, au2kcal, ang2bohr, bohr2ang, c_lightspeed, avogadro, cm2au, amu2au, ambervel2au, wq_wait, getWorkQueue, BigChemReady, commadash, bak
 
 def calc_cartesian_hessian(coords, molecule, engine, dirname, read_data=True, verbose=0):
     """ 
@@ -136,16 +136,15 @@ def calc_cartesian_hessian(coords, molecule, engine, dirname, read_data=True, ve
             coords[i] += h
             Hx[i] = (gfwd-gbak)/(2*h)
 
-    elif pkgutil.find_loader('bigchem') is not None:
-        # If BigChem is installed, it will be used to parallelize the Hessian calculation.
+    elif BigChemReady():
+        # If BigChem is ready, it will be used to parallelize the Hessian calculation.
         logger.info("BigChem will be used to calculate the Hessian. \n")
-        logger.info("Please ensure that the workers are running properly. \n")
         from qcio import Molecule as qcio_Molecule, ProgramInput
         from bigchem import compute, group
 
         elems = molecule[0].elem
 
-        # Uncommenting the following 6 lines will use BigChem's parallel_hessian function.
+        # Uncommenting the following 6 lines and commenting out the rest of the lines will use BigChem's parallel_hessian function.
         #from bigchem.algos import parallel_hessian
         #qcio_M = qcio_Molecule(symbols=elems, geometry=coords.reshape(-1,3))
         #input = ProgramInput(molecule=qcio_M, model={"method":engine.method, "basis": engine.basis}, calctype='hessian')
@@ -153,6 +152,7 @@ def calc_cartesian_hessian(coords, molecule, engine, dirname, read_data=True, ve
         #rec = output.get()
         #Hx = rec.results.hessian
 
+        # Creating a list containing qcio Molecule obejcts with different geometries.
         molecules = []
         for i in range(nc):
             coords[i] += h
@@ -161,23 +161,30 @@ def calc_cartesian_hessian(coords, molecule, engine, dirname, read_data=True, ve
             molecules.append(qcio_Molecule(symbols=elems, geometry=coords.reshape(-1,3)))
             coords[i] += h
 
+        # Submitting calculations
         outputs = group(compute.s(engine.__class__.__name__.lower(),
                         ProgramInput(molecule=qcio_M, calctype='gradient',
                                      model={"method":engine.method, "basis": engine.basis},
-                                     extras={'order':i}),
+                                     extras={"order":i}),
                         ) for i, qcio_M in enumerate(molecules)).apply_async()
 
+        # Getting the records
         records = outputs.get()
         assert len(records) == nc*2
 
+        # Grouping the recrods
         grouped_records = list(zip(records[::2], records[1::2]))
 
+        # Iterating through the grouped records to calculate the Hessian
         for i, (fwd_rec, bak_rec) in enumerate(grouped_records):
-            assert bak_rec.input_data.extras['order'] == fwd_rec.input_data.extras['order'] + 1
+            # Double checking the order
+            assert fwd_rec.input_data.extras["order"] == i*2
+            assert bak_rec.input_data.extras["order"] == fwd_rec.input_data.extras["order"] + 1
             gfwd = fwd_rec.results.gradient.ravel()
             gbak = bak_rec.results.gradient.ravel()
             Hx[i] = (gfwd-gbak)/(2*h)
 
+        # Deleting the records in the backend
         outputs.forget()
 
     else:

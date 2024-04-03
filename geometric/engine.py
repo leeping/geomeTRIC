@@ -1422,7 +1422,7 @@ class Psi4(Engine):
                     outfile.write(line)
         try:
             # Run Psi4
-            subprocess.check_call('psi4%s input.dat' % self.nt(), cwd=dirname, shell=True)
+            subprocess.check_call('psi4%s input.dat run.out' % self.nt(), cwd=dirname, shell=True)
             # Read energy and gradients from Psi4 output
             result = self.read_result(dirname)
         except (OSError, IOError, RuntimeError, subprocess.CalledProcessError):
@@ -1448,17 +1448,22 @@ class Psi4(Engine):
         # self.M.edit_qcrems({'jobtype':'force'})
         # self.M[0].write(os.path.join(dirname, 'run.in'))
         in_files = [('%s/input.dat' % dirname, 'input.dat')]
-        out_files = [('%s/output.dat' % dirname, 'output.dat'), ('%s/run.log' % dirname, 'run.log')]
+        out_files = [('%s/run.out' % dirname, 'run.out'), ('%s/run.log' % dirname, 'run.log')]
         # We will assume that the number of threads on the worker is 1, as this maximizes efficiency
         # in the limit of large numbers of jobs, although it may be controlled via environment variables.
         queue_up_src_dest(wq, 'psi4 input.dat > run.log 2>&1', in_files, out_files, verbose=False)
-    
+
+    def number_output(self, dirname, calcNum):
+        if not os.path.exists(os.path.join(dirname, 'run.out')):
+            raise RuntimeError('run.out does not exist')
+        shutil.copy2(os.path.join(dirname,'run.out'), os.path.join(dirname,'run_%03i.out' % calcNum))
+
     def read_result(self, dirname, check_coord=None):
         """ Read Psi4 calculation output. """
         if check_coord is not None:
             raise CheckCoordError("Coordinate checking not implemented")
         energy, gradient = None, None
-        psi4out = os.path.join(dirname, 'output.dat')
+        psi4out = os.path.join(dirname, 'run.out')
         with open(psi4out) as outfile:
             found_grad = False
             found_num_grad = False
@@ -1526,7 +1531,10 @@ class QChem(Engine):
         super(QChem, self).__init__(molecule)
         self.threads = threads
         self.prep_temp_folder(dirname, qcdir)
-        self.method = self.M.qcrems[0].get('exchange')
+
+        self.method = self.M.qcrems[0].get('method')
+        if self.method is None:
+            self.method = self.M.qcrems[0].get('exchange')
         self.basis = self.M.qcrems[0].get('basis')
 
     def prep_temp_folder(self, dirname, qcdir):

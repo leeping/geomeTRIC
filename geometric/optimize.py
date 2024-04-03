@@ -5,7 +5,7 @@ Copyright 2016-2020 Regents of the University of California and the Authors
 
 Authors: Lee-Ping Wang, Chenchen Song
 
-Contributors: Yudong Qiu, Daniel G. A. Smith, Alberto Gobbi, Josh Horton
+Contributors: Heejune Park, Yudong Qiu, Daniel G. A. Smith, Alberto Gobbi, Josh Horton
 
 Redistribution and use in source and binary forms, with or without modification,
 are permitted provided that the following conditions are met:
@@ -1175,9 +1175,9 @@ def run_optimizer(**kwargs):
     M, engine = get_molecule_engine(**kwargs)
     
     # Create Work Queue object
-    if kwargs.get('port', 0):
+    if kwargs.get('wqport', 0):
         logger.info("Creating Work Queue object for distributed Hessian calculation\n")
-        createWorkQueue(kwargs['port'], debug=verbose>1)
+        createWorkQueue(kwargs['wqport'], debug=verbose>1)
 
     # Get initial coordinates in bohr
     coords = M.xyzs[0].flatten() * ang2bohr
@@ -1325,7 +1325,7 @@ def run_optimizer(**kwargs):
             if params.qdata is not None: Mfinal.write('qdata-final.txt')
     print_citation(logger)
     logger.info("Time elapsed since start of run_optimizer: %.3f seconds\n" % (time.time()-t0))
-    if kwargs.get('port', 0):
+    if kwargs.get('wqport', 0):
         destroyWorkQueue()
     return progress
 
