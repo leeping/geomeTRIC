@@ -73,9 +73,30 @@ def test_qchem_bigchem_hessian():
     hessian = geometric.normal_modes.calc_cartesian_hessian(coords, molecule, engine, tempfile.mkdtemp())
     freqs, modes, G = geometric.normal_modes.frequency_analysis(coords, hessian, elem=molecule.elem, verbose=True)
 
-    np.testing.assert_almost_equal(freqs, [-1215.8587, 2126.6551, 2451.8600], decimal=0)
+    np.testing.assert_almost_equal(freqs, [-1215.8587, 2126.6551, 2451.8599], decimal=0)
     assert freqs[0] < 0
     assert len(freqs) == 3
+
+    # Turning off BigChem
+    geometric.nifty.BigChemOff()
+    assert not geometric.nifty.BigChemReady()
+
+@addons.using_bigchem_terachem
+def test_terachem_bigchem_hessian():
+    # Turning on BigChem
+    geometric.nifty.CheckBigChem('terachem')
+    assert geometric.nifty.BigChemReady()
+
+    shutil.copy2(os.path.join(datad, 'hcn_minimized.xyz'), os.path.join(os.getcwd(), 'hcn_minimized.xyz'))
+    molecule, engine = geometric.prepare.get_molecule_engine(engine="tera", input=os.path.join(datad, 'hcn_minimized.tcin'))
+    os.remove('hcn_minimized.xyz')
+    coords = molecule.xyzs[0].flatten()*geometric.nifty.ang2bohr
+    hessian = geometric.normal_modes.calc_cartesian_hessian(coords, molecule, engine, tempfile.mkdtemp())
+    freqs, modes, G = geometric.normal_modes.frequency_analysis(coords, hessian, elem=molecule.elem, verbose=True)
+
+
+    np.testing.assert_almost_equal(freqs, [989.5362,  989.7015, 2394.3670, 3687.6626], decimal=0)
+    assert len(freqs) == 4
 
     # Turning off BigChem
     geometric.nifty.BigChemOff()

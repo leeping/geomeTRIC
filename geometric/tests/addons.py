@@ -46,6 +46,12 @@ def get_gaussian_version():
 def workqueue_found():
     return (_plugin_import("work_queue") is True) and (geometric.nifty.which('work_queue_worker'))
 
+def bigchem_found(engine):
+    geometric.nifty.CheckBigChem(engine)
+    found = geometric.nifty.BigChemReady()
+    geometric.nifty.BigChemOff()
+    return found
+
 # Modify paths for testing
 os.environ["DQM_CONFIG_PATH"] = os.path.dirname(os.path.abspath(__file__))
 os.environ["TMPDIR"] = "/tmp/"
@@ -64,11 +70,11 @@ using_openmm = pytest.mark.skipif(
 using_workqueue = pytest.mark.skipif(
     (not workqueue_found()), reason="could not find work_queue module or work_queue_worker executable. please install the package to enable tests")
 using_bigchem_psi4 = pytest.mark.skipif(
-    (not geometric.nifty.BigChemTest('psi4')), reason="BigChem/Psi4 is not working. please install the package to enable tests")
+    (not bigchem_found("psi4")), reason="BigChem/Psi4 is not working. please install the package to enable tests")
 using_bigchem_qchem = pytest.mark.skipif(
-    (not geometric.nifty.BigChemTest('qchem')), reason="BigChem/QChem is not working. please install the package to enable tests")
+    (not bigchem_found("qchem")), reason="BigChem/QChem is not working. please install the package to enable tests")
 using_bigchem_terachem = pytest.mark.skipif(
-    (not geometric.nifty.BigChemTest('terachem')), reason="BigChem/TeraChem is not working. please install the package to enable tests")
+    (not bigchem_found("terachem")), reason="BigChem/TeraChem is not working. please install the package to enable tests")
 using_terachem = pytest.mark.skipif(
     not geometric.nifty.which("terachem"), reason="could not find terachem. please make sure TeraChem is installed for these tests")
 using_qchem = pytest.mark.skipif(

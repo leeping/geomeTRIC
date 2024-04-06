@@ -829,15 +829,10 @@ def CheckBigChem(engine):
 
     except:
         BIGCHEM = False
-        logger.warning("BigChem is not working properly. Calculations will be performed linearly.")
+        logger.warning("BigChem/%s is not working properly. Calculations will be carried linearly." %engine)
 
 def BigChemReady():
     global BIGCHEM
-    return BIGCHEM
-
-def BigChemTest(engine):
-    global BIGCHEM
-    CheckBigChem(engine)
     return BIGCHEM
 
 def BigChemOff():

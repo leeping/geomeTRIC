@@ -37,7 +37,6 @@ POSSIBILITY OF SUCH DAMAGE.
 from __future__ import division
 from __future__ import print_function
 import os, shutil
-
 import numpy as np
 from .errors import FrequencyError
 from .molecule import Molecule, PeriodicTable

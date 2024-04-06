@@ -48,7 +48,6 @@ def test_hcn_neb_optimize_1(localizer):
     """
     Optimize a HCN chain without alignment
     """
-
     assert not geometric.nifty.BigChemReady()
 
     M, engine = geometric.prepare.get_molecule_engine(
@@ -77,7 +76,6 @@ def test_hcn_neb_optimize_2(localizer):
     """
     Optimize a HCN chain with alignment
     """
-
     assert not geometric.nifty.BigChemReady()
 
     M, engine = geometric.prepare.get_molecule_engine(
@@ -169,6 +167,47 @@ def test_qchem_bigchem(localizer):
     # Turning off BigChem
     geometric.nifty.BigChemOff()
     assert not geometric.nifty.BigChemReady()
+
+
+@addons.using_bigchem_terachem
+def test_terachem_bigchem(localizer):
+    """
+    Optimize a HCN chain without alignment with BigChem and TeraChem
+    """
+    # Turning on BigChem
+    geometric.nifty.CheckBigChem('terachem')
+    assert geometric.nifty.BigChemReady()
+
+
+    shutil.copy2(os.path.join(datad, 'hcn_neb_input.xyz'), os.path.join(os.getcwd(), 'hcn_neb_input.xyz'))
+
+    M, engine = geometric.prepare.get_molecule_engine(
+        input=os.path.join(datad, "hcn_neb_input.tcin"),
+        chain_coords=os.path.join(datad, "hcn_neb_input.xyz"),
+        images=11,
+        neb=True,
+        engine="tera",
+    )
+
+    params = geometric.params.NEBParams(**{"align": False, "verbose": 1})
+    chain = geometric.neb.ElasticBand(
+        M, engine=engine, tmpdir=tempfile.mkdtemp(), params=params, plain=0
+    )
+
+    os.remove('hcn_neb_input.xyz')
+
+    assert chain.coordtype == "cart"
+
+    final_chain, optCycle = geometric.neb.OptimizeChain(chain, engine, params)
+
+    assert optCycle <= 10
+    assert final_chain.maxg < params.maxg
+    assert final_chain.avgg < params.avgg
+
+    # Turning off BigChem
+    geometric.nifty.BigChemOff()
+    assert not geometric.nifty.BigChemReady()
+
 
 class TestPsi4WorkQueueNEB:
 
