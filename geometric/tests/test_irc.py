@@ -10,6 +10,7 @@ import numpy as np
 localizer = addons.in_folder
 datad = addons.datad
 
+
 @addons.using_psi4
 def test_hcn_irc_psi4(localizer):
     """

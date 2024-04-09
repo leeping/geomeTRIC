@@ -71,6 +71,7 @@ def test_hcn_neb_optimize_1(localizer):
     assert final_chain.maxg < params.maxg
     assert final_chain.avgg < params.avgg
 
+
 @addons.using_psi4
 def test_hcn_neb_optimize_2(localizer):
     """
@@ -99,6 +100,7 @@ def test_hcn_neb_optimize_2(localizer):
     assert optCycle <= 10
     assert final_chain.maxg < params.maxg
     assert final_chain.avgg < params.avgg
+
 
 @addons.using_bigchem_psi4
 def test_psi4_bigchem(localizer):
@@ -133,6 +135,7 @@ def test_psi4_bigchem(localizer):
     # Turning off BigChem
     geometric.nifty.BigChemOff()
     assert not geometric.nifty.BigChemReady()
+
 
 @addons.using_bigchem_qchem
 def test_qchem_bigchem(localizer):
@@ -249,6 +252,7 @@ class TestPsi4WorkQueueNEB:
         assert final_chain.maxg < params.maxg
         assert final_chain.avgg < params.avgg
         geometric.nifty.destroyWorkQueue()
+
 
 @addons.using_qcelemental
 def test_hcn_neb_service_arrange(localizer):

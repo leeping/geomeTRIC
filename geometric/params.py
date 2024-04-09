@@ -110,7 +110,6 @@ class OptParams(object):
         # Check BigChem.
         if kwargs.get('bigchem', False):
             CheckBigChem(kwargs.get('engine', 'terachem'))
-        #self.bigchem = kwargs.get('bigchem', False)
         if self.hessian is None:
             # Default is to calculate Hessian in the first step if searching for a transition state.
             # Otherwise the default is to never calculate the Hessian.
@@ -229,7 +228,6 @@ class OptParams(object):
             logger.info(' Hessian data will be read from file: %s\n' % self.hessian[5:])
         elif self.hessian.startswith('file+last:'):
             logger.info(' Hessian data will be read from file: %s, then computed for the last step.\n' % self.hessian[5:])
-
 
 class NEBParams(object):
     """

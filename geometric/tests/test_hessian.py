@@ -14,6 +14,7 @@ from geometric.internal import *
 datad = addons.datad
 localizer = addons.in_folder
 
+
 def test_hessian_assort():
     M = geometric.molecule.Molecule(os.path.join(datad, 'assort.xyz'))
     coords = M.xyzs[0].flatten() * ang2bohr
@@ -43,6 +44,7 @@ def test_hessian_assort():
     assert np.allclose(fgrad_dlc, agrad_dlc, atol=1.e-6)
     assert np.allclose(fhess_dlc, ahess_dlc, atol=1.e-6)
 
+
 @addons.using_bigchem_psi4
 def test_psi4_bigchem_hessian():
     # Turning on BigChem
@@ -60,6 +62,7 @@ def test_psi4_bigchem_hessian():
     # Turning off BigChem
     geometric.nifty.BigChemOff()
     assert not geometric.nifty.BigChemReady()
+
 
 @addons.using_bigchem_qchem
 def test_qchem_bigchem_hessian():
@@ -81,6 +84,7 @@ def test_qchem_bigchem_hessian():
     geometric.nifty.BigChemOff()
     assert not geometric.nifty.BigChemReady()
 
+
 @addons.using_bigchem_terachem
 def test_terachem_bigchem_hessian():
     # Turning on BigChem
@@ -101,6 +105,7 @@ def test_terachem_bigchem_hessian():
     # Turning off BigChem
     geometric.nifty.BigChemOff()
     assert not geometric.nifty.BigChemReady()
+
 
 class TestPsi4WorkQueueHessian:
 
@@ -133,6 +138,7 @@ class TestPsi4WorkQueueHessian:
         np.testing.assert_almost_equal(freqs, [989.5974, 989.5992, 2394.0352, 3690.5745], decimal=0)
         assert len(freqs) == 4
         geometric.nifty.destroyWorkQueue()
+
 
 class TestASEWorkQueueHessian:
 
