@@ -2964,7 +2964,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
 
     
 class DelocalizedInternalCoordinates(InternalCoordinates):
-    def __init__(self, molecule, imagenr=0, build=False, connect=False, addcart=False, constraints=None, cvals=None, rigid=False, remove_tr=False, cart_only=False, conmethod=0, connected_isolated=True):
+    def __init__(self, molecule, imagenr=0, build=False, connect=False, addcart=False, constraints=None, cvals=None, rigid=False, remove_tr=False, cart_only=False, conmethod=0, connect_isolated=True):
         super(DelocalizedInternalCoordinates, self).__init__()
         # cart_only is just because of how I set up the class structure.
         if cart_only: return
