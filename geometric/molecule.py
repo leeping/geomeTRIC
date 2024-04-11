@@ -1906,7 +1906,7 @@ class Molecule(object):
             New.Data['bonds'] = [(list(atomslice).index(b[0]), list(atomslice).index(b[1])) for b in self.bonds if (b[0] in atomslice and b[1] in atomslice)]
         New.top_settings = copy.deepcopy(self.top_settings)
         
-        if build_topology:
+        if New.na > 1 and build_topology:
             New.build_topology(force_bonds=False)
         return New
 

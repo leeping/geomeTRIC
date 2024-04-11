@@ -302,7 +302,8 @@ class CartesianZ(PrimitiveCoordinate):
 
 def IsTR(Prim):
     return type(Prim) in (TranslationX, TranslationY, TranslationZ,
-                          RotationA, RotationB, RotationC)
+                          RotationA, RotationB, RotationC,
+                          CartesianX, CartesianY, CartesianZ)
             
 class TranslationX(PrimitiveCoordinate):
     def __init__(self, a, w):
@@ -2167,13 +2168,14 @@ class InternalCoordinates(object):
         self._rigid = val
 
 class PrimitiveInternalCoordinates(InternalCoordinates):
-    def __init__(self, molecule, connect=False, addcart=False, constraints=None, cvals=None, **kwargs):
+    def __init__(self, molecule, connect=False, addcart=False, constraints=None, cvals=None, connect_isolated=True, **kwargs):
         super(PrimitiveInternalCoordinates, self).__init__()
         # connect = True corresponds to "traditional" internal coordinates with minimum spanning bonds
         self.connect = connect
         # connect = False, addcart = True corresponds to HDLC
         # connect = False, addcart = False corresponds to TRIC
         self.addcart = addcart
+        self.connect_isolated = connect_isolated
         if 'rigid' in kwargs and kwargs['rigid'] is not None:
             raise RuntimeError('Do not use rigid molecules with PrimitiveInternalCoordinates')
         self.Internals = []
@@ -2197,7 +2199,6 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         # force_bonds=False is set because we don't want to override
         # bond order-based bonds that may have been obtained earlier.
         molecule.build_topology(force_bonds=False)
-        connect_isolated = True
         if 'resid' in molecule.Data.keys():
             # Create fragments corresponding to unique resID numbers if provided.
             frags = []
@@ -2218,7 +2219,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         else:
             # Create fragments based on connectivity in provided molecule object.
             frags = [list(m.nodes()) for m in molecule.molecules]
-            if connect_isolated:
+            if self.connect_isolated:
                 isolates = [list(m.nodes())[0] for m in molecule.molecules if len(m.nodes()) == 1]
                 for i in isolates:
                     j = molecule.get_closest_atom(i, pbc=False)[0]
@@ -2963,7 +2964,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
 
     
 class DelocalizedInternalCoordinates(InternalCoordinates):
-    def __init__(self, molecule, imagenr=0, build=False, connect=False, addcart=False, constraints=None, cvals=None, rigid=False, remove_tr=False, cart_only=False, conmethod=0):
+    def __init__(self, molecule, imagenr=0, build=False, connect=False, addcart=False, constraints=None, cvals=None, rigid=False, remove_tr=False, cart_only=False, conmethod=0, connected_isolated=True):
         super(DelocalizedInternalCoordinates, self).__init__()
         # cart_only is just because of how I set up the class structure.
         if cart_only: return
@@ -2984,7 +2985,8 @@ class DelocalizedInternalCoordinates(InternalCoordinates):
             if connect or addcart:
                 raise RuntimeError("Rigid optimizations not available using non-TRIC coordinates")
         # The DLC contains an instance of primitive internal coordinates.
-        self.Prims = PrimitiveInternalCoordinates(molecule, connect=connect, addcart=addcart, constraints=constraints, cvals=cvals)
+        if rigid: connect_isolated = False
+        self.Prims = PrimitiveInternalCoordinates(molecule, connect=connect, addcart=addcart, constraints=constraints, cvals=cvals, connect_isolated=connect_isolated)
         self.frags = self.Prims.frags
         self.na = molecule.na
         # Atomic mass array
