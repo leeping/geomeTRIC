@@ -1713,8 +1713,8 @@ def main():
 
     M, engine = get_molecule_engine(**args)
 
-    if BigChemReady():
-        logger.info("BigChem is ready. It will be used to carry singlepoint calculations. \n")
+    if params.bigchem:
+        logger.info("BigChem will be used to carry singlepoint calculations. \n")
 
     if args.get('wqport', 0):
         createWorkQueue(args.get('wqport'), debug=params.verbose)
