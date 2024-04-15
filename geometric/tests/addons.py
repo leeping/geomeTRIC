@@ -46,11 +46,19 @@ def get_gaussian_version():
 def workqueue_found():
     return (_plugin_import("work_queue") is True) and (geometric.nifty.which('work_queue_worker'))
 
-def bigchem_found(engine):
-    geometric.nifty.CheckBigChem(engine)
-    found = geometric.nifty.BigChemReady()
-    geometric.nifty.BigChemOff()
-    return found
+def bigchem_available(max_retries: int = 2):
+    """ 
+    A function written by Colton to check if BigChem is working properly.
+    """
+    from bigchem.app import bigchem as bigchem_app
+    try:
+        # Use the connection() method to get a broker connection object
+        with bigchem_app.connection() as conn:
+            # Open a connection to the broker
+            conn.ensure_connection(max_retries=max_retries)
+            return True
+    except Exception as e:
+        return False
 
 # Modify paths for testing
 os.environ["DQM_CONFIG_PATH"] = os.path.dirname(os.path.abspath(__file__))
@@ -69,12 +77,8 @@ using_openmm = pytest.mark.skipif(
     _plugin_import("openmm") is False and _plugin_import("simtk.openmm") is False, reason="could not find openmm. please install the package to enable tests")
 using_workqueue = pytest.mark.skipif(
     (not workqueue_found()), reason="could not find work_queue module or work_queue_worker executable. please install the package to enable tests")
-using_bigchem_psi4 = pytest.mark.skipif(
-    (not bigchem_found("psi4")), reason="BigChem/Psi4 is not working. please install the package to enable tests")
-using_bigchem_qchem = pytest.mark.skipif(
-    (not bigchem_found("qchem")), reason="BigChem/QChem is not working. please install the package to enable tests")
-using_bigchem_terachem = pytest.mark.skipif(
-    (not bigchem_found("terachem")), reason="BigChem/TeraChem is not working. please install the package to enable tests")
+using_bigchem = pytest.mark.skipif(
+    (not bigchem_available()), reason="BigChem is not working. please install the package to enable tests")
 using_terachem = pytest.mark.skipif(
     not geometric.nifty.which("terachem"), reason="could not find terachem. please make sure TeraChem is installed for these tests")
 using_qchem = pytest.mark.skipif(

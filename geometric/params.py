@@ -37,7 +37,7 @@ from __future__ import division
 import os, argparse
 import numpy as np
 from .errors import ParamError
-from .nifty import logger, CheckBigChem
+from .nifty import logger
 
 class OptParams(object):
     """
@@ -107,9 +107,9 @@ class OptParams(object):
         self.bothre = kwargs.get('bothre', 0.6 if self.transition else 0.0)
         # Whether to calculate or read a Hessian matrix.
         self.hessian = kwargs.get('hessian', None)
-        # Check BigChem.
-        if kwargs.get('bigchem', False):
-            CheckBigChem(kwargs.get('engine', 'terachem'))
+        # Whether to use BigChem to carry the Hessian and NEB calculations.
+        self.bigchem = kwargs.get('bigchem', False)
+
         if self.hessian is None:
             # Default is to calculate Hessian in the first step if searching for a transition state.
             # Otherwise the default is to never calculate the Hessian.
@@ -254,8 +254,8 @@ class NEBParams(object):
         self.tmax = kwargs.get('tmax', 0.3)
         self.tmin = kwargs.get('tmin', 1.2e-3)
         self.skip = kwargs.get('skip', False)
-        if kwargs.get('bigchem', False):
-            CheckBigChem(kwargs.get('engine', 'terachem'))
+        self.bigchem = kwargs.get('bigchem', False)
+
         # Sanity checks on trust radius
         if self.tmax < self.tmin:
             raise ParamError("Max trust radius must be larger than min")

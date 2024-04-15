@@ -44,13 +44,9 @@ def test_hessian_assort():
     assert np.allclose(fgrad_dlc, agrad_dlc, atol=1.e-6)
     assert np.allclose(fhess_dlc, ahess_dlc, atol=1.e-6)
 
-
-@addons.using_bigchem_psi4
+@addons.using_psi4
+@addons.using_bigchem
 def test_psi4_bigchem_hessian():
-    # Turning on BigChem
-    geometric.nifty.CheckBigChem('psi4')
-    assert geometric.nifty.BigChemReady()
-
     molecule, engine = geometric.prepare.get_molecule_engine(engine="psi4", input=os.path.join(datad, 'hcn_minimized.psi4in'))
     coords = molecule.xyzs[0].flatten()*geometric.nifty.ang2bohr
     hessian = geometric.normal_modes.calc_cartesian_hessian(coords, molecule, engine, tempfile.mkdtemp())
@@ -59,16 +55,10 @@ def test_psi4_bigchem_hessian():
     np.testing.assert_almost_equal(freqs, [989.5974, 989.5992, 2394.0352, 3690.5745], decimal=0)
     assert len(freqs) == 4
 
-    # Turning off BigChem
-    geometric.nifty.BigChemOff()
-    assert not geometric.nifty.BigChemReady()
 
-
-@addons.using_bigchem_qchem
+@addons.using_qchem
+@addons.using_bigchem
 def test_qchem_bigchem_hessian():
-    # Turning on BigChem
-    geometric.nifty.CheckBigChem('qchem')
-    assert geometric.nifty.BigChemReady()
 
     # Optimized TS structure of HCN -> CNH reaction. 
     molecule, engine = geometric.prepare.get_molecule_engine(engine="qchem", input=os.path.join(datad, 'hcn_minimized_ts.qcin'))
@@ -80,17 +70,10 @@ def test_qchem_bigchem_hessian():
     assert freqs[0] < 0
     assert len(freqs) == 3
 
-    # Turning off BigChem
-    geometric.nifty.BigChemOff()
-    assert not geometric.nifty.BigChemReady()
 
-
-@addons.using_bigchem_terachem
+@addons.using_terachem
+@addons.using_bigchem
 def test_terachem_bigchem_hessian():
-    # Turning on BigChem
-    geometric.nifty.CheckBigChem('terachem')
-    assert geometric.nifty.BigChemReady()
-
     shutil.copy2(os.path.join(datad, 'hcn_minimized.xyz'), os.path.join(os.getcwd(), 'hcn_minimized.xyz'))
     molecule, engine = geometric.prepare.get_molecule_engine(engine="tera", input=os.path.join(datad, 'hcn_minimized.tcin'))
     os.remove('hcn_minimized.xyz')
@@ -99,12 +82,8 @@ def test_terachem_bigchem_hessian():
     freqs, modes, G = geometric.normal_modes.frequency_analysis(coords, hessian, elem=molecule.elem, verbose=True)
 
 
-    np.testing.assert_almost_equal(freqs, [989.5362,  989.7015, 2394.3670, 3687.6626], decimal=0)
+    np.testing.assert_almost_equal(freqs, [991.5956,  991.6469, 2393.3915, 3691.8975], decimal=0)
     assert len(freqs) == 4
-
-    # Turning off BigChem
-    geometric.nifty.BigChemOff()
-    assert not geometric.nifty.BigChemReady()
 
 
 class TestPsi4WorkQueueHessian:

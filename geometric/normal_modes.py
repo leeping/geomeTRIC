@@ -40,9 +40,9 @@ import os, shutil
 import numpy as np
 from .errors import FrequencyError
 from .molecule import Molecule, PeriodicTable
-from .nifty import logger, kb, kb_si, hbar, au2kj, au2kcal, ang2bohr, bohr2ang, c_lightspeed, avogadro, cm2au, amu2au, ambervel2au, wq_wait, getWorkQueue, BigChemReady, commadash, bak
+from .nifty import logger, kb, kb_si, hbar, au2kj, au2kcal, ang2bohr, bohr2ang, c_lightspeed, avogadro, cm2au, amu2au, ambervel2au, wq_wait, getWorkQueue, commadash, bak
 
-def calc_cartesian_hessian(coords, molecule, engine, dirname, read_data=True, verbose=0):
+def calc_cartesian_hessian(coords, molecule, engine, dirname, read_data=True, bigchem=False, verbose=0):
     """ 
     Calculate the Cartesian Hessian using finite difference, and/or read data from disk. 
     Data is stored in a folder <prefix>.tmp/hessian, with gradient calculations found in
@@ -135,7 +135,7 @@ def calc_cartesian_hessian(coords, molecule, engine, dirname, read_data=True, ve
             coords[i] += h
             Hx[i] = (gfwd-gbak)/(2*h)
 
-    elif BigChemReady():
+    elif bigchem:
         # If BigChem is ready, it will be used to parallelize the Hessian calculation.
         logger.info("BigChem will be used to calculate the Hessian. \n")
         from qcio import Molecule as qcio_Molecule, ProgramInput
@@ -168,7 +168,7 @@ def calc_cartesian_hessian(coords, molecule, engine, dirname, read_data=True, ve
                         ) for i, qcio_M in enumerate(molecules)).apply_async()
 
         # Getting the records
-        records = outputs.get()
+        records = outputs.get(disable_sync_subtasks=False)
         assert len(records) == nc*2
 
         # Grouping the recrods

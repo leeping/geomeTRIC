@@ -333,7 +333,7 @@ class Optimizer(object):
         if self.params.hessian == 'each' or self.recalcHess:
             # Hx is assumed to be the Cartesian Hessian at the current step.
             # Otherwise we use the variable name Hx0 to avoid almost certain confusion.
-            self.Hx = calc_cartesian_hessian(self.X, self.molecule, self.engine, self.dirname, read_data=True, verbose=self.params.verbose)
+            self.Hx = calc_cartesian_hessian(self.X, self.molecule, self.engine, self.dirname, read_data=True, bigchem=self.params.bigchem, verbose=self.params.verbose)
             if self.params.frequency:
                 self.frequency_analysis(self.Hx, 'iter%03i' % self.Iteration, False)
             if self.recalcHess:
@@ -345,7 +345,7 @@ class Optimizer(object):
                 self.recalcHess = False
         elif self.Iteration == 0:
             if self.params.hessian in ['first', 'stop', 'first+last'] and not hasattr(self.params, 'hess_data'):
-                self.Hx0 = calc_cartesian_hessian(self.X, self.molecule, self.engine, self.dirname, read_data=True, verbose=self.params.verbose)
+                self.Hx0 = calc_cartesian_hessian(self.X, self.molecule, self.engine, self.dirname, read_data=True, bigchem=self.params.bigchem, verbose=self.params.verbose)
                 logger.info(">> Initial Cartesian Hessian Eigenvalues\n")
                 self.SortedEigenvalues(self.Hx0)
                 if self.params.frequency:
@@ -1038,7 +1038,7 @@ class Optimizer(object):
             Hx = self.IC.calcHessCart(self.X, self.G, self.H)
             np.savetxt(self.params.write_cart_hess, Hx, fmt='% 14.10f')
         if self.params.hessian in ['last', 'first+last', 'each']:
-            Hx = calc_cartesian_hessian(self.X, self.molecule, self.engine, self.dirname, read_data=False, verbose=self.params.verbose)
+            Hx = calc_cartesian_hessian(self.X, self.molecule, self.engine, self.dirname, read_data=False, bigchem=self.params.bigchem, verbose=self.params.verbose)
             if self.params.frequency:
                 self.frequency_analysis(Hx, 'last', True)
         return self.progress

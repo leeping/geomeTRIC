@@ -48,7 +48,6 @@ def test_hcn_neb_optimize_1(localizer):
     """
     Optimize a HCN chain without alignment
     """
-    assert not geometric.nifty.BigChemReady()
 
     M, engine = geometric.prepare.get_molecule_engine(
         input=os.path.join(datad, "hcn_neb_input.psi4in"),
@@ -77,8 +76,6 @@ def test_hcn_neb_optimize_2(localizer):
     """
     Optimize a HCN chain with alignment
     """
-    assert not geometric.nifty.BigChemReady()
-
     M, engine = geometric.prepare.get_molecule_engine(
         input=os.path.join(datad, "hcn_neb_input.psi4in"),
         chain_coords=os.path.join(datad, "hcn_neb_input.xyz"),
@@ -102,14 +99,12 @@ def test_hcn_neb_optimize_2(localizer):
     assert final_chain.avgg < params.avgg
 
 
-@addons.using_bigchem_psi4
+@addons.using_psi4
+@addons.using_bigchem
 def test_psi4_bigchem(localizer):
     """
     Optimize a HCN chain without alignment with BigChem and Psi4
     """
-    # Turning on BigChem
-    geometric.nifty.CheckBigChem('psi4')
-    assert geometric.nifty.BigChemReady()
 
     M, engine = geometric.prepare.get_molecule_engine(
         input=os.path.join(datad, "hcn_neb_input.psi4in"),
@@ -132,20 +127,14 @@ def test_psi4_bigchem(localizer):
     assert final_chain.maxg < params.maxg
     assert final_chain.avgg < params.avgg
 
-    # Turning off BigChem
-    geometric.nifty.BigChemOff()
-    assert not geometric.nifty.BigChemReady()
 
 
-@addons.using_bigchem_qchem
+@addons.using_qchem
+@addons.using_bigchem
 def test_qchem_bigchem(localizer):
     """
     Optimize a HCN chain without alignment with BigChem and QChem
     """
-    # Turning on BigChem
-    geometric.nifty.CheckBigChem('qchem')
-    assert geometric.nifty.BigChemReady()
-
     M, engine = geometric.prepare.get_molecule_engine(
         input=os.path.join(datad, "hcn_neb_input.qcin"),
         chain_coords=os.path.join(datad, "hcn_neb_input.xyz"),
@@ -167,19 +156,13 @@ def test_qchem_bigchem(localizer):
     assert final_chain.maxg < params.maxg
     assert final_chain.avgg < params.avgg
 
-    # Turning off BigChem
-    geometric.nifty.BigChemOff()
-    assert not geometric.nifty.BigChemReady()
 
-
-@addons.using_bigchem_terachem
+@addons.using_terachem
+@addons.using_bigchem
 def test_terachem_bigchem(localizer):
     """
     Optimize a HCN chain without alignment with BigChem and TeraChem
     """
-    # Turning on BigChem
-    geometric.nifty.CheckBigChem('terachem')
-    assert geometric.nifty.BigChemReady()
 
 
     shutil.copy2(os.path.join(datad, 'hcn_neb_input.xyz'), os.path.join(os.getcwd(), 'hcn_neb_input.xyz'))
@@ -207,9 +190,6 @@ def test_terachem_bigchem(localizer):
     assert final_chain.maxg < params.maxg
     assert final_chain.avgg < params.avgg
 
-    # Turning off BigChem
-    geometric.nifty.BigChemOff()
-    assert not geometric.nifty.BigChemReady()
 
 
 class TestPsi4WorkQueueNEB:

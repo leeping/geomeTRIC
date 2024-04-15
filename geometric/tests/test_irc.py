@@ -16,9 +16,6 @@ def test_hcn_irc_psi4(localizer):
     """
     IRC test without BigChem
     """
-    # To ensure that BigChem is not on.
-    assert not geometric.nifty.BigChemReady()
-
     shutil.copy2(os.path.join(datad, 'hcn_irc.psi4in'), os.path.join(os.getcwd(), 'hcn_irc.psi4in'))
     progress = geometric.optimize.run_optimizer(engine='psi4', input='hcn_irc.psi4in', converge=['set', 'GAU_LOOSE'],
                                                 nt=4, reset=False, trust=0.05, irc=True, maxiter=50)
@@ -40,15 +37,12 @@ def test_hcn_irc_psi4(localizer):
     assert len(progress) < 100
 
 
-@addons.using_bigchem_psi4
+@addons.using_psi4
+@addons.using_bigchem
 def test_hcn_irc_psi4_bigchem(localizer):
     """
     IRC test with BigChem
     """
-    # Turning on BigChem
-    geometric.nifty.CheckBigChem('psi4')
-    assert geometric.nifty.BigChemReady()
-
     shutil.copy2(os.path.join(datad, 'hcn_irc.psi4in'), os.path.join(os.getcwd(), 'hcn_irc.psi4in'))
     progress = geometric.optimize.run_optimizer(engine='psi4', input='hcn_irc.psi4in', converge=['set', 'GAU_LOOSE'],
                                                 nt=4, reset=False, trust=0.05, irc=True, maxiter=50)
@@ -68,8 +62,4 @@ def test_hcn_irc_psi4_bigchem(localizer):
 
     # Check that the IRC converged in less than 100 iterations
     assert len(progress) < 100
-
-    # Turning off BigChem
-    geometric.nifty.BigChemOff()
-    assert not geometric.nifty.BigChemReady()
 

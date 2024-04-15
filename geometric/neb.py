@@ -13,7 +13,7 @@ from .params import OptParams, NEBParams, parse_neb_args
 from .step import get_delta_prime_trm, brent_wiki, trust_step, calc_drms_dmax
 from .engine import Blank
 from .internal import CartesianCoordinates, PrimitiveInternalCoordinates, DelocalizedInternalCoordinates, ChainCoordinates
-from .nifty import flat, row, col, createWorkQueue, getWorkQueue, wq_wait, BigChemReady, ang2bohr, bohr2ang, kcal2au, au2kcal, au2evang, logger
+from .nifty import flat, row, col, createWorkQueue, getWorkQueue, wq_wait, ang2bohr, bohr2ang, kcal2au, au2kcal, au2evang, logger
 from .molecule import EqualSpacing
 from .errors import NEBStructureError, NEBChainShapeError, NEBBandTangentError, NEBBandGradientError
 from .config import config_dir
@@ -299,7 +299,7 @@ class Chain(object):
             wq_wait(wq, print_time=600)
             for i in range(len(self)):
                 self.Structures[i].GetEnergyGradient()
-        elif BigChemReady():
+        elif self.params.bigchem:
             # If BigChem is available, it will be used to carry the single-point calculations.
             from qcio import Molecule as qcio_Molecule, ProgramInput
             from bigchem import compute, group
@@ -335,7 +335,7 @@ class Chain(object):
                 else:
                     self.Structures[i].ComputeEnergyGradient()
         # When BigChem is used, it does not write output files to disk.
-        if cyc is not None and not BigChemReady():
+        if cyc is not None and not self.params.bigchem:
             for i in range(len(self)):
                 self.Structures[i].engine.number_output(self.Structures[i].tmpdir, cyc)
         self.haveCalcs = True

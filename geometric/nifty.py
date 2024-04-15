@@ -800,46 +800,6 @@ def lp_load(fnm):
     return answer
 
 #==============================#
-#|        BigChem stuff       |#
-#==============================#
-
-BIGCHEM = False
-
-def CheckBigChem(engine):
-    global BIGCHEM
-    try:
-        from bigchem import compute
-        from qcio import Molecule as qcio_Molecule, ProgramInput
-
-        molecule = qcio_Molecule(
-            symbols=["O", "H", "H"],
-            geometry=[
-                [0.0, 0.0, 0.0],
-                [0.52421003, 1.68733646, 0.48074633],
-                [1.14668581, -0.45032174, -1.35474466],
-            ],
-        )
-
-        prog_input = ProgramInput(molecule=molecule,
-                                  calctype='energy',
-                                  model={"method":'hf', "basis":'3-21g'})
-        output = compute.delay(engine, prog_input)
-
-        BIGCHEM = output.get().success
-
-    except:
-        BIGCHEM = False
-        logger.warning("BigChem/%s is not working properly. Calculations will be carried linearly." %engine)
-
-def BigChemReady():
-    global BIGCHEM
-    return BIGCHEM
-
-def BigChemOff():
-    global BIGCHEM
-    BIGCHEM = False
-
-#==============================#
 #|      Work Queue stuff      |#
 #==============================#
 try:
