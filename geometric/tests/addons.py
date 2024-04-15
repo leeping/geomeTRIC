@@ -50,8 +50,8 @@ def bigchem_available(max_retries: int = 2):
     """ 
     A function written by Colton to check if BigChem is working properly.
     """
-    from bigchem.app import bigchem as bigchem_app
     try:
+        from bigchem.app import bigchem as bigchem_app
         # Use the connection() method to get a broker connection object
         with bigchem_app.connection() as conn:
             # Open a connection to the broker
