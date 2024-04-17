@@ -45,7 +45,7 @@ def test_hcn_irc_psi4_bigchem(localizer):
     """
     shutil.copy2(os.path.join(datad, 'hcn_irc.psi4in'), os.path.join(os.getcwd(), 'hcn_irc.psi4in'))
     progress = geometric.optimize.run_optimizer(engine='psi4', input='hcn_irc.psi4in', converge=['set', 'GAU_LOOSE'],
-                                                nt=4, reset=False, trust=0.05, irc=True, maxiter=50)
+                                                nt=4, reset=False, trust=0.05, irc=True, maxiter=50, bigchem=True)
     e_ref1 = -92.35408411
     e_ref2 = -92.33971205
     max_e = np.max(progress.qm_energies)
