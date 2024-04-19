@@ -15,7 +15,7 @@ from .engine import Blank
 from .internal import CartesianCoordinates, PrimitiveInternalCoordinates, DelocalizedInternalCoordinates, ChainCoordinates
 from .nifty import flat, row, col, createWorkQueue, getWorkQueue, wq_wait, ang2bohr, bohr2ang, kcal2au, au2kcal, au2evang, logger
 from .molecule import EqualSpacing
-from .errors import NEBStructureError, NEBChainShapeError, NEBChainRespaceError, NEBBandTangentError, NEBBandGradientError
+from .errors import NEBStructureError, NEBChainShapeError, NEBBandTangentError, NEBBandGradientError
 from .config import config_dir
 
 def print_forces(chain, avgg, maxg):
@@ -586,9 +586,8 @@ class Chain(object):
                 break
             nloop += 1
             if nloop > len(self):
-                raise NEBChainRespaceError(
-                    "Stuck in a loop, bug likely! Try again with more number of images."
-                )
+                logger.info("Spacing out images could not be completed within %i iterations. NEB will be performed with the last iterated chain. \n" %nloop)
+                break
         if respaced:
             self.clearCalcs(clearEngine=False)
             logger.info("Image Number          :"+" ".join(["  %3i  " % i for i in range(len(self))])+'\n')
