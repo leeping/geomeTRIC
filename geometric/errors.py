@@ -69,9 +69,6 @@ class NEBChainError(Error):
 class NEBChainShapeError(NEBChainError):
     pass
 
-class NEBChainRespaceError(NEBChainError):
-    pass
-
 class NEBBandError(Error):
     pass
 
