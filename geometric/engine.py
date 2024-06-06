@@ -1854,7 +1854,16 @@ class QCEngineAPI(Engine):
         new_schema = deepcopy(self.schema)
         new_schema["molecule"]["geometry"] = coords.tolist()
         new_schema.pop("program", None)
-        ret = qcengine.compute(new_schema, self.program, return_dict=True)
+        if self.schema.get("schema_name", "qcschema_input") == "qcschema_manybodyspecification":
+            # Rearrange slightly when input is GeneralizedOptimizationInput for QCManyBody
+            new_schema = {
+                "schema_name": "qcschema_manybodyinput",
+                "molecule": new_schema.pop("molecule"),
+                "specification": new_schema,
+            }
+            ret = qcengine.compute_procedure(new_schema, "qcmanybody", return_dict=True)
+        else:
+            ret = qcengine.compute(new_schema, self.program, return_dict=True)
         # store the schema_traj for run_json to pick up
         self.schema_traj.append(ret)
         if ret["success"] is False:

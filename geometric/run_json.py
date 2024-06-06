@@ -118,7 +118,11 @@ def get_output_json_dict(in_json_dict, schema_traj):
         try:
             final_molecule = schema_traj[-1]["molecule"]
         except:
-            final_molecule = None
+            try:
+                # location in GeneralizedOptimizationResult, an intermediate QCSchema for QCManyBody opts
+                final_molecule = schema_traj[-1]["input_data"]["molecule"]
+            except:
+                final_molecule = None
 
     out_json_dict.update({"trajectory": schema_traj, "energies": energy_traj, "final_molecule": final_molecule})
     return out_json_dict
