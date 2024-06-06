@@ -1,0 +1,30 @@
+<?xml version="1.0" ?>
+<State openmmVersion="8.0" stepCount="0" time="0" type="State" version="1">
+	<PeriodicBoxVectors>
+		<A x="2" y="0" z="0"/>
+		<B x="0" y="2" z="0"/>
+		<C x="0" y="0" z="2"/>
+	</PeriodicBoxVectors>
+	<Parameters AmoebaVdwLambda="1"/>
+	<Positions>
+		<Position x="-.2596000134944916" y=".16899999976158142" z="0"/>
+		<Position x="-.22390000522136688" y=".21940000355243683" z=".08739999681711197"/>
+		<Position x="-.22390000522136688" y=".21940000355243683" z="-.08739999681711197"/>
+		<Position x="-.36660000681877136" y=".16899999976158142" z="0"/>
+		<Position x="-.20829999446868896" y=".023800000548362732" z="0"/>
+		<Position x="-.24390000104904175" y="-.02669999934732914" z=".08739999681711197"/>
+		<Position x="-.24390000104904175" y="-.02669999934732914" z="-.08739999681711197"/>
+		<Position x="-.10130000114440918" y=".023800000548362732" z="0"/>
+	</Positions>
+	<Velocities>
+		<Velocity x="0" y="0" z="0"/>
+		<Velocity x="0" y="0" z="0"/>
+		<Velocity x="0" y="0" z="0"/>
+		<Velocity x="0" y="0" z="0"/>
+		<Velocity x="0" y="0" z="0"/>
+		<Velocity x="0" y="0" z="0"/>
+		<Velocity x="0" y="0" z="0"/>
+		<Velocity x="0" y="0" z="0"/>
+	</Velocities>
+	<IntegratorParameters/>
+</State>

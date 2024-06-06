@@ -39,14 +39,15 @@ import os
 import sys
 import time
 import traceback
-import pkg_resources
 from copy import deepcopy
 from datetime import datetime
 
 import numpy as np
+import scipy
+import warnings
+from scipy import optimize
 from numpy.linalg import multi_dot
 
-import geometric
 from .info import print_logo, print_citation
 from .internal import CartesianCoordinates, PrimitiveInternalCoordinates, DelocalizedInternalCoordinates
 from .ic_tools import check_internal_grad, check_internal_hess, write_displacements
@@ -54,8 +55,9 @@ from .normal_modes import calc_cartesian_hessian, frequency_analysis
 from .step import brent_wiki, Froot, calc_drms_dmax, get_cartesian_norm, get_delta_prime, trust_step, force_positive_definite, update_hessian
 from .prepare import get_molecule_engine, parse_constraints
 from .params import OptParams, parse_optimizer_args
-from .nifty import row, col, flat, bohr2ang, ang2bohr, logger, bak, createWorkQueue, destroyWorkQueue
-from .errors import InputError, HessianExit, EngineError, GeomOptNotConvergedError, GeomOptStructureError, LinearTorsionError
+from .nifty import row, col, flat, bohr2ang, ang2bohr, logger, bak, createWorkQueue, destroyWorkQueue, printcool_dictionary
+from .errors import InputError, HessianExit, EngineError, IRCError, GeomOptNotConvergedError, GeomOptStructureError, LinearTorsionError
+from .config import config_dir
 
 class Optimizer(object):
     def __init__(self, coords, molecule, IC, engine, dirname, params, print_info=True):
@@ -83,6 +85,7 @@ class Optimizer(object):
         # Copies of data passed into constructor
         self.coords = coords
         self.molecule = deepcopy(molecule)
+        self.IC0 = IC
         self.IC = IC
         self.engine = engine
         self.dirname = dirname
@@ -119,6 +122,9 @@ class Optimizer(object):
         self.lowq_tr_limit = 1
         # Recalculate the Hessian after a trigger - for example if the energy changes by a lot during TS optimization.
         self.recalcHess = False
+        # IRC related information
+        self.IRC_info = {"direction" : 1, "opt" : False, "total_disp" : 0.0, 
+                        "substep_success" : True, "IC_changed" : False}
         if print_info:
             self.print_info()
         
@@ -127,6 +133,8 @@ class Optimizer(object):
         logger.info("> ===== Optimization Info: ====\n")
         if params.transition:
             logger.info("> Job type: Transition state optimization\n")
+        elif params.irc:
+            logger.info("> Job type: Intrinsic Reaction Coordinate method\n")
         else:
             logger.info("> Job type: Energy minimization\n")
             
@@ -168,6 +176,9 @@ class Optimizer(object):
             logger.info("> \n")
             logger.info("> Constraints are requested. The following criterion is added:\n")
             logger.info(">  Max Constraint Violation (in Angstroms/degrees) < %.2e \n" % self.params.Convergence_cmax)
+
+        if params.Converge_maxiter:
+            logger.info(">  Converge-on-maxiter set: Will exit with success if maximum number of iterations (%i) is reached.\n" % params.maxiter)
 
         logger.info("> === End Optimization Info ===\n")
         
@@ -216,7 +227,7 @@ class Optimizer(object):
                 raise ValueError("Cannot continue a constrained optimization; please implement constrained optimization in Cartesian coordinates")
             IC1 = CartesianCoordinates(newmol)
         else:
-            IC1 = self.IC.__class__(newmol, connect=self.IC.connect, addcart=self.IC.addcart, build=False, conmethod=self.IC.conmethod)
+            IC1 = self.IC.__class__(newmol, connect=self.IC.connect, addcart=self.IC.addcart, build=False, conmethod=self.IC.conmethod, rigid=self.IC.rigid)
             if self.IC.haveConstraints(): IC1.getConstraints_from(self.IC)
         # Check for differences
         changed = (IC1 != self.IC)
@@ -245,13 +256,32 @@ class Optimizer(object):
 
     def calcGradNorm(self):
         gradxc = self.IC.calcGradProj(self.X, self.gradx) if self.IC.haveConstraints() else self.gradx.copy()
-        atomgrad = np.sqrt(np.sum((gradxc.reshape(-1,3))**2, axis=1))
+        if self.IC.rigid:
+            mol = deepcopy(self.molecule)
+            mol.xyzs = [self.X.reshape(-1, 3)*bohr2ang]
+            mol.qm_grads = [gradxc.reshape(-1,3)]
+            atomgrad = []
+            # print("Net forces / torques:")
+            netfrcs = []
+            torques = []
+            for i, frag in enumerate(self.IC.frags):
+                frag_mol = mol.atom_select(frag)
+                netfrc, torque = frag_mol.calc_netforce_torque(mass=True)
+                netfrcs.append(netfrc[0])
+                torques.append(torque[0])
+                # print("Frag %i: % 9.3e % 9.3e % 9.3e ; % 9.3e % 9.3e % 9.3e" % (i, *netfrc[0], *torque[0]))
+            atomgrad = np.sqrt(np.sum((np.array(netfrcs + torques).reshape(-1,3))**2, axis=1))
+        else:
+            atomgrad = np.sqrt(np.sum((gradxc.reshape(-1,3))**2, axis=1))
         rms_gradient = np.sqrt(np.mean(atomgrad**2))
         max_gradient = np.max(atomgrad)
         return rms_gradient, max_gradient
 
     def rebuild_hessian(self):
-        self.H0 = self.IC.guess_hessian(self.coords)
+        if self.params.irc:
+            self.H0 = self.IC.calcHess(self.coords.copy(), self.Gx_init, self.Hx0)
+        else:
+            self.H0 = self.IC.guess_hessian(self.coords)
         self.H = update_hessian(self.IC, self.H0, self.X_hist, self.Gx_hist, self.params, trust_limit=True, max_updates=100)
 
     def frequency_analysis(self, hessian, suffix, afterOpt):
@@ -266,7 +296,7 @@ class Optimizer(object):
             logger.info("Requesting %i samples from Wigner distribution.\n" % self.params.wigner)
         prefix = self.params.xyzout.replace("_optim.xyz", "").replace(".xyz", "")
         # Call the frequency analysis function with an input Hessian, with most arguments populated from self.params
-        frequency_analysis(self.X, hessian, self.molecule.elem, energy=self.E, temperature=self.params.temperature, pressure=self.params.pressure, verbose=self.params.verbose, 
+        self.TSWavenum, self.TSNormal_modes_x, _ = frequency_analysis(self.X, hessian, self.molecule.elem, energy=self.E, temperature=self.params.temperature, pressure=self.params.pressure, verbose=self.params.verbose,
                            outfnm='%s.vdata_%s' % (prefix, suffix), note='Iteration %i Energy % .8f%s' % (self.Iteration, self.E, ' (Optimized Structure)' if afterOpt else ''),
                            wigner=((self.params.wigner, os.path.join(self.dirname, 'wigner')) if do_wigner else None), ignore=self.params.ignore_modes)
 
@@ -334,6 +364,14 @@ class Optimizer(object):
                     self.frequency_analysis(self.Hx0, 'first', False)
                 if self.Hx0.shape != (self.X.shape[0], self.X.shape[0]):
                     raise IOError('hess_data passed in via OptParams does not have the right shape')
+            if self.params.maxiter == 0:
+                logger.info("Maximum iterations reached (%i); increase --maxiter for more\n" % self.params.maxiter)
+                if self.params.Converge_maxiter:
+                    logger.info("Exiting normally because --converge maxiter was set.\n")
+                    self.state = OPT_STATE.CONVERGED
+                else:
+                    self.state = OPT_STATE.FAILED
+
             # self.Hx = self.Hx0.copy()
         # Add new Cartesian coordinates, energies, and gradients to history
         if self.viz_rotations:
@@ -368,6 +406,7 @@ class Optimizer(object):
         # Initial history
         self.X_hist = [self.X]
         self.Gx_hist = [self.gradx]
+        self.Gx_init = self.gradx.copy()
         # Initial Hessian
         if hasattr(self, 'Hx'):
             # Compute IC Hessian from Cartesian Hessian at the current step
@@ -392,11 +431,156 @@ class Optimizer(object):
         else:
             logger.info("Hessian Eigenvalues: " + ' '.join("%.5e" % i for i in Eig) + '\n')
         return Eig
-        
-    def step(self):
+
+    def find_lambda(self, Lambda, Heig, Hvec, g_M, p_M):
         """
-        Perform one step of the optimization.
+        Equation 26 from Gonzalez & Schlegel (1990)
         """
+        a = Heig * np.dot(p_M, Hvec) - np.dot(g_M, Hvec)
+        b = Heig - Lambda
+        c = (a / b) ** 2
+        return np.sum(c) - (0.5 * self.IRC_stepsize) ** 2
+
+    def guess_g(self, g, H, disp):
+        """
+        Guess the gradient using the quadratic expansion
+        """
+        g_new = g + np.dot(H, disp)
+        return g_new
+
+    def IRC_step(self):
+        self.farConstraints = self.IC.haveConstraints() and self.IC.maxConstraintViolation(self.X) > 1e-1
+        logger.info("IRC sub-step 1: Finding the pivot point (q*_{k+1})\n")
+
+        # Need to take a step towards the pivot point
+        self.IC.clearCache()
+        MWGMat = self.IC.GMatrix(self.X, invMW=True)
+
+        # Save the initial Cartesian coordinate
+        X0 = self.X.copy()
+
+        # Vector to the pivot point
+        if self.Iteration == 0:
+            # If it's the very first step, pick the eigenvector of the imaginary frequency and pick the direction
+            logger.info('\nFirst, following the imaginary mode vector\n')
+            if self.TSWavenum[1] < 0:
+                raise IRCError("There are more than one imaginary vibrational mode. Please optimize the structure and try again.\n")
+            elif self.TSWavenum[0] > 0:
+                raise IRCError("No imaginary mode detected. Please optimize the structure and try again.\n")
+
+            self.IRC_adjfactor = np.linalg.norm(self.TSNormal_modes_x[0] * np.sqrt(self.IC.mass))
+            self.IRC_init_step = self.trust * ang2bohr * self.IRC_adjfactor
+            logger.info("Initial step-size: %.5f \n" %self.IRC_init_step)
+
+            # Following the imaginary mode vector
+            Im_mode = self.TSNormal_modes_x[0]
+            Im_mode *= self.IRC_info.get("direction")
+            v = self.IC.calcDiff(X0 + Im_mode, X0)
+            X = self.IC.newCartesian(X0, v)
+            v = self.IC.calcDiff(X, X0)
+  
+            #if self.IRC_init_v is None:
+            #    #MWGMat_sqrt_inv, MWGMat_sqrt = self.IC.GInverse_SVD(self.X, sqrt=True, invMW=True)
+            #    #H_M = np.dot(np.dot(MWGMat_sqrt, self.H), MWGMat_sqrt.T)
+            #    #_, MW_IC_vecs = np.linalg.eigh(H_M)
+            #    #v = MW_IC_vecs[0]
+            #    self.IRC_init_v = self.IC.calcDiff(X0 - Im_mode, X0)
+            #else:
+            #    v = self.IRC_init_v
+
+        else:
+            v = self.G.copy() # Internal coordinate gradients
+
+        invMW_v = np.dot(MWGMat, v) # Inverse mass-weighted vector
+        # Normalization factor
+        N = 1 / np.sqrt(np.dot(v.T, np.dot(MWGMat, v)))
+        self.IRC_stepsize = self.trust * ang2bohr * self.IRC_adjfactor
+        # Step towards the pivot point
+        dy_to_pivot = -0.5*self.IRC_stepsize*N*invMW_v
+
+        # Move to the pivot point
+        X_pivot = self.IC.newCartesian(X0, dy_to_pivot, self.params.verbose)
+        dy_to_pivot = self.IC.calcDiff(X_pivot, X0)
+        # Calculating sqrt(mass) weighted Cartesian coordinate
+        MWGMat_sqrt_inv, MWGMat_sqrt = self.IC.GInverse_SVD(X_pivot, sqrt=True, invMW=True)
+        mwdx_1 = np.dot(MWGMat_sqrt_inv, dy_to_pivot)
+        logger.info("Half step dy     = %.5f\n" %np.linalg.norm(dy_to_pivot))
+        logger.info("Half step mw-dx  = %.5f Bohr*sqrt(amu)\n" %np.linalg.norm(mwdx_1))
+
+        # We are at the pivot point
+        logger.info('\nIRC sub-step 2: Finding the next point (q_{k+1})\n')
+        v1 = v.copy()
+        irc_sub_iteration = 0
+        irc_reset_iteration = 0
+        p_prime = dy_to_pivot.copy()
+        # Finding the next point
+        while True:
+            X = self.IC.newCartesian(X_pivot, p_prime, self.params.verbose)
+            # Now we are at the guessed point, define mass-weighted G matrix at the guessed point
+            self.IC.clearCache()
+            MWGMat_sqrt_inv, MWGMat_sqrt = self.IC.GInverse_SVD(X, sqrt=True, invMW=True)
+            # Mass weighted displacement, gradients, and Hessian
+            g_M = np.dot(MWGMat_sqrt, self.guess_g(self.G, self.H, dy_to_pivot + p_prime))
+            H_M = np.dot(np.dot(MWGMat_sqrt, self.H), MWGMat_sqrt.T)
+            p_M = np.dot(MWGMat_sqrt_inv, p_prime)
+
+            Heig, Hvecs = np.linalg.eigh(H_M)
+            init_guess = 1.01*Heig[0] if Heig[0] < 0 else 0.99*Heig[0]
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                min_lambda = scipy.optimize.fsolve(self.find_lambda, init_guess, (Heig, Hvecs, g_M, p_M), xtol=1e-14, maxfev=500)
+            LambdaI = min_lambda[0]*np.eye(len(self.IC.Internals))
+            del_q_M1 = np.linalg.pinv(H_M - LambdaI)
+            del_q_M2 = g_M - min_lambda[0]*p_M
+            del_q_M = -np.dot(del_q_M1, del_q_M2)
+            dq_new = np.dot(MWGMat_sqrt, del_q_M)
+
+            if np.linalg.norm(dq_new) < 1e-6 or irc_sub_iteration > 100:
+                dy = dy_to_pivot + p_prime
+                dy_norm = np.linalg.norm(dy)
+                v2 = p_prime/np.linalg.norm(p_prime)
+                deg = np.degrees(np.arccos(np.dot(v1/np.linalg.norm(v1),v2)))
+                mwdx = np.linalg.norm(np.dot(MWGMat_sqrt_inv, dy))
+                half_mwdx = np.linalg.norm(np.dot(MWGMat_sqrt_inv, p_prime))
+                self.IRC_dystep = dy_norm
+                self.IRC_mwdxstep = mwdx
+                self.IRC_info["total_disp"] += mwdx
+                const = self.find_lambda(min_lambda, Heig, Hvecs, g_M, p_M)
+                cnorm = self.get_cartesian_norm(dy) # Angstrom
+                if ((const > 1 or min_lambda > Heig[0]) and irc_sub_iteration > 100) or mwdx > self.IRC_stepsize*1.5:
+                    #logger.info("mwdx_1: %f \n" %np.linalg.norm(mwdx_1))
+                    #logger.info("mwdx: %f \n" %mwdx)
+                    #logger.info("cnorm: %f \n" %cnorm)
+                    if self.IRC_info.get("substep_success"):
+                        logger.info("IRC second sub-step failed. Rejecting the step.\n")
+                        self.IRC_info["substep_success"] = False
+                    else:
+                        logger.info("IRC second sub-step failed. Taking a half-step.\n")
+                        dy = dy_to_pivot
+                        self.IRC_info["substep_success"] = True
+                    logger.info('X Failed half step dy     = %.5f \n' % np.linalg.norm(p_prime))
+                    logger.info('X Failed half step mw-dx  = %.5f Bohr*sqrt(amu)\n\n' % half_mwdx)
+                    logger.info('X Failed total step dy: %.5f \n' %dy_norm)
+                    logger.info('X Failed total step mw-dx = %.5f Bohr*sqrt(amu)\n' % mwdx)
+                    logger.info('X Failed total cnorm: %.5f \n' %cnorm)
+                    logger.info('Constraint: %.5f \n' %const)
+                    logger.info('dq_new: %.5f \n' %np.linalg.norm(dq_new))
+                else:
+                    self.IRC_info["substep_success"] = True
+                break
+            irc_sub_iteration += 1
+            p_prime += dq_new
+
+        logger.info('Angle between v1 and v2: %2.f \n' % deg)
+        logger.info('Half step dy     = %.5f \n' % np.linalg.norm(p_prime))
+        logger.info('Half step mw-dx  = %.5f Bohr*sqrt(amu)\n\n' % half_mwdx)
+        logger.info('=> Total step dy    = %.5f \n' % dy_norm)
+        logger.info('=> Total step mw-dx = %.5f Bohr*sqrt(amu)\n' % mwdx)
+        self.Iteration += 1
+        return dy
+
+    def optimize_step(self):
+        # This function is identical to the previous version without IRC (a copy of lines 426-504)
         params = self.params
         if np.isnan(self.G).any():
             raise RuntimeError("Gradient contains nan - check output and temp-files for possible errors")
@@ -476,7 +660,30 @@ class Optimizer(object):
             ##### End Rebuild
             # Finally, take an internal coordinate step of the desired length.
             dy, _ = self.trust_step(iopt, v0, verbose=(self.params.verbose+1 if self.params.verbose >= 2 else 0))
-            self.cnorm = self.get_cartesian_norm(dy)
+
+        return dy
+
+
+    def step(self):
+        if self.params.irc:
+            """
+            Take an IRC step.
+            """
+            if self.IRC_info.get("opt"):
+                # If the IRC switches to optimization, take an optimization step. () 
+                dy = self.optimize_step()
+            else:
+                dy = self.IRC_step()
+        else:
+            """
+            Take an optimization step.
+            """
+            dy = self.optimize_step()
+
+        if dy is None: return
+
+        ### Before updating any of our variables, copy current variables to "previous"
+        self.cnorm = self.get_cartesian_norm(dy)
         ### DONE OBTAINING THE STEP ###
         if isinstance(self.IC, PrimitiveInternalCoordinates):
             idx = np.argmax(np.abs(dy))
@@ -488,7 +695,6 @@ class Optimizer(object):
         # Dot = -np.dot(dy/np.linalg.norm(dy), self.G/np.linalg.norm(self.G))
         # Whether the Cartesian norm comes close to the trust radius
         # bump = cnorm > 0.8 * self.trust
-        ### Before updating any of our variables, copy current variables to "previous"
         self.Yprev = self.Y.copy()
         self.Xprev = self.X.copy()
         self.Gxprev = self.gradx.copy()
@@ -507,6 +713,103 @@ class Optimizer(object):
         # self.expectdG = np.dot(self.H, col(dy).flatten())
         self.state = OPT_STATE.NEEDS_EVALUATION
 
+    def reset_irc(self):
+        self.IRC_info["direction"] = -1
+        self.Iteration = 0
+        self.X = self.X_hist[0].copy()
+        self.IC = self.IC0
+        self.E = self.progress.qm_energies[0]
+        self.gradx = self.progress.qm_grads[0]
+        self.progress = self.progress[::-1]
+        self.trust = self.params.trust
+        self.IRC_info["opt"] = False
+        self.trustprint = "="
+        self.IRC_info["substep_success"] = True 
+        self.IRC_info["IC_changed"] = False
+        self.IRC_info["total_disp"] = 0.0
+        self.prepareFirstStep()
+
+
+    def evaluate_IRC_step(self, params, step_state, criteria_met, IRC_converged):
+
+        if self.Iteration > params.maxiter:
+            if self.IRC_info.get("direction") == -1:
+                logger.info("\nIRC backward direction reached maximum iteration number\n")
+                logger.info("Terminating IRC\n")
+                self.state = OPT_STATE.FAILED
+            else:
+                logger.info("\nIRC forward direction reached maximum iteration number\n")
+                logger.info("IRC backward direction starts here\n\n")
+                self.reset_irc()
+            return True, step_state
+        
+        self.IC_check = False
+        if step_state in (StepState.Reject, StepState.Poor) and not self.IRC_info.get("opt"):
+            step_state = StepState.Reject
+            if np.isclose(self.trust, params.tmin):
+                logger.info("IRC stuck with the minimum step-size and bad quality step. Forcing it to take a step.\n")
+                step_state = StepState.Okay
+            if self.Iteration < 3: 
+                logger.info("Bad quality IRC step detected near the starting point. Decreasing the step-size to the minimum.\n")
+                self.trust = params.tmin
+            self.IC_check = True
+            
+        if not self.IRC_info.get("substep_success"):
+            step_state = StepState.Reject
+            self.IC_check = True
+
+        if self.IRC_info["total_disp"] > 5*self.IRC_init_step:
+            if criteria_met :
+                if self.IRC_info.get("direction") == 1:
+                    logger.info("\nIRC forward direction converged\n")
+                    logger.info("IRC backward direction starts here\n\n")
+                    self.reset_irc()
+                elif self.IRC_info.get("direction") == -1:
+                    self.SortedEigenvalues(self.H)
+                    logger.info("Converged! =D\n")
+                    self.state = OPT_STATE.CONVERGED
+                return True, step_state
+            elif IRC_converged and not self.IRC_info.get("opt"):
+                self.IRC_info["opt"] = True
+                #if self.cnorm > 1e-4:
+                #    self.trust = self.cnorm
+                #self.params.tmax = self.params.trust*3
+                logger.info("Switching to optimization\n")
+
+        return False, step_state
+
+    def evaluate_OPT_step(self, params, step_state, criteria_met, Converged_molpro_gmax, Converged_molpro_dmax):
+        if criteria_met and self.conSatisfied:
+            self.SortedEigenvalues(self.H)
+            logger.info("Converged! =D\n")
+            self.state = OPT_STATE.CONVERGED
+            return True, step_state
+
+        if self.Iteration >= params.maxiter:
+            self.SortedEigenvalues(self.H)
+            logger.info("Maximum iterations reached (%i); increase --maxiter for more\n" % params.maxiter)
+            if params.Converge_maxiter:
+                logger.info("Exiting normally because --converge maxiter was set.\n")
+                self.state = OPT_STATE.CONVERGED
+            else:
+                self.state = OPT_STATE.FAILED
+            return True, step_state
+
+        if params.qccnv and Converged_grms and (Converged_drms or Converged_energy) and self.conSatisfied:
+            self.SortedEigenvalues(self.H)
+            logger.info("Converged! (Q-Chem style criteria requires grms and either drms or energy)\n")
+            self.state = OPT_STATE.CONVERGED
+            return True, step_state
+
+        if params.molcnv and Converged_molpro_gmax and (Converged_molpro_dmax or Converged_energy) and self.conSatisfied:
+            self.SortedEigenvalues(self.H)
+            logger.info("Converged! (Molpro style criteria requires gmax and either dmax or energy)\nThis is approximate since convergence checks are done in cartesian coordinates.\n")
+            self.state = OPT_STATE.CONVERGED
+            return True, step_state
+
+        return False, step_state
+
+
     def evaluateStep(self):
         ### At this point, the state should be NEEDS_EVALUATION
         assert self.state == OPT_STATE.NEEDS_EVALUATION
@@ -522,15 +825,16 @@ class Optimizer(object):
         rms_gradient, max_gradient = self.calcGradNorm()
         rms_displacement, max_displacement = calc_drms_dmax(self.X, self.Xprev)
         rms_displacement_noalign, max_displacement_noalign = calc_drms_dmax(self.X, self.Xprev, align=False)
+        del_E = self.E-self.Eprev
         # The ratio of the actual energy change to the expected change
-        Quality = (self.E-self.Eprev)/self.expect
+        Quality = del_E/self.expect
         # The internal coordinate gradient (actually not really used in this function)
         self.G = self.IC.calcGrad(self.X, self.gradx).flatten()
         # For transition states, the quality factor decreases in both directions
         if params.transition and Quality > 1.0:
             Quality = 2.0 - Quality
         # Check convergence criteria
-        Converged_energy = np.abs(self.E-self.Eprev) < params.Convergence_energy
+        Converged_energy = np.abs(del_E) < params.Convergence_energy
         Converged_grms = rms_gradient < params.Convergence_grms
         Converged_gmax = max_gradient < params.Convergence_gmax
         Converged_drms = rms_displacement < params.Convergence_drms
@@ -539,12 +843,12 @@ class Optimizer(object):
         # 2020-03-10: Step quality thresholds are hard-coded here.
         colors = {}
         if Quality > 0.75: step_state = StepState.Good
-        elif Quality > (0.5 if params.transition else 0.25): step_state = StepState.Okay
+        elif Quality > (0.5 if params.transition or params.irc else 0.25): step_state = StepState.Okay
         elif Quality > 0.0: step_state = StepState.Poor
         else:
             colors['energy'] = "\x1b[92m" if Converged_energy else "\x1b[91m"
             colors['quality'] = "\x1b[91m"
-            step_state = StepState.Reject if (Quality < -1.0 or params.transition) else StepState.Poor
+            step_state = StepState.Reject if (Quality < -1.0 or params.transition or params.irc) else StepState.Poor
         if 'energy' not in colors: colors['energy'] = "\x1b[92m" if Converged_energy else "\x1b[0m"
         if 'quality' not in colors: colors['quality'] = "\x1b[0m"
         colors['grms'] = "\x1b[92m" if Converged_grms else "\x1b[0m"
@@ -568,29 +872,18 @@ class Optimizer(object):
             logger.info(self.prim_msg + '\n')
 
         ### Check convergence criteria ###
-        if Converged_energy and Converged_grms and Converged_drms and Converged_gmax and Converged_dmax and self.conSatisfied:
-            self.SortedEigenvalues(self.H)
-            logger.info("Converged! =D\n")
-            self.state = OPT_STATE.CONVERGED
-            return
+        criteria_met = Converged_energy and Converged_grms and Converged_drms and Converged_gmax and Converged_dmax
 
-        if self.Iteration > params.maxiter:
-            self.SortedEigenvalues(self.H)
-            logger.info("Maximum iterations reached (%i); increase --maxiter for more\n" % params.maxiter)
-            self.state = OPT_STATE.FAILED
-            return
+        # The IRC method often oscillates near the end point without converging. 
+        # If the energy, grms, and gmax converge, simple optimization procedure will be initiated. 
+        IRC_converged = Converged_energy and Converged_grms and Converged_gmax
 
-        if params.qccnv and Converged_grms and (Converged_drms or Converged_energy) and self.conSatisfied:
-            self.SortedEigenvalues(self.H)
-            logger.info("Converged! (Q-Chem style criteria requires grms and either drms or energy)\n")
-            self.state = OPT_STATE.CONVERGED
-            return
+        if params.irc and not self.IRC_info.get("opt"):
+            terminate, step_state = self.evaluate_IRC_step(params, step_state, criteria_met, IRC_converged)
+        else:
+            terminate, step_state = self.evaluate_OPT_step(params, step_state, criteria_met, Converged_molpro_gmax, Converged_molpro_dmax)
 
-        if params.molcnv and Converged_molpro_gmax and (Converged_molpro_dmax or Converged_energy) and self.conSatisfied:
-            self.SortedEigenvalues(self.H)
-            logger.info("Converged! (Molpro style criteria requires gmax and either dmax or energy)\nThis is approximate since convergence checks are done in cartesian coordinates.\n")
-            self.state = OPT_STATE.CONVERGED
-            return
+        if terminate: return
 
         assert self.state == OPT_STATE.NEEDS_EVALUATION
         
@@ -623,6 +916,32 @@ class Optimizer(object):
             self.trustprint = "="
 
         if step_state == StepState.Reject:
+            if params.irc and not self.IRC_info.get("opt") and self.Iteration > 1:
+                self.IRC_info["total_disp"] -= self.IRC_mwdxstep
+                self.Iteration -= 1
+                logger.info("\x1b[93mRejecting step - low quality IRC step\x1b[0m\n")
+                self.trustprint = "\x1b[1;91mx\x1b[0m"
+                self.X_rj = self.X.copy()
+                self.Y = self.Yprev.copy()
+                self.X = self.Xprev.copy()
+                self.gradx = self.Gxprev.copy()
+                self.G = self.Gprev.copy()
+                self.E = self.Eprev
+                self.engine.load_guess_files(self.dirname)
+                self.recalcHess = False
+                self.progress = self.progress[:-1]
+                #if self.IC.bork:
+                #    logger.info("Failed inverse iteration - checking coordinate system\n")
+                #    self.checkCoordinateSystem(recover=True, cartesian=isinstance(self.IC, CartesianCoordinates))
+                #else:
+                #    self.X_hist = self.X_hist[:-1]
+                #    self.Gx_hist = self.Gx_hist[:-1]
+                if self.IC_check:
+                    logger.info("Checking coordinate system\n")
+                    IC_changed = self.checkCoordinateSystem(cartesian=isinstance(self.IC, CartesianCoordinates))
+                    if IC_changed and not self.IRC_info.get("IC_changed"):
+                        self.IRC_info["IC_changed"] = IC_changed
+                return
             if hasattr(self, 'X_rj') and np.allclose(self.X_rj, self.X, atol=1e-6):
                 logger.info("\x1b[93mA previously rejected step was repeated; accepting to avoid infinite loop\x1b[0m\n")
                 delattr(self, 'X_rj')
@@ -642,7 +961,7 @@ class Optimizer(object):
             elif self.farConstraints:
                 logger.info("\x1b[93mNot rejecting step - far from constraint satisfaction\x1b[0m\n")
             else:
-                logger.info("\x1b[93mRejecting step - quality is lower than %.1f\x1b[0m\n" % (0.0 if params.transition else -1.0))
+                logger.info("\x1b[93mRejecting step - quality is lower than %.1f\x1b[0m\n" % (0.0 if params.transition or params.irc else -1.0))
                 self.trustprint = "\x1b[1;91mx\x1b[0m"
                 # Store the rejected step.  In case the next step is identical to the rejected one, the next step should be accepted to avoid infinite loops.
                 self.X_rj = self.X.copy()
@@ -662,7 +981,7 @@ class Optimizer(object):
 
         ### Rebuild Coordinate System if Necessary ###
         UpdateHessian = (not self.params.hessian == 'each')
-        if self.IC.bork:
+        if self.IC.bork and not params.irc:
             logger.info("Failed inverse iteration - checking coordinate system\n")
             self.checkCoordinateSystem(recover=True)
             UpdateHessian = False
@@ -798,8 +1117,7 @@ def run_optimizer(**kwargs):
     # This behavior may be changed by editing the log.ini file.
     # Output will only be written to log files after the 'logConfig' line is called!
     if kwargs.get('logIni') is None:
-        import geometric.optimize
-        logIni = pkg_resources.resource_filename(geometric.optimize.__name__, r'config/log.ini')
+        logIni = os.path.join(config_dir, 'log.ini')
     else:
         logIni = kwargs.get('logIni')
     logfilename = kwargs.get('prefix')
@@ -836,6 +1154,7 @@ def run_optimizer(**kwargs):
     now = datetime.now()
     logger.info('-=# \x1b[1;94m geomeTRIC started. Version: %s \x1b[0m #=-\n' % (geometric.__version__))
     logger.info('Current date and time: %s\n' % now.strftime("%Y-%m-%d %H:%M:%S"))
+    printcool_dictionary(kwargs, 'Arguments passed to driver run_optimizer():')
     
     if backed_up:
         logger.info('Backed up existing log file: %s -> %s\n' % (logfilename, os.path.basename(backed_up)))
@@ -864,7 +1183,9 @@ def run_optimizer(**kwargs):
     coords = M.xyzs[0].flatten() * ang2bohr
 
     # Read in the constraints
-    constraints = kwargs.get('constraints', None) #Constraint input file (optional)
+    constraints = kwargs.get('constraints', None) # Constraint input file (optional)
+    conmethod = kwargs.get('conmethod', 0) # Constraint algorithm - 0, original; 1, alternative
+    rigid = kwargs.get('rigid', False) # Whether to keep molecules rigid during optimization (TRIC only)
 
     if constraints is not None:
         Cons, CVals = parse_constraints(M, open(constraints).read())
@@ -909,8 +1230,14 @@ def run_optimizer(**kwargs):
             logger.info("Requested bond order-based connectivity but it is not available in the current engine\n")
         logger.info("Bonds will be generated from interatomic distances less than %.2f times sum of covalent radii\n" % M.top_settings['Fac'])
 
+    # TRIC IRC will fail when there is only one molecule due to the small Hessian eigenvalues.
+    if params.irc and len(M.molecules) == 1 and coordsys == 'tric':
+        coordsys = 'dlc'
+
+    CoordClass, connect, addcart = CoordSysDict[coordsys.lower()]
+
     IC = CoordClass(M, build=True, connect=connect, addcart=addcart, constraints=Cons, cvals=CVals[0] if CVals is not None else None,
-                    conmethod=params.conmethod)
+                    conmethod=conmethod, rigid=rigid)
     
     #========================================#
     #| End internal coordinate system setup |#
@@ -956,7 +1283,10 @@ def run_optimizer(**kwargs):
 
     if Cons is None:
         # Run a standard geometry optimization
-        params.xyzout = prefix+"_optim.xyz"
+        add = "_optim.xyz"
+        if params.irc:
+            add = "_irc.xyz"
+        params.xyzout = prefix+add
         progress = Optimize(coords, M, IC, engine, dirname, params)
     else:
         # Run a single constrained geometry optimization or scan over a grid of values
@@ -966,7 +1296,7 @@ def run_optimizer(**kwargs):
         for ic, CVal in enumerate(CVals):
             if len(CVals) > 1:
                 logger.info("---=== Scan %i/%i : Constrained Optimization ===---\n" % (ic+1, len(CVals)))
-            IC = CoordClass(M, build=True, connect=connect, addcart=addcart, constraints=Cons, cvals=CVal, conmethod=params.conmethod)
+            IC = CoordClass(M, build=True, connect=connect, addcart=addcart, constraints=Cons, cvals=CVal, conmethod=conmethod, rigid=rigid)
             IC.printConstraints(coords, thre=-1)
             if len(CVals) > 1:
                 params.xyzout = prefix+"_scan-%03i.xyz" % (ic+1)

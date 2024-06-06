@@ -17,7 +17,7 @@ Credits
 
 Authors: Lee-Ping Wang, Chenchen Song
 
-Contributors: Heejune Park (Nudged elastic band); Yudong Qiu (Psi4 engine, error handling); Daniel G. A. Smith (Testing framework, QCEngine JSON API);
+Contributors: Heejune Park (Nudged elastic band, Intrinsic reaction coordinate); Yudong Qiu (Psi4 engine, error handling); Daniel G. A. Smith (Testing framework, QCEngine JSON API);
 Tamas K. Stenczel (GitHub Actions, ASE engine); Sebastian Lee (Molpro engine); Chaya Stern (Travis, Conda); Qiming Sun (Custom engine); 
 Alberto Gobbi (Batch energy/gradient, logging); Josh Horton (Convergence criteria, Gaussian engine); Akhil Shajan (QUICK engine)
 
@@ -40,7 +40,7 @@ License
 
     Authors: Lee-Ping Wang, Chenchen Song
 
-    Contributors: Yudong Qiu, Daniel G. A. Smith, Sebastian Lee, Chaya Stern, Qiming Sun,
+    Contributors: Heejune Park, Yudong Qiu, Daniel G. A. Smith, Sebastian Lee, Chaya Stern, Qiming Sun,
     Alberto Gobbi, Josh Horton, Tamas K. Stenczel, Akhil Shajan
 
     Redistribution and use in source and binary forms, with or without modification,

@@ -331,7 +331,7 @@ def update_hessian(IC, H0, xyz_seq, gradx_seq, params, trust_limit=False, max_up
         if history == max_updates: break
         history += 1
 
-    if (trust_limit and history >= 1) or history > 1:
+    if ((trust_limit and history >= 1) or history > 1) and not params.irc:
         logger.info("Updating Hessian using %i steps from history\n" % history)
 
     # If history=2, thisFrame and prevFrame should be (-3, -2) and (-2, -1)
@@ -375,7 +375,7 @@ def update_hessian(IC, H0, xyz_seq, gradx_seq, params, trust_limit=False, max_up
             logger.info(msg+'\n')
             
     # Return the guess Hessian if performing energy minimization and eigenvalues become negative.
-    if not params.transition:
+    if not params.transition and not params.irc:
         Eig = sorted_eigh(H, asc=True)[0]
         if np.min(Eig) <= params.epsilon and params.reset:
             logger.info("Eigenvalues below %.4e (%.4e) - returning guess\n" % (params.epsilon, np.min(Eig)))
@@ -456,7 +456,7 @@ def get_delta_prime_trm(v, X, G, H, IC, verbose=0):
     # LPW 2020-01-24 Testing whether the image potential can be combined with NR for transition state optimization
     # Gs, Hs = image_gradient_hessian(G, H, [0])
     if IC is not None:
-        GC, HC = IC.augmentGH(X, G, H) if IC.haveConstraints() else (G, H)
+        GC, HC = IC.augmentGH(X, G, H) if (IC.haveConstraints() or IC.rigid) else (G, H)
     else:
         GC, HC = (G, H)
     HT = HC + v*np.eye(len(HC))
@@ -834,7 +834,7 @@ def trust_step(target, v0, X, G, H, IC, rfo, verbose=0):
             m_sol = sol
         # Break out of infinite oscillation loops
         if niter%100 == 99:
-            logger.info("    trust_step Iter:  %4i, randomizing\n" % niter)
+            # logger.info("    trust_step Iter:  %4i, randomizing\n" % niter)
             v += np.random.random() * niter / 100
         if niter%1000 == 999:
             if verbose >= 3: get_delta_prime(v, X, G, H, IC, rfo, verbose+1)

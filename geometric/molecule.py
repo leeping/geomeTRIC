@@ -12,12 +12,10 @@ import json
 from collections import OrderedDict, namedtuple, Counter
 from ctypes import *
 from datetime import date
-from warnings import warn
 
 import numpy as np
 from numpy import sin, cos, arccos
 from numpy.linalg import multi_dot
-from pkg_resources import parse_version
 
 # For Python 3 compatibility
 try:
@@ -364,9 +362,14 @@ if "forcebalance" in __name__:
     #| OpenMM interface functions |#
     #==============================#
     try:
-        from simtk.unit import *
-        from simtk.openmm import *
-        from simtk.openmm.app import *
+        try:
+            from openmm.unit import *
+            from openmm import *
+            from openmm.app import *
+        except ImportError:
+            from simtk.unit import *
+            from simtk.openmm import *
+            from simtk.openmm.app import *
     except ImportError:
         logger.debug('Note: Cannot import optional OpenMM module.\n')
 
@@ -545,7 +548,7 @@ def MolEqual(mol1, mol2):
     if Counter(mol1.elem) != Counter(mol2.elem) : return False
     return Counter(mol1.molecules) == Counter(mol2.molecules)
 
-def format_xyz_coord(element,xyz,tinker=False):
+def format_xyz_coord(element,xyz,tinker=False,precision=None):
     """ Print a line consisting of (element, x, y, z) in accordance with .xyz file format
 
     @param[in] element A chemical element of a single atom
@@ -553,9 +556,15 @@ def format_xyz_coord(element,xyz,tinker=False):
 
     """
     if tinker:
-        return "%-3s % 13.8f % 13.8f % 13.8f" % (element,xyz[0],xyz[1],xyz[2])
+        if precision is None: precision = 8
+        fmtstr = "%%-%is %% %i.%if %% %i.%if %% %i.%if" % (3, precision+5, precision, precision+5, precision, precision+5, precision)
+        return fmtstr % (element,xyz[0],xyz[1],xyz[2])
+        # return "%-3s % 13.8f % 13.8f % 13.8f" % (element,xyz[0],xyz[1],xyz[2])
     else:
-        return "%-5s % 15.10f % 15.10f % 15.10f" % (element,xyz[0],xyz[1],xyz[2])
+        if precision is None: precision = 10
+        fmtstr = "%%-%is %% %i.%if %% %i.%if %% %i.%if" % (5, precision+5, precision, precision+5, precision, precision+5, precision)
+        return fmtstr % (element,xyz[0],xyz[1],xyz[2])
+        # return "%-5s % 15.10f % 15.10f % 15.10f" % (element,xyz[0],xyz[1],xyz[2])
 
 def _format_83(f):
     """Format a single float into a string of width 8, with ideally 3 decimal
@@ -1897,7 +1906,7 @@ class Molecule(object):
             New.Data['bonds'] = [(list(atomslice).index(b[0]), list(atomslice).index(b[1])) for b in self.bonds if (b[0] in atomslice and b[1] in atomslice)]
         New.top_settings = copy.deepcopy(self.top_settings)
         
-        if build_topology:
+        if New.na > 1 and build_topology:
             New.build_topology(force_bonds=False)
         return New
 
@@ -1954,6 +1963,68 @@ class Molecule(object):
                     raise RuntimeError
         if 'bonds' in self.Data and 'bonds' in other.Data:
             New.Data['bonds'] = self.bonds + [(b[0]+self.na, b[1]+self.na) for b in other.bonds]
+        return New
+
+    def delete_atoms(self, indices):
+        # Returns a copy of Molecule object with the indicated atoms deleted.
+        # An array of true or false indicating whether each atom is 
+        # to be included in the returned molecule
+        mask = np.ones(self.na, dtype=bool)
+        mask[indices] = False
+        
+        # Mapping old to new atom indices
+        old_to_new_idx = np.cumsum(mask)-1
+        new_na = old_to_new_idx[-1] + 1
+        
+        # Copy data fields that don't depend on number of atoms
+        New = Molecule()
+        for key in self.FrameKeys | self.MetaKeys:
+            New.Data[key] = copy.deepcopy(self.Data[key])
+
+        # Copy and modify data fields that contain numerical atom-wise data
+        for key in ['xyzs', 'qm_grads', 'qm_espxyzs', 'qm_espvals', 'qm_extchgs', 'qm_mulliken_charges', 'qm_mulliken_spins']:
+            if key in self.Data:
+                if key == 'qm_hessians':
+                    new_data = [self.Data[key][i].reshape(self.na, 3, self.na, 3)[mask, :, mask, :].reshape(new_na, new_na).copy() for i in range(len(self))]
+                elif key == 'qm_bondorder':
+                    new_data = [self.Data[key][i][mask, mask].copy() for i in range(len(self))]
+                else:
+                    new_data = [self.Data[key][i][mask].copy() for i in range(len(self))]
+            New.Data[key] = new_data
+
+        # Copy and modify other atom-wise data fields.
+        for key in self.AtomKeys:
+            if key == 'tinkersuf': # Tinker suffix is a bit tricky
+                NewSuf = []
+                for iline, line in enumerate(self.Data[key]):
+                    if not mask[iline]: continue
+                    whites      = re.split('[^ ]+',line)
+                    s           = line.split()
+                    if len(s) > 1:
+                        for i in range(1,len(s)):
+                            # Convert the "bonded atom numbers" by changing string to integer,
+                            # subtracting 1, looking up corresponding new atom index, then adding 1
+                            s[i] = str(old_to_new_idx[int(s[i])-1]+1)
+                    NewSuf.append(''.join([whites[j]+s[j] for j in range(len(s))]))
+                New.Data[key] = NewSuf
+            else:
+                if type(self.Data[key]) is np.ndarray:
+                    new_data = self.Data[key][mask]
+                    New.Data[key] = new_data.copy()
+                elif type(self.Data[key]) is list:
+                    new_data = [self.Data[key][i] for i in range(self.na) if mask[i]]
+                    New.Data[key] = new_data[:]
+                else:
+                    logger.error('Cannot stack %s because it is of type %s\n' % (key, str(type(New.Data[key]))))
+                    raise RuntimeError
+        if 'bonds' in self.Data:
+            new_data = []
+            for b in self.bonds:
+                # Only keep bonds in non-deleted atoms
+                if mask[b[0]] and mask[b[1]]:
+                    new_data.append((old_to_new_idx[b[0]], old_to_new_idx[b[1]]))
+            New.Data['bonds'] = new_data
+
         return New
 
     def get_populations(self):
@@ -2229,16 +2300,10 @@ class Molecule(object):
         G = MyG()
         for i, a in enumerate(self.elem):
             G.add_node(i)
-            if parse_version(nx.__version__) >= parse_version('2.0'):
-                if 'atomname' in self.Data:
-                    nx.set_node_attributes(G,{i:self.atomname[i]}, name='n')
-                nx.set_node_attributes(G,{i:a}, name='e')
-                nx.set_node_attributes(G,{i:self.xyzs[sn][i]}, name='x')
-            else:
-                if 'atomname' in self.Data:
-                    nx.set_node_attributes(G,'n',{i:self.atomname[i]})
-                nx.set_node_attributes(G,'e',{i:a})
-                nx.set_node_attributes(G,'x',{i:self.xyzs[sn][i]})
+            if 'atomname' in self.Data:
+                nx.set_node_attributes(G,{i:self.atomname[i]}, name='n')
+            nx.set_node_attributes(G,{i:a}, name='e')
+            nx.set_node_attributes(G,{i:self.xyzs[sn][i]}, name='x')
         for (i, j) in self.bonds:
             G.add_edge(i, j)
         # The Topology is simply the NetworkX graph object.
@@ -3731,6 +3796,8 @@ class Molecule(object):
         X=PDBLines[0]
 
         XYZ=np.array([[x.x,x.y,x.z] for x in X])/10.0#Convert to nanometers
+
+        Serial=[x.serial for x in X] # Serial number - not the same as the atom index because it starts from 1 and TER takes up a serial number
         AltLoc=np.array([x.altLoc for x in X],'str') # Alternate location
         ICode=np.array([x.iCode for x in X],'str') # Insertion code
         ChainID=np.array([x.chainID for x in X],'str')
@@ -3775,18 +3842,23 @@ class Molecule(object):
         F2=open(fnm,'r')
         # QYD: Rewrite to support atom indices with 5 digits
         # i.e. CONECT143321433314334 -> 14332 connected to 14333 and 14334
+        # LPW: The serial numbers in the CONECT records start from 1 and include the TER records,
+        # so are not the same as the 'atom indices' in the Molecule object.
         for line in F2:
             if line[:6] == "CONECT":
-                conect_A = int(line[6:11]) - 1
+                conect_A = int(line[6:11])
                 conect_B_list = []
                 line_rest = line[11:]
                 while line_rest.strip():
                     # Take 5 characters a time until run out of characters
-                    conect_B_list.append(int(line_rest[:5]) - 1)
+                    conect_B_list.append(int(line_rest[:5]))
                     line_rest = line_rest[5:]
                 for conect_B in conect_B_list:
-                    bond = (min((conect_A, conect_B)), max((conect_A, conect_B)))
-                    bonds.append(bond)
+                    idx_conect_A = Serial.index(conect_A)
+                    idx_conect_B = Serial.index(conect_B)
+                    bond = (min((idx_conect_A, idx_conect_B)), max((idx_conect_A, idx_conect_B)))
+                    if bond not in bonds:
+                        bonds.append(bond)
 
         Answer={"xyzs":XYZList, "chain":list(ChainID), "altloc":list(AltLoc), "icode":list(ICode),
                 "atomname":[str(i) for i in AtomNames], "resid":list(ResidueID), "resname":list(ResidueNames),
@@ -4546,7 +4618,7 @@ class Molecule(object):
         # Standardize formatting of residue IDs.
         resIds = []
         for resid in self.resid:
-            resIds.append("%4d" % (resid%10000))
+            resIds.append("%4d" % (resid%10000 if resid > 0 else resid))
         # Standardize record names.
         records = []
         for resname in resNames:

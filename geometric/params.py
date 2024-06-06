@@ -48,6 +48,8 @@ class OptParams(object):
     def __init__(self, **kwargs):
         # Whether we are optimizing for a transition state. This changes a number of default parameters.
         self.transition = kwargs.get('transition', False)
+        # Intrinsic Reaction Coordinate method. This changes a number of default parameters.
+        self.irc = kwargs.get('irc', False)
         # CI optimizations sometimes require tiny steps
         self.meci = kwargs.get('meci', False)
         # Handle convergence criteria; this edits the kwargs
@@ -64,20 +66,24 @@ class OptParams(object):
         # Because TS optimization is experimental, use conservative trust radii
         self.trust = kwargs.get('trust', 0.01 if self.transition else 0.1)
         # Maximum value of trust radius
-        self.tmax = kwargs.get('tmax', 0.03 if self.transition else 0.3)
+        self.tmax = kwargs.get('tmax', 0.03 if self.transition else self.trust if self.irc else 0.3)
         # Minimum value of the trust radius
         # Also sets the maximum step size that can be rejected
         # LPW: Add to documentation later:
         # This parameter is complicated.  It represents the length scale below which the PES is expected to be smooth.
-        # If set too small, the trust radius can decrease without limit and make the optimization impossible.
+        # If set too small, the optimization could get "stuck" in a small divot on the PES and be unable to escape.
         # This could happen for example if the potential energy surface contains a "step", which occurs infrequently;
         # we don't want the optimization to stop there completely, but rather we accept a bad step and keep going.
         # If set too large, then the rejection algorithm becomes ineffective as too-large low-quality steps will be kept.
-        # It should also not be smaller than 2*Convergence_drms because that could artifically cause convergence.
-        # Because MECI optimizations have more "sharpness" in their PES, it is set
+        # It should also not be smaller than Convergence_drms because that could artifically cause convergence.
         # PS: If the PES is inherently rough on extremely small length scales,
         # then the optimization is not expected to converge regardless of tmin.
-        self.tmin = kwargs.get('tmin', min(1.0e-4 if (self.meci or self.transition) else 1.2e-3, self.Convergence_drms))
+        # Note 2023-10-29: Testing has shown that DFT calculations can have gradient errors on the order of 1e-4 
+        # in various engines when the default grid is used. This could lead to failures if the attempted 
+        # optimization step is larger than Convergence_drms, the step is rejected, then (almost) the same step
+        # is attempted again. Therefore, the minimum trust radius should be set smaller than the convergence
+        # criterion to avoid this infinite loop scenario.
+        self.tmin = kwargs.get('tmin', min(1.0e-4, self.Convergence_drms*0.1))
         # Use maximum component instead of RMS displacement when applying trust radius.
         self.usedmax = kwargs.get('usedmax', False)
         # Sanity checks on trust radius
@@ -88,8 +94,6 @@ class OptParams(object):
         self.trust = max(self.tmin, self.trust)
         # Maximum number of optimization cycles
         self.maxiter = kwargs.get('maxiter', 300)
-        # Use updated constraint algorithm implemented 2019-03-20
-        self.conmethod = kwargs.get('conmethod', 0)
         # Write Hessian matrix at optimized structure to text file
         self.write_cart_hess = kwargs.get('write_cart_hess', None)
         # Output .xyz is deliberately not set here in order to give run_optimizer()
@@ -106,7 +110,7 @@ class OptParams(object):
         if self.hessian is None:
             # Default is to calculate Hessian in the first step if searching for a transition state.
             # Otherwise the default is to never calculate the Hessian.
-            if self.transition: self.hessian = 'first'
+            if self.transition or self.irc: self.hessian = 'first'
             else: self.hessian = 'never'
         elif self.hessian.startswith('file:'):
             if os.path.exists(self.hessian[5:]):
@@ -153,8 +157,15 @@ class OptParams(object):
 
     def convergence_criteria(self, **kwargs):
         criteria = kwargs.get('converge', [])
+        # Whether to converge successfully on reaching maximum number of iterations
+        self.Converge_maxiter = False
+        # Iterate backward through the list, in case someone lists maxiter twice.
+        for i in list(range(len(criteria)))[::-1]:
+            if criteria[i].lower() == 'maxiter':
+                criteria.pop(i)
+                self.Converge_maxiter = True
         if len(criteria)%2 != 0:
-            raise RuntimeError('Please pass an even number of options to --converge')
+            raise RuntimeError('Please pass an even number of options to --converge (excluding maxiter)')
         for i in range(int(len(criteria)/2)):
             key = 'convergence_' + criteria[2*i].lower()
             try:
@@ -198,6 +209,8 @@ class OptParams(object):
             logger.info(' Net force and torque will be projected out of gradient.\n')
         if self.transition:
             logger.info(' Transition state optimization requested.\n')
+        if self.irc:
+            logger.info(' The IRC method requested.\n')
         if self.hessian == 'first':
             logger.info(' Hessian will be computed on the first step.\n')
         elif self.hessian == 'each':
@@ -233,6 +246,7 @@ class NEBParams(object):
         self.climb = kwargs.get('climb', 0.5)
         self.ncimg = kwargs.get('ncimg', 1)
         self.optep = kwargs.get('optep', False)
+        self.align = kwargs.get('align', True)
         self.epsilon = kwargs.get('epsilon', 1e-5)
         self.verbose = kwargs.get('verbose', False)
         self.trust = kwargs.get('trust', 0.1)
@@ -316,11 +330,12 @@ def parse_optimizer_args(*args):
                           '"psi4" = Psi4                       "openmm" = OpenMM (pass a force field or XML input file)\n'
                           '"molpro" = Molpro                   "gmx" = Gromacs (pass conf.gro; requires topol.top and shot.mdp\n '
                           '"gaussian" = Gaussian09/16          "ase" = ASE calculator, use --ase-class/--ase-kwargs\n '
-                          '"quick" = QUICK\n')
+                          '"quick" = QUICK                     "bagel" = Bagel\n')
     grp_univ.add_argument('--nt', type=int, help='Specify number of threads for running in parallel\n(for TeraChem this should be number of GPUs)')
 
     grp_jobtype = parser.add_argument_group('jobtype', 'Control the type of optimization job')
     grp_jobtype.add_argument('--transition', type=str2bool, help='Provide "yes" to Search for a first order saddle point / transition state.\n ')
+    grp_jobtype.add_argument('--irc', type=str2bool, help='Provide "yes" to perform the IRC method.\n ')
     grp_jobtype.add_argument('--meci', type=str, nargs="+", help='Provide second input file and search for minimum-energy conical\n '
                              'intersection or crossing point between two SCF solutions (TeraChem and Q-Chem supported).\n'
                              'Or, provide "engine" if the engine directly provides the MECI objective function and gradient.\n')
@@ -328,6 +343,7 @@ def parse_optimizer_args(*args):
                             'Not used if the engine computes the MECI objective function directly.\n ')
     grp_jobtype.add_argument('--meci_alpha', type=float, help='Alpha parameter for MECI penalty function (default 0.025).\n'
                              'Not used if the engine computes the MECI objective function directly.\n ')
+    grp_jobtype.add_argument('--rigid', type=str2bool, help='Provide "yes" to keep molecules rigid during optimization (only with TRIC)')
 
     grp_hessian = parser.add_argument_group('hessian', 'Control the calculation of Hessian (force constant) matrices and derived quantities')
     grp_hessian.add_argument('--hessian', type=str, help='Specify when to calculate Cartesian Hessian using finite difference of gradient.\n'
@@ -352,13 +368,14 @@ def parse_optimizer_args(*args):
     grp_optparam.add_argument('--maxiter', type=int, help='Maximum number of optimization steps, default 300.\n ')
     grp_optparam.add_argument('--converge', type=str, nargs="+", help='Custom convergence criteria as key/value pairs.\n'
                               'Provide the name of a criteria set as "set GAU_LOOSE" or "set TURBOMOLE",\n'
-                              'and/or set specific criteria using key/value pairs e.g. "energy 1e-5 grms 1e-3"\n ')
+                              'and/or set specific criteria using key/value pairs e.g. "energy 1e-5 grms 1e-3"\n '
+                              'and/or add the MAXITER keyword to enable successful convergence on maximum iterations reached')
     grp_optparam.add_argument('--trust', type=float, help='Starting trust radius, defaults to 0.1 (energy minimization) or 0.01 (TS optimization).\n ')
     grp_optparam.add_argument('--tmax', type=float, help='Maximum trust radius, defaults to 0.3 (energy minimization) or 0.03 (TS optimization).\n ')
     grp_optparam.add_argument('--tmin', type=float, help='Minimum trust radius, do not reject steps trust radius is below this threshold (method-dependent).\n ')
     grp_optparam.add_argument('--usedmax', type=str2bool, help='Use maximum component instead of RMS displacement when applying trust radius.\n ')
     grp_optparam.add_argument('--enforce', type=float, help='Enforce exact constraints when within provided tolerance (in a.u./radian, default 0.0)\n ')
-    grp_optparam.add_argument('--conmethod', type=int, help='Set to 1 to enable updated constraint algorithm (default 0).\n ')
+    grp_optparam.add_argument('--conmethod', type=int, help='Set to 1 to enable alternate constraint algorithm (default 0).\n ')
     grp_optparam.add_argument('--reset', type=str2bool, help='Reset approximate Hessian to guess when eigenvalues are under epsilon.\n '
                               'Defaults to True for minimization and False for transition states.\n ')
     grp_optparam.add_argument('--epsilon', type=float, help='Small eigenvalue threshold for resetting Hessian, default 1e-5.\n ')
@@ -449,7 +466,7 @@ def parse_neb_args(*args):
 
     grp_univ = parser.add_argument_group('universal', 'Relevant to every job')
     grp_univ.add_argument('input', type=str, help='REQUIRED positional argument: Quantum chemistry or MM input file for calculation\n ')
-    grp_univ.add_argument('chain_coords', type=str, help='REQUIRED positional argument: Coordinate file containing multiple frames for NEB\n')
+    grp_univ.add_argument('chain_coords', type=str, help='REQUIRED positional argument: Coordinate file containing multiple frames for NEB\n ')
     # TeraChem as a default option is only for the command line interface.
     grp_univ.add_argument('--engine', type=str, help='Specify engine for computing energies and gradients.\n'
                           '"tera" = TeraChem (default)         "qchem" = Q-Chem\n'
@@ -472,11 +489,13 @@ def parse_neb_args(*args):
     grp_nebparam.add_argument('--images', type=int, help='Number of NEB images to use (default 11).\n ')
     grp_nebparam.add_argument('--plain', type=int, help='1: Use plain elastic band for spring force. 2: Use plain elastic band for spring AND potential (default 0).\n ')
     grp_nebparam.add_argument('--optep', type=str2bool, help='Provide "yes" to optimize two end points of the initial input chain.\n ')
+    grp_nebparam.add_argument('--align', type=str2bool, help='Align images before starting the NEB method (default yes). If "--optep" is set to "yes", the images will be aligned after optimizing the end points.\n ')
     grp_nebparam.add_argument('--trust', type=float, help='Starting trust radius, defaults to 0.1 (energy minimization) or 0.01 (TS optimization).\n ')
     grp_nebparam.add_argument('--tmax', type=float, help='Maximum trust radius, defaults to 0.3 (energy minimization) or 0.03 (TS optimization).\n ')
     grp_nebparam.add_argument('--tmin', type=float, help='Minimum trust radius, do not reject steps trust radius is below this threshold (method-dependent).\n ')
-    grp_nebparam.add_argument('--skip', action='store_true', help='Skip Hessian updates that would introduce negative eigenvalues.')
+    grp_nebparam.add_argument('--skip', action='store_true', help='Skip Hessian updates that would introduce negative eigenvalues.\n ')
     grp_nebparam.add_argument('--epsilon', type=float, help='Small eigenvalue threshold for resetting Hessian, default 1e-5.\n ')
+    grp_nebparam.add_argument('--port', type=int, help='Work Queue port used to distribute singlepoint calculations. Workers must be started separately.\n')
 
     grp_output = parser.add_argument_group('output', 'Control the format and amount of the output')
     grp_output.add_argument('--prefix', type=str, help='Specify a prefix for log file and temporary directory.\n'
@@ -484,7 +503,6 @@ def parse_neb_args(*args):
     grp_output.add_argument('--verbose', type=int, help='Set to positive for more verbose printout.\n'
                             '0 = Default print level.     1 = Basic info about optimization step.\n'
                             '2 = Include microiterations. 3 = Lots of printout from low-level functions.\n ')
-
     grp_help = parser.add_argument_group('help', 'Get help')
     grp_help.add_argument('-h', '--help', action='help', help='Show this help message and exit')
 

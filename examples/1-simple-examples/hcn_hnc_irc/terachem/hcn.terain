@@ -1,0 +1,19 @@
+coordinates    input.xyz
+charge         0
+spinmult       1
+run            gradient
+method         hf
+basis          3-21g
+
+# SCF options
+purify         no
+convthre       1e-6
+maxit          50
+scf            diis
+
+# Thresholds and precision
+#threall        1e-14
+precision      mixed
+threspdp       1e-4
+dftgrid        3
+end

@@ -54,6 +54,9 @@ class ParamError(Error):
 class FrequencyError(Error):
     pass
 
+class IRCError(Error):
+    pass
+
 class CheckCoordError(Error):
     pass
 
@@ -64,9 +67,6 @@ class NEBChainError(Error):
     pass
 
 class NEBChainShapeError(NEBChainError):
-    pass
-
-class NEBChainRespaceError(NEBChainError):
     pass
 
 class NEBBandError(Error):
@@ -93,6 +93,9 @@ class QChemEngineError(EngineError):
 class QUICKEngineError(EngineError):
     pass
 
+class CFOUREngineError(EngineError):
+    pass
+
 class GromacsEngineError(EngineError):
     pass
 
@@ -103,6 +106,9 @@ class GaussianEngineError(EngineError):
     pass
 
 class QCEngineAPIEngineError(EngineError):
+    pass
+
+class BagelEngineError(EngineError):
     pass
 
 class ConicalIntersectionEngineError(EngineError):

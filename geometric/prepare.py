@@ -45,8 +45,8 @@ import os
 
 from .ase_engine import EngineASE
 from .errors import EngineError, InputError
-from .internal import Distance, Angle, Dihedral, CartesianX, CartesianY, CartesianZ, TranslationX, TranslationY, TranslationZ, RotationA, RotationB, RotationC
-from .engine import set_tcenv, load_tcin, TeraChem, ConicalIntersection, Psi4, QChem, Gromacs, Molpro, OpenMM, QCEngineAPI, Gaussian, QUICK
+from .internal import Distance, Angle, Dihedral, CartesianX, CartesianY, CartesianZ, TranslationX, TranslationY, TranslationZ, RotationA, RotationB, RotationC, CentroidDistance
+from .engine import set_tcenv, load_tcin, TeraChem, ConicalIntersection, Psi4, QChem, Gromacs, Molpro, OpenMM, QCEngineAPI, Gaussian, Bagel, QUICK, CFOUR
 from .molecule import Molecule, Elements
 from .nifty import logger, isint, uncommadash, bohr2ang, ang2bohr
 from .rotate import calc_fac_dfac
@@ -88,8 +88,8 @@ def get_molecule_engine(**kwargs):
     ## MECI calculations create a custom engine that contains multiple engines.
     if kwargs.get('meci', None):
         if engine_str is not None:
-            if engine_str.lower() in ['psi4', 'gmx', 'molpro', 'qcengine', 'openmm', 'gaussian','quick']:
-                logger.warning("MECI optimizations are not tested with engines: psi4, gmx, molpro, qcengine, openmm, gaussian, quick. Be Careful!")
+            if engine_str.lower() in ['psi4', 'gmx', 'molpro', 'qcengine', 'openmm', 'gaussian', 'bagel', 'quick', 'cfour']:
+                logger.warning("MECI optimizations are not tested with engines: psi4, gmx, molpro, qcengine, openmm, gaussian, quick, cfour. Be Careful!")
         elif customengine:
             logger.warning("MECI optimizations are not tested with customengine. Be Careful!")
         ## If 'engine' is provided as the argument to 'meci', then we assume the engine is
@@ -134,7 +134,7 @@ def get_molecule_engine(**kwargs):
         engine_str = engine_str.lower()
         if engine_str[:4] == 'tera':
             engine_str = 'tera'
-        implemented_engines = ('tera', 'qchem', 'psi4', 'gmx', 'molpro', 'openmm', 'qcengine', "gaussian", "ase", "quick")
+        implemented_engines = ('tera', 'qchem', 'psi4', 'gmx', 'molpro', 'openmm', 'qcengine', "gaussian", "bagel", "ase", "quick", "cfour")
         if engine_str not in implemented_engines:
             raise RuntimeError("Valid values of engine are: " + ", ".join(implemented_engines))
         if customengine:
@@ -298,6 +298,28 @@ def get_molecule_engine(**kwargs):
             logger.info("The gaussian engine exe is set as %s\n" % engine.gaussian_exe)
             # load the template into the engine
             engine.load_gaussian_input(inputf)
+        elif engine_str == 'bagel':
+            logger.info("Bagel engine selected. Expecting Bagel input for gradient calculation.\n")
+            engine = Bagel(threads=threads)
+            engine.load_bagel_input(inputf)
+            M = engine.M
+            threads_enabled = True        
+    
+        elif engine_str == 'cfour':
+            logger.info("CFOUR engine selected. Expecting CFOUR input for gradient calculation.\n")
+            engine = CFOUR(inputf)
+            if pdb is not None:
+                M = Molecule(pdb, radii=radii, fragment=frag)
+                # Make the PDB Molecule the engine's Molecule
+                # but keep the original 'elem'.
+                M1 = engine.M
+                M.Data['elem'] = M1.Data['elem']
+                engine.M = M
+            else:
+                M = engine.M
+                M.top_settings['radii'] = radii
+            M.build_topology()
+            threads_enabled = False
         elif engine_str == "quick":
             logger.info("QUICK engine selected. Expecting QUICK input for gradient calculation. \n")
             M = Molecule(inputf, radii=radii, fragment=frag)
@@ -306,7 +328,7 @@ def get_molecule_engine(**kwargs):
                 exe = "quick.cuda.MPI"
             elif shutil.which("quick.cuda") is not None:
                 exe = "quick.cuda"
-            elif shutil.which("quick") is not None:
+            elif shutil.which("quick.MPI") is not None:
                 exe = "quick.MPI"
             elif shutil.which("quick") is not None:
                 exe = "quick"
@@ -314,7 +336,7 @@ def get_molecule_engine(**kwargs):
                 raise ValueError("Neither quick.cuda.MPI, quick.cuda, quick.MPI or quick was found, please check the environment.")
             engine = QUICK(molecule=M, exe=exe, threads=threads)
             threads_enabled = True
-            logger.info("The quick engine exe is set as %s" % engine.quick_exe)
+            logger.info("The quick engine exe is set as %s\n" % engine.quick_exe)
             # load the template into the engine
             engine.load_quick_input(inputf)
         elif engine_str == 'qcengine':
@@ -451,7 +473,8 @@ def parse_constraints(molecule, constraints_string):
                  "trans-xz":([TranslationX, TranslationZ], 1),
                  "trans-yz":([TranslationY, TranslationZ], 1),
                  "trans-xyz":([TranslationX, TranslationY, TranslationZ], 1),
-                 "rotation":([RotationA, RotationB, RotationC], 1)
+                 "rotation":([RotationA, RotationB, RotationC], 1),
+                 "centroid_distance":([CentroidDistance], 2)
                  }
     AtomKeys = ["x", "y", "z", "xy", "yz", "xz", "xyz"]
     TransKeys = ["trans-x", "trans-y", "trans-z", "trans-xy", "trans-yz", "trans-xz", "trans-xyz"]
@@ -583,6 +606,24 @@ def parse_constraints(molecule, constraints_string):
                         if key == "distance": x2 = float(s[2+n_atom]) * ang2bohr
                         else: x2 = float(s[2+n_atom])*np.pi/180.0
                         nstep = int(s[3+n_atom])
+                        vals.append([[i] for i in list(np.linspace(x1,x2,nstep))])
+            elif key in ["centroid_distance"]:
+                atoms_a = uncommadash(s[1])
+                atoms_b = uncommadash(s[2])
+                if atoms_a[0] > atoms_b[0]:
+                    atoms_c = atoms_a[:]
+                    atoms_a = atoms_b[:]
+                    atoms_b = atoms_c[:]
+                objs.append([classes[0](atoms_a, atoms_b)])
+                if mode == "freeze":
+                    vals.append([[None]])
+                elif mode in ["set", "scan"]:
+                    x1 = float(s[3]) * ang2bohr
+                    if mode == "set":
+                        vals.append([[x1]])
+                    else:
+                        x2 = float(s[4]) * ang2bohr
+                        nstep = int(s[5])
                         vals.append([[i] for i in list(np.linspace(x1,x2,nstep))])
             elif key in ["rotation"]:
                 # User can only specify ranges of atoms

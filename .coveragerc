@@ -15,6 +15,11 @@ exclude_lines =
     except np.linalg.LinAlgError
     raise NotImplementedError
     raise RuntimeError
+    raise .*EngineError
+    raise NEBChainRespaceError
+    raise NEBStructureError
+    raise NEBBandGradientError
+    raise IRCError
     def visualize
     verbose:
     if verbose >=
@@ -24,3 +29,5 @@ exclude_lines =
     main()
     engine_str == 'gmx'
     if False
+    if self.viz_rotations
+    if self.ForceRebuild:

@@ -1,0 +1,3 @@
+geomeTRIC requires a ZMAT file containing Cartesian coordinates.
+To create the Cartesian ZMAT file from Z-matrix coordinate input, 
+run the script geomeTRIC/tools/convert-cfour-zmat.py.

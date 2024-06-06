@@ -6,7 +6,6 @@ from collections import OrderedDict
 import numpy as np
 from copy import deepcopy
 from datetime import datetime
-import pkg_resources
 from .info import print_logo, print_citation
 from .prepare import get_molecule_engine
 from .optimize import Optimize
@@ -16,7 +15,8 @@ from .engine import Blank
 from .internal import CartesianCoordinates, PrimitiveInternalCoordinates, DelocalizedInternalCoordinates, ChainCoordinates
 from .nifty import flat, row, col, createWorkQueue, getWorkQueue, wq_wait, ang2bohr, bohr2ang, kcal2au, au2kcal, au2evang, logger
 from .molecule import EqualSpacing
-from .errors import NEBStructureError, NEBChainShapeError, NEBChainRespaceError, NEBBandTangentError, NEBBandGradientError
+from .errors import NEBStructureError, NEBChainShapeError, NEBBandTangentError, NEBBandGradientError
+from .config import config_dir
 
 def print_forces(chain, avgg, maxg):
     """Check average and maximum chain forces and return color coded string"""
@@ -309,13 +309,6 @@ class Chain(object):
                 self.Structures[i].engine.number_output(self.Structures[i].tmpdir, cyc)
         self.haveCalcs = True
 
-    def CopyEnergyGradient(self, other):
-        for i in range(len(self)):
-            self.Structures[i].energy = other.Structures[i].energy
-            self.Structures[i].grad_cartesian = other.Structures[i].grad_cartesian.copy()
-            self.Structures[i].grad_internal = other.Structures[i].grad_internal.copy()
-        self.haveCalcs = True
-
     def get_cartesian_all(self, endpts=False):
         """Return the internal coordinates of images 1 .. N-2."""
         if endpts:
@@ -493,6 +486,12 @@ class Chain(object):
         Cnew.haveMetric = True
         return Cnew
 
+    def align(self):
+        self.M.align()
+        self.Structures = [Structure(self.M[i], self.engine, os.path.join(self.tmpdir, "struct_%%0%ii" %  len(str(len(self))) % i),
+                          self.coordtype) for i in range(len(self))]
+        self.clearCalcs()
+
     def respace(self, thresh):
         """
         Space-out NEB images that are closer than the threshold.
@@ -587,9 +586,8 @@ class Chain(object):
                 break
             nloop += 1
             if nloop > len(self):
-                raise NEBChainRespaceError(
-                    "Stuck in a loop, bug likely! Try again with more number of images."
-                )
+                logger.info("Spacing out images could not be completed within %i iterations. NEB will be performed with the last iterated chain. \n" %nloop)
+                break
         if respaced:
             self.clearCalcs(clearEngine=False)
             logger.info("Image Number          :"+" ".join(["  %3i  " % i for i in range(len(self))])+'\n')
@@ -619,7 +617,6 @@ class ElasticBand(Chain):
     def __init__(self, molecule, engine, tmpdir, params, coords=None, plain=0):
         super(ElasticBand, self).__init__(molecule, engine, tmpdir, params, coords=coords)
         # convert kcal/mol/Ang^2 to Hartree/Bohr^2
-        self.coordtype = 'cart'
         self.k = self.params.nebk * kcal2au * (bohr2ang**2)
         # Number of atoms
         self.na = molecule.na
@@ -670,49 +667,6 @@ class ElasticBand(Chain):
     def get_tangent_all(self):
         return np.hstack(tuple(self._tangents[1 : len(self) - 1]))
 
-    def set_grad(self, i, value, component, projection):
-        """
-        Set a component of the gradient for a specific image.
-        The value being set is copied.
-
-        Parameters
-        ----------
-        i : int
-            Index of the image for which the gradient is being set
-        value : np.ndarray
-            1D array containing gradient to be added
-        component : str
-            Choose "potential", "spring", "total" referring to the
-            corresponding energy component
-        projection : str
-            Choose "plain", "projected", "working" indicating whether
-            this is the "plain" (i.e. total) gradient, "projected" according
-            to the NEB method, or the "working" gradient being used for optimization
-        """
-        if value.ndim != 1:
-            raise NEBBandGradientError("Please pass a 1D array")
-        if i < 1 or i > (len(self) - 2):
-            raise NEBBandGradientError(
-                "Spring_Grads are only defined for 1 .. N-2 (in a chain indexed from 0 .. N-1)"
-            )
-        if value.shape[0] != self.Structures[i].nICs:
-            raise NEBBandGradientError(
-                "Dimensions of array being passed are wrong (%i ICs expected for image %i)"
-                % (self.Structures[i].nICs, i)
-            )
-        if component not in ["potential", "spring", "total"]:
-            raise NEBBandGradientError(
-                "Please set the component argument to potential, spring, or total"
-            )
-        if projection not in ["plain", "projected", "working"]:
-            raise NEBBandGradientError(
-                "Please set the projection argument to plain, projected, or working"
-            )
-        self._grads.setdefault(
-            (component, projection), [None for j in range(len(self))]
-        )[i] = value.copy()
-        self._grads[(component, projection)][i].flags.writeable = False
-
     def set_global_grad(self, value, component, projection):
         if value.ndim != 1:
             raise NEBBandGradientError("Please pass a 1D array")
@@ -731,127 +685,6 @@ class ElasticBand(Chain):
             )
         self._global_grads[(component, projection)] = value.copy()
         self._global_grads[(component, projection)].flags.writeable = False
-
-    def add_grad(self, i, value, component, projection):
-        """
-        Add to a component of the gradient for a specific image.
-
-        Parameters
-        ----------
-        i : int
-            Index of the image for which the gradient is being set
-        value : np.ndarray
-            1D array containing gradient to be added
-        component : str
-            Choose "potential", "spring", "total" referring to the
-            corresponding energy component
-        projection : str
-            Choose "plain", "projected", "working" indicating whether
-            this is the "plain" (i.e. total) gradient, "projected" according
-            to the NEB method, or the "working" gradient being used for optimization
-        """
-        if value.ndim != 1:
-            raise NEBBandGradientError("Please pass a 1D array")
-        if i < 1 or i > (len(self) - 2):
-            raise NEBBandGradientError(
-                "Spring_Grads are only defined for 1 .. N-2 (in a chain indexed from 0 .. N-1)"
-            )
-        if value.shape[0] != self.Structures[i].nICs:
-            raise NEBBandGradientError(
-                "Dimensions of array being passed are wrong (%i ICs expected for image %i)"
-                % (self.Structures[i].nICs, i)
-            )
-        if component not in ["potential", "spring", "total"]:
-            raise NEBBandGradientError(
-                "Please set the component argument to potential, spring, or total"
-            )
-        if projection not in ["plain", "projected", "working"]:
-            raise NEBBandGradientError(
-                "Please set the projection argument to plain, projected, or working"
-            )
-        if (component, projection) not in self._grads or self._grads[
-            (component, projection)
-        ][i] is None:
-            # print "Setting gradient for image", i, component, projection
-            self.set_grad(i, value, component, projection)
-        else:
-            # print "Adding gradient for image", i, component, projection
-            self._grads[(component, projection)][i].flags.writeable = True
-            self._grads[(component, projection)][i] += value
-            self._grads[(component, projection)][i].flags.writeable = False
-
-    def get_grad(self, i, component, projection):
-        """
-        Get a component of the gradient.
-        The returned value is copied.
-
-        Parameters
-        ----------
-        i : int
-            Index of the image for which the gradient is requested
-        component : str
-            Choose "potential", "spring", "total" referring to the
-            corresponding energy component
-        projection : str
-            Choose "plain", "projected", "working" indicating whether
-            this is the "plain" (i.e. total) gradient, "projected" according
-            to the NEB method, or the "working" gradient being used for optimization
-
-        Returns
-        -------
-        np.ndarray
-            1D array containing the requested gradient in units of a.u.
-        """
-        if i < 1 or i > (len(self) - 2):
-            raise NEBBandGradientError(
-                "Spring_Grads are only defined for 1 .. N-2 (in a chain indexed from 0 .. N-1)"
-            )
-        if component not in ["potential", "spring", "total"]:
-            raise NEBBandGradientError(
-                "Please set the component argument to potential, spring, or total"
-            )
-        if projection not in ["plain", "projected", "working"]:
-            raise NEBBandGradientError(
-                "Please set the projection argument to plain, projected, or working"
-            )
-        if projection == "working":
-            if component == "potential":
-                # Plain = 0: Projected potential force, projected spring force
-                # Plain = 1: Projected potential force, full spring force
-                # Plain = 2: Full potential force, full spring force
-                if self.plain < 2:
-                    return self.get_grad(i, component, "projected")
-                else:
-                    return self.get_grad(i, component, "plain")
-            elif component == "spring":
-                if self.plain < 1:
-                    return self.get_grad(i, component, "projected")
-                else:
-                    return self.get_grad(i, component, "plain")
-            elif component == "total":
-                if self.plain == 2:
-                    return self.get_grad(i, "potential", "plain") + self.get_grad(
-                        i, "spring", "plain"
-                    )
-                elif self.plain == 1:
-                    return self.get_grad(i, "potential", "projected") + self.get_grad(
-                        i, "spring", "plain"
-                    )
-                elif self.plain == 0:
-                    return self.get_grad(i, "potential", "projected") + self.get_grad(
-                        i, "spring", "projected"
-                    )
-        elif component == "total":
-            return self.get_grad(i, "potential", projection) + self.get_grad(
-                i, "spring", projection
-            )
-        if (component, projection) not in self._grads or self._grads[
-            (component, projection)
-        ][i] is None:
-            raise NEBBandGradientError("Gradient has not been set")
-        # print "Getting gradient for image", i, component, projection
-        # LPW 2017-04-08: Removed copy operation, hope flags.writeable = False prevents unwanted edits
-        return self._grads[(component, projection)][i]
 
     def get_global_grad(self, component, projection):
         if component not in ["potential", "spring", "total"]:
@@ -900,36 +733,6 @@ class ElasticBand(Chain):
         # print "Getting gradient for image", i, component, projection
         # LPW 2017-04-08: Removed copy operation, hope flags.writeable = False prevents unwanted edits
         return self._global_grads[(component, projection)]
-
-    def get_grad_all(self, component, projection):
-        """
-        Get a component of the gradient, for all of the images.
-
-        Parameters
-        ----------
-        component : str
-            Choose "potential", "spring", "total" referring to the
-            corresponding energy component
-        projection : str
-            Choose "plain", "projected", "working" indicating whether
-            this is the "plain" (i.e. total) gradient, "projected" according
-            to the NEB method, or the "working" gradient being used for optimization
-
-        Returns
-        -------
-        np.ndarray
-            2D array containing the requested gradient for each image
-            (leading index is the image number)
-        """
-        if component not in ["potential", "spring", "total"]:
-            raise NEBBandGradientError(
-                "Please set the component argument to potential, spring, or total"
-            )
-        if projection not in ["plain", "projected", "working"]:
-            raise NEBBandGradientError(
-                "Please set the projection argument to plain, projected, or working"
-            )
-        return np.hstack(tuple([self.get_grad(i, component, projection) for i in range(1, len(self) - 1)]))
 
     def calc_spacings(self):
         rmsds = []
@@ -1064,25 +867,26 @@ class ElasticBand(Chain):
         logger.info(" ".join(["%7.3f" % (straight[n]) for n in range(len(totGrad))]) + '\n')
         self.avgg = avgg
         self.maxg = maxg
-        printDiffs = False
-        if not printDiffs:
-            return
-        for n in range(1, len(self) - 1):
-            ICP = self.GlobalIC.ImageICs[n].Internals
-            drplus = self.GlobalIC.calcDisplacement(xyz, n + 1, n)
-            drminus = self.GlobalIC.calcDisplacement(xyz, n - 1, n)
-            logger.info(
-                "Largest IC devs (%i - %i); norm % 8.4f \n"
-                % (n + 1, n, np.linalg.norm(drplus))
-            )
-            for i in np.argsort(np.abs(drplus))[::-1][:5]:
-                logger.info("%30s % 8.4f \n" % (repr(ICP[i]), (drplus)[i]))
-            logger.info(
-                "Largest IC devs (%i - %i); norm % 8.4f \n"
-                % (n - 1, n, np.linalg.norm(drminus))
-            )
-            for i in np.argsort(np.abs(drminus))[::-1][:5]:
-                logger.info("%30s % 8.4f \n" % (repr(ICP[i]), (drminus)[i]))
+        return
+        #printDiffs = False
+        #if not printDiffs:
+        #    return
+        #for n in range(1, len(self) - 1):
+        #    ICP = self.GlobalIC.ImageICs[n].Internals
+        #    drplus = self.GlobalIC.calcDisplacement(xyz, n + 1, n)
+        #    drminus = self.GlobalIC.calcDisplacement(xyz, n - 1, n)
+        #    logger.info(
+        #        "Largest IC devs (%i - %i); norm % 8.4f \n"
+        #        % (n + 1, n, np.linalg.norm(drplus))
+        #    )
+        #    for i in np.argsort(np.abs(drplus))[::-1][:5]:
+        #        logger.info("%30s % 8.4f \n" % (repr(ICP[i]), (drplus)[i]))
+        #    logger.info(
+        #        "Largest IC devs (%i - %i); norm % 8.4f \n"
+        #        % (n - 1, n, np.linalg.norm(drminus))
+        #    )
+        #    for i in np.argsort(np.abs(drminus))[::-1][:5]:
+        #        logger.info("%30s % 8.4f \n" % (repr(ICP[i]), (drminus)[i]))
 
     def CalcRMSCartGrad(self, igrad):
         xyz = self.get_cartesian_all(endpts=True)
@@ -1493,7 +1297,7 @@ def recover(chain_hist, forceCart, result=None):
     return newchain, Y, GW, GP, HW, HP
 
 
-def BFGSUpdate(Y, old_Y, G, old_G, H, params, Eig=True):
+def BFGSUpdate(Y, old_Y, G, old_G, H, params):
     """Update a Hessian using the BFGS method"""
     verbose = params.verbose
     # BFGS Hessian update
@@ -1515,15 +1319,14 @@ def BFGSUpdate(Y, old_Y, G, old_G, H, params, Eig=True):
         logger.info("Denoms: %.3e %.3e \n" % ((Dg.T * Dy)[0, 0], (Dy.T * H * Dy)[0, 0]))
         logger.info("Dots: %.3e %.3e \n" % (np.dot(ndg, ndy), np.dot(ndy, nhdy.reshape(ndy,ndy))))
     H += Mat1 - Mat2
-    if Eig:
-        Eig1 = np.linalg.eigh(H)[0]
-        Eig1.sort()
-        if verbose:
-            logger.info(
-                "Eig-ratios: %.5e ... %.5e \n"
-                % (np.min(Eig1) / np.min(Eig), np.max(Eig1) / np.max(Eig))
-            )
-        return Eig1
+    Eig1 = np.linalg.eigh(H)[0]
+    Eig1.sort()
+    if verbose:
+        logger.info(
+            "Eig-ratios: %.5e ... %.5e \n"
+            % (np.min(Eig1) / np.min(Eig), np.max(Eig1) / np.max(Eig))
+        )
+    return Eig1
     # Then it's on to the next loop iteration!
 
 
@@ -1735,6 +1538,12 @@ def OptimizeChain(chain, engine, params):
     if params.optep:
         logger.info("Optimizing endpoint images \n")
         chain.OptimizeEndpoints(params.maxg)
+
+    # Align images
+    if params.align:
+        logger.info("Aligning images \n")
+        chain.align()
+
     logger.info("Optimizing the input chain \n")
     chain.respace(0.01)
     chain.delete_insert(1.0)
@@ -1850,8 +1659,7 @@ def main():
     params = NEBParams(**args)
 
     if args.get('logIni') is None:
-        import geometric.neb
-        logIni = pkg_resources.resource_filename(geometric.neb.__name__, r'config/log.ini')
+        logIni = os.path.join(config_dir, 'log.ini')
     else:
         logIni = args.get('logIni')
 
@@ -1863,6 +1671,7 @@ def main():
     logfilename = rf"{prefix}.log"
     # Create a backup if the log file already exists
     import logging.config
+    import geometric
     logging.config.fileConfig(logIni,defaults={'logfilename': logfilename},disable_existing_loggers=False)
     logger.info('geometric-neb called with the following command line:\n')
     logger.info(' '.join(sys.argv) + '\n')

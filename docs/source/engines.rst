@@ -37,6 +37,8 @@ Different engines have different features available.  Here is a simple summary:
 +-------------+--------------+-----------------+---------+---------------+------------+
 | QUICK       | No           | No              | No      | No            | No         |
 +-------------+--------------+-----------------+---------+---------------+------------+
+| CFOUR       | No           | Yes             | No      | Untested      | No         |
++-------------+--------------+-----------------+---------+---------------+------------+
 
 In what follows, all examples can be found in the ``[root]/examples/`` folder of the source distribution.
 
@@ -222,4 +224,35 @@ Make sure `QUICK <https://github.com/merzlab/QUICK/>`_ is installed and
 environment variables are properly set.
 The input file should contain the molecular structure in Cartesian coordinates.
 
+The QUICK installation may have multiple executables depending on whether QUICK was
+compiled with / without CUDA and/or MPI support.
+geomeTRIC will use the "most optimized" QUICK executable if available, in order of
+``quick.cuda.MPI``, ``quick.cuda``, ``quick.MPI`` and finally ``quick``.
+If you wish to use a lower-priority executable, remove the higher-priority ones from your path.
+
 An example is provided in the ``[root]/examples/1-simple-examples/water2_quick`` folder.
+
+CFOUR
+-----
+
+This is an interface to the CFOUR electronic structure software.  Selected using ``--engine cfour``.  
+
+Make sure `CFOUR <https://cfour.uni-mainz.de/cfour/>`_ is installed and
+environment variables are properly set.
+
+CFOUR typically expects the input file (``ZMAT``) to contain Z-matrix input for the
+molecular structure, but geomeTRIC requires Cartesian coordinates.
+To perform the conversion, run the script ``[root]/tools/convert-cfour-zmat.py``
+in a folder that contains your ZMAT input file.
+This script will run CFOUR's ``xjoda`` utility to perform the conversion 
+and create a new ``ZMAT`` file containing Cartesian coordinates (dummy atoms excepted).
+The original file will be moved to ``ZMAT.orig``.
+
+When calling CFOUR, geomeTRIC automatically adds the keywords
+``COORD=CARTESIAN,SYMMETRY=OFF,DERIV_LEV=1,PRINT=1`` to the job specification in order
+to obtain a Cartesian gradient in the global frame. Make sure that your input file 
+does not contain any options that conflict with these, and also do not include anything 
+else in the input file that modifies the program behavior such as ``%grid``.
+
+An example is provided in the ``[root]/examples/1-simple-examples/water1_cfour`` folder.
+
