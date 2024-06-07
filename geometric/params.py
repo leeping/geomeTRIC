@@ -330,7 +330,7 @@ def parse_optimizer_args(*args):
                           '"psi4" = Psi4                       "openmm" = OpenMM (pass a force field or XML input file)\n'
                           '"molpro" = Molpro                   "gmx" = Gromacs (pass conf.gro; requires topol.top and shot.mdp\n '
                           '"gaussian" = Gaussian09/16          "ase" = ASE calculator, use --ase-class/--ase-kwargs\n '
-                          '"quick" = QUICK\n')
+                          '"quick" = QUICK                     "bagel" = Bagel\n')
     grp_univ.add_argument('--nt', type=int, help='Specify number of threads for running in parallel\n(for TeraChem this should be number of GPUs)')
 
     grp_jobtype = parser.add_argument_group('jobtype', 'Control the type of optimization job')

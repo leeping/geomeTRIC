@@ -6,7 +6,7 @@ Copyright 2016-2020 Regents of the University of California and the Authors
 Authors: Lee-Ping Wang, Chenchen Song
 
 Contributors: Yudong Qiu, Daniel G. A. Smith, Sebastian Lee, Qiming Sun,
-Alberto Gobbi, Josh Horton
+Alberto Gobbi, Josh Horton, Nathan Yoshino
 
 Redistribution and use in source and binary forms, with or without modification,
 are permitted provided that the following conditions are met:
@@ -45,11 +45,12 @@ import xml.etree.ElementTree as ET
 import numpy as np
 import re
 import os
+import json
 
 from .molecule import Molecule, format_xyz_coord
 from .nifty import bak, au2ev, eqcgmx, fqcgmx, bohr2ang, logger, getWorkQueue, queue_up_src_dest, rootdir, copy_tree_over
 from .errors import EngineError, CheckCoordError, Psi4EngineError, QChemEngineError, TeraChemEngineError, \
-    ConicalIntersectionEngineError, OpenMMEngineError, GromacsEngineError, MolproEngineError, QCEngineAPIEngineError, GaussianEngineError, QUICKEngineError, CFOUREngineError
+    ConicalIntersectionEngineError, OpenMMEngineError, GromacsEngineError, MolproEngineError, QCEngineAPIEngineError, GaussianEngineError, QUICKEngineError, CFOUREngineError, BagelEngineError
 from .xml_helper import read_coors_from_xml, write_coors_to_xml
 
 # Strings matching common DFT functionals
@@ -1821,6 +1822,145 @@ class Molpro(Engine): # pragma: no cover
                 if keyword in line.lower() or line.lower().strip().endswith("ks"):
                     return True
         return False
+
+class Bagel(Engine):
+    """
+    Run a Bagel energy and gradient calculation.
+    """
+    def __init__(self, molecule=None, exe=None, threads=None):
+        if molecule is None:
+            # create a fake molecule
+            molecule = Molecule()
+            molecule.elem = ['H']
+            molecule.xyzs = [[[0,0,0]]]
+        super(Bagel, self).__init__(molecule)
+        self.threads = threads
+    
+    def load_bagel_input(self, bagel_input):
+        """
+        Bagel .json input parser. Supports both angstroms and bohr.
+        """
+        with open(bagel_input,'r') as bageljson:
+            bagel_dict = json.load(bageljson)
+        
+        elems = []
+        coords = []
+        readang = False
+
+        bagel_dict['bagel'][:] = [dicts for dicts in bagel_dict['bagel'] if dicts['title'].lower() in ['molecule','force']]
+        
+        if not bagel_dict['bagel'][0]['title'].lower() in 'molecule':
+            raise RuntimeError("The first dictionary in Bagel json file %s must be title:'molecule'." % bagel_input)
+        
+        mole_dict = bagel_dict['bagel'][0]
+        force_dict = bagel_dict['bagel'][1]
+
+        for atom_dict in mole_dict['geometry']:
+            elems.append(atom_dict['atom']) #extract elements
+            coords.append(atom_dict['xyz']) #extract coordinates
+            if 'angstrom' in mole_dict or 'Angstrom' in mole_dict or 'ANGSTROM' in mole_dict:
+            #bagel by default reads coordinates in Bohr, check to see which input is used.
+              try:
+                  readang = mole_dict['angstrom']
+              except:
+                  pass
+              try:
+                  readang = mole_dict['Angstrom']
+              except:
+                  pass
+              try:
+                  readang = mole_dict['ANGSTROM']
+              except:
+                 pass
+        try: 
+            force_dict['title'].lower() == 'force'
+            self.force_method = force_dict['method'][0]['title'].lower()
+        except:
+            raise RuntimeError('Bagel json file %s should have a "force" title with a specified method.' % bagel_input)
+        
+        self.M = Molecule()
+        self.M.elem = elems
+
+        if readang:
+            self.M.xyzs = [np.array(coords, dtype=np.float64)]
+        elif not readang:#save coordinates in molecule object as angstroms
+            self.M.xyzs = [np.array(coords, dtype=np.float64)*bohr2ang]
+            bagel_dict['bagel'][0]['angstrom']="True" #for consistency geomeTRIC will create Bagel files that use angstrom
+        self.bagel_temp = bagel_dict
+        if self.force_method.lower in ['fci', 'zfci', 'ras', 'smith', 'relsmith']:
+            raise RuntimeError("Full configuration interaction and SMITH3 code are not currently supported.")
+
+
+    def calc_new(self, coords, dirname):
+        if not os.path.exists(dirname):
+            os.makedirs(dirname)
+        # Convert coordinates back to the xyz file
+        self.M.xyzs[0] = coords.reshape(-1, 3) * bohr2ang
+
+        # Change coordinates in bagel_temp dictionary
+        for atom in range(self.M.xyzs[0].shape[0]):
+            self.bagel_temp['bagel'][0]['geometry'][atom]['xyz'] = list(self.M.xyzs[0][atom])
+        # Write Json file
+        with open(os.path.join(dirname, 'run.json'), 'w') as outfile:
+            outfile.write(json.dumps(self.bagel_temp, indent=2))
+        outfile.close()
+        try:
+            # Run Bagel
+            subprocess.check_call('export BAGEL_NUM_THREADS=%s' %  self.threads, cwd=dirname, shell=True)
+            subprocess.check_call('export MKL_NUM_THREADS=%s' % self.threads, cwd=dirname, shell=True)
+            subprocess.check_call('BAGEL run.json > run.out', cwd=dirname, shell=True)
+            # Read energy and gradients from Bagel output
+            result = self.read_result(dirname)
+        except (OSError, IOError, RuntimeError, subprocess.CalledProcessError):
+            raise BagelEngineError
+        return result
+
+
+    def read_result(self, dirname, check_coord=None):
+        """ read an output file from Bagel"""
+        if check_coord is not None:
+            raise CheckCoordError("Coordinate check not implemented")
+        energy, gradient = None, None
+        bagel_out = os.path.join(dirname, 'run.out')
+        with open(bagel_out) as outfile:
+            found_grad, read_grad, found_energy, read_energy = False, False, False, False
+            for line in reversed(outfile.readlines()):
+                if '* METHOD: FORCE' in line and not found_grad:
+                    read_grad = True
+                    gradient = []
+                elif '* Nuclear energy gradient' in line and read_grad:
+                    read_grad, found_grad = False, True
+                    gradient.reverse()
+                    gradient = np.array(gradient, dtype=np.float64)
+
+                elif read_grad and any(x in line for x in ['x','y','z']):
+                    gradient.append(float(line.split()[1]))
+
+                #For MP2, and HF
+                elif '* SCF iteration converged' in line and not (self.force_method.lower() == 'casscf' or self.force_method.lower() =='caspt2') and not found_energy:
+                    read_energy = True
+
+                elif read_energy and not (self.force_method == 'casscf' or self.force_method=='caspt2'):
+                    split = line.split()
+                    if len(split) == 4:
+                        read_energy = False
+                        found_energy = True
+                        energy = float(line.split()[1])
+                #For CASSCF
+                elif '* Second-order optimization converged' in line and self.force_method.lower() == 'casscf' and not found_energy:
+                    read_energy = True
+                elif read_energy  and self.force_method == 'casscf':
+                    split = line.split()
+                    if len(split) == 5 and split[1] == '0':
+                        found_energy = True
+                        read_energy = False
+                        energy = float(split[2])
+
+        if energy is None:
+            raise RuntimeError("Bagel energy is not found in %s, please check." % bagel_out)
+        if gradient is None:
+            raise RuntimeError("Bagel gradient is not found in %s, please check." % bagel_out)
+        return {'energy':energy, 'gradient':gradient}
 
 class QCEngineAPI(Engine):
     def __init__(self, schema, program):
