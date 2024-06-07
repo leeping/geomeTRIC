@@ -1,0 +1,27 @@
+{ "bagel" : [
+
+{
+  "title" : "molecule",
+  "basis" : "/home/ccsong/opt/bagel/current/share/cc-pvdz.json",
+  "df_basis" : "/home/ccsong/opt/bagel/current/share/cc-pvdz-jkfit.json",
+  "angstrom" : true,
+  "geometry" : [
+    { "atom" : "P", "xyz" : [      0.2238578355,    1.1309802898,    1.0989460181 ] },
+    { "atom" : "P", "xyz" : [      0.8151038290,   -0.3588758134,    2.5788731692 ] },
+    { "atom" : "P", "xyz" : [     -0.7631190474,   -0.8141132093,    1.1430397092 ] },
+    { "atom" : "P", "xyz" : [      1.3075201574,   -0.6565274109,    0.4744772210 ] }
+  ]
+},
+
+{
+  "title" : "force",
+  "method" : [ {
+    "title" : "casscf",
+    "nact" : 12,
+    "nclosed" : 24,
+    "active" : [25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36],
+    "maxiter" : 200, 
+    "thresh" : 1e-10
+  } ]
+}
+]}
