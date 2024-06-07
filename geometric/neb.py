@@ -1317,7 +1317,7 @@ def BFGSUpdate(Y, old_Y, G, old_G, H, params):
     if verbose:
         # HP: 2023-2-15: Not sure what is nhdy is for. I changed np.array(H*dy) to np.dot(H, dy)
         logger.info("Denoms: %.3e %.3e \n" % ((Dg.T * Dy)[0, 0], (Dy.T * H * Dy)[0, 0]))
-        logger.info("Dots: %.3e %.3e \n" % (np.dot(ndg, ndy), np.dot(ndy, nhdy)))
+        logger.info("Dots: %.3e %.3e \n" % (np.dot(ndg, ndy), np.dot(ndy, nhdy.reshape(ndy,ndy))))
     H += Mat1 - Mat2
     Eig1 = np.linalg.eigh(H)[0]
     Eig1.sort()
