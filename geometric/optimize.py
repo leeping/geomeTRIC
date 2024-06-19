@@ -778,7 +778,7 @@ class Optimizer(object):
 
         return False, step_state
 
-    def evaluate_OPT_step(self, params, step_state, criteria_met, Converged_energy, Converged_drms, Converged_grms, Converged_molpro_gmax, Converged_molpro_dmax):
+    def evaluate_OPT_step(self, params, step_state, criteria_met, Converged_molpro_gmax, Converged_molpro_dmax):
         if criteria_met and self.conSatisfied:
             self.SortedEigenvalues(self.H)
             logger.info("Converged! =D\n")
@@ -881,7 +881,7 @@ class Optimizer(object):
         if params.irc and not self.IRC_info.get("opt"):
             terminate, step_state = self.evaluate_IRC_step(params, step_state, criteria_met, IRC_converged)
         else:
-            terminate, step_state = self.evaluate_OPT_step(params, step_state, criteria_met, Converged_energy, Converged_drms, Converged_gmax, Converged_molpro_gmax, Converged_molpro_dmax)
+            terminate, step_state = self.evaluate_OPT_step(params, step_state, criteria_met, Converged_molpro_gmax, Converged_molpro_dmax)
 
         if terminate: return
 
