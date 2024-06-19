@@ -55,6 +55,8 @@ The key function that any ``Engine`` subclass must have is ``calc_new(coords)``,
 .. note::
     The ``tests/test_customengine.py`` module shows how almost any energy function could be used to calculate the energy and gradient.  This was originally added by the `PySCF <https://pyscf.org/user/geomopt.html>`_ developers as an interface to their software.
 
+.. _internal_coordinate:
+
 Internal coordinate setup
 -------------------------
 
@@ -97,6 +99,8 @@ Energy minimizations start with a guessed diagonal Hessian matrix in the primiti
 The diagonal elements are assigned following `Schlegel et al <https://link.springer.com/article/10.1007/BF00554788>`_, with a small modification that the dihedral elements are fixed at a constant value of 0.023, rather than depending on distance as in the original publication.
 The initial diagonal elements for translation and rotation coordinates are set to 0.05.
 On the other hand, the default behavior in :ref:`transition state <transition>` optimizations is to calculate the full Hessian by finite difference of the gradient, because it is important to have the correct local shape of the PES for those calculations.
+
+.. _optimization_step:
 
 Optimization step
 -----------------
@@ -160,6 +164,8 @@ The iterations are repeated until the IC change from the initial coordinates mat
 
 The Cartesian step that matches the IC is obtained as :math:`\boldsymbol{\delta}^{(x)} = \mathbf{x}_n - \mathbf{x}_0`.
 
+.. _optimization_stepsize:
+
 Controlling the step size
 """""""""""""""""""""""""
 
@@ -220,6 +226,8 @@ The step size control algorithm can be summarized as:
 4. Iterate through Brent's method until :math:`f(r_{IC})` is converged to within 10% of the trust radius.
 5. Use the converged :math:`\boldsymbol{\delta}^{(x)}` to update the Cartesian coordinates for the next energy and gradient calculation.
 
+.. _convergence_criteria:
+
 Convergence criteria
 --------------------
 
@@ -254,12 +262,14 @@ The convergence criteria may be changed either as a set, by passing ``--converge
 Additionally, geomeTRIC supports Q-Chem-style and Molpro-style convergence criteria following the conventions of these packages. 
 Q-Chem requires the RMS gradient and *either* the RMS displacement or the energy change to fall below their criteria.
 Similarly, Molpro requires the maximum gradient and *either* the maximum displacement or the energy change to fall below their criteria.
-These alternate convergence conditions can be activated by passing ``--qccnv yes`` or ``-molpro yes`` on the command line.
+These alternate convergence conditions can be activated by passing ``--qccnv yes`` or ``--molpro yes`` on the command line.
 
 Trust radius adjustment
 -----------------------
 
 If the calculation is not converged yet, the step quality is calculated as:
+
+.. _step_quality:
 
 .. math::
     \begin{aligned}
