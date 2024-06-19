@@ -450,7 +450,9 @@ class Optimizer(object):
 
     def IRC_step(self):
         self.farConstraints = self.IC.haveConstraints() and self.IC.maxConstraintViolation(self.X) > 1e-1
-        logger.info("IRC sub-step 1: Finding the pivot point (q*_{k+1})\n")
+
+        if self.params.verbose:
+            logger.info("IRC sub-step 1: Finding the pivot point (q*_{k+1})\n")
 
         # Need to take a step towards the pivot point
         self.IC.clearCache()
@@ -462,7 +464,7 @@ class Optimizer(object):
         # Vector to the pivot point
         if self.Iteration == 0:
             # If it's the very first step, pick the eigenvector of the imaginary frequency and pick the direction
-            logger.info('\nFirst, following the imaginary mode vector\n')
+            logger.info('First, following the imaginary mode vector\n')
             if self.TSWavenum[1] < 0:
                 raise IRCError("There are more than one imaginary vibrational mode. Please optimize the structure and try again.\n")
             elif self.TSWavenum[0] > 0:
@@ -504,11 +506,13 @@ class Optimizer(object):
         # Calculating sqrt(mass) weighted Cartesian coordinate
         MWGMat_sqrt_inv, MWGMat_sqrt = self.IC.GInverse_SVD(X_pivot, sqrt=True, invMW=True)
         mwdx_1 = np.dot(MWGMat_sqrt_inv, dy_to_pivot)
-        logger.info("Half step dy     = %.5f\n" %np.linalg.norm(dy_to_pivot))
-        logger.info("Half step mw-dx  = %.5f Bohr*sqrt(amu)\n" %np.linalg.norm(mwdx_1))
+
+        if self.params.verbose:
+            logger.info("Half step dy     = %.5f\n" %np.linalg.norm(dy_to_pivot))
+            logger.info("Half step mw-dx  = %.5f Bohr*sqrt(amu)\n" %np.linalg.norm(mwdx_1))
 
         # We are at the pivot point
-        logger.info('\nIRC sub-step 2: Finding the next point (q_{k+1})\n')
+            logger.info('\nIRC sub-step 2: Finding the next point (q_{k+1})\n')
         v1 = v.copy()
         irc_sub_iteration = 0
         irc_reset_iteration = 0
@@ -571,11 +575,12 @@ class Optimizer(object):
             irc_sub_iteration += 1
             p_prime += dq_new
 
-        logger.info('Angle between v1 and v2: %2.f \n' % deg)
-        logger.info('Half step dy     = %.5f \n' % np.linalg.norm(p_prime))
-        logger.info('Half step mw-dx  = %.5f Bohr*sqrt(amu)\n\n' % half_mwdx)
+        if self.params.verbose:
+            logger.info('Angle between v1 and v2: %2.f \n' % deg)
+            logger.info('Half step dy     = %.5f \n' % np.linalg.norm(p_prime))
+            logger.info('Half step mw-dx  = %.5f Bohr*sqrt(amu)\n\n' % half_mwdx)
         logger.info('=> Total step dy    = %.5f \n' % dy_norm)
-        logger.info('=> Total step mw-dx = %.5f Bohr*sqrt(amu)\n\n\n' % mwdx)
+        logger.info('=> Total step mw-dx = %.5f Bohr*sqrt(amu)\n\n' % mwdx)
         self.Iteration += 1
         return dy
 
