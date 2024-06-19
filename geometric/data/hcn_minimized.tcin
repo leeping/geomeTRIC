@@ -1,0 +1,6 @@
+run gradient
+coordinates hcn_minimized.xyz
+method rhf
+basis 3-21g
+charge 0
+spinmult 1

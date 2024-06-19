@@ -31,6 +31,9 @@ setup(
         'pytest',
         'pytest-cov',
     ],
+    extra_require={
+        'bigchem': ['bigchem']        
+    },
     version=versioneer.get_version(),
     cmdclass=versioneer.get_cmdclass(),
     classifiers=[
