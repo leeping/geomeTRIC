@@ -575,7 +575,7 @@ class Optimizer(object):
         logger.info('Half step dy     = %.5f \n' % np.linalg.norm(p_prime))
         logger.info('Half step mw-dx  = %.5f Bohr*sqrt(amu)\n\n' % half_mwdx)
         logger.info('=> Total step dy    = %.5f \n' % dy_norm)
-        logger.info('=> Total step mw-dx = %.5f Bohr*sqrt(amu)\n' % mwdx)
+        logger.info('=> Total step mw-dx = %.5f Bohr*sqrt(amu)\n\n\n' % mwdx)
         self.Iteration += 1
         return dy
 
@@ -744,7 +744,7 @@ class Optimizer(object):
             return True, step_state
         
         self.IC_check = False
-        if step_state in (StepState.Reject, StepState.Poor) and not self.IRC_info.get("opt"):
+        if step_state in (StepState.Reject, StepState.Poor):
             step_state = StepState.Reject
             if np.isclose(self.trust, params.tmin):
                 logger.info("IRC stuck with the minimum step-size and bad quality step. Forcing it to take a step.\n")
@@ -759,7 +759,7 @@ class Optimizer(object):
             self.IC_check = True
 
         if self.IRC_info["total_disp"] > 5*self.IRC_init_step:
-            if criteria_met :
+            if criteria_met:
                 if self.IRC_info.get("direction") == 1:
                     logger.info("\nIRC forward direction converged\n")
                     logger.info("IRC backward direction starts here\n\n")
@@ -778,11 +778,17 @@ class Optimizer(object):
 
         return False, step_state
 
-    def evaluate_OPT_step(self, params, step_state, criteria_met, Converged_molpro_gmax, Converged_molpro_dmax):
+    def evaluate_OPT_step(self, params, step_state, criteria_met, Converged_grms, Converged_drms, Converged_energy,
+                          Converged_molpro_gmax, Converged_molpro_dmax):
         if criteria_met and self.conSatisfied:
-            self.SortedEigenvalues(self.H)
-            logger.info("Converged! =D\n")
-            self.state = OPT_STATE.CONVERGED
+            if params.irc and self.IRC_info.get("direction") == 1:
+                logger.info("\nIRC forward direction converged\n")
+                logger.info("IRC backward direction starts here\n\n")
+                self.reset_irc()
+            else:
+                self.SortedEigenvalues(self.H)
+                logger.info("Converged! =D\n")
+                self.state = OPT_STATE.CONVERGED
             return True, step_state
 
         if self.Iteration >= params.maxiter:
@@ -881,7 +887,8 @@ class Optimizer(object):
         if params.irc and not self.IRC_info.get("opt"):
             terminate, step_state = self.evaluate_IRC_step(params, step_state, criteria_met, IRC_converged)
         else:
-            terminate, step_state = self.evaluate_OPT_step(params, step_state, criteria_met, Converged_molpro_gmax, Converged_molpro_dmax)
+            terminate, step_state = self.evaluate_OPT_step(params, step_state, criteria_met, Converged_grms,
+                                        Converged_drms, Converged_energy, Converged_molpro_gmax, Converged_molpro_dmax)
 
         if terminate: return
 
