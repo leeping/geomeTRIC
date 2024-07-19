@@ -130,7 +130,7 @@ def get_basic_info(info_dict, previous=False):
     params_dict = {"images": args_dict.get("images"), "maxg": args_dict.get("maximum_force"),
         "avgg": args_dict.get("average_force"), "nebk": args_dict.get("spring_constant"),
         "neb_maxcyc": args_dict.get("maximum_cycle"), "plain": args_dict.get("spring_type"),
-        "skip": not args_dict.get("hessian_reset"), "epsilon": args_dict.get("epsilon")}
+        "epsilon": args_dict.get("epsilon")}
     iteration = args_dict.get("iteration")
     params = NEBParams(**params_dict)
 
