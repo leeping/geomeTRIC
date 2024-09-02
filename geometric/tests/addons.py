@@ -43,6 +43,17 @@ def get_gaussian_version():
     else:
         return None
 
+
+def is_qcengine_new_enough(version_feature_introduced):
+    if not _plugin_import("qcengine"):
+        return False
+
+    from pkg_resources import parse_version
+    import qcengine
+
+    return parse_version(qcengine.__version__) >= parse_version(version_feature_introduced)
+
+
 def workqueue_found():
     return (_plugin_import("work_queue") is True) and (geometric.nifty.which('work_queue_worker'))
 
@@ -83,6 +94,15 @@ using_xtb = pytest.mark.skipif(
     _plugin_import("xtb") is False,
     reason="could not find ase. please install the package to enable tests",
 )
+using_qcmanybody = pytest.mark.skipif(
+    _plugin_import("qcmanybody") is False,
+    reason="cound not find qcmanybody. please install the package to enable tests",
+)
+using_qcengine_genopt = pytest.mark.skipif(
+    is_qcengine_new_enough("0.30.0") is False,
+    reason="could not find qcengine or version too old. please install >=0.30.0 to enable tests")
+using_nwchem = pytest.mark.skipif(
+    not geometric.nifty.which("nwchem"), reason="could not find NWChem. please install the package to enable tests")
 
 
 # Points to the folder where the data files are installed.
@@ -94,8 +114,9 @@ exampled = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.
 def in_folder(request):
 
     # Build out a test folder
+    # * request.node allows separate dirs for parametrized tests in parallel
     cwd = os.path.abspath(os.getcwd())
-    test_folder = os.path.join(cwd, 'test_generated_files', request.function.__name__)
+    test_folder = os.path.join(cwd, 'test_generated_files', request.node.name)
 
     # Build and change to test folder
     if not os.path.exists(test_folder):

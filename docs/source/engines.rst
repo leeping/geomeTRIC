@@ -189,6 +189,9 @@ It works a bit differently in that `QCEngine <https://github.com/MolSSI/QCEngine
 This engine is typically used by running geomeTRIC using the JSON API instead of the command line.
 Examples are provided in ``<root>/geometric/tests/test_run_json.py``.
 
+With QCManyBody and a recent version of QCEngine (>=0.30), BSSE-corrected optimizations can be run
+through geomeTRIC with any program that can handle ghost atoms in QCEngine (Psi4, Cfour, NWChem known to work).
+
 CustomEngine
 ------------
 
