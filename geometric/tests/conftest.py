@@ -17,7 +17,7 @@ logging.StreamHandler.terminator = ""
 datad = addons.datad
 
 @pytest.fixture
-def molecule_engine_neb():
+def molecule_engine_hcn_neb():
     """Return the Molecule and Engine for an NEB Calculation."""
     input_ext = {'psi4': 'psi4in', 'qchem': 'qcin', 'tera': 'tcin'}
     def get_molecule_engine(engine: str, images: int):
