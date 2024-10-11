@@ -7,11 +7,13 @@ import geometric
 import subprocess
 import os, shutil
 import numpy as np
+import tempfile
 from . import addons
 from geometric.internal import *
 
 datad = addons.datad
 localizer = addons.in_folder
+
 
 def test_hessian_assort():
     M = geometric.molecule.Molecule(os.path.join(datad, 'assort.xyz'))
@@ -41,6 +43,37 @@ def test_hessian_assort():
     assert np.allclose(fhess_prim, ahess_prim, atol=1.e-6)
     assert np.allclose(fgrad_dlc, agrad_dlc, atol=1.e-6)
     assert np.allclose(fhess_dlc, ahess_dlc, atol=1.e-6)
+
+@addons.using_psi4
+@addons.using_bigchem
+def test_psi4_bigchem_hessian(bigchem_frequency):
+    freqs = bigchem_frequency("psi4", "hcn_minimized.psi4in")
+
+    np.testing.assert_almost_equal(freqs, [989.5974, 989.5992, 2394.0352, 3690.5745], decimal=0)
+    assert len(freqs) == 4
+
+
+@addons.using_qchem
+@addons.using_bigchem
+def test_qchem_bigchem_hessian(bigchem_frequency):
+    # Optimized TS structure of HCN -> CNH reaction. 
+    freqs = bigchem_frequency("qchem", "hcn_minimized_ts.qcin")
+
+    np.testing.assert_almost_equal(freqs, [-1215.8587, 2126.6551, 2451.8599], decimal=0)
+    assert freqs[0] < 0
+    assert len(freqs) == 3
+
+
+@addons.using_terachem
+@addons.using_bigchem
+def test_terachem_bigchem_hessian(bigchem_frequency):
+    shutil.copy2(os.path.join(datad,"hcn_minimized.xyz"), os.path.join(os.getcwd(), "hcn_minimized.xyz"))
+    freqs = bigchem_frequency("tera", "hcn_minimized.tcin")
+    os.remove("hcn_minimized.xyz")
+
+    np.testing.assert_almost_equal(freqs, [989.5482, 989.7072, 2394.4201, 3687.4741], decimal=0)
+    assert len(freqs) == 4
+
 
 class TestPsi4WorkQueueHessian:
 
@@ -73,6 +106,7 @@ class TestPsi4WorkQueueHessian:
         np.testing.assert_almost_equal(freqs, [989.5974, 989.5992, 2394.0352, 3690.5745], decimal=0)
         assert len(freqs) == 4
         geometric.nifty.destroyWorkQueue()
+
 
 class TestASEWorkQueueHessian:
 

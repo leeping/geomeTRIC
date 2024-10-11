@@ -262,6 +262,7 @@ class Chain(object):
         self.tmpdir = tmpdir
         # HP 5/2/2023: coordtype is set to 'cart' here.
         self.coordtype='cart'
+
         # coords is a 2D array with dimensions (N_image, N_atomx3) in atomic units
         if coords is not None:
             # Reshape the array if we passed in a flat array
@@ -292,19 +293,49 @@ class Chain(object):
         """Compute energies and gradients for each structure."""
         # This is the parallel point.
         wq = getWorkQueue()
-        if wq is None:
-            for i in range(len(self)):
-                if result:
-                    self.Structures[i].ComputeEnergyGradient(result=result[i])
-                else:
-                    self.Structures[i].ComputeEnergyGradient()
-        else:  # If work queue is available, handle jobs with the work queue.
+        if wq:  # If work queue is available, handle jobs with the work queue.
             for i in range(len(self)):
                 self.Structures[i].QueueEnergyGradient()
             wq_wait(wq, print_time=600)
             for i in range(len(self)):
                 self.Structures[i].GetEnergyGradient()
-        if cyc is not None:
+        elif self.params.bigchem:
+            # If BigChem is available, it will be used to carry the single-point calculations.
+            from qcio import Molecule as qcio_Molecule, ProgramInput
+            from bigchem import compute, group
+            elems = self.Structures[0].M.elem
+            molecules = []
+            
+            # Creating a list with qcio Molecule objects and submitting calculations.
+            for Structure in self.Structures:
+                molecules.append(qcio_Molecule(symbols=elems, geometry=Structure.cartesians.reshape(-1,3)))
+
+            outputs = group(compute.s(self.engine.__class__.__name__.lower(),
+                            ProgramInput(molecule=qcio_M, calctype="gradient",
+                                         model={"method":self.engine.method, "basis": self.engine.basis},
+                                         extras={"order":i}),
+                            ) for i, qcio_M in enumerate(molecules)).apply_async()
+
+            # Getting the records
+            records = outputs.get()
+            
+            # Passing the results to chain.ComputeEnergyGradient()
+            for i in range(len(self)):
+                assert records[i].input_data.extras["order"] == i
+                result = {"energy": records[i].results.energy, "gradient": np.array(records[i].results.gradient).ravel()}
+                self.Structures[i].ComputeEnergyGradient(result=result)
+
+            # Deleting the records
+            outputs.forget()
+
+        else:
+            for i in range(len(self)):
+                if result:
+                    self.Structures[i].ComputeEnergyGradient(result=result[i])
+                else:
+                    self.Structures[i].ComputeEnergyGradient()
+        # When BigChem is used, it does not write output files to disk.
+        if cyc is not None and not self.params.bigchem:
             for i in range(len(self)):
                 self.Structures[i].engine.number_output(self.Structures[i].tmpdir, cyc)
         self.haveCalcs = True
@@ -1682,8 +1713,11 @@ def main():
 
     M, engine = get_molecule_engine(**args)
 
-    if params.port != 0:
-        createWorkQueue(params.port, debug=params.verbose)
+    if params.bigchem:
+        logger.info("BigChem will be used to carry singlepoint calculations. \n")
+
+    if args.get('wqport', 0):
+        createWorkQueue(args.get('wqport'), debug=params.verbose)
 
     if params.prefix is None:
         tmpdir = os.path.splitext(args["input"])[0] + ".tmp"
