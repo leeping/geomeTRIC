@@ -88,6 +88,14 @@ Also, a numerical Hessian will be computed at the start of the optimization (not
 
 ....
 
+``--irc [yes/no]``
+
+Provide ``yes`` to find an intrinsic reaction coordinate pathway starting from a first-order saddle point (optimized transition state structure).
+It will compute a numerical Hessian at the beginning of the calculation.
+
+....
+
+
 ``--rigid [yes/no]``
 
 Provide ``yes`` to keep molecules / fragments rigid during the optimization.
@@ -136,7 +144,7 @@ if the coordinates at run time matches the existing coordinate file, the Hessian
 
 Currently, Hessian matrices are computed by geomeTRIC by numerical central difference of the gradient, requiring 1+6*N(atoms) total calculations.
 The finite difference step size is ``1.0e-3`` a.u. which is the default in many QC programs.
-Independent gradient jobs can be computed either locally in serial or in parallel using the Work Queue distributed computing library (see ``--port`` below).
+Independent gradient jobs can be computed either locally in serial or in parallel using the Work Queue distributed computing library (see ``--wqport`` below).
 
 Individual gradient calculations are stored in folders such as ``[prefix].tmp/hessian/displace/001[m/p]`` which stands for "coordinate 1 minus/plus displacement".
 If the job is interrupted and restarted, existing completed gradient calculations will be read instead of recomputed.
@@ -148,7 +156,7 @@ Interfaces for using native Hessian calculation routines will be added in the fu
 Possible values to pass to this argument are:
 
 - ``never`` (**default for minimization and MECI**) : Do not calculate the Hessian or read Hessian data.
-- ``first`` (**default for transition state**) : Calculate the Hessian for the initial structure.
+- ``first`` (**default for transition state and IRC**) : Calculate the Hessian for the initial structure.
 - ``last`` : Calculate the Hessian for the final (optimized) structure.
 - ``first+last`` : Calculate the Hessian for both the initial and final structure.
 - ``stop`` : Calculate the Hessian for the initial structure, and then stop (do not optimize).
@@ -157,7 +165,14 @@ Possible values to pass to this argument are:
 
 ....
 
-``--port [9876]``
+``--bigchem [yes/no]``
+
+Provide ``yes`` to carry out the Hessian calculation in parallel using `BigChem <https://github.com/mtzgroup/bigchem>`_.
+Ensure that BigChem's backend and broker are running properly.
+
+....
+
+``--wqport [9876]``
 
 Provide a port number for the Work Queue distributed computing server.
 This is only used for distributing gradient calculations in numerical Hessian calculations.
@@ -319,6 +334,113 @@ This is enabled by default in energy minimizations, and disabled in transition s
 
 If a number is provided, the internal coordinate system will be rebuilt at the specified interval as if the current structure were the input structure.
 This is disabled by default because it tends to lower performance, but may be useful for debugging.
+
+.. _neb_options:
+
+NEB options
+-----------
+
+These options control the NEB method.
+
+....
+
+``--maxg [0.05]``
+
+``--avgg [0.025]``
+
+The convergence occurs when the maximum and average RMS-gradient of all images fall below these thresholds.
+
+....
+
+``--guessk [0.05]``
+
+This value will be used to build the guessed Hessian for the input chain.
+
+....
+
+``--neb_history [1]``
+
+Number of chain histories to save in memory. Note that each chain is memory intensive.
+
+....
+
+``--neb_maxcyc [100]``
+
+This sets the maximum number of NEB iterations.
+
+....
+
+``--climb [0.5]``
+
+``--ncimg [1]``
+
+When the maximum RMS-gradient of the chain falls below ``--climb``, ``--ncimg`` number of images will be in climbing mode.
+The climbing images will be selected in descending order from the highest energy image.
+
+....
+
+``--plain [0]``
+
+This option determines force components that will be projected. The default value is ``0`` which is NEB.
+The other two available bands are hybrid (``1``) and plain (``2``) band.
+The details of the force components of each band can be found in the :ref:` NEB page <neb>`.
+
+....
+
+``--optep [yes/no]``
+
+Provide ``yes`` to optimize the two end points of the input chain prior to the NEB calculation. It will not optimize the end points by default.
+
+....
+
+``--align [yes/no]``
+
+Provide ``yes`` to align all the images with the first image. It will align them by default.
+
+....
+
+``--trust [0.1]``
+
+``--tmax [0.3]``
+
+These options control the starting and maximum values of the trust radius.
+The trust radius is the maximum allowed Cartesian displacement of an optimization step measured in Angstrom.
+
+Depending on the quality of individual optimization steps, the trust radius can be increased from its current value up to the ``--tmax`` value, or it can be decreased down to a minimum value.
+
+The minimum trust radius cannot be user-set; its value is ``0.0`` for transition state and MECI jobs, and the smaller of the ``drms`` convergence criteria and ``1.2e-3`` for energy minimizations.
+The purpose of the minimum trust radius is to prevent unpredictable behavior when the trust radius becomes extremely small (e.g. if the step is so small that the energy change is smaller than the SCF convergence criteria).
+
+....
+
+``--skip [yes/no]``
+
+Setting it to ``yes`` will skip Hessian updates that will introduce negative eigenvalues.
+
+....
+
+``--epsilon [1e-5]``
+
+When the eigenvalues of the Hessian fall below ``--epsilon``, it will rebuild the Hessian using the ``--guessk`` value.
+
+....
+
+``--bigchem [yes/no]``
+
+Provide ``yes`` to carry out the Hessian calculation in parallel using `BigChem <https://github.com/mtzgroup/bigchem>`_.
+Ensure that BigChem's backend and broker are running properly.
+
+....
+
+``--wqport [9876]``
+
+Provide a port number for the Work Queue distributed computing server.
+This is only used for distributing gradient calculations in numerical Hessian calculations.
+This number can range up to 65535, and a number in the high 4-digit range is acceptable.
+Do not use privileged port numbers (less than 1024).
+
+The port number should not be used by other servers running on your machine, and should match
+the port number provided to Work Queue worker processes whose job is to execute the gradient calculations.
 
 Structure options
 -----------------

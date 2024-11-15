@@ -88,3 +88,20 @@ The Work Queue library in the `CCTools <https://github.com/cooperative-computing
 Installation of ``cctools`` can be done easily via conda as follows ::
 
     conda install -c conda-forge ndcctools
+
+.. _installbigchem:
+
+Installation of BigChem
+-----------------------
+
+BigChem can be used to perform the Hessian and NEB calculations in parallel.
+The github repository of `BigChem <https://github.com/mtzgroup/bigchem>`_ has detailed documentation explaining how its backend and broker work.
+
+BigChem can be installed using ``pip``::
+
+    pip install bigchem
+
+or it can be installed along with geomeTRIC::
+
+    pip install geometric[bigchem]
+

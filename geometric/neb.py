@@ -56,7 +56,7 @@ def CoordinateSystem(M, coordtype, chain=False, guessw=0.1):
     chain : bool
         True will return a chain object
     guessw : float
-        Guessed value for initial Hessians
+        Guessed weight value for the chain coordinate
 
     Returns
     -------
@@ -996,7 +996,7 @@ class ElasticBand(Chain):
             if rmsGrad[n] < self.params.avgg and maxGrad[n] < self.params.maxg:
                 newLocks[n] = True
         if False not in newLocks:
-            # HP: In case all of the images are locked before NEB converges, unlock a few.
+            # HP: In case all the images are locked before NEB converges, unlock a few.
             logger.info(
                 "All the images got locked, unlocking some images with tighter average gradient value. \n"
             )
@@ -1666,7 +1666,7 @@ def OptimizeChain(chain, engine, params):
         # |  Adjust Trust Radius / Reject Step  |#
         # =======================================#
 
-        chain, trust, trustprint, Y, GW, GP, good = qualitycheck(chain_prev, chain,trust, Quality, ThreLQ, ThreRJ,
+        chain, trust, trustprint, Y, GW, GP, good = qualitycheck(chain_prev, chain, trust, Quality, ThreLQ, ThreRJ,
             ThreHQ, Y, GW, GP, Y_prev, GW_prev, GP_prev, params.tmax)
         if not good:
             continue

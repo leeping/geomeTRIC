@@ -222,7 +222,7 @@ where
 
 i.e. :math:`\boldsymbol\delta` is the current optimization step, :math:`\boldsymbol\xi` is the difference between the actual gradient change and the *predicted* gradient change using the previous structure's Hessian, and :math:`\phi` measures the alignment between the two vectors, being equal to 1 when they are orthogonal and 0 when parallel.
 The PSB update is mixed in when the two vectors are almost orthogonal, as the MS update approaches zero and becomes unstable.
-This updating method is used in TS optmization because it does not preserve positive-definiteness of the Hessian matrix, as opposed to BFGS (which is used in energy minimization).
+This updating method is used in TS optimization because it does not preserve positive-definiteness of the Hessian matrix, as opposed to BFGS (which is used in energy minimization).
 All of the Hessian updates are carried out in internal coordinates.
 
 Step size control
@@ -261,7 +261,7 @@ If you want to use an analytic Hessian from running the QC software separately, 
 The Hessian file must be stored as a square matrix in Numpy-readable text format (not binary) with dimension :math:`3 \times N_{\mathrm{atoms}}`.
 
 The gradient calculations may be parallelized by distributing the jobs to remote "worker" nodes using the `Work Queue distributed computing library <https://ccl.cse.nd.edu/software/workqueue/>`_; this can greatly reduce the wall time relative to performing the gradient calculations serially.
-To enable this behavior, first ensure that the Work Queue library and Python module are installed, then pass ``--port ####`` on the command line where ``####`` is a custom port number (I usually use a large four-digit number, such as 7953, that is not commonly used by other services).
+To enable this behavior, first ensure that the Work Queue library and Python module are installed, then pass ``--wqport ####`` on the command line where ``####`` is a custom port number (I usually use a large four-digit number, such as 7953, that is not commonly used by other services).
 Then run the ``work_queue_worker`` program on the worker node, providing the host name that is running ``geometric-optimize`` and the port number.
 The worker node must have the QC software installed with the environment variables properly set when ``work_queue_worker`` is executed; one common approach is to write a batch script to execute workers on clusters managed by Slurm or similar job schedulers.
 If successful, the worker will establish a connection to the master and begin to accept gradient jobs.
