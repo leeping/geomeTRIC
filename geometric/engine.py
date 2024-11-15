@@ -1171,7 +1171,7 @@ class Gaussian(Engine):
         if energy is None:
             raise RuntimeError("Gaussian energy is not found in %s, please check." % fchk_out)
         if gradient is None:
-            raise RuntimeError("Gaussian gradient is not found in %s, please check." % gaussian_out)
+            raise RuntimeError("Gaussian gradient is not found in %s, please check." % fchk_out)
         gradient = np.array(gradient, dtype=np.float64).ravel()
         return {'energy':energy, 'gradient':gradient}
 
