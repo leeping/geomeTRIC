@@ -41,7 +41,7 @@ Dependencies
 
 The required packages for geomeTRIC are as follows. Older versions of packages may work, no guarantees.
 
-* Python : Versions 2.7, 3.5, 3.6, 3.7 are supported. Basic functionalities tested on 3.6 to 3.10.
+* Python : Versions 2.7, 3.5+ are supported. Basic functionalities tested on 3.7 to 3.13.
 * NumPy: Version 1.15 or above
 * NetworkX : Version 2.2 or above
 
