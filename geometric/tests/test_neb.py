@@ -78,8 +78,6 @@ def test_tera_hcn_neb_optimize(localizer, molecule_engine_hcn):
     """
     NEB with TeraChem
     """
-    shutil.copy2(os.path.join(datad, 'hcn_neb_input.xyz'), os.path.join(os.getcwd(), 'hcn_neb_input.xyz'))
-
     M, engine = molecule_engine_hcn('tera', 11)
 
     params = geometric.params.NEBParams(**{"optep": False, "align": False})
@@ -166,16 +164,12 @@ def test_terachem_bigchem(localizer, molecule_engine_hcn):
     """
     Optimize a HCN chain without alignment with BigChem and TeraChem
     """
-    shutil.copy2(os.path.join(datad, 'hcn_neb_input.xyz'), os.path.join(os.getcwd(), 'hcn_neb_input.xyz'))
-
     M, engine = molecule_engine_hcn('tera', 11)
 
     params = geometric.params.NEBParams(**{"align": False, "verbose": 1, "bigchem": True})
     chain = geometric.neb.ElasticBand(
         M, engine=engine, tmpdir=tempfile.mkdtemp(), params=params, plain=0
     )
-
-    os.remove('hcn_neb_input.xyz')
 
     assert chain.coordtype == "cart"
 
@@ -296,9 +290,6 @@ class TestTerachemWorkQueueNEB:
     @addons.using_terachem
     @addons.using_workqueue
     def test_terachem_work_queue_neb(self, localizer, molecule_engine_hcn):
-
-        shutil.copy2(os.path.join(datad, 'hcn_neb_input.xyz'), os.path.join(os.getcwd(), 'hcn_neb_input.xyz'))
-
         M, engine = molecule_engine_hcn('tera', 11)
         params = geometric.params.NEBParams(**{"optep": False, "align": False, "verbose": 1})
         chain = geometric.neb.ElasticBand(

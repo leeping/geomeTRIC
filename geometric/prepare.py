@@ -144,7 +144,7 @@ def get_molecule_engine(**kwargs):
         if engine_str == 'tera':
             logger.info("TeraChem engine selected. Expecting TeraChem input for gradient calculation.\n")
             set_tcenv()
-            tcin = load_tcin(inputf)
+            tcin = load_tcin(inputf, reqxyz=not NEB)
             # The QM-MM interface is designed on the following ideas:
             # 1) We are only optimizing the QM portion of the system
             # (until we implement fast inversion of G matrices and Hessians)
@@ -206,6 +206,8 @@ def get_molecule_engine(**kwargs):
                 M.build_topology()
             elif pdb is not None:
                 M = Molecule(pdb, radii=radii, fragment=frag)
+            elif NEB:
+                M = Molecule(kwargs.get('chain_coords'))
             else:
                 if not os.path.exists(tcin['coordinates']):
                     raise RuntimeError("TeraChem coordinate file does not exist")
@@ -378,8 +380,9 @@ def get_molecule_engine(**kwargs):
 
     if NEB:
         logger.info("\nNudged Elastic Band calculation will be performed.\n")
-        chain_coord = kwargs.get('chain_coords', None)
-        M.load_frames(chain_coord)
+        if engine_str != 'tera':
+            chain_coord = kwargs.get('chain_coords', None)
+            M.load_frames(chain_coord)
         images = kwargs.get('images', 11)
         if images > len(M):
             # HP 5/3/2023 : We can interpolate here if len(M) == 2.
