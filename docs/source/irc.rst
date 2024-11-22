@@ -14,7 +14,7 @@ Once the Hessian calculation is completed, the first step is taken in the positi
 The Hessian is updated using the :ref:`BFGS method <bfgs-update>` and the succeeding steps are guided by the instantaneous acceleration vectors.
 The IRC method continues taking the steps until it meets the same convergence criteria as :ref:`geometry optimization <convergence_criteria>`.
 
-geomeTRIC will repeat the same procedure for the negative direction upon the convergence of the positive direction IRC and concatenate the two paths.
+geomeTRIC repeats the same procedure for the negative direction after the positive direction IRC converges. Once both directions have converged, one of the paths is reversed to concatenated with the other, using the TS structure as the connecting point.
 
 Usage
 -----
@@ -26,7 +26,7 @@ Once the both directions converge, geomeTRIC will write an output xyz file `inpu
 Example
 -------
 
-See ```examples/1-simple-examples/hcn_hnc_irc``` directory.
+See ``examples/1-simple-examples/hcn_hnc_irc`` directory.
 
 
 Theory
@@ -38,14 +38,14 @@ Obtaining the IRC step
 """"""""""""""""""""""
 
 geomeTRIC implemented Gonzalez and Schlegel's `mass-weighted internal coordinates IRC method <https://doi.org/10.1021/j100377a021>`_.
-The mass-weighted Wilson B-matrix (:math:`\mathbf{B}`) has elements of :math:`dq_i / (dx_j \sqrt{m_j})`, where :math:`m_j` is the atomic mass, and the G-matrix is calculated as :math:`\mathbf{G} = \mathbf{B}\mathbf{B}^T` (See :ref:`internal coordinate setup <internal_coordinates>`).
+The mass-weighted Wilson B-matrix (:math:`\mathbf{B}`) has elements of :math:`dq_i / (dx_j \sqrt{m_j})`, where :math:`m_j` is the atomic mass, and the G-matrix is calculated as :math:`\mathbf{G} = \mathbf{B}\mathbf{B}^T` (See :ref:`internal coordinate setup <internal_coordinate>`).
 
 At the beginning of the first iteration, the mass-weighted step size (:math:`\mathbf{s}`) is calculated from the trust radius (:math:`R_{\mathrm{trust}}`) as follows:
 
 .. math::
     \begin{aligned}
-    A = \sqrt{\sum_{i=1}^{N_{\mathrm{atoms}}} (\Delta x_i^2 + \Delta y_i^2 + \Delta z_i^2) \times \sqrt{m_i}} \\
-    \mathbf{s} = R_{\mathrm{trust}} \times A
+    & A = \sqrt{\sum_{i=1}^{N_{\mathrm{atoms}}} (\Delta x_i^2 + \Delta y_i^2 + \Delta z_i^2) \times \sqrt{m_i}} \\
+    & \mathrm{s} = R_{\mathrm{trust}} \times A
     \end{aligned}
 
 where :math:`\Delta x`, :math:`\Delta y`, and :math:`\Delta z` are the normalized Cartesian displacements along the imaginary mode on the saddle-point.
@@ -55,51 +55,48 @@ Each IRC step starts with taking a half-step towards a pivot point following the
 The pivot point (:math:`\mathbf{\mathrm{q}}^*`) is obtained by:
 
 .. math::
-    \begin{aligned}
-    \mathbf{\mathrm{q}}^* = \mathbf{\mathrm{q}} - 1/2 \mathbf{s} N \mathbf{G} \cdot \mathbf{g} \\
-    N = (\mathbf{g}^T \cdot \mathbf{G} \cdot \mathbf{g})^{1/2}
-    \end{aligned}
+    \mathbf{q}^* = \mathbf{q} - \frac{\mathrm{s}}{2} \cdot \frac{\mathbf{G} \cdot \mathbf{g}}{(\mathbf{g}^T \cdot \mathbf{G} \cdot \mathbf{g})^{2}}
 
-where :math:`\mathbf{g}` is the gradients of internal coordinates :math:`\mathbf{\mathrm{q}}`.
-To reach the next point on the reaction path, another half-step needs to be taken from the pivot point along a vector that is 1) parallel to the acceleration vector of the next point and 2) has a scalar value equal to half of the mass-weighted step size (:math:`1/2\mathbf{s}`).
+where :math:`\mathbf{g}` is the gradients of internal coordinates :math:`\mathbf{q}`.
+To reach the next point on the reaction path, another half-step needs to be taken from the pivot point along a vector that is 1) parallel to the acceleration vector of the next point and 2) has a scalar value equal to half of the mass-weighted step size (:math:`\mathrm{s}/2`).
 
-First, a guessed point (:math:`\mathbf{\mathrm{q}}_1^\prime`) is obtained by taking the same step as the initial half-step starting from the pivot point.
-The guessed point is guided to the next guessed point (:math:`\mathbf{\mathrm{q}}_2^\prime`) until the vector pointing from the pivot point to the guessed point satisfies the two conditions.
+First, a guessed point (:math:`\mathbf{q}_1^\prime`) is obtained by taking the same step as the initial half-step starting from the pivot point.
+The guessed point is guided to the next guessed point (:math:`\mathbf{q}_2^\prime`) until the vector pointing from the pivot point to the guessed point satisfies the two conditions.
 
 If we define the following two vectors:
 
 .. math::
     \begin{aligned}
-    \mathbf{\mathrm{p}} = \mathbf{\mathrm{q}}_n^\prime - \mathbf{\mathrm{q}}^* \\
-    \Delta\mathbf{\mathrm{q}} = \mathbf{\mathrm{q}}_{n+1}^\prime - \mathbf{\mathrm{q}}_n^\prime
+    & \mathbf{p} = \mathbf{q}_n^\prime - \mathbf{q}^* \\
+    & \Delta\mathbf{q} = \mathbf{q}_{n+1}^\prime - \mathbf{q}_n^\prime
     \end{aligned}
     :label: vectors
 
-:math:`\Delta\mathbf{\mathrm{q}}` can be updated while keeping the scaler value of :math:`\mathbf{\mathrm{p}}` equal to :math:`1/2\mathbf{s}` until :math:`\mathbf{\mathrm{q}}_n^\prime` reaches the point where :math:`\mathbf{\mathrm{p}} + \Delta\mathbf{\mathrm{q}}` is parallel to the acceleration vectors at point :math:`\mathbf{\mathrm{q}}_{n+1}^\prime`.
-The vectors, Hessian, and gradients in mass-weighted internal coordinates can be expressed as:
+:math:`\Delta\mathbf{q}` can be updated while keeping the scaler value of :math:`\mathbf{p}` equal to :math:`\mathrm{s}/2` until :math:`\mathbf{q}_n^\prime` reaches the point where :math:`\mathbf{p} + \Delta\mathbf{q}` is parallel to the acceleration vectors at point :math:`\mathbf{q}_{n+1}^\prime`.
+The vectors, Hessian, and gradients in mass-weighted internal coordinates can be expressed as
 
 .. math::
     \begin{aligned}
-    \Delta\mathbf{\mathrm{q}}_\mathbf{\mathrm{M}} = \mathbf{G}^{-1/2} \Delta\mathbf{\mathrm{q}}\\
-    \mathbf{\mathrm{p}}_\mathbf{\mathrm{M}} = \mathbf{G}^{-1/2} \mathbf{\mathrm{p}}\\
-    \mathbf{\mathrm{g}}_\mathbf{\mathrm{M}} = \mathbf{G}^{1/2} \mathbf{\mathrm{g}}^{\prime}\\
-    \mathbf{\mathrm{H}}_\mathbf{\mathrm{M}} = \mathbf{G}^{1/2} \mathbf{\mathrm{H}} \mathbf{G}^{1/2}\\
+    & \Delta\mathbf{q}_\mathrm{M} = \mathbf{G}^{-1/2} \Delta\mathbf{q}\\
+    & \mathbf{p}_\mathrm{M} = \mathbf{G}^{-1/2} \mathbf{p}\\
+    & \mathbf{g}_\mathrm{M} = \mathbf{G}^{1/2} \mathbf{g}^{\prime}\\
+    & \mathbf{H}_\mathrm{M} = \mathbf{G}^{1/2} \mathbf{H} \mathbf{G}^{1/2}\\
     \end{aligned}
     :label: mwic
 
-where :math:`\mathbf{\mathrm{g}}^{\prime}` represents the estimated gradients at the point :math:`\mathbf{\mathrm{q}}_n^\prime`, using a quadratic expansion.
-:math:`\mathbf{G}` is calculated at :math:`\mathbf{\mathrm{q}}_n^\prime` as well.
+where :math:`\mathbf{g}^{\prime}` represents the estimated gradients at the point :math:`\mathbf{q}_n^\prime`, using a quadratic expansion.
+:math:`\mathbf{G}` is calculated at :math:`\mathbf{q}_n^\prime` as well.
 
 The step size constraint can be expressed as:
 
 .. math::
-    (\mathbf{\mathrm{p}}_\mathbf{\mathrm{M}} + \Delta\mathbf{\mathrm{q}}_\mathbf{\mathrm{M}})^{T}(\mathbf{\mathrm{p}}_\mathbf{\mathrm{M}} + \Delta\mathbf{\mathrm{q}}_\mathbf{\mathrm{M}}) = (1/2 \mathbf{s})^2
+    (\mathbf{p}_\mathrm{M} + \Delta\mathbf{q}_\mathrm{M})^{T}(\mathbf{p}_\mathrm{M} + \Delta\mathbf{q}_\mathrm{M}) = (\frac{\mathrm{s}}{2})^2
     :label: const1
 
 The other condition is satisfied at the convergence point (the next point), when the following equation holds true:
 
 .. math::
-    (\mathbf{\mathrm{g}}_\mathbf{\mathrm{M}} - \lambda \mathbf{\mathrm{p}}_\mathbf{\mathrm{M}}) + (\mathbf{\mathrm{H}}_\mathbf{\mathrm{M}} - \lambda \mathbf{I})\Delta\mathbf{\mathrm{q}}_\mathbf{\mathrm{M}} = 0
+    (\mathbf{g}_\mathrm{M} - \lambda \mathbf{p}_\mathrm{M}) + (\mathbf{H}_\mathrm{M} - \lambda \mathbf{I})\Delta\mathbf{q}_\mathrm{M} = 0
     :label: const2
 
 where :math:`\lambda` is the Lagrangian multiplier and :math:`\mathbf{I}` is the identity matrix.
@@ -107,12 +104,12 @@ where :math:`\lambda` is the Lagrangian multiplier and :math:`\mathbf{I}` is the
 Eq. :eq:`const2` can be rearranged as follows:
 
 .. math::
-    \Delta\mathbf{\mathrm{q}}_\mathbf{\mathrm{M}} = -(\mathbf{\mathrm{H}}_\mathbf{\mathrm{M}} - \lambda \mathbf{I})^{-1}(\mathbf{\mathrm{g}}_\mathbf{\mathrm{M}} - \lambda \mathbf{\mathrm{p}}_\mathbf{\mathrm{M}})
+    \Delta\mathbf{q}_\mathrm{M} = -(\mathbf{H}_\mathrm{M} - \lambda \mathbf{I})^{-1}(\mathbf{g}_\mathrm{M} - \lambda \mathbf{p}_\mathrm{M})
     :label: delqm
 
 :math:`\lambda` is calculated iteratively after introducing Eq. :eq:`delqm` to :eq:`const1`.
-:math:`\Delta\mathbf{\mathrm{q}}_\mathbf{\mathrm{M}}` is then used to move :math:`\mathbf{\mathrm{q}}_n^\prime` to :math:`\mathbf{\mathrm{q}}_{n+1}^\prime` and new Eq. :eq:`vectors` and Eq. :eq:`mwic` are defined to calculate the next :math:`\Delta\mathbf{\mathrm{q}}_\mathbf{\mathrm{M}}`.
-This process repeats until the norm of :math:`\Delta\mathbf{\mathrm{q}}` falls below 1e-6. It then takes the rest of the half-step along :math:`\mathbf{\mathrm{p}} + \Delta\mathbf{\mathrm{q}}` from the pivot point, which completes an iteration.
+:math:`\Delta\mathbf{q}_\mathrm{M}` is then used to move :math:`\mathbf{q}_n^\prime` to :math:`\mathbf{q}_{n+1}^\prime` and new Eq. :eq:`vectors` and Eq. :eq:`mwic` are defined to calculate the next :math:`\Delta\mathbf{q}_\mathrm{M}`.
+This process repeats until the norm of :math:`\Delta\mathbf{q}` falls below 1e-6. It then takes the rest of the half-step along :math:`\mathbf{p} + \Delta\mathbf{q}` from the pivot point, which completes an iteration.
 
 
 Trust radius adjustment

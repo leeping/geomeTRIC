@@ -1,11 +1,9 @@
 """
 optimize.py: Driver and core functions for geometry optimization
 
-Copyright 2016-2020 Regents of the University of California and the Authors
+This code is part of geomeTRIC.
 
-Authors: Lee-Ping Wang, Chenchen Song
-
-Contributors: Heejune Park, Yudong Qiu, Daniel G. A. Smith, Alberto Gobbi, Josh Horton
+Copyright 2016-2024 Regents of the University of California and the Authors
 
 Redistribution and use in source and binary forms, with or without modification,
 are permitted provided that the following conditions are met:
