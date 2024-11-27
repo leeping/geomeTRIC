@@ -174,7 +174,7 @@ def set_tcenv():
     os.environ['PATH'] = os.path.join(TCHome,'bin')+":"+os.environ['PATH']
     os.environ['LD_LIBRARY_PATH'] = os.path.join(TCHome,'lib')+":"+os.environ['LD_LIBRARY_PATH']
 
-def load_tcin(f_tcin):
+def load_tcin(f_tcin, reqxyz=True):
     tcdef = OrderedDict()
     tcdef['convthre'] = "3.0e-6"
     tcdef['threall'] = "1.0e-13"
@@ -183,7 +183,7 @@ def load_tcin(f_tcin):
     # tcdef['dftgrid'] = "1"
     # tcdef['precision'] = "mixed"
     # tcdef['threspdp'] = "1.0e-8"
-    tcin = edit_tcin(fin=f_tcin, options={'run':'gradient', 'keep_scr':'yes', 'scrdir':'scr'}, defaults=tcdef)
+    tcin = edit_tcin(fin=f_tcin, reqxyz=reqxyz, options={'run':'gradient', 'keep_scr':'yes', 'scrdir':'scr'}, defaults=tcdef)
     return tcin
 
 #====================================#
@@ -1171,7 +1171,7 @@ class Gaussian(Engine):
         if energy is None:
             raise RuntimeError("Gaussian energy is not found in %s, please check." % fchk_out)
         if gradient is None:
-            raise RuntimeError("Gaussian gradient is not found in %s, please check." % gaussian_out)
+            raise RuntimeError("Gaussian gradient is not found in %s, please check." % fchk_out)
         gradient = np.array(gradient, dtype=np.float64).ravel()
         return {'energy':energy, 'gradient':gradient}
 

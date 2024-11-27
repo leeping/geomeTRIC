@@ -15,9 +15,9 @@ with translation and rotation coordinates", J. Chem, Phys. 144, 214108.
 Credits
 -------
 
-Authors: Lee-Ping Wang, Chenchen Song
+Authors: Lee-Ping Wang, Chenchen Song, Heejune Park
 
-Contributors: Heejune Park (Nudged elastic band, Intrinsic reaction coordinate); Yudong Qiu (Psi4 engine, error handling); Daniel G. A. Smith (Testing framework, QCEngine JSON API);
+Contributors: Yudong Qiu (Psi4 engine, error handling); Daniel G. A. Smith (Testing framework, QCEngine JSON API);
 Tamas K. Stenczel (GitHub Actions, ASE engine); Sebastian Lee (Molpro engine); Chaya Stern (Travis, Conda); Qiming Sun (Custom engine); 
 Alberto Gobbi (Batch energy/gradient, logging); Josh Horton (Convergence criteria, Gaussian engine); Akhil Shajan (QUICK engine)
 
@@ -36,11 +36,11 @@ License
 
                            BSD 3-clause (aka BSD 2.0) License
 
-    Copyright 2016-2023 Regents of the University of California and the Authors
+    Copyright 2016-2024 Regents of the University of California and the Authors
 
-    Authors: Lee-Ping Wang, Chenchen Song
+    Authors: Lee-Ping Wang, Chenchen Song, Heejune Park
 
-    Contributors: Heejune Park, Yudong Qiu, Daniel G. A. Smith, Sebastian Lee, Chaya Stern, Qiming Sun,
+    Contributors: Yudong Qiu, Daniel G. A. Smith, Sebastian Lee, Chaya Stern, Qiming Sun,
     Alberto Gobbi, Josh Horton, Tamas K. Stenczel, Akhil Shajan
 
     Redistribution and use in source and binary forms, with or without modification,

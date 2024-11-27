@@ -1,4 +1,6 @@
-![geomeTRIC](https://user-images.githubusercontent.com/1441560/56555299-600d1980-6549-11e9-9f05-b1e8b899a292.png)
+<div align="center">
+    <img width = "40%" src = "https://user-images.githubusercontent.com/1441560/56555299-600d1980-6549-11e9-9f05-b1e8b899a292.png">
+</div>
 
 [![Build Status](https://github.com/leeping/geomeTRIC/actions/workflows/test-conda.yml/badge.svg)](https://github.com/leeping/geomeTRIC/actions/workflows/test-conda.yml)
 [![codecov](https://codecov.io/gh/leeping/geometric/branch/master/graph/badge.svg)](https://codecov.io/gh/leeping/geometric)
@@ -14,9 +16,9 @@ also supported through the command line interface.
 
 Documentation is hosted at https://geometric.readthedocs.io/ .
 
-Authors: Lee-Ping Wang, Chenchen Song
+Authors: Lee-Ping Wang, Chenchen Song, Heejune Park
 
-Contributors: Heejune Park (Nudged elastic band, Intrinsic reaction coordinate); Yudong Qiu (Psi4 engine, error handling); Daniel G. A. Smith (Testing framework, QCEngine JSON API);
+Contributors: Yudong Qiu (Psi4 engine, error handling); Daniel G. A. Smith (Testing framework, QCEngine JSON API);
 Tamas K. Stenczel (GitHub Actions, ASE engine); Sebastian Lee (Molpro engine); Chaya Stern (Travis, Conda); Qiming Sun (Custom engine); 
 Alberto Gobbi (Batch energy/gradient, logging); Josh Horton (Convergence criteria, Gaussian engine); Akhil Shajan (QUICK engine)
 

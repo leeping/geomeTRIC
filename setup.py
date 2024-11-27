@@ -9,7 +9,7 @@ setup(
     name='geometric',
     description='Geometry optimization for quantum chemistry',
     url='https://github.com/leeping/geomeTRIC',
-    author='Lee-Ping Wang, Chenchen Song',
+    author='Lee-Ping Wang, Chenchen Song, Heejune Park',
     author_email='leeping@ucdavis.edu',
     packages=find_packages(),
     package_data={'': ['*.ini']},

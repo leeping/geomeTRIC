@@ -33,37 +33,37 @@
 # 
 # == Summary of harmonic free energy analysis ==
 # Note: Rotational symmetry is set to 1 regardless of true symmetry
-# 1 Imaginary Frequencies (cm^-1): 1215.859i
+# 1 Imaginary Frequencies (cm^-1): 732.902i
 # Note: Free energy does not include contribution from imaginary mode(s)
 # 
 # Free energy contributions calculated at @ 300.00 K:
-# Zero-point vibrational energy:                                    6.5453 kcal/mol 
-# H   (Trans + Rot + Vib = Tot):   1.4904 +   0.8942 +   0.0003 =   2.3849 kcal/mol 
-# S   (Trans + Rot + Vib = Tot):  35.8748 +  16.3847 +   0.0010 =  52.2605 cal/mol/K
-# TS  (Trans + Rot + Vib = Tot):  10.7624 +   4.9154 +   0.0003 =  15.6782 kcal/mol 
+# Zero-point vibrational energy:                                    4.8006 kcal/mol 
+# H   (Trans + Rot + Vib = Tot):   1.4904 +   0.8942 +   0.0331 =   2.4177 kcal/mol 
+# S   (Trans + Rot + Vib = Tot):  35.8748 +  17.0348 +   0.1353 =  53.0449 cal/mol/K
+# TS  (Trans + Rot + Vib = Tot):  10.7624 +   5.1104 +   0.0406 =  15.9135 kcal/mol 
 # 
-# Ground State Electronic Energy    : E0                        =   -92.24604266 au (    -57885.2657 kcal/mol)
-# Free Energy Correction (Harmonic) : ZPVE + [H-TS]_T,R,V       =    -0.01075349 au (        -6.7479 kcal/mol)
-# Gibbs Free Energy (Harmonic)      : E0 + ZPVE + [H-TS]_T,R,V  =   -92.25679615 au (    -57892.0136 kcal/mol)
+# Ground State Electronic Energy    : E0                        =   -92.20270517 au (    -57858.0710 kcal/mol)
+# Free Energy Correction (Harmonic) : ZPVE + [H-TS]_T,R,V       =    -0.01385660 au (        -8.6951 kcal/mol)
+# Gibbs Free Energy (Harmonic)      : E0 + ZPVE + [H-TS]_T,R,V  =   -92.21656177 au (    -57866.7662 kcal/mol)
 # 
 
 3
-Iteration 0 Energy -92.24604266
- C   -0.1088783634   -0.6365101639    0.0043221742
- N   -0.6393457902    0.4205365638    0.0052498438
- H    0.7532976101    0.2173493463   -0.0090384631
+Iteration 0 Energy -92.20270517
+ C    0.0000000000    0.0000000000    0.0000000000
+ N    0.0000000000    0.0000000000    1.1483800000
+ H   -1.5853600000    0.0000000000    1.1483800000
 
--1215.858933
--0.043293 -0.081607  0.000849
- 0.075287  0.009576 -0.000867
--0.530324  0.839319  0.001930
+ -732.902049
+ 0.065828 -0.000000 -0.019334
+-0.114851 -0.000000 -0.024309
+ 0.811594 -0.000000  0.568178
 
- 2126.655388
--0.335109  0.647241  0.000681
- 0.302446 -0.563902 -0.000708
--0.209774  0.123745  0.001723
+  914.008443
+-0.085452 -0.000000  0.034099
+ 0.025196 -0.000000  0.023838
+ 0.668085 -0.000000 -0.737560
 
- 2451.859833
--0.057515 -0.023525  0.000737
--0.012776 -0.015886  0.000213
- 0.862859  0.501058 -0.011742
+ 2444.056325
+ 0.004731  0.000000  0.754258
+ 0.002087  0.000000 -0.649700
+-0.085380  0.000000  0.040837
