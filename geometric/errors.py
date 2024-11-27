@@ -2,13 +2,11 @@
 errors.py : errors module with definition of Customized Errors
 
 The classes and subclasses in this module defines a "tree" relation of exceptions,
-that can be used thoughout the code for a consistent error handling pattern.
+that can be used throughout the code for a consistent error handling pattern.
 
-Copyright 2016-2020 Regents of the University of California and the Authors
+This code is part of geomeTRIC.
 
-Authors: Lee-Ping Wang, Chenchen Song
-
-Contributors: Yudong Qiu
+Copyright 2016-2024 Regents of the University of California and the Authors
 
 Redistribution and use in source and binary forms, with or without modification,
 are permitted provided that the following conditions are met:

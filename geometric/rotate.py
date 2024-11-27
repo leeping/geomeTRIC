@@ -13,11 +13,9 @@ References
 3. G. H. Golub, V. Pereyra. "The differentiation of pseudo-inverses and 
 nonlinear least squares problems whose variables separate." Siam J. Numer. Anal., 1973.
 
-Copyright 2016-2020 Regents of the University of California and the Authors
+This code is part of geomeTRIC.
 
-Authors: Lee-Ping Wang, Chenchen Song
-
-Contributors: 
+Copyright 2016-2024 Regents of the University of California and the Authors
 
 Redistribution and use in source and binary forms, with or without modification,
 are permitted provided that the following conditions are met:

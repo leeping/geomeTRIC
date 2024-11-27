@@ -1,11 +1,9 @@
 """
 step.py: Algorithms and tools for taking optimization steps
 
-Copyright 2016-2020 Regents of the University of California and the Authors
+This code is part of geomeTRIC.
 
-Authors: Lee-Ping Wang, Chenchen Song
-
-Contributors: 
+Copyright 2016-2024 Regents of the University of California and the Authors
 
 Redistribution and use in source and binary forms, with or without modification,
 are permitted provided that the following conditions are met:

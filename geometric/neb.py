@@ -1,3 +1,37 @@
+"""
+neb.py: NEB method
+
+This code is part of geomeTRIC.
+
+Copyright 2016-2024 Regents of the University of California and the Authors
+
+Redistribution and use in source and binary forms, with or without modification,
+are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice,
+this list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+this list of conditions and the following disclaimer in the documentation
+and/or other materials provided with the distribution.
+
+3. Neither the name of the copyright holder nor the names of its contributors
+may be used to endorse or promote products derived from this software
+without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT,
+INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
+NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
+"""
+
+
 from __future__ import print_function
 from __future__ import division
 
@@ -56,7 +90,7 @@ def CoordinateSystem(M, coordtype, chain=False, guessw=0.1):
     chain : bool
         True will return a chain object
     guessw : float
-        Guessed value for initial Hessians
+        Guessed weight value for the chain coordinate
 
     Returns
     -------
@@ -996,7 +1030,7 @@ class ElasticBand(Chain):
             if rmsGrad[n] < self.params.avgg and maxGrad[n] < self.params.maxg:
                 newLocks[n] = True
         if False not in newLocks:
-            # HP: In case all of the images are locked before NEB converges, unlock a few.
+            # HP: In case all the images are locked before NEB converges, unlock a few.
             logger.info(
                 "All the images got locked, unlocking some images with tighter average gradient value. \n"
             )
@@ -1666,7 +1700,7 @@ def OptimizeChain(chain, engine, params):
         # |  Adjust Trust Radius / Reject Step  |#
         # =======================================#
 
-        chain, trust, trustprint, Y, GW, GP, good = qualitycheck(chain_prev, chain,trust, Quality, ThreLQ, ThreRJ,
+        chain, trust, trustprint, Y, GW, GP, good = qualitycheck(chain_prev, chain, trust, Quality, ThreLQ, ThreRJ,
             ThreHQ, Y, GW, GP, Y_prev, GW_prev, GP_prev, params.tmax)
         if not good:
             continue

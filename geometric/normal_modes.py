@@ -1,12 +1,9 @@
 """
 normal_modes.py: Compute Cartesian Hessian and perform vibrational analysis
 
-Copyright 2016-2020 Regents of the University of California and the Authors
+This code is part of geomeTRIC.
 
-Authors: Lee-Ping Wang, Chenchen Song
-
-Contributors: Yudong Qiu, Daniel G. A. Smith, Sebastian Lee, Chaya Stern, Qiming Sun,
-Alberto Gobbi, Josh Horton
+Copyright 2016-2024 Regents of the University of California and the Authors
 
 Redistribution and use in source and binary forms, with or without modification,
 are permitted provided that the following conditions are met:
