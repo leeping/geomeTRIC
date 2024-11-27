@@ -63,13 +63,13 @@ The details of how each force component is applied will be explained here, along
 Force components
 """"""""""""""""
 
-The gradients are calculated based on the force components described in Equation (:eq:`neb_force`).
+The gradients are calculated based on the force components described in Equation :eq:`neb_force`.
 geomeTRIC implemented Henkelman and Jónsson's `improved tangent <https://doi.org/10.1063/1.1323224>`_ and `climibing image <https://doi.org/10.1063/1.1329672>`_ method.
 The perpendicular and parallel forces are obtained as following:
 
 .. math::
     \begin{aligned}
-    & \mathbf{F}_{\mathrm{PES}}^{\perp}(\mathbf{r}_i) = \mathbf{F}_{\mathrm{PES}}(\mathbf{r}_i) - \mathbf{F}_{\mathrm{PES}}(\mathbf{r}_i) \cdot \hat{\mathbf{\tau}}_i\\
+    & \mathbf{F}_{\mathrm{PES}}^{\perp}(\mathbf{r}_i) = \mathbf{F}_{\mathrm{PES}}(\mathbf{r}_i) - (\mathbf{F}_{\mathrm{PES}}(\mathbf{r}_i) \cdot \hat{\mathbf{\tau}}_i)\hat{\mathbf{\tau}}_i\\
     & \mathbf{F}_{\mathrm{spring}}^{\parallel}(\Delta \mathbf{r}_{i+1,i}, \Delta \mathbf{r}_{i-1, i}) = k([(\mathbf{r}_{i+1} - \mathbf{r}_i) - (\mathbf{r}_i - \mathbf{r}_{i-1})] \cdot \hat{\mathbf{\tau}}_i) \hat{\mathbf{\tau}}_i
     \end{aligned}
 
@@ -96,8 +96,8 @@ For the images located at extrema, the following tangent is applied:
 where
 
 .. math::
-    \Delta E_i^{\mathrm{max}} = max(|E_{i+1} - E_i|, |E_{i-1} - E_i|) \\
-    \Delta E_i^{\mathrm{min}} = min(|E_{i+1} - E_i|, |E_{i-1} - E_i|)
+    \Delta E_i^{\mathrm{max}} = \mathrm{max}(|E_{i+1} - E_i|, |E_{i-1} - E_i|) \\
+    \Delta E_i^{\mathrm{min}} = \mathrm{min}(|E_{i+1} - E_i|, |E_{i-1} - E_i|)
 
 The tangent vector is normalized and applied to project the force components accordingly.
 During the optimization, when the maximum RMS gradient of the chain falls below a threshold (default set at 0.5 ev/Ang using ``--climb [0.5]``), the highest energy image (:math:`i_{\mathrm{max}}`) is switched to climbing mode.
@@ -128,7 +128,7 @@ The :math:`\Delta E_{\mathrm{pred}}` is calculated using the same equation as th
 The step quality based on gradients (:math:`Q_g`) is calculated as:
 
 .. math::
-    Q_g = 2 - \frac{g_{\mathrm{curr}}}{max(g_{\mathrm{pred}}, \frac{g_{\mathrm{prev}}}{2}, \frac{g_{\mathrm{conv}}}{2})}
+    Q_g = 2 - \frac{g_{\mathrm{curr}}}{\mathrm{max}(g_{\mathrm{pred}}, \frac{g_{\mathrm{prev}}}{2}, \frac{g_{\mathrm{conv}}}{2})}
 
 where :math:`g_{\mathrm{curr}}` and :math:`g_{\mathrm{prev}}` are the average RMS Cartesian gradients of current and previously iterated chain, respectively.
 :math:`g_{\mathrm{conv}}` is the average gradient convergence criterion (``--avgg [0.025]``).
