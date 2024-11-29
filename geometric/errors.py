@@ -108,6 +108,9 @@ class GaussianEngineError(EngineError):
 class QCEngineAPIEngineError(EngineError):
     pass
 
+class BagelEngineError(EngineError):
+    pass
+
 class ConicalIntersectionEngineError(EngineError):
     pass
 

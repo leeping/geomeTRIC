@@ -46,7 +46,7 @@ import os
 from .ase_engine import EngineASE
 from .errors import EngineError, InputError
 from .internal import Distance, Angle, Dihedral, CartesianX, CartesianY, CartesianZ, TranslationX, TranslationY, TranslationZ, RotationA, RotationB, RotationC, CentroidDistance
-from .engine import set_tcenv, load_tcin, TeraChem, ConicalIntersection, Psi4, QChem, Gromacs, Molpro, OpenMM, QCEngineAPI, Gaussian, QUICK, CFOUR
+from .engine import set_tcenv, load_tcin, TeraChem, ConicalIntersection, Psi4, QChem, Gromacs, Molpro, OpenMM, QCEngineAPI, Gaussian, Bagel, QUICK, CFOUR
 from .molecule import Molecule, Elements
 from .nifty import logger, isint, uncommadash, bohr2ang, ang2bohr
 from .rotate import calc_fac_dfac
@@ -90,7 +90,7 @@ def get_molecule_engine(**kwargs):
     ## MECI calculations create a custom engine that contains multiple engines.
     if kwargs.get('meci', None):
         if engine_str is not None:
-            if engine_str.lower() in ['psi4', 'gmx', 'molpro', 'qcengine', 'openmm', 'gaussian','quick', 'cfour']:
+            if engine_str.lower() in ['psi4', 'gmx', 'molpro', 'qcengine', 'openmm', 'gaussian', 'bagel', 'quick', 'cfour']:
                 logger.warning("MECI optimizations are not tested with engines: psi4, gmx, molpro, qcengine, openmm, gaussian, quick, cfour. Be Careful!")
         elif customengine:
             logger.warning("MECI optimizations are not tested with customengine. Be Careful!")
@@ -136,7 +136,7 @@ def get_molecule_engine(**kwargs):
         engine_str = engine_str.lower()
         if engine_str[:4] == 'tera':
             engine_str = 'tera'
-        implemented_engines = ('tera', 'qchem', 'psi4', 'gmx', 'molpro', 'openmm', 'qcengine', "gaussian", "ase", "quick", "cfour")
+        implemented_engines = ('tera', 'qchem', 'psi4', 'gmx', 'molpro', 'openmm', 'qcengine', "gaussian", "bagel", "ase", "quick", "cfour")
         if engine_str not in implemented_engines:
             raise RuntimeError("Valid values of engine are: " + ", ".join(implemented_engines))
         if customengine:
@@ -302,6 +302,13 @@ def get_molecule_engine(**kwargs):
             logger.info("The gaussian engine exe is set as %s\n" % engine.gaussian_exe)
             # load the template into the engine
             engine.load_gaussian_input(inputf)
+        elif engine_str == 'bagel':
+            logger.info("Bagel engine selected. Expecting Bagel input for gradient calculation.\n")
+            engine = Bagel(threads=threads)
+            engine.load_bagel_input(inputf)
+            M = engine.M
+            threads_enabled = True        
+    
         elif engine_str == 'cfour':
             logger.info("CFOUR engine selected. Expecting CFOUR input for gradient calculation.\n")
             engine = CFOUR(inputf)
