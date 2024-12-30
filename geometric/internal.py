@@ -2168,7 +2168,7 @@ class InternalCoordinates(object):
         self._rigid = val
 
 class PrimitiveInternalCoordinates(InternalCoordinates):
-    def __init__(self, molecule, connect=False, addcart=False, constraints=None, cvals=None, connect_isolated=True, **kwargs):
+    def __init__(self, molecule, connect=False, addcart=False, constraints=None, cvals=None, connect_isolated=True, build_prim=True, **kwargs):
         super(PrimitiveInternalCoordinates, self).__init__()
         # connect = True corresponds to "traditional" internal coordinates with minimum spanning bonds
         self.connect = connect
@@ -2187,8 +2187,9 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         self.mass = np.repeat([PeriodicTable[i] for i in self.elem], 3)
         # List of fragments as determined by residue ID, distance criteria or bond order
         self.frags = []
-        for i in range(len(molecule)):
-            self.makePrimitives(molecule[i], connect, addcart)
+        if build_prim:
+            for i in range(len(molecule)):
+                self.makePrimitives(molecule[i], connect, addcart)
         # Assume we're using the first image for constraints
         self.makeConstraints(molecule[0], constraints, cvals)
         # Reorder primitives for checking with cc's code in TC.
@@ -3701,7 +3702,7 @@ class CartesianCoordinates(PrimitiveInternalCoordinates):
     primitive internal coordinates.
     """
     def __init__(self, molecule, **kwargs):
-        super(CartesianCoordinates, self).__init__(molecule)
+        super(CartesianCoordinates, self).__init__(molecule, build_prim=False)
         self.Internals = []
         self.cPrims = []
         self.cVals = []
