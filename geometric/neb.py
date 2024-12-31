@@ -2,6 +2,7 @@ from __future__ import print_function
 from __future__ import division
 
 import os, sys, time
+from typing import Callable, Optional
 from collections import OrderedDict
 import numpy as np
 from copy import deepcopy
@@ -1556,9 +1557,9 @@ def takestep(c_hist, chain, optCycle, LastForce, ForceRebuild, trust, Y, GW, GP,
     return (chain, new_chain, expect, expectG, ForceRebuild, LastForce, old_Y, old_GW, old_GP, respaced, optCycle)
 
 
-def OptimizeChain(chain, engine, params):
+def OptimizeChain(chain, engine, params, save_callback: Optional[Callable[[Chain], None]] = None):
     """
-    Main optimization function.
+    Main optimization function. Optionally takes `save_callback` to periodically save the `Chain` object.
     """
     # Thresholds for low and high quality steps
     ThreLQ = 0.0
@@ -1602,7 +1603,12 @@ def OptimizeChain(chain, engine, params):
             "% 8.4f  " % sum(chain.calc_spacings()),
         )
     )
+
+    # save status
     chain.SaveToDisk(fout="chain_%04i.xyz" % 0)
+    if save_callback is not None:
+        save_callback(chain)
+
     Y = chain.get_internal_all()
     GW = chain.get_global_grad("total", "working")
     GP = chain.get_global_grad("total", "plain")
@@ -1652,8 +1658,13 @@ def OptimizeChain(chain, engine, params):
 
         if respaced:
             chain.SaveToDisk(fout="chain_%04i.xyz" % optCycle)
+            if save_callback is not None:
+                save_callback(chain)
             continue
+
         chain.SaveToDisk(fout="chain_%04i.xyz" % optCycle)
+        if save_callback is not None:
+            save_callback(chain)
 
         # =======================================#
         # |    Check convergence criteria       |#
