@@ -4669,6 +4669,8 @@ class Molecule(object):
                 if i < (self.na-1) and chainName != chainNames[i+1]:
                     out.append("TER   %5d      %3s %s%4s" % (atomIndex, resName, chainName, resId))
                     atomIndex += 1
+                elif i < (self.na-1) and hasattr(self, 'terminal') and self.terminal[i]:
+                    out.append("TER")
             out.append("TER   %5d      %3s %s%4s" % (atomIndex, resName, chainName, resId))
             if len(self) > 1:
                 out.append("ENDMDL")
