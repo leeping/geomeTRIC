@@ -26,6 +26,8 @@ Main features of geomeTRIC include:
    how-it-works
    constraints
    transition
+   neb
+   irc
    meci
    engines
    help

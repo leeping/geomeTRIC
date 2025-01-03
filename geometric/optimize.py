@@ -1,11 +1,9 @@
 """
 optimize.py: Driver and core functions for geometry optimization
 
-Copyright 2016-2020 Regents of the University of California and the Authors
+This code is part of geomeTRIC.
 
-Authors: Lee-Ping Wang, Chenchen Song
-
-Contributors: Heejune Park, Yudong Qiu, Daniel G. A. Smith, Alberto Gobbi, Josh Horton
+Copyright 2016-2024 Regents of the University of California and the Authors
 
 Redistribution and use in source and binary forms, with or without modification,
 are permitted provided that the following conditions are met:
@@ -451,6 +449,9 @@ class Optimizer(object):
     def IRC_step(self):
         self.farConstraints = self.IC.haveConstraints() and self.IC.maxConstraintViolation(self.X) > 1e-1
 
+        if self.params.verbose:
+            logger.info("IRC sub-step 1: Finding the pivot point (q*_{k+1})\n")
+
         # Need to take a step towards the pivot point
         self.IC.clearCache()
         MWGMat = self.IC.GMatrix(self.X, invMW=True)
@@ -461,7 +462,7 @@ class Optimizer(object):
         # Vector to the pivot point
         if self.Iteration == 0:
             # If it's the very first step, pick the eigenvector of the imaginary frequency and pick the direction
-            logger.info('\nFirst, following the imaginary mode vector\n')
+            logger.info('First, following the imaginary mode vector\n')
             if self.TSWavenum[1] < 0:
                 raise IRCError("There are more than one imaginary vibrational mode. Please optimize the structure and try again.\n")
             elif self.TSWavenum[0] >= 0:
@@ -503,12 +504,13 @@ class Optimizer(object):
         # Calculating sqrt(mass) weighted Cartesian coordinate
         MWGMat_sqrt_inv, MWGMat_sqrt = self.IC.GInverse_SVD(X_pivot, sqrt=True, invMW=True)
         mwdx_1 = np.dot(MWGMat_sqrt_inv, dy_to_pivot)
+
         if self.params.verbose:
-            logger.info("IRC sub-step 1: Finding the pivot point (q*_{k+1})\n")
             logger.info("Half step dy     = %.5f\n" %np.linalg.norm(dy_to_pivot))
             logger.info("Half step mw-dx  = %.5f Bohr*sqrt(amu)\n" %np.linalg.norm(mwdx_1))
 
         # We are at the pivot point
+            logger.info('\nIRC sub-step 2: Finding the next point (q_{k+1})\n')
         v1 = v.copy()
         irc_sub_iteration = 0
         irc_reset_iteration = 0
@@ -570,8 +572,8 @@ class Optimizer(object):
                 break
             irc_sub_iteration += 1
             p_prime += dq_new
+
         if self.params.verbose:
-            logger.info('\nIRC sub-step 2: Finding the next point (q_{k+1})\n')
             logger.info('Angle between v1 and v2: %2.f \n' % deg)
             logger.info('Half step dy     = %.5f \n' % np.linalg.norm(p_prime))
             logger.info('Half step mw-dx  = %.5f Bohr*sqrt(amu)\n\n' % half_mwdx)
@@ -1214,6 +1216,7 @@ def run_optimizer(**kwargs):
                     'tric-p':(PrimitiveInternalCoordinates, False, False),
                     'tric':(DelocalizedInternalCoordinates, False, False)}
     coordsys = kwargs.get('coordsys', 'tric')
+    CoordClass, connect, addcart = CoordSysDict[coordsys.lower()]
 
     # Perform an initial single-point QM calculation to determine bonding & fragments, if using TRIC
     if hasattr(engine, 'calc_bondorder') and coordsys.lower() in ['hdlc', 'tric'] and params.bothre > 1e-3:

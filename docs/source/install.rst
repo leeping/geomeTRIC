@@ -41,7 +41,7 @@ Dependencies
 
 The required packages for geomeTRIC are as follows. Older versions of packages may work, no guarantees.
 
-* Python : Versions 2.7, 3.5, 3.6, 3.7 are supported. Basic functionalities tested on 3.6 to 3.10.
+* Python : Versions 2.7, 3.5+ are supported. Basic functionalities tested on 3.7 to 3.13.
 * NumPy: Version 1.15 or above
 * NetworkX : Version 2.2 or above
 
@@ -88,3 +88,20 @@ The Work Queue library in the `CCTools <https://github.com/cooperative-computing
 Installation of ``cctools`` can be done easily via conda as follows ::
 
     conda install -c conda-forge ndcctools
+
+.. _installbigchem:
+
+Installation of BigChem
+-----------------------
+
+BigChem can be used to perform the Hessian and NEB calculations in parallel.
+The github repository of `BigChem <https://github.com/mtzgroup/bigchem>`_ has detailed documentation explaining how its backend and broker work.
+
+BigChem can be installed using ``pip``::
+
+    pip install bigchem
+
+or it can be installed along with geomeTRIC::
+
+    pip install geometric[bigchem]
+

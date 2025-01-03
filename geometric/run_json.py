@@ -1,11 +1,9 @@
 """
 run_json.py: JSON API for geomeTRIC
 
-Copyright 2016-2020 Regents of the University of California and the Authors
+This code is part of geomeTRIC.
 
-Authors: Yudong Qiu, Daniel G. A. Smith, Lee-Ping Wang
-
-Contributors: 
+Copyright 2016-2024 Regents of the University of California and the Authors
 
 Redistribution and use in source and binary forms, with or without modification,
 are permitted provided that the following conditions are met:
