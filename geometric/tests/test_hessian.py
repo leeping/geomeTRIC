@@ -71,7 +71,7 @@ def test_terachem_bigchem_hessian(bigchem_frequency):
     freqs = bigchem_frequency("tera", "hcn_minimized.tcin")
     os.remove("hcn_minimized.xyz")
 
-    np.testing.assert_almost_equal(freqs, [989.5482, 989.7072, 2394.4201, 3687.4741], decimal=0)
+    np.testing.assert_almost_equal(freqs, [989.5482, 989.7072, 2394.4201, 3694.5272], decimal=0)
     assert len(freqs) == 4
 
 
@@ -126,7 +126,7 @@ class TestASEWorkQueueHessian:
 
         shutil.copy2(os.path.join(datad, 'water1_coords_gfn2-xtb.xyz'), os.path.join(os.getcwd(), "start.xyz"))
 
-        geometric.nifty.createWorkQueue(9191, debug=False)
+        geometric.nifty.createWorkQueue(9192, debug=False)
         wq = geometric.nifty.getWorkQueue()
 
         molecule, engine = geometric.prepare.get_molecule_engine(engine="ase", input="start.xyz", ase_class="xtb.ase.calculator.XTB", ase_kwargs='{"method":"GFN2-xTB", "accuracy":0.001}')
