@@ -2030,9 +2030,6 @@ class Bagel(Engine):
             bagel_env = os.environ.copy()
             bagel_env['BAGEL_NUM_THREADS'] = str(self.threads)
             bagel_env['MKL_NUM_THREADS'] = str(self.threads)
-            print(f'{self.bagel_exe} run.json 1> run.out 2> run.err')
-            os.system('echo $BAGEL_NUM_THREADS')
-            os.system('echo $MKL_NUM_THREADS')
             subprocess.check_call(
                 f'{self.bagel_exe} run.json 1> run.out 2> run.err', 
                 cwd=dirname, shell=True, env=bagel_env,
