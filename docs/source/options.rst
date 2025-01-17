@@ -344,23 +344,24 @@ These options control the NEB method.
 
 ....
 
+``chain_coords``
+
+Name of the coordinate file containing multiple frames for NEB. This is a **required** positional argument along with the ``input`` file.
+It will override the molecular structure in the ``input`` file, which should contain the structure of the first image.
+
+....
+
 ``--maxg [0.05]``
 
 ``--avgg [0.025]``
 
-The convergence occurs when the maximum and average RMS-gradient of all images fall below these thresholds.
+The convergence occurs when the maximum and average RMS-gradient (in ev/Ang) of all images fall below these thresholds.
 
 ....
 
 ``--guessk [0.05]``
 
 This value will be used to build the guessed Hessian for the input chain.
-
-....
-
-``--neb_history [1]``
-
-Number of chain histories to save in memory. Note that each chain is memory intensive.
 
 ....
 
@@ -383,7 +384,7 @@ The climbing images will be selected in descending order from the highest energy
 
 This option determines force components that will be projected. The default value is ``0`` which is NEB.
 The other two available bands are hybrid (``1``) and plain (``2``) band.
-The details of the force components of each band can be found in the :ref:` NEB page <neb>`.
+The details of the force components of each band can be found in the :ref:`NEB page <neb>`.
 
 ....
 
@@ -408,14 +409,11 @@ The trust radius is the maximum allowed Cartesian displacement of an optimizatio
 
 Depending on the quality of individual optimization steps, the trust radius can be increased from its current value up to the ``--tmax`` value, or it can be decreased down to a minimum value.
 
-The minimum trust radius cannot be user-set; its value is ``0.0`` for transition state and MECI jobs, and the smaller of the ``drms`` convergence criteria and ``1.2e-3`` for energy minimizations.
-The purpose of the minimum trust radius is to prevent unpredictable behavior when the trust radius becomes extremely small (e.g. if the step is so small that the energy change is smaller than the SCF convergence criteria).
-
 ....
 
 ``--skip [yes/no]``
 
-Setting it to ``yes`` will skip Hessian updates that will introduce negative eigenvalues.
+Setting it to ``yes`` will skip Hessian updates that would introduce negative eigenvalues instead of resetting it. By default, it will reset the Hessian when negative Hessian eigenvalues are detected.
 
 ....
 

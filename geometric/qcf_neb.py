@@ -350,7 +350,7 @@ def nextchain(info_dict):
                 % (params.epsilon, np.min(Eig))
             )
 
-            chain, Y, GW, GP, HW, HP = recover([chain_prev], LastForce, result_prev)
+            chain, Y, GW, GP, HW, HP = recover([chain_prev], result_prev)
             Ys = []
             GWs = []
             GPs = []
