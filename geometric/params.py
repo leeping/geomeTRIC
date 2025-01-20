@@ -482,11 +482,12 @@ def parse_neb_args(*args):
     grp_nebparam = parser.add_argument_group('nebparam', 'Control the NEB calculation')
     grp_nebparam.add_argument('--maxg', type=float, help='Converge when the maximum RMS-gradient of all images falls below this threshold (default 0.05 ev/Ang).\n ')
     grp_nebparam.add_argument('--avgg', type=float, help='Converge when the average RMS-gradient of all images falls below this threshold (default 0.025 ev/Ang).\n ')
-    grp_nebparam.add_argument('--guessk', type=float, help='Guess Hessian eigenvalue for displacements (default 0.05).\n ')
+    grp_nebparam.add_argument('--guessk', type=float, help='Guess the initial Hessian eigenvalue for displacements (default 0.05).\n ')
     #HP 5/10/2024: guessw will be enabled once IC NEB is implemented.
     #grp_nebparam.add_argument('--guessw', type=float, help='Guess weight for chain coordinates (default 0.1).\n ')
     grp_nebparam.add_argument('--nebk', type=float, help='NEB spring constant in units of kcal/mol/Ang^2 (default 1.0).\n ')
-    grp_nebparam.add_argument('--neb_history', type=int, help='Chain history to keep in memory; note chains are very memory intensive, >1 GB each (default 1).\n ')
+    #HP 1/16/2025: neb_history is commented out because rebuilding the Hessian based on changes in IC isn't available.
+    #grp_nebparam.add_argument('--neb_history', type=int, help='Chain history to keep in memory; note chains are very memory intensive, >1 GB each (default 1).\n ')
     grp_nebparam.add_argument('--neb_maxcyc', type=int, help='Maximum number of chain optimization cycles to perform (default 100).\n ')
     grp_nebparam.add_argument('--climb', type=float, help='Activate climbing image for max-energy points when max RMS-gradient falls below this threshold (default 0.5).\n ')
     grp_nebparam.add_argument('--ncimg', type=int, help='Number of climbing images to expect (default 1).\n ')
@@ -497,7 +498,7 @@ def parse_neb_args(*args):
     grp_nebparam.add_argument('--trust', type=float, help='Starting trust radius (default 0.1). \n ')
     grp_nebparam.add_argument('--tmax', type=float, help='Maximum trust radius (default 0.3).\n ')
     grp_nebparam.add_argument('--tmin', type=float, help='Minimum trust radius, do not reject steps trust radius is below this threshold.\n ')
-    grp_nebparam.add_argument('--skip', type=str2bool, help='Skip Hessian updates that would introduce negative eigenvalues.\n ')
+    grp_nebparam.add_argument('--skip', type=str2bool, help='Setting it to ``yes`` will skip Hessian updates that would introduce negative eigenvalues instead of resetting it. By default, it will reset the Hessian when negative Hessian eigenvalues are detected.\n ')
     grp_nebparam.add_argument('--epsilon', type=float, help='Small eigenvalue threshold for resetting Hessian, default 1e-5.\n ')
     grp_nebparam.add_argument('--wqport', type=int, help='Work Queue port used to distribute singlepoint calculations. Workers must be started separately.\n ')
     grp_nebparam.add_argument('--bigchem', type=str2bool, help='Provide "Yes" to use BigChem for performing the NEB calculation in parallel. \n'
