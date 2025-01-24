@@ -126,7 +126,7 @@ class TestASEWorkQueueHessian:
 
         shutil.copy2(os.path.join(datad, 'water1_coords_gfn2-xtb.xyz'), os.path.join(os.getcwd(), "start.xyz"))
 
-        geometric.nifty.createWorkQueue(9192, debug=False)
+        geometric.nifty.createWorkQueue(9191, debug=False)
         wq = geometric.nifty.getWorkQueue()
 
         molecule, engine = geometric.prepare.get_molecule_engine(engine="ase", input="start.xyz", ase_class="xtb.ase.calculator.XTB", ase_kwargs='{"method":"GFN2-xTB", "accuracy":0.001}')
