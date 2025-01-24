@@ -1323,7 +1323,7 @@ class Froot(object):
             return cnorm - self.target
 
 
-def recover(chain_hist, forceCart, result=None):
+def recover(chain_hist, result=None):
     """
     Recover from a failed optimization.
 
@@ -1332,9 +1332,6 @@ def recover(chain_hist, forceCart, result=None):
     chain_hist : list
         List of previous Chain objects;
         the last element is the current chain
-    forceCart : bool
-        Whether to use Cartesian coordinates or
-        adopt the IC system of the current chain
     result : dict
         Dictionary with energies and gradients
 
@@ -1380,7 +1377,6 @@ def BFGSUpdate(Y, old_Y, G, old_G, H, params):
     ndg = np.array(Dg).flatten() / np.linalg.norm(np.array(Dg))
     nhdy = np.dot(H, Dy).flatten() / np.linalg.norm(np.dot(H, Dy))
     if verbose:
-        # HP: 2023-2-15: Not sure what is nhdy is for. I changed np.array(H*dy) to np.dot(H, dy)
         logger.info("Denoms: %.3e %.3e \n" % ((Dg.T * Dy)[0, 0], (Dy.T * H * Dy)[0, 0]))
         logger.info("Dots: %.3e %.3e \n" % (np.dot(ndg, ndy), np.dot(ndy, nhdy)))
     H += Mat1 - Mat2
@@ -1399,7 +1395,6 @@ def updatehessian(old_chain, chain, HP, HW, Y, old_Y, GW, old_GW, GP, old_GP, La
     """
     This function updates the Hessians and check their eigenvalues.
     """
-    H_reset = False
     HP_bak = HP.copy()
     HW_bak = HW.copy()
     BFGSUpdate(Y, old_Y, GP, old_GP, HP, params)
@@ -1413,7 +1408,6 @@ def updatehessian(old_chain, chain, HP, HW, Y, old_Y, GW, old_GW, GP, old_GP, La
             HP = HP_bak.copy()
             HW = HW_bak.copy()
         else:
-            H_reset = True
             logger.info(
                 "Eigenvalues below %.4e (%.4e) - will reset the Hessian \n"
                 % (params.epsilon, np.min(Eig1))
@@ -1422,7 +1416,7 @@ def updatehessian(old_chain, chain, HP, HW, Y, old_Y, GW, old_GW, GP, old_GP, La
 
     del HP_bak
     del HW_bak
-    return chain, Y, GW, GP, HP, HW, old_Y, old_GP, old_GW, H_reset
+    return chain, Y, GW, GP, HP, HW, old_Y, old_GP, old_GW
 
 
 def qualitycheck(old_chain, new_chain, trust, Quality, ThreLQ, ThreRJ, ThreHQ, Y, GW, GP, old_Y, old_GW, old_GP, params_tmax):
@@ -1711,7 +1705,7 @@ def OptimizeChain(chain, engine, params):
         # |      Update the Hessian Matrix      |#
         # =======================================#
 
-        chain, Y, GW, GP, HP, HW, Y_prev, GP_prev, GW_prev, _ = updatehessian(chain_prev, chain, HP, HW, Y, Y_prev, GW,
+        chain, Y, GW, GP, HP, HW, Y_prev, GP_prev, GW_prev = updatehessian(chain_prev, chain, HP, HW, Y, Y_prev, GW,
                                                                  GW_prev, GP, GP_prev, LastForce, params, None)
     return chain, optCycle
 

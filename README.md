@@ -7,9 +7,9 @@
 
 This is a geometry optimization code for molecular structures.
 The code works by calling external software for the energy and 
-gradient through wrapper functions.  Q-Chem, TeraChem, Psi4, 
-Molpro, Gaussian 09/16, and CFOUR are supported quantum chemistry
-codes through the command line interface.  The PySCF and
+gradient through wrapper functions. Q-Chem, TeraChem, Psi4, 
+Molpro, Gaussian 09/16, CFOUR, and QUICK are supported quantum chemistry
+codes through the command line interface. The PySCF and
 QCArchive packages also provide interfaces to geomeTRIC for
 optimization. MM optimizations using OpenMM and Gromacs are
 also supported through the command line interface.
