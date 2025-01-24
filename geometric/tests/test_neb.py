@@ -259,7 +259,7 @@ class TestQChemWorkQueueNEB:
             M, engine=engine, tmpdir=tempfile.mkdtemp(), params=params, plain=0
         )
 
-        geometric.nifty.createWorkQueue(9192, debug=False)
+        geometric.nifty.createWorkQueue(9191, debug=False)
         wq = geometric.nifty.getWorkQueue()
         worker_program = geometric.nifty.which('work_queue_worker')
         # Assume 4 threads are available
@@ -296,7 +296,7 @@ class TestTerachemWorkQueueNEB:
             M, engine=engine, tmpdir=tempfile.mkdtemp(), params=params, plain=0
         )
 
-        geometric.nifty.createWorkQueue(9193, debug=False)
+        geometric.nifty.createWorkQueue(9191, debug=False)
         wq = geometric.nifty.getWorkQueue()
         worker_program = geometric.nifty.which('work_queue_worker')
         # Assume 4 threads are available
