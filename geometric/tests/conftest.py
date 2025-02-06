@@ -35,7 +35,7 @@ def molecule_engine_hcn():
                             'input':os.path.join(datad, "hcn_irc_input.%s" %input_ext.get(engine)),
                             'converge':['set', 'GAU_LOOSE'],
                             'reset':False,
-                            'trust':0.05, 'irc':True, 'xyzout':'test_irc.xyz'}
+                            'trust':0.3, 'irc':True, 'xyzout':'test_irc.xyz'}
             params = geometric.params.OptParams(**param_kwargs)
             M, engine = geometric.prepare.get_molecule_engine(**param_kwargs)
 
