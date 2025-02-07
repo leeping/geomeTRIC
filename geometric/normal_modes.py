@@ -321,7 +321,7 @@ def frequency_analysis(coords, Hessian, elem=None, mass=None, energy=0.0, temper
     # Principal moments
     Ivals, Ivecs = np.linalg.eigh(I)
     # Eigenvectors are in the rows after transpose
-    Ivecs = Ivecs.T 
+    Ivecs = Ivecs.T
 
     # Obtain the number of rotational degrees of freedom
     RotDOF = 0
@@ -353,9 +353,9 @@ def frequency_analysis(coords, Hessian, elem=None, mass=None, energy=0.0, temper
         ic_eckart[1,3*i+1] = smass 
         ic_eckart[2,3*i+2] = smass 
         for ix in range(3):
-            ic_eckart[3,3*i+ix] = smass*(Ivecs[2,ix]*p_vec[1] - Ivecs[1,ix]*p_vec[2])
+            ic_eckart[5,3*i+ix] = smass*(Ivecs[2,ix]*p_vec[1] - Ivecs[1,ix]*p_vec[2])
             ic_eckart[4,3*i+ix] = smass*(Ivecs[2,ix]*p_vec[0] - Ivecs[0,ix]*p_vec[2])
-            ic_eckart[5,3*i+ix] = smass*(Ivecs[0,ix]*p_vec[1] - Ivecs[1,ix]*p_vec[0])
+            ic_eckart[3,3*i+ix] = smass*(Ivecs[0,ix]*p_vec[1] - Ivecs[1,ix]*p_vec[0])
     
     if verbose >= 2:
         logger.info("Coordinates in Eckart frame:\n")
@@ -380,7 +380,7 @@ def frequency_analysis(coords, Hessian, elem=None, mass=None, energy=0.0, temper
                 logger.info(" % .12f " % ic_eckart[i, j])
             logger.info("\n")
 
-    # Using Gram-Schmidt orthogonalization, create a basis where translation 
+    # Using Gram-Schmidt orthogonalization, create a basis where translation
     # and rotation is projected out of Cartesian coordinates
     proj_basis = np.identity(TotDOF)
     maxIt = 100
@@ -388,9 +388,9 @@ def frequency_analysis(coords, Hessian, elem=None, mass=None, energy=0.0, temper
         max_overlap = 0.0
         for i in range(TotDOF):
             for n in range(TR_DOF):
-                proj_basis[i] -= np.dot(ic_eckart[n], proj_basis[i]) * ic_eckart[n] 
-            overlap = np.sum(np.dot(ic_eckart, proj_basis[i]))
-            max_overlap = max(overlap, max_overlap)        
+                proj_basis[i] -= np.dot(ic_eckart[n], proj_basis[i]) * ic_eckart[n]
+            overlap = np.sum(np.abs(np.dot(ic_eckart[:TR_DOF], proj_basis[i])))
+            max_overlap = max(overlap, max_overlap)
         if verbose >= 2:
             logger.info("Gram-Schmidt Iteration %i: % .12f\n" % (iteration, overlap))
         if max_overlap < 1e-12 : break

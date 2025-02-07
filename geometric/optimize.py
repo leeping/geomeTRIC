@@ -464,13 +464,17 @@ class Optimizer(object):
             # If it's the very first step, pick the eigenvector of the imaginary frequency and pick the direction
             logger.info('First, following the imaginary mode vector\n')
             if self.TSWavenum[1] < 0:
-                raise IRCError("There are more than one imaginary vibrational mode. Please optimize the structure and try again.\n")
+                if np.isclose(self.TSWavenum[0], self.TSWavenum[1], atol = 1):
+                    logger.warning("Warning: More than one imaginary mode is detected. The two lowest wavenumbers are degenerate; following the lowest one.\n")
+                else:
+                    raise IRCError("There are more than one imaginary vibrational mode. Please optimize the structure and try again.\n")
             elif self.TSWavenum[0] >= 0:
                 raise IRCError("No imaginary mode detected. Please optimize the structure and try again.\n")
 
             self.IRC_adjfactor = np.linalg.norm(self.TSNormal_modes_x[0] * np.sqrt(self.IC.mass))
-            self.IRC_init_step = self.trust * ang2bohr * self.IRC_adjfactor
-            logger.info("Initial step-size: %.5f \n" %self.IRC_init_step)
+            IRC_init_step = self.trust * ang2bohr * self.IRC_adjfactor
+            self.IRC_std_step = 0.1 * ang2bohr * self.IRC_adjfactor
+            logger.info("Initial step-size: %.5f \n" %IRC_init_step)
 
             # Following the imaginary mode vector
             Im_mode = self.TSNormal_modes_x[0]
@@ -761,7 +765,7 @@ class Optimizer(object):
             step_state = StepState.Reject
             self.IC_check = True
 
-        if self.IRC_info["total_disp"] > 5*self.IRC_init_step:
+        if self.IRC_info["total_disp"] > 5*self.IRC_std_step:
             if criteria_met:
                 if self.IRC_info.get("direction") == 1:
                     logger.info("\nIRC forward direction converged\n")
@@ -889,6 +893,12 @@ class Optimizer(object):
 
         if params.irc and not self.IRC_info.get("opt"):
             terminate, step_state = self.evaluate_IRC_step(params, step_state, criteria_met, IRC_converged)
+
+            # When IRC deals with a small linear moleule, the 2nd part of the substep cancels the 1st part near convergence.
+            # To help it with convergence, trust radius is decreased to the minimum. 
+            if rms_displacement < 1e-7 and max_displacement < 1e-7:
+                step_state = StepState.Okay
+                self.trust = params.tmin
         else:
             terminate, step_state = self.evaluate_OPT_step(params, step_state, criteria_met, Converged_grms,
                                         Converged_drms, Converged_energy, Converged_molpro_gmax, Converged_molpro_dmax)
