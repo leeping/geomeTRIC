@@ -121,7 +121,8 @@ class Optimizer(object):
         # Recalculate the Hessian after a trigger - for example if the energy changes by a lot during TS optimization.
         self.recalcHess = False
         # IRC related information
-        self.IRC_info = {"direction" : 1, "opt" : False, "total_disp" : 0.0, 
+        self.IRC_direction = self.params.irc_direction
+        self.IRC_info = {"direction" : 1, "opt" : False, "total_disp" : 0.0,
                         "substep_success" : True, "IC_changed" : False}
         if print_info:
             self.print_info()
@@ -469,12 +470,18 @@ class Optimizer(object):
                 raise IRCError("No imaginary mode detected. Please optimize the structure and try again.\n")
 
             self.IRC_adjfactor = np.linalg.norm(self.TSNormal_modes_x[0] * np.sqrt(self.IC.mass))
-            self.IRC_init_step = self.trust * ang2bohr * self.IRC_adjfactor
-            logger.info("Initial step-size: %.5f \n" %self.IRC_init_step)
+            IRC_init_step = self.trust * ang2bohr * self.IRC_adjfactor
+            self.IRC_std_step = 0.1 * ang2bohr * self.IRC_adjfactor
+            logger.info("Initial step-size: %.5f \n" %IRC_init_step)
 
             # Following the imaginary mode vector
             Im_mode = self.TSNormal_modes_x[0]
-            Im_mode *= self.IRC_info.get("direction")
+            if self.IRC_direction == 'both' or self.IRC_direction == 'forward':
+                Im_mode *= self.IRC_info.get("direction")
+            elif self.IRC_direction == 'backward':
+                Im_mode *= -self.IRC_info.get("direction")
+            else:
+                raise IRCError('IRC direction should either be forward or backward.\n')
             v = self.IC.calcDiff(X0 + Im_mode, X0)
             X = self.IC.newCartesian(X0, v)
             v = self.IC.calcDiff(X, X0)
@@ -717,6 +724,7 @@ class Optimizer(object):
         self.state = OPT_STATE.NEEDS_EVALUATION
 
     def reset_irc(self):
+        self.dirname = '.'.join(self.dirname.split('.')[:-1]) + '2.tmp'
         self.IRC_info["direction"] = -1
         self.Iteration = 0
         self.X = self.X_hist[0].copy()
@@ -736,14 +744,19 @@ class Optimizer(object):
     def evaluate_IRC_step(self, params, step_state, criteria_met, IRC_converged):
 
         if self.Iteration > params.maxiter:
-            if self.IRC_info.get("direction") == -1:
-                logger.info("\nIRC backward direction reached maximum iteration number\n")
+            if self.IRC_direction == 'both':
+                if self.IRC_info.get("direction") == -1:
+                    logger.info("\nIRC backward direction reached maximum iteration number\n")
+                    logger.info("Terminating IRC\n")
+                    self.state = OPT_STATE.FAILED
+                else:
+                    logger.info("\nIRC forward direction reached maximum iteration number\n")
+                    logger.info("IRC backward direction starts here\n\n")
+                    self.reset_irc()
+            else:
+                logger.info("\nReached the maximum iteration number\n")
                 logger.info("Terminating IRC\n")
                 self.state = OPT_STATE.FAILED
-            else:
-                logger.info("\nIRC forward direction reached maximum iteration number\n")
-                logger.info("IRC backward direction starts here\n\n")
-                self.reset_irc()
             return True, step_state
         
         self.IC_check = False
@@ -752,7 +765,7 @@ class Optimizer(object):
             if np.isclose(self.trust, params.tmin):
                 logger.info("IRC stuck with the minimum step-size and bad quality step. Forcing it to take a step.\n")
                 step_state = StepState.Okay
-            if self.Iteration < 3: 
+            if self.Iteration < 3:
                 logger.info("Bad quality IRC step detected near the starting point. Decreasing the step-size to the minimum.\n")
                 self.trust = params.tmin
             self.IC_check = True
@@ -761,13 +774,18 @@ class Optimizer(object):
             step_state = StepState.Reject
             self.IC_check = True
 
-        if self.IRC_info["total_disp"] > 5*self.IRC_init_step:
+        if self.IRC_info["total_disp"] > 5*self.IRC_std_step:
             if criteria_met:
-                if self.IRC_info.get("direction") == 1:
-                    logger.info("\nIRC forward direction converged\n")
-                    logger.info("IRC backward direction starts here\n\n")
-                    self.reset_irc()
-                elif self.IRC_info.get("direction") == -1:
+                if self.IRC_direction == 'both':
+                    if self.IRC_info.get("direction") == 1:
+                        logger.info("\nIRC forward direction converged\n")
+                        logger.info("IRC backward direction starts here\n\n")
+                        self.reset_irc()
+                    elif self.IRC_info.get("direction") == -1:
+                        self.SortedEigenvalues(self.H)
+                        logger.info("Converged! =D\n")
+                        self.state = OPT_STATE.CONVERGED
+                else:
                     self.SortedEigenvalues(self.H)
                     logger.info("Converged! =D\n")
                     self.state = OPT_STATE.CONVERGED
@@ -784,10 +802,15 @@ class Optimizer(object):
     def evaluate_OPT_step(self, params, step_state, criteria_met, Converged_grms, Converged_drms, Converged_energy,
                           Converged_molpro_gmax, Converged_molpro_dmax):
         if criteria_met and self.conSatisfied:
-            if params.irc and self.IRC_info.get("direction") == 1:
-                logger.info("\nIRC forward direction converged\n")
-                logger.info("IRC backward direction starts here\n\n")
-                self.reset_irc()
+            if params.irc:
+                if self.IRC_info.get("direction") == 1 and self.IRC_direction == 'both':
+                    logger.info("\nIRC forward direction converged\n")
+                    logger.info("IRC backward direction starts here\n\n")
+                    self.reset_irc()
+                else:
+                    self.SortedEigenvalues(self.H)
+                    logger.info("Converged! =D\n")
+                    self.state = OPT_STATE.CONVERGED
             else:
                 self.SortedEigenvalues(self.H)
                 logger.info("Converged! =D\n")
@@ -1176,6 +1199,8 @@ def run_optimizer(**kwargs):
     params.printInfo()
 
     # Create "dirname" folder for writing
+    if params.irc:
+        prefix = prefix + '_IRC'
     dirname = prefix+".tmp"
     if not os.path.exists(dirname):
         os.makedirs(dirname)
@@ -1295,7 +1320,7 @@ def run_optimizer(**kwargs):
         # Run a standard geometry optimization
         add = "_optim.xyz"
         if params.irc:
-            add = "_irc.xyz"
+            add = "_%s.xyz" %params.irc_direction
         params.xyzout = prefix+add
         progress = Optimize(coords, M, IC, engine, dirname, params)
     else:
