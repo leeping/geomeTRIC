@@ -3700,18 +3700,20 @@ class CartesianCoordinates(PrimitiveInternalCoordinates):
     """
     def __init__(self, molecule, **kwargs):
         super(CartesianCoordinates, self).__init__(molecule)
-        self.Internals = []
         self.cPrims = []
         self.cVals = []
         self.elem = molecule.elem
-        for i in range(molecule.na):
-            self.add(CartesianX(i, w=1.0))
-            self.add(CartesianY(i, w=1.0))
-            self.add(CartesianZ(i, w=1.0))
+
         if kwargs.get('remove_tr', False):
             raise RuntimeError('Do not use remove_tr with Cartesian coordinates')
         if 'constraints' in kwargs and kwargs['constraints'] is not None:
             raise RuntimeError('Do not use constraints with Cartesian coordinates')
+
+    def makePrimitives(self, molecule, connect, addcart):
+        for i in range(molecule.na):
+            self.add(CartesianX(i, w=1.0))
+            self.add(CartesianY(i, w=1.0))
+            self.add(CartesianZ(i, w=1.0))
 
     def guess_hessian(self, xyz):
         return 0.5*np.eye(len(xyz.flatten()))
