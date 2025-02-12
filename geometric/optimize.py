@@ -724,7 +724,7 @@ class Optimizer(object):
         self.state = OPT_STATE.NEEDS_EVALUATION
 
     def reset_irc(self):
-        self.dirname = '.'.join(self.dirname.split('.')[:-1]) + '2.tmp'
+        self.dirname = self.dirname.replace('forward','backward')
         self.IRC_info["direction"] = -1
         self.Iteration = 0
         self.X = self.X_hist[0].copy()
@@ -1200,7 +1200,10 @@ def run_optimizer(**kwargs):
 
     # Create "dirname" folder for writing
     if params.irc:
-        prefix = prefix + '_IRC'
+        if params.irc_direction == 'both':
+            prefix += '_forward'
+        else:
+            prefix += '_%s' %params.irc_direction
     dirname = prefix+".tmp"
     if not os.path.exists(dirname):
         os.makedirs(dirname)
@@ -1320,7 +1323,9 @@ def run_optimizer(**kwargs):
         # Run a standard geometry optimization
         add = "_optim.xyz"
         if params.irc:
-            add = "_%s.xyz" %params.irc_direction
+            if params.irc_direction == 'both':
+                prefix = prefix.replace('_forward', '')
+            add = "_irc.xyz"
         params.xyzout = prefix+add
         progress = Optimize(coords, M, IC, engine, dirname, params)
     else:
