@@ -48,6 +48,8 @@ class OptParams(object):
         self.transition = kwargs.get('transition', False)
         # Intrinsic Reaction Coordinate method. This changes a number of default parameters.
         self.irc = kwargs.get('irc', False)
+        # Intrinsic Reaction Coordinate direction.
+        self.irc_direction = kwargs.get('irc_direction', 'both')
         # CI optimizations sometimes require tiny steps
         self.meci = kwargs.get('meci', False)
         # Handle convergence criteria; this edits the kwargs
@@ -337,6 +339,7 @@ def parse_optimizer_args(*args):
     grp_jobtype = parser.add_argument_group('jobtype', 'Control the type of optimization job')
     grp_jobtype.add_argument('--transition', type=str2bool, help='Provide "yes" to Search for a first order saddle point / transition state.\n ')
     grp_jobtype.add_argument('--irc', type=str2bool, help='Provide "yes" to perform the IRC method.\n ')
+    grp_jobtype.add_argument('--irc_direction', type=str, help='Provide the IRC direction as either \'forward\' or \'backward\'. By default, it will run in both directions. \n')
     grp_jobtype.add_argument('--meci', type=str, nargs="+", help='Provide second input file and search for minimum-energy conical\n '
                              'intersection or crossing point between two SCF solutions (TeraChem and Q-Chem supported).\n'
                              'Or, provide "engine" if the engine directly provides the MECI objective function and gradient.\n')
