@@ -1199,14 +1199,17 @@ def run_optimizer(**kwargs):
     params.printInfo()
 
     # Create "dirname" folder for writing
-    if params.irc:
-        if params.irc_direction == 'both':
-            prefix += '_forward'
-        else:
-            prefix += '_%s' %params.irc_direction
     dirname = prefix+".tmp"
     if not os.path.exists(dirname):
         os.makedirs(dirname)
+
+    if params.irc:
+        if params.irc_direction == 'both':
+            prefix += '_forward'
+            dirname = os.path.join(dirname, "irc_forward.tmp")
+        else:
+            prefix += '_%s' % params.irc_direction
+
     kwargs['dirname'] = dirname
     
     # Get the Molecule and engine objects needed for optimization
