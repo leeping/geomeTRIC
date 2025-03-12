@@ -3854,10 +3854,12 @@ class ChainCoordinates(PrimitiveInternalCoordinates):
         for i, imageIC in self.ICIter():
             for ic in imageIC.Internals:
                 self.Internals.append(ImagePrim(ic, self.na, i))
-        guessw = kwargs.get('guessw', 0.1)
-        for i, imageIC in self.ICIter():
-            self.Internals.append(RMSDisplacement(imageIC, self.na, i-1, i, head=molecule.xyzs[0]*ang2bohr, tail=molecule.xyzs[-1]*ang2bohr, w=guessw))
-        self.Internals.append(RMSDisplacement(imageIC, self.na, i+1, i, head=molecule.xyzs[0]*ang2bohr, tail=molecule.xyzs[-1]*ang2bohr, w=guessw))
+
+        # 2025/3/12 HP: RMSDisplacement is experimental. It needs to be tested first.
+        #guessw = kwargs.get('guessw', 0.1)
+        #for i, imageIC in self.ICIter():
+        #    self.Internals.append(RMSDisplacement(imageIC, self.na, i-1, i, head=molecule.xyzs[0]*ang2bohr, tail=molecule.xyzs[-1]*ang2bohr, w=guessw))
+        #self.Internals.append(RMSDisplacement(imageIC, self.na, i+1, i, head=molecule.xyzs[0]*ang2bohr, tail=molecule.xyzs[-1]*ang2bohr, w=guessw))
 
     def __repr__(self):
         lines = ["Internal coordinate system (atoms numbered from 1):"]
