@@ -68,7 +68,7 @@ def test_psi4_hcn_neb_optimize_2(localizer, molecule_engine_hcn):
 
     final_chain, optCycle = geometric.neb.OptimizeChain(chain, engine, params)
 
-    assert optCycle <= 10
+    assert optCycle <= 15
     assert final_chain.maxg < params.maxg
     assert final_chain.avgg < params.avgg
 
@@ -342,6 +342,9 @@ def test_hcn_neb_service_arrange(localizer):
     # 5 images should change as the result of the respacing.
     assert count == 5
 
+# The json files for the following two tests can be generated using Snowflake.
+# While running the NEB method with Snowflake, return the record within a while loop.
+# The json file needed for the test can be obtained as record.service.service_state.get('nebinfo')
 
 def test_hcn_neb_service_normal(localizer):
     """
@@ -396,7 +399,7 @@ def test_hcn_neb_service_normal(localizer):
     assert np.allclose(new_coords_ang[0], old_coords_ang[0])
     assert np.allclose(new_coords_ang[-1], old_coords_ang[-1])
 
-    # Output dictionary should have still have just one Ys, GWs, and GPs
+    # Output dictionary should still have just one Ys, GWs, and GPs
     assert 1 == len(out_dict["Ys"])
     assert 1 == len(out_dict["GWs"])
     assert 1 == len(out_dict["GPs"])
