@@ -1409,7 +1409,7 @@ def updatehessian(old_chain, chain, HP, HW, Y, old_Y, GW, old_GW, GP, old_GP, La
                 "Eigenvalues below %.4e (%.4e) - will reset the Hessian \n"
                 % (params.epsilon, np.min(Eig1))
             )
-            chain, Y, GW, GP, HW, HP = recover([old_chain], LastForce, result)
+            chain, Y, GW, GP, HW, HP = recover([old_chain], result)
 
     del HP_bak
     del HW_bak
@@ -1563,7 +1563,7 @@ def takestep(c_hist, chain, optCycle, LastForce, ForceRebuild, trust, Y, GW, GP,
             logger.info("\x1b[93mContinuing in Cartesian coordinates\x1b[0m \n")
         else:
             raise NEBStructureError("Coordinate system has failed too many times")
-        chain, Y, GW, GP, HW, HP = recover(c_hist, LastForce == 2, result)
+        chain, Y, GW, GP, HW, HP = recover(c_hist, result)
         logger.info("\x1b[1;93mSkipping optimization step\x1b[0m \n")
         optCycle -= 1
     else:
