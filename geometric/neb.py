@@ -1137,11 +1137,8 @@ class ElasticBand(Chain):
             ndrminus = np.linalg.norm(cc_curr - cc_prev)
             # Plain elastic band force
             k_new = self.k
-            force_s = k_new * (cc_prev + cc_next - 2 * cc_curr)
-            force_s_para = np.dot(force_s, tau) * tau
-            force_s_ortho = force_s - force_s_para
-            factor = 256 * (1.0 - straight[n]) ** 4
             # Force from the spring in the tangent direction
+            force_s = k_new * (cc_prev + cc_next - 2 * cc_curr) # Full spring force
             force_s_p = k_new * (ndrplus - ndrminus) * tau
             # Now get the perpendicular component of the force from the potential
             force_v_p = force_v - np.dot(force_v, tau) * tau
@@ -1159,7 +1156,7 @@ class ElasticBand(Chain):
             grad_v = -1.0 * force_v
             grad_v_p = -1.0 * force_v_p
             grad_v_p_c[n] = grad_v_p
-            force_s_p_c[n] = force_s
+            force_s_p_c[n] = force_s_p
             force_s_c[n] = force_s
 
         grad_s_i = self.GlobalIC.calcGrad(xyz, -force_s_c.flatten())
@@ -1412,7 +1409,7 @@ def updatehessian(old_chain, chain, HP, HW, Y, old_Y, GW, old_GW, GP, old_GP, La
                 "Eigenvalues below %.4e (%.4e) - will reset the Hessian \n"
                 % (params.epsilon, np.min(Eig1))
             )
-            chain, Y, GW, GP, HW, HP = recover([old_chain], LastForce, result)
+            chain, Y, GW, GP, HW, HP = recover([old_chain], result)
 
     del HP_bak
     del HW_bak
@@ -1566,7 +1563,7 @@ def takestep(c_hist, chain, optCycle, LastForce, ForceRebuild, trust, Y, GW, GP,
             logger.info("\x1b[93mContinuing in Cartesian coordinates\x1b[0m \n")
         else:
             raise NEBStructureError("Coordinate system has failed too many times")
-        chain, Y, GW, GP, HW, HP = recover(c_hist, LastForce == 2, result)
+        chain, Y, GW, GP, HW, HP = recover(c_hist, result)
         logger.info("\x1b[1;93mSkipping optimization step\x1b[0m \n")
         optCycle -= 1
     else:
