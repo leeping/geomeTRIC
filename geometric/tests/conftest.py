@@ -17,25 +17,25 @@ logging.StreamHandler.terminator = ""
 datad = addons.datad
 
 @pytest.fixture
-def molecule_engine_hcn():
+def molecule_engine():
     """Return the Molecule and Engine for NEB and IRC tests."""
     from typing import Optional
     input_ext = {'psi4': 'psi4in', 'qchem': 'qcin', 'tera': 'tcin', 'gaussian':'gjf'}
-    def get_molecule_engine(engine: str, images: Optional[int]=None):
+    def get_molecule_engine(mol:str, engine: str, images: Optional[int]=None):
         if images:
             return geometric.prepare.get_molecule_engine(
-                input=os.path.join(datad, "hcn_neb_input.%s" %input_ext.get(engine)),
-                chain_coords=os.path.join(datad, "hcn_neb_input.xyz"),
+                input=os.path.join(datad, "%s_neb_input.%s" %(mol, input_ext.get(engine))),
+                chain_coords=os.path.join(datad, "%s_neb_input.xyz" %mol),
                 images=images,
                 neb=True,
                 engine=engine,
                 )
         else:
             param_kwargs = {'engine':engine,
-                            'input':os.path.join(datad, "hcn_irc_input.%s" %input_ext.get(engine)),
+                            'input':os.path.join(datad, "%s_irc_input.%s" %(mol, input_ext.get(engine))),
                             'converge':['set', 'GAU_LOOSE'],
                             'reset':False,
-                            'trust':0.05, 'irc':True, 'xyzout':'test_irc.xyz'}
+                            'trust':0.3, 'irc':True, 'xyzout':'test_irc.xyz'}
             params = geometric.params.OptParams(**param_kwargs)
             M, engine = geometric.prepare.get_molecule_engine(**param_kwargs)
 
