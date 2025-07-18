@@ -70,7 +70,7 @@ The perpendicular and parallel forces are obtained as following:
 .. math::
     \begin{aligned}
     & \mathbf{F}_{\mathrm{PES}}^{\perp}(\mathbf{r}_i) = \mathbf{F}_{\mathrm{PES}}(\mathbf{r}_i) - (\mathbf{F}_{\mathrm{PES}}(\mathbf{r}_i) \cdot \hat{\mathbf{\tau}}_i)\hat{\mathbf{\tau}}_i\\
-    & \mathbf{F}_{\mathrm{spring}}^{\parallel}(\Delta \mathbf{r}_{i+1,i}, \Delta \mathbf{r}_{i-1, i}) = k([(\mathbf{r}_{i+1} - \mathbf{r}_i) - (\mathbf{r}_i - \mathbf{r}_{i-1})] \cdot \hat{\mathbf{\tau}}_i) \hat{\mathbf{\tau}}_i
+    & \mathbf{F}_{\mathrm{spring}}^{\parallel}(\Delta \mathbf{r}_{i+1,i}, \Delta \mathbf{r}_{i-1, i}) = k(|\mathbf{r}_{i+1} - \mathbf{r}_i| - |\mathbf{r}_i - \mathbf{r}_{i-1}|) \hat{\mathbf{\tau}}_i
     \end{aligned}
 
 The tangent vector (:math:`\hat{\mathbf{\tau}}_i`) is defined as:
