@@ -95,6 +95,11 @@ It will compute a numerical Hessian at the beginning of the calculation.
 
 ....
 
+``--irc_direction [both]``
+
+Provide the IRC direction as either ``forward``, ``backward`` or ``both`` (default). When ``both`` is selected, the ``forward`` direction will be run first.
+
+....
 
 ``--rigid [yes/no]``
 
