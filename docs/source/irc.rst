@@ -20,8 +20,9 @@ Usage
 -----
 
 The IRC method can be used by passing ``--irc yes`` on the command line with ``geometric-optimize``. The input geometry should be an optimize TS structure.
-geomeTRIC adjusts the IRC step size based on the step quality, and the maximum step size will be set equal to the initial trust radius ``--trust [0.3]``.
-Once the both directions converge, geomeTRIC will write an output xyz file `input_irc.xyz` that shows the IRC pathway.
+geomeTRIC adjusts the IRC step size based on the step quality, and the maximum step size will be set equal to the initial trust radius ``--trust [0.3]``. The direction of IRC can be specified using ``--irc_direction [both]``.
+The ``forward`` direction follows the imaginary mode from the frequency analysis as is, while the ``backward`` direction follows its opposite.
+Once convergence is achieved, geomeTRIC will generate an output xyz file containing the IRC pathway.
 
 Example
 -------
