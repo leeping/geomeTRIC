@@ -1,0 +1,47 @@
+{ "bagel" : [
+
+{
+    "title" : "molecule",
+    "basis": "/home/miaoxin/software/bagel-1.2.2/obj/share/cc-pvdz.json",
+    "df_basis": "/home/miaoxin/software/bagel-1.2.2/obj/share/cc-pvdz-jkfit.json",
+    "angstrom" : true,
+    "geometry" : [
+        { "atom": "C", "xyz": [  0.6579, -0.0045,  0.0649] },
+        { "atom": "C", "xyz": [ -0.6579,  0.0045, -0.0639] },
+        { "atom": "H", "xyz": [  1.1610,  0.0661,  1.0238] },
+        { "atom": "H", "xyz": [  1.3352, -0.0830, -0.7815] },
+        { "atom": "H", "xyz": [ -1.3355,  0.0830,  0.7812] },
+        { "atom": "H", "xyz": [ -1.1608, -0.0661, -1.0239] }]
+},
+
+{
+    "title": "casscf",
+    "nstate": 3,
+    "nact": 2,
+    "nclosed": 7,
+    "active": [8, 9],
+    "maxiter": 200,
+    "thresh": 1e-9
+},
+
+{
+    "title": "force",
+    "target": 1,
+    "method": [ {
+        "title": "caspt2",
+        "smith": {
+            "method": "caspt2",
+            "ms": true,
+            "xms": true,
+            "sssr": true,
+            "shift": 0.2,
+            "maxiter": 200
+        }, 
+        "nstate": 3,
+        "nact" : 2,
+        "nclosed" : 7,
+        "thresh" : 1e-8
+    } ]
+}
+
+]}
