@@ -27,6 +27,8 @@ Funding: UC Davis Department of Chemistry
 
 NIH/NIAID Award R01 AI130684
 
+NSF Award 2408693
+
 Open Force Field Consortium (2019-2020)
 
 License
