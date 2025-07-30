@@ -52,6 +52,10 @@ Supported MM packages are: OpenMM, Gromacs.
 Please refer to the example calculations for how to run the code.  
 The commands to execute the code are contained in "command.sh".
 
+## Funding Acknowledgments
+
+We are grateful for funding support from NIH/NIAID Award R01 AI130684 and NSF Award 2408693.
+
 ## Citation
 
 If this code has benefited your research, please support us by citing our publication:
