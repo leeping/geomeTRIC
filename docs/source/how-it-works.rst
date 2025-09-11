@@ -206,7 +206,7 @@ The derivative of the step size with respect to :math:`\lambda_n` at iteration :
 The next iteration of :math:`\lambda` is then calculated as:
 
 .. math::
-   \lambda_{n+1} = \lambda_n = \left(1 - \frac{|\boldsymbol{\delta}^{(q)}|}{r_{IC}} \right) \cdot \frac{|\boldsymbol{\delta}^{(q)}|}{|\boldsymbol{\delta}^{(q)}|^\prime}
+   \lambda_{n+1} - \lambda_n = \left(1 - \frac{|\boldsymbol{\delta}^{(q)}|}{r_{IC}} \right) \cdot \frac{|\boldsymbol{\delta}^{(q)}|}{|\boldsymbol{\delta}^{(q)}|^\prime}
    :label: lambda_iter
 
 The convergence tolerance for :math:`\lambda` is 0.1% of the target IC step size.
