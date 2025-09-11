@@ -200,7 +200,7 @@ The optimization of :math:`\lambda` for a target step size (i.e. :math:`|\boldsy
 The derivative of the step size with respect to :math:`\lambda_n` at iteration :math:`n` is given by:
 
 .. math::
-   |\boldsymbol{\delta}^{(q)}|^\prime = \frac{d |\boldsymbol{\delta}^{(q)}|}{d \lambda_n} = -\frac{(\boldsymbol{\delta}^{(q)}) \cdot (\mathbf{H} + \lambda_n I)^{-1} \cdot \boldsymbol{\delta}^{(q)}}{|\boldsymbol{\delta}^{(q)}|}
+   |\boldsymbol{\delta}^{(q)}|^\prime = \frac{d |\boldsymbol{\delta}^{(q)}|}{d \lambda_n} = -\frac{\boldsymbol{\delta}^{(q)} \cdot (\mathbf{H} + \lambda_n I)^{-1} \cdot \boldsymbol{\delta}^{(q)}}{|\boldsymbol{\delta}^{(q)}|}
    :label: dy_prime
 
 The next iteration of :math:`\lambda` is then calculated as:
