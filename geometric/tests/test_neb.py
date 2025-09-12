@@ -44,9 +44,27 @@ def test_psi4_hcn_neb_optimize_1(localizer, molecule_engine):
 
     assert chain.coordtype == "cart"
 
-    final_chain, optCycle = geometric.neb.OptimizeChain(chain, engine, params)
+    class StepCounter:
+        """Simple class to store the number of steps."""
+        num_steps: int
+
+        def __init__(self):
+            self.num_steps = 0
+
+        def __call__(self, chain):
+            self.num_steps += 1
+
+    step_counter = StepCounter()
+
+    final_chain, optCycle = geometric.neb.OptimizeChain(
+        chain,
+        engine,
+        params,
+        save_callback=step_counter
+    )
 
     assert optCycle <= 10
+    assert step_counter.num_steps == optCycle + 1  # the callback gets called once more
     assert final_chain.maxg < params.maxg
     assert final_chain.avgg < params.avgg
 
