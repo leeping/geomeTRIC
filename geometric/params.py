@@ -333,7 +333,7 @@ def parse_optimizer_args(*args):
                           '"psi4" = Psi4                       "openmm" = OpenMM (pass a force field or XML input file)\n'
                           '"molpro" = Molpro                   "gmx" = Gromacs (pass conf.gro; requires topol.top and shot.mdp\n '
                           '"gaussian" = Gaussian09/16          "ase" = ASE calculator, use --ase-class/--ase-kwargs\n '
-                          '"quick" = QUICK\n')
+                          '"quick" = QUICK                     "bagel" = Bagel\n')
     grp_univ.add_argument('--nt', type=int, help='Specify number of threads for running in parallel\n(for TeraChem this should be number of GPUs)')
 
     grp_jobtype = parser.add_argument_group('jobtype', 'Control the type of optimization job')
@@ -413,6 +413,7 @@ def parse_optimizer_args(*args):
     grp_software.add_argument('--molcnv', type=str2bool, help='Provide "yes" to use Molpro style convergence criteria instead of the default.\n ')
     grp_software.add_argument('--qcdir', type=str, help='Provide an initial Q-Chem scratch folder (e.g. supplied initial guess).\n ')
     grp_software.add_argument('--qccnv', type=str2bool, help='Provide "yes" to Use Q-Chem style convergence criteria instead of the default.\n ')
+    grp_software.add_argument('--bagelexe', type=str, help='Specify how to run Bagel, e.g. "mpirun -np 4 BAGEL".\n ')
 
     grp_software.add_argument(
         '--ase-class',
