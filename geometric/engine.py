@@ -1873,7 +1873,10 @@ class QCEngineAPI(Engine):
         ret = qcengine.compute(new_schema, self.program, return_dict=True)
 
         if ret["success"] is False:
+            # QCEngine retries expects failed trajectory stored
+            self.schema_traj.append(ret)
             raise QCEngineAPIEngineError("QCEngineAPI computation did not execute correctly. Message: " + ret["error"]["error_message"])
+
         # Unpack the energy and gradient
         if "return_energy" not in ret["properties"]:
             # SinglepointRecord dictionary from terachem.py in QCEngine won't have 'return_energy' key.
