@@ -76,22 +76,28 @@ The perpendicular and parallel forces are obtained as following:
 The tangent vector (:math:`\hat{\mathbf{\tau}}_i`) is defined as:
 
 .. math::
-    \hat{\mathbf{\tau}}_i=
+    \begin{aligned}
+    &\mathbf{\tau}_i=
     \begin{cases}
-        \hat{\mathbf{\tau}}_i^+ = \mathbf{r}_{i+1} - \mathbf{r}_i& \textrm{if}\qquad E_{i+1} > E_{i} > E_{i-1}\\
-        \hat{\mathbf{\tau}}_i^- = \mathbf{r}_i - \mathbf{r}_{i-1}& \textrm{if}\qquad E_{i+1} < E_{i} < E_{i-1}
-    \end{cases}
+        \mathbf{\tau}_i^+ = \mathbf{r}_{i+1} - \mathbf{r}_i& \textrm{if}\qquad E_{i+1} > E_{i} > E_{i-1}\\
+        \mathbf{\tau}_i^- = \mathbf{r}_i - \mathbf{r}_{i-1}& \textrm{if}\qquad E_{i+1} < E_{i} < E_{i-1}
+    \end{cases} \\
+    &\hat{\mathbf{\tau}}_i = \frac{\mathbf{\tau}_i}{|\mathbf{\tau}_i|}
+    \end{aligned}
 
 where :math:`E_{i}` is the energy of :math:`i`-th image.
 
-For the images located at extrema, the following tangent is applied:
+For the images located at extrema, the following tangent (:math:`\hat{\mathbf{\tau}}_\mathrm{ext}`) is applied:
 
 .. math::
-    \hat{\mathbf{\tau}}_i=
+    \begin{aligned}
+    &\mathbf{\tau}_\mathrm{ext}=
     \begin{cases}
-        \hat{\mathbf{\tau}}_i^+ \Delta E_i^{\mathrm{max}} + \mathbf{\hat{\tau}}_i^- \Delta E_i^{\mathrm{min}}  & \textrm{if}\qquad E_{i+1} > E_{i-1}\\
-        \hat{\mathbf{\tau}}_i^+ \Delta E_i^{\mathrm{min}} + \mathbf{\hat{\tau}}_i^- \Delta E_i^{\mathrm{max}}  & \textrm{if}\qquad E_{i+1} < E_{i-1}
-    \end{cases}
+        \mathbf{\tau}_i^+ \Delta E_i^{\mathrm{max}} + \mathbf{\tau}_i^- \Delta E_i^{\mathrm{min}}  & \textrm{if}\qquad E_{i+1} > E_{i-1}\\
+        \mathbf{\tau}_i^+ \Delta E_i^{\mathrm{min}} + \mathbf{\tau}_i^- \Delta E_i^{\mathrm{max}}  & \textrm{if}\qquad E_{i+1} < E_{i-1}
+    \end{cases}\\
+    &\hat{\mathbf{\tau}}_\mathrm{ext} = \frac{\mathbf{\tau}_\mathrm{ext}}{|\mathbf{\tau}_\mathrm{ext}|}
+    \end{aligned}
 
 where
 
@@ -101,10 +107,10 @@ where
 
 The tangent vector is normalized and applied to project the force components accordingly.
 During the optimization, when the maximum RMS gradient of the chain falls below a threshold (default set at 0.5 ev/Ang using ``--climb [0.5]``), the highest energy image (:math:`i_{\mathrm{max}}`) is switched to climbing mode.
-The climbing image receives a newly defined force, which is:
+The climbing image (CI) receives a newly defined force, which is:
 
 .. math::
-    \mathbf{F}_i = -\nabla E(\mathbf{r}_{i_{\mathrm{max}}}) + 2 (\nabla E(\mathbf{r}_{i_{\mathrm{max}}}) \cdot \hat{\mathbf{\tau}}_{i_{\mathrm{max}}})\hat{\mathbf{\tau}}_{i_{\mathrm{max}}}
+    \mathbf{F}_\mathrm{CI} = -\nabla E(\mathbf{r}_{i_{\mathrm{max}}}) + 2 (\nabla E(\mathbf{r}_{i_{\mathrm{max}}}) \cdot \hat{\mathbf{\tau}}_\mathrm{ext})\hat{\mathbf{\tau}}_\mathrm{ext}
 
 Once both the average and maximum gradient of :math:`i`-th image satisfy the convergence criteria, which are 0.025 and 0.05 eV/Ang, respectively by default, the image is locked.
 The locked images won't be moved until their gradients exceed the convergence criteria and they are unlocked.
