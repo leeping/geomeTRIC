@@ -2174,7 +2174,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         # connect = False, addcart = False corresponds to TRIC
         self.addcart = addcart
         self.connect_isolated = connect_isolated
-        if 'rigid' in kwargs and kwargs['rigid'] is not None:
+        if 'rigid' in kwargs and kwargs['rigid'] is not None and kwargs['rigid']:
             raise RuntimeError('Do not use rigid molecules with PrimitiveInternalCoordinates')
         self.Internals = []
         self.cPrims = []
