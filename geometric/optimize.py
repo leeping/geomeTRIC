@@ -916,9 +916,9 @@ class Optimizer(object):
         if params.irc and not self.IRC_info.get("opt"):
             terminate, step_state = self.evaluate_IRC_step(params, step_state, criteria_met, IRC_converged)
 
-            # When IRC deals with a small linear moleule, the 2nd part of the substep cancels the 1st part near convergence.
+            # When IRC deals with a small linear molecule, the 2nd part of the substep cancels the 1st part near convergence.
             # To help it with convergence, trust radius is decreased to the minimum. 
-            if rms_displacement < 1e-7 and max_displacement < 1e-7:
+            if rms_displacement < 1e-7 and max_displacement < 1e-7 and not terminate:
                 step_state = StepState.Okay
                 self.trust = params.tmin
         else:
