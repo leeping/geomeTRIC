@@ -59,6 +59,15 @@ def d_unit_vector(a, ndim=3):
     answer = term1-term2
     return answer
 
+def cross_product(a,b):
+    #a is a single array
+    #b is a single array
+    x = (a[1]*b[2] - a[2]*b[1])
+    y = (a[2]*b[0] - a[0]*b[2])
+    z = (a[0]*b[1] - a[1]*b[0])
+    c = np.array([x, y, z])
+    return c
+
 def d_cross(a, b):
     """
     Given two vectors a and b, return the gradient of the cross product axb w/r.t. a.
@@ -69,7 +78,7 @@ def d_cross(a, b):
     for i in range(3):
         ei = np.zeros(3, dtype=float)
         ei[i] = 1.0
-        d_cross[i] = np.cross(ei, b)
+        d_cross[i] = cross_product(ei, b)
     return d_cross
 
 def d_cross_ab(a, b, da, db):
@@ -79,21 +88,21 @@ def d_cross_ab(a, b, da, db):
     """
     answer = np.zeros((da.shape[0], 3), dtype=float)
     for i in range(da.shape[0]):
-        answer[i] = np.cross(a, db[i]) + np.cross(da[i], b)
+        answer[i] = cross_product(a, db[i]) + cross_product(da[i], b)
     return answer
 
 def ncross(a, b):
     """
     Scalar function: Given vectors a and b, return the norm of the cross product
     """
-    cross = np.cross(a, b)
+    cross = cross_product(a, b)
     return np.linalg.norm(cross)
 
 def d_ncross(a, b):
     """
     Return the gradient of the norm of the cross product w/r.t. a
     """
-    ncross = np.linalg.norm(np.cross(a, b))
+    ncross = np.linalg.norm(cross_product(a, b))
     term1 = a * np.dot(b, b)
     term2 = -b * np.dot(a, b)
     answer = (term1+term2)/ncross
@@ -118,7 +127,7 @@ def ucross(a, b):
     Given two vectors a and b, return the cross product (\hat{a})xb.
     """
     ev = a / np.linalg.norm(a)
-    return np.cross(ev, b)
+    return cross_product(ev, b)
     
 def d_ucross(a, b):
     r"""
@@ -133,7 +142,7 @@ def nucross(a, b):
     Given two vectors a and b, return the norm of the cross product (\hat{a})xb.
     """
     ev = a / np.linalg.norm(a)
-    return np.linalg.norm(np.cross(ev, b))
+    return np.linalg.norm(cross_product(ev, b))
     
 def d_nucross(a, b):
     r"""
@@ -980,7 +989,7 @@ class Angle(PrimitiveCoordinate):
         # norm of the two vectors
         norm1 = np.sqrt(np.sum(vector1**2))
         norm2 = np.sqrt(np.sum(vector2**2))
-        crs = np.cross(vector1, vector2)
+        crs = cross_product(vector1, vector2)
         crs /= np.linalg.norm(crs)
         return crs
         
@@ -1004,14 +1013,14 @@ class Angle(PrimitiveCoordinate):
             if ((np.linalg.norm(u + VECTOR1) < 1e-10) or
                     (np.linalg.norm(u - VECTOR2) < 1e-10)):
                 # and they're parallel o [1, -1, 1]
-                w_prime = np.cross(u, VECTOR2)
+                w_prime = cross_product(u, VECTOR2)
             else:
-                w_prime = np.cross(u, VECTOR1)
+                w_prime = cross_product(u, VECTOR1)
         else:
-            w_prime = np.cross(u, v)
+            w_prime = cross_product(u, v)
         w = w_prime / np.linalg.norm(w_prime)
-        term1 = np.cross(u, w) / u_norm
-        term2 = np.cross(w, v) / v_norm
+        term1 = cross_product(u, w) / u_norm
+        term2 = cross_product(w, v) / v_norm
         derivatives[m, :] = term1
         derivatives[n, :] = term2
         derivatives[o, :] = -(term1 + term2)
@@ -1137,9 +1146,9 @@ class LinearAngle(PrimitiveCoordinate):
         e0 = self.e0
         self.stored_dot2 = np.dot(ev, e0)**2
         # Now make two unit vectors that are perpendicular to this one.
-        c1 = np.cross(ev, e0)
+        c1 = cross_product(ev, e0)
         e1 = c1 / np.linalg.norm(c1)
-        c2 = np.cross(ev, e1)
+        c2 = cross_product(ev, e1)
         e2 = c2 / np.linalg.norm(c2)
         # BA and BC unit vectors in ABC angle
         vba = xyz[a]-xyz[b]
@@ -1166,9 +1175,9 @@ class LinearAngle(PrimitiveCoordinate):
         e0 = self.e0
         self.stored_dot2 = np.dot(ev, e0)**2
         # Now make two unit vectors that are perpendicular to this one.
-        c1 = np.cross(ev, e0)
+        c1 = cross_product(ev, e0)
         e1 = c1 / np.linalg.norm(c1)
-        c2 = np.cross(ev, e1)
+        c2 = cross_product(ev, e1)
         e2 = c2 / np.linalg.norm(c2)
         # Visualize the rotated unit vectors.
         answer = np.zeros((3, 3), dtype=float)
@@ -1199,9 +1208,9 @@ class LinearAngle(PrimitiveCoordinate):
         ev = v / np.linalg.norm(v)
         if self.e0 is None: self.reset(xyz)
         e0 = self.e0
-        c1 = np.cross(ev, e0)
+        c1 = cross_product(ev, e0)
         e1 = c1 / np.linalg.norm(c1)
-        c2 = np.cross(ev, e1)
+        c2 = cross_product(ev, e1)
         e2 = c2 / np.linalg.norm(c2)
         # BA and BC unit vectors in ABC angle
         vba = xyz[a]-xyz[b]
@@ -1319,7 +1328,7 @@ class MultiAngle(PrimitiveCoordinate): # pragma: no cover
         # norm of the two vectors
         norm1 = np.sqrt(np.sum(vector1**2))
         norm2 = np.sqrt(np.sum(vector2**2))
-        crs = np.cross(vector1, vector2)
+        crs = cross_product(vector1, vector2)
         crs /= np.linalg.norm(crs)
         return crs
         
@@ -1345,14 +1354,14 @@ class MultiAngle(PrimitiveCoordinate): # pragma: no cover
             if ((np.linalg.norm(u + VECTOR1) < 1e-10) or
                     (np.linalg.norm(u - VECTOR2) < 1e-10)):
                 # and they're parallel o [1, -1, 1]
-                w_prime = np.cross(u, VECTOR2)
+                w_prime = cross_product(u, VECTOR2)
             else:
-                w_prime = np.cross(u, VECTOR1)
+                w_prime = cross_product(u, VECTOR1)
         else:
-            w_prime = np.cross(u, v)
+            w_prime = cross_product(u, v)
         w = w_prime / np.linalg.norm(w_prime)
-        term1 = np.cross(u, w) / u_norm
-        term2 = np.cross(w, v) / v_norm
+        term1 = cross_product(u, w) / u_norm
+        term2 = cross_product(w, v) / v_norm
         for i in m:
             derivatives[i, :] = term1/len(m)
         for i in n:
@@ -1403,8 +1412,8 @@ class Dihedral(PrimitiveCoordinate):
         vec1 = xyz[b] - xyz[a]
         vec2 = xyz[c] - xyz[b]
         vec3 = xyz[d] - xyz[c]
-        cross1 = np.cross(vec2, vec3)
-        cross2 = np.cross(vec1, vec2)
+        cross1 = cross_product(vec2, vec3)
+        cross2 = cross_product(vec1, vec2)
         arg1 = np.sum(np.multiply(vec1, cross1)) * \
                np.sqrt(np.sum(vec2**2))
         arg2 = np.sum(np.multiply(cross1, cross2))
@@ -1428,21 +1437,21 @@ class Dihedral(PrimitiveCoordinate):
         w = w_prime / w_norm
         v = v_prime / v_norm
         if (1 - np.dot(u, w)**2) < 1e-6:
-            term1 = np.cross(u, w) * 0
-            term3 = np.cross(u, w) * 0
+            term1 = cross_product(u, w) * 0
+            term3 = cross_product(u, w) * 0
         else:
-            term1 = np.cross(u, w) / (u_norm * (1 - np.dot(u, w)**2))
-            term3 = np.cross(u, w) * np.dot(u, w) / (w_norm * (1 - np.dot(u, w)**2))
+            term1 = cross_product(u, w) / (u_norm * (1 - np.dot(u, w)**2))
+            term3 = cross_product(u, w) * np.dot(u, w) / (w_norm * (1 - np.dot(u, w)**2))
         if (1 - np.dot(v, w)**2) < 1e-6:
-            term2 = np.cross(v, w) * 0
-            term4 = np.cross(v, w) * 0
+            term2 = cross_product(v, w) * 0
+            term4 = cross_product(v, w) * 0
         else:
-            term2 = np.cross(v, w) / (v_norm * (1 - np.dot(v, w)**2))
-            term4 = np.cross(v, w) * np.dot(v, w) / (w_norm * (1 - np.dot(v, w)**2))
-        # term1 = np.cross(u, w) / (u_norm * (1 - np.dot(u, w)**2))
-        # term2 = np.cross(v, w) / (v_norm * (1 - np.dot(v, w)**2))
-        # term3 = np.cross(u, w) * np.dot(u, w) / (w_norm * (1 - np.dot(u, w)**2))
-        # term4 = np.cross(v, w) * np.dot(v, w) / (w_norm * (1 - np.dot(v, w)**2))
+            term2 = cross_product(v, w) / (v_norm * (1 - np.dot(v, w)**2))
+            term4 = cross_product(v, w) * np.dot(v, w) / (w_norm * (1 - np.dot(v, w)**2))
+        # term1 = cross_product(u, w) / (u_norm * (1 - np.dot(u, w)**2))
+        # term2 = cross_product(v, w) / (v_norm * (1 - np.dot(v, w)**2))
+        # term3 = cross_product(u, w) * np.dot(u, w) / (w_norm * (1 - np.dot(u, w)**2))
+        # term4 = cross_product(v, w) * np.dot(v, w) / (w_norm * (1 - np.dot(v, w)**2))
         derivatives[m, :] = term1
         derivatives[n, :] = -term2
         derivatives[o, :] = -term1 + term3 - term4
@@ -1473,8 +1482,8 @@ class Dihedral(PrimitiveCoordinate):
         sv4 = sv**4
         if su < 1e-6 or sv < 1e-6 : return deriv2
         
-        uxw = np.cross(u, w)
-        vxw = np.cross(v, w)
+        uxw = cross_product(u, w)
+        vxw = cross_product(v, w)
 
         term1 = np.outer(uxw, w*cu - u)/(lu**2*su4)
         term2 = np.outer(vxw, -w*cv + v)/(lv**2*sv4)
@@ -1600,8 +1609,8 @@ class MultiDihedral(PrimitiveCoordinate): # pragma: no cover
         vec1 = xyz[b] - xyza
         vec2 = xyz[c] - xyz[b]
         vec3 = xyzd - xyz[c]
-        cross1 = np.cross(vec2, vec3)
-        cross2 = np.cross(vec1, vec2)
+        cross1 = cross_product(vec2, vec3)
+        cross2 = cross_product(vec1, vec2)
         arg1 = np.sum(np.multiply(vec1, cross1)) * \
                np.sqrt(np.sum(vec2**2))
         arg2 = np.sum(np.multiply(cross1, cross2))
@@ -1628,21 +1637,21 @@ class MultiDihedral(PrimitiveCoordinate): # pragma: no cover
         w = w_prime / w_norm
         v = v_prime / v_norm
         if (1 - np.dot(u, w)**2) < 1e-6:
-            term1 = np.cross(u, w) * 0
-            term3 = np.cross(u, w) * 0
+            term1 = cross_product(u, w) * 0
+            term3 = cross_product(u, w) * 0
         else:
-            term1 = np.cross(u, w) / (u_norm * (1 - np.dot(u, w)**2))
-            term3 = np.cross(u, w) * np.dot(u, w) / (w_norm * (1 - np.dot(u, w)**2))
+            term1 = cross_product(u, w) / (u_norm * (1 - np.dot(u, w)**2))
+            term3 = cross_product(u, w) * np.dot(u, w) / (w_norm * (1 - np.dot(u, w)**2))
         if (1 - np.dot(v, w)**2) < 1e-6:
-            term2 = np.cross(v, w) * 0
-            term4 = np.cross(v, w) * 0
+            term2 = cross_product(v, w) * 0
+            term4 = cross_product(v, w) * 0
         else:
-            term2 = np.cross(v, w) / (v_norm * (1 - np.dot(v, w)**2))
-            term4 = np.cross(v, w) * np.dot(v, w) / (w_norm * (1 - np.dot(v, w)**2))
-        # term1 = np.cross(u, w) / (u_norm * (1 - np.dot(u, w)**2))
-        # term2 = np.cross(v, w) / (v_norm * (1 - np.dot(v, w)**2))
-        # term3 = np.cross(u, w) * np.dot(u, w) / (w_norm * (1 - np.dot(u, w)**2))
-        # term4 = np.cross(v, w) * np.dot(v, w) / (w_norm * (1 - np.dot(v, w)**2))
+            term2 = cross_product(v, w) / (v_norm * (1 - np.dot(v, w)**2))
+            term4 = cross_product(v, w) * np.dot(v, w) / (w_norm * (1 - np.dot(v, w)**2))
+        # term1 = cross_product(u, w) / (u_norm * (1 - np.dot(u, w)**2))
+        # term2 = cross_product(v, w) / (v_norm * (1 - np.dot(v, w)**2))
+        # term3 = cross_product(u, w) * np.dot(u, w) / (w_norm * (1 - np.dot(u, w)**2))
+        # term4 = cross_product(v, w) * np.dot(v, w) / (w_norm * (1 - np.dot(v, w)**2))
         for i in self.a:
             derivatives[i, :] = term1/len(self.a)
         for i in self.d:
@@ -1698,8 +1707,8 @@ class OutOfPlane(PrimitiveCoordinate):
         vec1 = xyz[b] - xyz[a]
         vec2 = xyz[c] - xyz[b]
         vec3 = xyz[d] - xyz[c]
-        cross1 = np.cross(vec2, vec3)
-        cross2 = np.cross(vec1, vec2)
+        cross1 = cross_product(vec2, vec3)
+        cross2 = cross_product(vec1, vec2)
         arg1 = np.sum(np.multiply(vec1, cross1)) * \
                np.sqrt(np.sum(vec2**2))
         arg2 = np.sum(np.multiply(cross1, cross2))
@@ -1723,21 +1732,21 @@ class OutOfPlane(PrimitiveCoordinate):
         w = w_prime / w_norm
         v = v_prime / v_norm
         if (1 - np.dot(u, w)**2) < 1e-6:
-            term1 = np.cross(u, w) * 0
-            term3 = np.cross(u, w) * 0
+            term1 = cross_product(u, w) * 0
+            term3 = cross_product(u, w) * 0
         else:
-            term1 = np.cross(u, w) / (u_norm * (1 - np.dot(u, w)**2))
-            term3 = np.cross(u, w) * np.dot(u, w) / (w_norm * (1 - np.dot(u, w)**2))
+            term1 = cross_product(u, w) / (u_norm * (1 - np.dot(u, w)**2))
+            term3 = cross_product(u, w) * np.dot(u, w) / (w_norm * (1 - np.dot(u, w)**2))
         if (1 - np.dot(v, w)**2) < 1e-6:
-            term2 = np.cross(v, w) * 0
-            term4 = np.cross(v, w) * 0
+            term2 = cross_product(v, w) * 0
+            term4 = cross_product(v, w) * 0
         else:
-            term2 = np.cross(v, w) / (v_norm * (1 - np.dot(v, w)**2))
-            term4 = np.cross(v, w) * np.dot(v, w) / (w_norm * (1 - np.dot(v, w)**2))
-        # term1 = np.cross(u, w) / (u_norm * (1 - np.dot(u, w)**2))
-        # term2 = np.cross(v, w) / (v_norm * (1 - np.dot(v, w)**2))
-        # term3 = np.cross(u, w) * np.dot(u, w) / (w_norm * (1 - np.dot(u, w)**2))
-        # term4 = np.cross(v, w) * np.dot(v, w) / (w_norm * (1 - np.dot(v, w)**2))
+            term2 = cross_product(v, w) / (v_norm * (1 - np.dot(v, w)**2))
+            term4 = cross_product(v, w) * np.dot(v, w) / (w_norm * (1 - np.dot(v, w)**2))
+        # term1 = cross_product(u, w) / (u_norm * (1 - np.dot(u, w)**2))
+        # term2 = cross_product(v, w) / (v_norm * (1 - np.dot(v, w)**2))
+        # term3 = cross_product(u, w) * np.dot(u, w) / (w_norm * (1 - np.dot(u, w)**2))
+        # term4 = cross_product(v, w) * np.dot(v, w) / (w_norm * (1 - np.dot(v, w)**2))
         derivatives[m, :] = term1
         derivatives[n, :] = -term2
         derivatives[o, :] = -term1 + term3 - term4
@@ -1788,6 +1797,8 @@ CacheWarning = False
 class InternalCoordinates(object):
     def __init__(self):
         self.stored_wilsonB = OrderedDict()
+        self.stored_Ginverse = OrderedDict()
+        self.stored_sqrtG = OrderedDict()
 
     def addConstraint(self, cPrim, cVal):
         raise NotImplementedError("Constraints not supported with Cartesian coordinates")
@@ -1803,24 +1814,40 @@ class InternalCoordinates(object):
 
     def clearCache(self):
         self.stored_wilsonB = OrderedDict()
+        self.stored_Ginverse = OrderedDict()
+        self.stored_sqrtG = OrderedDict()
+
+    def trimCache(self):
+        # Only keep the latest (maxCacheSize) values in the caches
+        maxCacheSize = 50
+        while len(self.stored_wilsonB) > maxCacheSize:
+            self.stored_wilsonB.popitem(last=False)
+        while len(self.stored_Ginverse) > maxCacheSize:
+            self.stored_Ginverse.popitem(last=False)
+        while len(self.stored_sqrtG) > maxCacheSize:
+            self.stored_sqrtG.popitem(last=False)
 
     def wilsonB(self, xyz, invMW=False):
         """
         Given Cartesian coordinates xyz, return the Wilson B-matrix
         given by dq_i/dx_j where x is flattened (i.e. x1, y1, z1, x2, y2, z2)
         """
+        cached_bmatrix_used = False
         global CacheWarning
         t0 = time.time()
         xhash = hash(xyz.tobytes())
         ht = time.time() - t0
         if xhash in self.stored_wilsonB:
             ans = self.stored_wilsonB[xhash]
+            # logger.info("Using cached B-matrix : %i from end\n" % (len(self.stored_wilsonB) - list(self.stored_wilsonB.keys()).index(xhash)))
+            cached_bmatrix_used = True
             return ans
         WilsonB = []
         Der = self.derivatives(xyz)
         for i in range(Der.shape[0]):
             WilsonB.append(Der[i].flatten())
         self.stored_wilsonB[xhash] = np.array(WilsonB)
+        self.trimCache()
         if len(self.stored_wilsonB) > 1000 and not CacheWarning:
             logger.warning("\x1b[91mWarning: more than 1000 B-matrices stored, memory leaks likely\x1b[0m\n")
             CacheWarning = True
@@ -1841,47 +1868,68 @@ class InternalCoordinates(object):
     def GInverse_SVD(self, xyz, sqrt=False, invMW=False):
         xyz = xyz.reshape(-1,3)
         # Perform singular value decomposition
-        click()
-        loops = 0
-        while True:
-            try:
-                G = self.GMatrix(xyz, invMW)
-                time_G = click()
-                U, S, VT = np.linalg.svd(G)
-                time_svd = click()
-            except np.linalg.LinAlgError:
-                logger.warning("\x1b[1;91m SVD fails, perturbing coordinates and trying again\x1b[0m\n")
-                xyz = xyz + 1e-2*np.random.random(xyz.shape)
-                loops += 1
-                if loops == 10:
-                    raise RuntimeError('SVD failed too many times')
-                continue
-            break
-        # print "Build G: %.3f SVD: %.3f" % (time_G, time_svd),
-        V = VT.T
-        UT = U.T
-        Sinv = np.zeros_like(S)
-        Ssqrt = np.zeros_like(S)
-        LargeVals = 0
-        for ival, value in enumerate(S):
-            # print "%.5e % .5e" % (ival,value)
-            if np.abs(value) > 1e-6:
-                if sqrt: value = np.sqrt(value)
-                LargeVals += 1
-                Sinv[ival] = 1/value
-                Ssqrt[ival] = value
+        # GInverse Caching
+        global CacheWarning
+        xhash = hash(xyz.tobytes())
+        cached_used_ginverse = False
+        if xhash in self.stored_Ginverse and xhash in self.stored_sqrtG:
+            Inv = self.stored_Ginverse[xhash]
+            Sqrt = self.stored_sqrtG[xhash]
+            cached_used_ginverse = True
+            # logger.info("Using cached G-inverse : %i from end\n" % (len(self.stored_Ginverse) - list(self.stored_Ginverse.keys()).index(xhash)))
+        else: 
+            click()
+            loops = 0
+            while True:
+                try:
+                    G = self.GMatrix(xyz, invMW)
+                    time_G = click()
+                    U, S, VT = np.linalg.svd(G)
+                    time_svd = click()
+                except np.linalg.LinAlgError:
+                    logger.warning("\x1b[1;91m SVD fails, perturbing coordinates and trying again\x1b[0m\n")
+                    xyz = xyz + 1e-2*np.random.random(xyz.shape)
+                    loops += 1
+                    if loops == 10:
+                        raise RuntimeError('SVD failed too many times')
+                    continue
+                break
+            # print "Build G: %.3f SVD: %.3f" % (time_G, time_svd),
+            V = VT.T
+            UT = U.T
+            Sinv = np.zeros_like(S)
+            Ssqrt = np.zeros_like(S)
+            LargeVals = 0
+            for ival, value in enumerate(S):
+                # print "%.5e % .5e" % (ival,value)
+                if np.abs(value) > 1e-6:
+                    if sqrt: value = np.sqrt(value)
+                    LargeVals += 1
+                    Sinv[ival] = 1/value
+                    Ssqrt[ival] = value
 
-        # print "%i atoms; %i/%i singular values are > 1e-6" % (xyz.shape[0], LargeVals, len(S))
-        Sinv = np.diag(Sinv)
-        Inv = multi_dot([V, Sinv, UT])
+            # print "%i atoms; %i/%i singular values are > 1e-6" % (xyz.shape[0], LargeVals, len(S))
+            if sqrt:
+                Ssqrt = np.diag(Ssqrt)
+                Sqrt = multi_dot([V, Ssqrt, UT])
+                self.stored_sqrtG[xhash] = Sqrt
+
+            Sinv = np.diag(Sinv)
+            Inv = multi_dot([V, Sinv, UT])
        
+
+        self.stored_Ginverse[xhash] = Inv
+        self.trimCache()
+        if len(self.stored_Ginverse) > 10000 and not CacheWarning:
+            logger.warning("\x1b[91mWarning: more than 10000 G-inverses stored, memory leaks likely\x1b[0m\n")
+            CacheWarning = True
+
         # When "sqrt" is True, return the sqrt of the G matrix along with its inverse.
         # Sqrt of the G matrix is used to calculate gradients and Hessian in mass-weighted IC.
         if sqrt:
-            Ssqrt = np.diag(Ssqrt)
-            Sqrt = multi_dot([V, Ssqrt, UT])
             return Inv, Sqrt
-        return Inv
+        else:
+            return Inv
 
     def GInverse_EIG(self, xyz): # pragma: no cover
         # Currently unused function, but could possibly speed up calculations
@@ -2174,7 +2222,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
         # connect = False, addcart = False corresponds to TRIC
         self.addcart = addcart
         self.connect_isolated = connect_isolated
-        if 'rigid' in kwargs and kwargs['rigid'] is not None:
+        if 'rigid' in kwargs and kwargs['rigid'] is not None and kwargs['rigid']:
             raise RuntimeError('Do not use rigid molecules with PrimitiveInternalCoordinates')
         self.Internals = []
         self.cPrims = []
@@ -2944,7 +2992,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                 r1 = xyzs[ic.b]-xyzs[ic.a]
                 r2 = xyzs[ic.c]-xyzs[ic.a]
                 r3 = xyzs[ic.d]-xyzs[ic.a]
-                d = 1 - np.abs(np.dot(r1,np.cross(r2,r3))/np.linalg.norm(r1)/np.linalg.norm(r2)/np.linalg.norm(r3))
+                d = 1 - np.abs(np.dot(r1,cross_product(r2,r3))/np.linalg.norm(r1)/np.linalg.norm(r2)/np.linalg.norm(r3))
                 # Hdiag.append(0.1)
                 if covalent(ic.a, ic.b) and covalent(ic.a, ic.c) and covalent(ic.a, ic.d):
                     Hdiag.append(0.045)
@@ -3835,6 +3883,8 @@ class ChainCoordinates(PrimitiveInternalCoordinates):
     """
     def __init__(self, molecule, connect=False, addcart=False, **kwargs):
         self.stored_wilsonB = OrderedDict()
+        self.stored_Ginverse = OrderedDict()
+        self.stored_sqrtG = OrderedDict()
         self.connect = connect
         self.addcart = addcart
         self.nim = len(molecule)
