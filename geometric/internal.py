@@ -1909,8 +1909,11 @@ class InternalCoordinates(object):
                     Ssqrt[ival] = value
 
             # print "%i atoms; %i/%i singular values are > 1e-6" % (xyz.shape[0], LargeVals, len(S))
-            Ssqrt = np.diag(Ssqrt)
-            Sqrt = multi_dot([V, Ssqrt, UT])
+            if sqrt:
+                Ssqrt = np.diag(Ssqrt)
+                Sqrt = multi_dot([V, Ssqrt, UT])
+                self.stored_sqrtG[xhash] = Sqrt
+
             Sinv = np.diag(Sinv)
             Inv = multi_dot([V, Sinv, UT])
        
