@@ -807,8 +807,8 @@ class Optimizer(object):
         if criteria_met and self.conSatisfied:
             if params.irc:
                 if self.IRC_info.get("direction") == 1 and self.IRC_direction == 'both':
-                    logger.info("\nIRC forward direction converged\n")
-                    logger.info("IRC backward direction starts here\n\n")
+                    logger.info("\nThe IRC calculation in the forward direction has converged.\n")
+                    logger.info("The IRC calculation in the backward direction starts here.\n\n")
                     self.reset_irc()
                 else:
                     self.SortedEigenvalues(self.H)
@@ -822,13 +822,19 @@ class Optimizer(object):
 
         if self.Iteration >= params.maxiter:
             self.SortedEigenvalues(self.H)
-            logger.info("Maximum iterations reached (%i); increase --maxiter for more\n" % params.maxiter)
-            if params.Converge_maxiter:
-                logger.info("Exiting normally because --converge maxiter was set.\n")
-                self.state = OPT_STATE.CONVERGED
+            if params.irc and self.IRC_info.get("direction") == 1 and self.IRC_direction == 'both':
+                logger.info("\nThe IRC in the forward direction has reached the maximum iteration.\n")
+                logger.info("The IRC calculation in the backward direction starts here.\n\n")
+                self.reset_irc()
+                return False, step_state
             else:
-                self.state = OPT_STATE.FAILED
-            return True, step_state
+                logger.info("Maximum iterations reached (%i); increase --maxiter for more\n" % params.maxiter)
+                if params.Converge_maxiter:
+                    logger.info("Exiting normally because --converge maxiter was set.\n")
+                    self.state = OPT_STATE.CONVERGED
+                else:
+                    self.state = OPT_STATE.FAILED
+                return True, step_state
 
         if params.qccnv and Converged_grms and (Converged_drms or Converged_energy) and self.conSatisfied:
             self.SortedEigenvalues(self.H)
