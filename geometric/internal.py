@@ -1798,6 +1798,7 @@ class InternalCoordinates(object):
     def __init__(self):
         self.stored_wilsonB = OrderedDict()
         self.stored_Ginverse = OrderedDict()
+        self.stored_sqrtG = OrderedDict()
 
     def addConstraint(self, cPrim, cVal):
         raise NotImplementedError("Constraints not supported with Cartesian coordinates")
@@ -1814,6 +1815,7 @@ class InternalCoordinates(object):
     def clearCache(self):
         self.stored_wilsonB = OrderedDict()
         self.stored_Ginverse = OrderedDict()
+        self.stored_sqrtG = OrderedDict()
 
     def trimCache(self):
         # Only keep the latest (maxCacheSize) values in the caches
@@ -1822,6 +1824,8 @@ class InternalCoordinates(object):
             self.stored_wilsonB.popitem(last=False)
         while len(self.stored_Ginverse) > maxCacheSize:
             self.stored_Ginverse.popitem(last=False)
+        while len(self.stored_sqrtG) > maxCacheSize:
+            self.stored_sqrtG.popitem(last=False)
 
     def wilsonB(self, xyz, invMW=False):
         """
@@ -1868,8 +1872,9 @@ class InternalCoordinates(object):
         global CacheWarning
         xhash = hash(xyz.tobytes())
         cached_used_ginverse = False
-        if xhash in self.stored_Ginverse:
+        if xhash in self.stored_Ginverse and xhash in self.stored_sqrtG:
             Inv = self.stored_Ginverse[xhash]
+            Sqrt = self.stored_sqrtG[xhash]
             cached_used_ginverse = True
             # logger.info("Using cached G-inverse : %i from end\n" % (len(self.stored_Ginverse) - list(self.stored_Ginverse.keys()).index(xhash)))
         else: 
@@ -1904,15 +1909,11 @@ class InternalCoordinates(object):
                     Ssqrt[ival] = value
 
             # print "%i atoms; %i/%i singular values are > 1e-6" % (xyz.shape[0], LargeVals, len(S))
+            Ssqrt = np.diag(Ssqrt)
+            Sqrt = multi_dot([V, Ssqrt, UT])
             Sinv = np.diag(Sinv)
             Inv = multi_dot([V, Sinv, UT])
        
-            # When "sqrt" is True, return the sqrt of the G matrix along with its inverse.
-            # Sqrt of the G matrix is used to calculate gradients and Hessian in mass-weighted IC.
-        if sqrt:
-            Ssqrt = np.diag(Ssqrt)
-            Sqrt = multi_dot([V, Ssqrt, UT])
-            return Inv, Sqrt
 
         self.stored_Ginverse[xhash] = Inv
         self.trimCache()
@@ -1920,7 +1921,12 @@ class InternalCoordinates(object):
             logger.warning("\x1b[91mWarning: more than 10000 G-inverses stored, memory leaks likely\x1b[0m\n")
             CacheWarning = True
 
-        return Inv
+        # When "sqrt" is True, return the sqrt of the G matrix along with its inverse.
+        # Sqrt of the G matrix is used to calculate gradients and Hessian in mass-weighted IC.
+        if sqrt:
+            return Inv, Sqrt
+        else:
+            return Inv
 
     def GInverse_EIG(self, xyz): # pragma: no cover
         # Currently unused function, but could possibly speed up calculations
@@ -3874,6 +3880,8 @@ class ChainCoordinates(PrimitiveInternalCoordinates):
     """
     def __init__(self, molecule, connect=False, addcart=False, **kwargs):
         self.stored_wilsonB = OrderedDict()
+        self.stored_Ginverse = OrderedDict()
+        self.stored_sqrtG = OrderedDict()
         self.connect = connect
         self.addcart = addcart
         self.nim = len(molecule)
