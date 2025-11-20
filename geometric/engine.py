@@ -42,11 +42,13 @@ import xml.etree.ElementTree as ET
 import numpy as np
 import re
 import os
+import json
 
 from .molecule import Molecule, format_xyz_coord
 from .nifty import bak, au2ev, eqcgmx, fqcgmx, bohr2ang, logger, getWorkQueue, queue_up_src_dest, rootdir, copy_tree_over
 from .errors import EngineError, CheckCoordError, Psi4EngineError, QChemEngineError, TeraChemEngineError, \
-    ConicalIntersectionEngineError, OpenMMEngineError, GromacsEngineError, MolproEngineError, QCEngineAPIEngineError, GaussianEngineError, QUICKEngineError, CFOUREngineError
+    ConicalIntersectionEngineError, OpenMMEngineError, GromacsEngineError, MolproEngineError, \
+    QCEngineAPIEngineError, GaussianEngineError, QUICKEngineError, CFOUREngineError, BagelEngineError
 from .xml_helper import read_coors_from_xml, write_coors_to_xml
 
 # Strings matching common DFT functionals
@@ -1837,6 +1839,233 @@ class Molpro(Engine): # pragma: no cover
                 if keyword in line.lower() or line.lower().strip().endswith("ks"):
                     return True
         return False
+
+class Bagel(Engine):
+    """
+    Run a Bagel energy and gradient calculation.
+    """
+    def __init__(self, molecule=None, exe=None, threads=None):
+        """
+        Initialize the Bagel engine.
+
+        Parameters
+        ----------
+        molecule : Molecule
+            The molecule object to be used in the calculation.
+            Default is None, in which case the molecule is created from the input file.
+        exe : str
+            The path to the Bagel executable.
+            Default is "BAGEL". For parallel execution, this parameter should
+            be set e.g. to "mpirun BAGEL" or "srun --mpi=pmi2 BAGEL", etc.,
+            with specification of the number of threads if not set by
+            environment variables.
+        threads : int
+            The number of threads to start every Bagel process.
+            Default is 1. This parameter is used to set the environment variables
+            BAGEL_NUM_THREADS and MKL_NUM_THREADS, i.e.
+            $ export BAGEL_NUM_THREADS=threads
+            $ export MKL_NUM_THREADS=threads
+        """
+
+        if molecule is None:
+            # create a fake molecule
+            molecule = Molecule()
+            molecule.elem = ['H']
+            molecule.xyzs = [[[0,0,0]]]
+        super(Bagel, self).__init__(molecule)
+
+        if exe is None:
+            self.bagel_exe = 'BAGEL'
+        else:
+            if 'BAGEL' in exe:
+                self.bagel_exe = exe
+            else:
+                raise ValueError('Bagel executable must be named BAGEL')
+
+        self.threads = threads if threads is not None else 1
+
+    def load_bagel_input(self, bagel_input):
+        """
+        Bagel .json input parser. Supports both angstroms and bohr.
+        """
+        with open(bagel_input,'r') as bageljson:
+            bagel_dict = json.load(bageljson, object_pairs_hook=OrderedDict)
+        
+        for i in range(0, len(bagel_dict['bagel'])):
+            if 'title' in bagel_dict['bagel'][i]:
+                bagel_dict['bagel'][i]['title'] = bagel_dict['bagel'][i]['title'].lower()
+                
+        bagel_titles = [dct['title'] for dct in bagel_dict['bagel']]
+        if bagel_titles[0] != 'molecule':
+            raise RuntimeError(
+                f'The first dictionary in Bagel json file {bagel_input} '
+                'must have the title "molecule".'
+            )
+        if not 'force' in bagel_titles:
+            raise RuntimeError(
+                f'The Bagel json file {bagel_input} must have a dictionary '
+                'with the title "force".'
+            )
+        self.mol_idx = bagel_titles.index('molecule')
+        force_idx = bagel_titles.index('force')
+        self.force_method = bagel_dict['bagel'][force_idx]['method'][0]['title'].lower()
+        
+        if self.force_method in ['fci', 'ras', 'nevpt2', 'zfci', 'zcasscf', 'relsmith']:
+            raise NotImplementedError(
+                'FCI, RASCI, NEVPT2 and relativistic methods '
+                'except for Dirac-HF are not currently supported '
+                'due to the lack of analytic gradients.'
+            )
+        elif self.force_method in ['casscf', 'caspt2']:
+            if self.force_method == 'caspt2':
+                # Check if CASSCF section is present
+                if 'casscf' not in bagel_titles:
+                    raise RuntimeError(
+                        'You requested a CASPT2 calculation, therefore the '
+                        f'Bagel json file {bagel_input} must have a CASSCF section.'
+                    )
+                else:
+                    if bagel_titles.index('casscf') > force_idx:
+                        raise RuntimeError(
+                            'The CASSCF section must be before the force section.'
+                        )
+
+            # Check if a guess wavefunction is provided
+            if 'load_ref' in bagel_titles:
+                self.ref_idx = bagel_titles.index('load_ref')
+                self.ref_file = bagel_dict['bagel'][self.ref_idx]['file']
+                bagel_dict['bagel'][self.ref_idx]['continue_geom'] = False
+            else:
+                self.ref_file = None
+            # Export CASSCF wavefunction for the next step
+            if 'save_ref' in bagel_titles:
+                save_idx = bagel_titles.index('save_ref')
+                bagel_dict['bagel'][save_idx]['file'] = 'run'
+            else:
+                bagel_dict['bagel'].append({
+                    'title': 'save_ref',
+                    'file': 'run',
+                })
+
+        # Add export keyword to the "force" dictionary if it is not present
+        if 'export' not in [key.lower() for key in bagel_dict['bagel'][force_idx]]:
+            bagel_dict['bagel'][force_idx]['export'] = True
+        # else:
+        #     bagel_dict['bagel'][force_idx].move_to_end('export')
+        
+        elems = []
+        coords = []
+        readang = False
+
+        # Bagel by default reads coordinates in Bohr, check to see which input is used.
+        molecule_lower_keys = {
+            k.lower(): k for k in bagel_dict['bagel'][self.mol_idx]
+        }
+        if 'angstrom' in molecule_lower_keys:
+            readang = bagel_dict['bagel'][self.mol_idx][molecule_lower_keys['angstrom']]
+
+        for atom_dict in bagel_dict['bagel'][self.mol_idx]['geometry']:
+            elems.append(atom_dict['atom'])  # extract elements
+            coords.append(atom_dict['xyz'])  # extract coordinates
+
+        self.M = Molecule()
+        self.M.elem = elems
+
+        if readang:
+            self.M.xyzs = [np.array(coords, dtype=np.float64)]
+        elif not readang:  # save coordinates in molecule object as angstroms
+            self.M.xyzs = [np.array(coords, dtype=np.float64) * bohr2ang]
+            # for consistency geomeTRIC will create Bagel files that use angstrom
+            bagel_dict['bagel'][self.mol_idx]['angstrom'] = True
+        
+        self.bagel_temp = bagel_dict
+
+    def calc_new(self, coords, dirname):
+        if not os.path.exists(dirname):
+            os.makedirs(dirname)
+        # Convert coordinates back to the xyz file
+        self.M.xyzs[0] = coords.reshape(-1, 3) * bohr2ang
+
+        # Change coordinates in bagel_temp dictionary
+        for atom in range(self.M.xyzs[0].shape[0]):
+            self.bagel_temp['bagel'][0]['geometry'][atom]['xyz'] = list(self.M.xyzs[0][atom])
+        
+        # Handle CASSCF guess wavefunction
+        if self.force_method in ['casscf', 'caspt2']:
+            if self.ref_file is None:
+                if os.path.exists(os.path.join(dirname, 'run.archive')):
+                    if 'load_ref' not in [dct['title'].lower() for dct in self.bagel_temp['bagel']]:
+                        self.bagel_temp['bagel'].insert(
+                            self.mol_idx + 1,  # insert after the molecule section
+                            {
+                                'title': 'load_ref',
+                                'file': 'run',
+                                'continue_geom': False,
+                            },
+                        )
+                        # Remove the custom active space from the CASSCF section
+                        # since the active orbitals in the reference wavefunction
+                        # are already in the middle.
+                        if self.force_method == 'casscf':
+                            force_idx = [dct['title'] for dct in self.bagel_temp['bagel']].index('force')
+                            self.bagel_temp['bagel'][force_idx]['method'][0].pop('active', None)
+                        elif self.force_method == 'caspt2':
+                            casscf_idx = [dct['title'] for dct in self.bagel_temp['bagel']].index('casscf')
+                            self.bagel_temp['bagel'][casscf_idx].pop('active', None)
+            else:
+                if os.path.exists(os.path.join(dirname, 'run.archive')):
+                    self.bagel_temp['bagel'][self.ref_idx]['file'] = 'run'
+                else:
+                    shutil.copy(
+                        f'{self.ref_file}.archive',
+                        os.path.join(dirname, f'{self.ref_file}.archive'),
+                    )
+
+        # Write Json file
+        with open(os.path.join(dirname, 'run.json'), 'w') as outfile:
+            outfile.write(json.dumps(self.bagel_temp, indent=2))
+
+        try:
+            # Run Bagel
+            bagel_env = os.environ.copy()
+            bagel_env['BAGEL_NUM_THREADS'] = str(self.threads)
+            bagel_env['MKL_NUM_THREADS'] = str(self.threads)
+            subprocess.check_call(
+                f'{self.bagel_exe} run.json 1> run.out 2> run.err', 
+                cwd=dirname, shell=True, env=bagel_env,
+            )
+            # Read energy and gradients from Bagel output
+            result = self.read_result(dirname)
+        except (OSError, IOError, RuntimeError, subprocess.CalledProcessError):
+            raise BagelEngineError
+        return result
+
+
+    def read_result(self, dirname, check_coord=None):
+        """ read an output file from Bagel"""
+        if check_coord is not None:
+            raise CheckCoordError("Coordinate check not implemented")
+
+        force_idx = [dct['title'] for dct in self.bagel_temp['bagel']].index('force')
+        istate = self.bagel_temp['bagel'][force_idx].get('target', 0)
+        
+        energy = np.loadtxt(os.path.join(dirname, 'ENERGY.out'))
+        if energy.ndim == 0:
+            energy = float(energy)
+        else:
+            energy = energy[istate]
+        
+        gradient = np.loadtxt(
+            os.path.join(dirname, f'FORCE_{istate}.out'),
+            skiprows=1,
+            usecols=(1, 2, 3),
+        ).flatten()
+        
+        # Remove exported files
+        os.remove(os.path.join(dirname, 'ENERGY.out'))
+        os.remove(os.path.join(dirname, f'FORCE_{istate}.out'))
+
+        return {'energy': energy, 'gradient': gradient}
 
 class QCEngineAPI(Engine):
     def __init__(self, schema, program):
