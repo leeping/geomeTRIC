@@ -1799,6 +1799,7 @@ class InternalCoordinates(object):
         self.stored_wilsonB = OrderedDict()
         self.stored_Ginverse = OrderedDict()
         self.stored_sqrtG = OrderedDict()
+        self.stored_sqrtGinverse = OrderedDict()
 
     def addConstraint(self, cPrim, cVal):
         raise NotImplementedError("Constraints not supported with Cartesian coordinates")
@@ -1816,6 +1817,7 @@ class InternalCoordinates(object):
         self.stored_wilsonB = OrderedDict()
         self.stored_Ginverse = OrderedDict()
         self.stored_sqrtG = OrderedDict()
+        self.stored_sqrtGinverse = OrderedDict()
 
     def trimCache(self):
         # Only keep the latest (maxCacheSize) values in the caches
@@ -1826,6 +1828,8 @@ class InternalCoordinates(object):
             self.stored_Ginverse.popitem(last=False)
         while len(self.stored_sqrtG) > maxCacheSize:
             self.stored_sqrtG.popitem(last=False)
+        while len(self.stored_sqrtGinverse) > maxCacheSize:
+            self.stored_sqrtGinverse.popitem(last=False)
 
     def wilsonB(self, xyz, invMW=False):
         """
@@ -1865,17 +1869,75 @@ class InternalCoordinates(object):
         BuBt = np.dot(Bmat,Bmat.T)
         return BuBt
 
-    def GInverse_SVD(self, xyz, sqrt=False, invMW=False):
+    def GInverse_Sqrt_SVD(self, xyz, invMW=False):
+        xyz = xyz.reshape(-1, 3)
+        # Perform singular value decomposition
+        # GInverse Caching
+        global CacheWarning
+        xhash = hash(xyz.tobytes())
+        if xhash in self.stored_Ginverse and xhash in self.stored_sqrtGinverse:
+            Inv = self.stored_Ginverse[xhash]
+            Sqrt = self.stored_sqrtG[xhash]
+            # logger.info("Using cached G-inverse : %i from end\n" % (len(self.stored_Ginverse) - list(self.stored_Ginverse.keys()).index(xhash)))
+        else:
+            click()
+            loops = 0
+            while True:
+                try:
+                    G = self.GMatrix(xyz, invMW)
+                    time_G = click()
+                    U, S, VT = np.linalg.svd(G)
+                    time_svd = click()
+                except np.linalg.LinAlgError:
+                    logger.warning("\x1b[1;91m SVD fails, perturbing coordinates and trying again\x1b[0m\n")
+                    xyz = xyz + 1e-2 * np.random.random(xyz.shape)
+                    loops += 1
+                    if loops == 10:
+                        raise RuntimeError('SVD failed too many times')
+                    continue
+                break
+            # print "Build G: %.3f SVD: %.3f" % (time_G, time_svd),
+            V = VT.T
+            UT = U.T
+            Sinv = np.zeros_like(S)
+            Ssqrt = np.zeros_like(S)
+            LargeVals = 0
+            for ival, value in enumerate(S):
+                # print "%.5e % .5e" % (ival,value)
+                if np.abs(value) > 1e-6:
+                    value = np.sqrt(value)
+                    LargeVals += 1
+                    Sinv[ival] = 1 / value
+                    Ssqrt[ival] = value
+
+            # print "%i atoms; %i/%i singular values are > 1e-6" % (xyz.shape[0], LargeVals, len(S))
+            Ssqrt = np.diag(Ssqrt)
+            Sqrt = multi_dot([V, Ssqrt, UT])
+
+            Sinv = np.diag(Sinv)
+            Inv = multi_dot([V, Sinv, UT])
+
+        self.stored_sqrtG[xhash] = Sqrt
+        self.stored_sqrtGinverse[xhash] = Inv
+        self.trimCache()
+        if len(self.stored_sqrtG) > 10000 and not CacheWarning:
+            logger.warning("\x1b[91mWarning: more than 10000 G-inverses stored, memory leaks likely\x1b[0m\n")
+            CacheWarning = True
+        if len(self.stored_sqrtGinverse) > 10000 and not CacheWarning:
+            logger.warning("\x1b[91mWarning: more than 10000 sqrt(G)-inverses stored, memory leaks likely\x1b[0m\n")
+            CacheWarning = True
+
+        # Sqrt of the G matrix is used to calculate gradients and Hessian in mass-weighted IC.
+        return Inv, Sqrt
+
+    def GInverse_SVD(self, xyz, invMW=False):
         xyz = xyz.reshape(-1,3)
         # Perform singular value decomposition
         # GInverse Caching
         global CacheWarning
         xhash = hash(xyz.tobytes())
-        cached_used_ginverse = False
-        if xhash in self.stored_Ginverse and xhash in self.stored_sqrtG:
+        if xhash in self.stored_Ginverse:
             Inv = self.stored_Ginverse[xhash]
-            Sqrt = self.stored_sqrtG[xhash]
-            cached_used_ginverse = True
             # logger.info("Using cached G-inverse : %i from end\n" % (len(self.stored_Ginverse) - list(self.stored_Ginverse.keys()).index(xhash)))
         else: 
             click()
@@ -1898,21 +1960,14 @@ class InternalCoordinates(object):
             V = VT.T
             UT = U.T
             Sinv = np.zeros_like(S)
-            Ssqrt = np.zeros_like(S)
             LargeVals = 0
             for ival, value in enumerate(S):
                 # print "%.5e % .5e" % (ival,value)
                 if np.abs(value) > 1e-6:
-                    if sqrt: value = np.sqrt(value)
                     LargeVals += 1
                     Sinv[ival] = 1/value
-                    Ssqrt[ival] = value
 
             # print "%i atoms; %i/%i singular values are > 1e-6" % (xyz.shape[0], LargeVals, len(S))
-            if sqrt:
-                Ssqrt = np.diag(Ssqrt)
-                Sqrt = multi_dot([V, Ssqrt, UT])
-                self.stored_sqrtG[xhash] = Sqrt
 
             Sinv = np.diag(Sinv)
             Inv = multi_dot([V, Sinv, UT])
@@ -1924,12 +1979,7 @@ class InternalCoordinates(object):
             logger.warning("\x1b[91mWarning: more than 10000 G-inverses stored, memory leaks likely\x1b[0m\n")
             CacheWarning = True
 
-        # When "sqrt" is True, return the sqrt of the G matrix along with its inverse.
-        # Sqrt of the G matrix is used to calculate gradients and Hessian in mass-weighted IC.
-        if sqrt:
-            return Inv, Sqrt
-        else:
-            return Inv
+        return Inv
 
     def GInverse_EIG(self, xyz): # pragma: no cover
         # Currently unused function, but could possibly speed up calculations
@@ -3885,6 +3935,7 @@ class ChainCoordinates(PrimitiveInternalCoordinates):
         self.stored_wilsonB = OrderedDict()
         self.stored_Ginverse = OrderedDict()
         self.stored_sqrtG = OrderedDict()
+        self.stored_sqrtGinverse = OrderedDict()
         self.connect = connect
         self.addcart = addcart
         self.nim = len(molecule)
