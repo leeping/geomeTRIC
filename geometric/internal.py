@@ -1798,8 +1798,8 @@ class InternalCoordinates(object):
     def __init__(self):
         self.stored_wilsonB = OrderedDict()
         self.stored_Ginverse = OrderedDict()
-        self.stored_sqrtG = OrderedDict()
-        self.stored_sqrtGinverse = OrderedDict()
+        self.stored_MWsqrtG = OrderedDict()
+        self.stored_MWsqrtGinverse = OrderedDict()
 
     def addConstraint(self, cPrim, cVal):
         raise NotImplementedError("Constraints not supported with Cartesian coordinates")
@@ -1816,8 +1816,8 @@ class InternalCoordinates(object):
     def clearCache(self):
         self.stored_wilsonB = OrderedDict()
         self.stored_Ginverse = OrderedDict()
-        self.stored_sqrtG = OrderedDict()
-        self.stored_sqrtGinverse = OrderedDict()
+        self.stored_MWsqrtG = OrderedDict()
+        self.stored_MWsqrtGinverse = OrderedDict()
 
     def trimCache(self):
         # Only keep the latest (maxCacheSize) values in the caches
@@ -1826,17 +1826,16 @@ class InternalCoordinates(object):
             self.stored_wilsonB.popitem(last=False)
         while len(self.stored_Ginverse) > maxCacheSize:
             self.stored_Ginverse.popitem(last=False)
-        while len(self.stored_sqrtG) > maxCacheSize:
-            self.stored_sqrtG.popitem(last=False)
-        while len(self.stored_sqrtGinverse) > maxCacheSize:
-            self.stored_sqrtGinverse.popitem(last=False)
+        while len(self.stored_MWsqrtG) > maxCacheSize:
+            self.stored_MWsqrtG.popitem(last=False)
+        while len(self.stored_MWsqrtGinverse) > maxCacheSize:
+            self.stored_MWsqrtGinverse.popitem(last=False)
 
-    def wilsonB(self, xyz, invMW=False):
+    def wilsonB(self, xyz):
         """
         Given Cartesian coordinates xyz, return the Wilson B-matrix
         given by dq_i/dx_j where x is flattened (i.e. x1, y1, z1, x2, y2, z2)
         """
-        cached_bmatrix_used = False
         global CacheWarning
         t0 = time.time()
         xhash = hash(xyz.tobytes())
@@ -1844,7 +1843,6 @@ class InternalCoordinates(object):
         if xhash in self.stored_wilsonB:
             ans = self.stored_wilsonB[xhash]
             # logger.info("Using cached B-matrix : %i from end\n" % (len(self.stored_wilsonB) - list(self.stored_wilsonB.keys()).index(xhash)))
-            cached_bmatrix_used = True
             return ans
         WilsonB = []
         Der = self.derivatives(xyz)
@@ -1856,35 +1854,44 @@ class InternalCoordinates(object):
             logger.warning("\x1b[91mWarning: more than 1000 B-matrices stored, memory leaks likely\x1b[0m\n")
             CacheWarning = True
         ans = np.array(WilsonB)
-        if invMW:
-            ans /= np.tile(np.sqrt(self.mass), (len(self.Internals), 1))
         return ans
 
-    def GMatrix(self, xyz, invMW=False):
+    def GMatrix(self, xyz, MW=False):
         """
         Given Cartesian coordinates xyz, return the G-matrix
         given by G = BuBt where u is an arbitrary matrix (default to identity)
         """
-        Bmat = self.wilsonB(xyz, invMW)
+        Bmat = self.wilsonB(xyz)
+        if MW:
+            """
+            Mass-weighted B matrix is used for the IRC method
+            Gonzalez & Schlegel. J. Phys. Chem. 1990, 94, 5523-5527
+            """
+            Bmat /= np.tile(np.sqrt(self.mass), (len(self.Internals), 1))
         BuBt = np.dot(Bmat,Bmat.T)
         return BuBt
 
-    def GInverse_Sqrt_SVD(self, xyz, invMW=False):
+    def MWGInverse_Sqrt_SVD(self, xyz):
         xyz = xyz.reshape(-1, 3)
+        """
+        The B matrix is mass-weighted. 
+        The sqrt(G) matrix and its inverse calculated here are used
+        for Equations 18-21 in Gonzalez & Schlegel (J. Phys. Chem. 1990, 94, 5523-5527) 
+        """
         # Perform singular value decomposition
         # GInverse Caching
         global CacheWarning
         xhash = hash(xyz.tobytes())
-        if xhash in self.stored_Ginverse and xhash in self.stored_sqrtGinverse:
+        if xhash in self.stored_Ginverse and xhash in self.stored_MWsqrtGinverse:
             Inv = self.stored_Ginverse[xhash]
-            Sqrt = self.stored_sqrtG[xhash]
+            Sqrt = self.stored_MWsqrtG[xhash]
             # logger.info("Using cached G-inverse : %i from end\n" % (len(self.stored_Ginverse) - list(self.stored_Ginverse.keys()).index(xhash)))
         else:
             click()
             loops = 0
             while True:
                 try:
-                    G = self.GMatrix(xyz, invMW)
+                    G = self.GMatrix(xyz, MW=True)
                     time_G = click()
                     U, S, VT = np.linalg.svd(G)
                     time_svd = click()
@@ -1917,20 +1924,20 @@ class InternalCoordinates(object):
             Sinv = np.diag(Sinv)
             Inv = multi_dot([V, Sinv, UT])
 
-        self.stored_sqrtG[xhash] = Sqrt
-        self.stored_sqrtGinverse[xhash] = Inv
+        self.stored_MWsqrtG[xhash] = Sqrt
+        self.stored_MWsqrtGinverse[xhash] = Inv
         self.trimCache()
-        if len(self.stored_sqrtG) > 10000 and not CacheWarning:
+        if len(self.stored_MWsqrtG) > 10000 and not CacheWarning:
             logger.warning("\x1b[91mWarning: more than 10000 G-inverses stored, memory leaks likely\x1b[0m\n")
             CacheWarning = True
-        if len(self.stored_sqrtGinverse) > 10000 and not CacheWarning:
+        if len(self.stored_MWsqrtGinverse) > 10000 and not CacheWarning:
             logger.warning("\x1b[91mWarning: more than 10000 sqrt(G)-inverses stored, memory leaks likely\x1b[0m\n")
             CacheWarning = True
 
         # Sqrt of the G matrix is used to calculate gradients and Hessian in mass-weighted IC.
         return Inv, Sqrt
 
-    def GInverse_SVD(self, xyz, invMW=False):
+    def GInverse_SVD(self, xyz):
         xyz = xyz.reshape(-1,3)
         # Perform singular value decomposition
         # GInverse Caching
@@ -1944,7 +1951,7 @@ class InternalCoordinates(object):
             loops = 0
             while True:
                 try:
-                    G = self.GMatrix(xyz, invMW)
+                    G = self.GMatrix(xyz)
                     time_G = click()
                     U, S, VT = np.linalg.svd(G)
                     time_svd = click()
@@ -3934,8 +3941,8 @@ class ChainCoordinates(PrimitiveInternalCoordinates):
     def __init__(self, molecule, connect=False, addcart=False, **kwargs):
         self.stored_wilsonB = OrderedDict()
         self.stored_Ginverse = OrderedDict()
-        self.stored_sqrtG = OrderedDict()
-        self.stored_sqrtGinverse = OrderedDict()
+        self.stored_MWsqrtG = OrderedDict()
+        self.stored_MWsqrtGinverse = OrderedDict()
         self.connect = connect
         self.addcart = addcart
         self.nim = len(molecule)
