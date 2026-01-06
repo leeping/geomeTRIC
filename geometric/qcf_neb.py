@@ -212,6 +212,10 @@ def nextchain(info_dict):
 
     # Extracting information from the given dictionary.
     params, M, engine, result, iteration = get_basic_info(info_dict)
+
+    if iteration == 0:
+        return prepare(info_dict)
+
     params_prev, M_prev, engine_prev, result_prev, _ = get_basic_info(
         info_dict, previous=True
     )
