@@ -1833,7 +1833,7 @@ class Molpro(Engine): # pragma: no cover
                         gradient.extend([float(v) for v in values])
             # Look for energy with principal="true" attribute (the main result)
             for prop in jobstep.findall('molpro:property', namespaces):
-                if prop.get('principal') == 'true' and prop.get('name') in ['Energy', 'total energy']:
+                if prop.get('principal') == 'true' and prop.get('name') in ['Energy', 'total energy', 'energy']:
                     energy = float(prop.get('value'))
         if energy is None:
             raise RuntimeError("Molpro energy is not found in %s, please check." % molpro_xml)
