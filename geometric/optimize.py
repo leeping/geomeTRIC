@@ -1278,7 +1278,7 @@ def run_optimizer(**kwargs):
                 bothre += 0.01
                 M.build_topology(bond_order=bothre)
             logger.info("Using threshold of %.2f, there are now %i molecules\n" % (bothre, len(M.molecules)))
-        M.top_settings['read_bonds'] = True
+        M.set_bond_lock(True)
         # Delete the QM bond order to avoid problems when more structures are added
         del M.Data['qm_bondorder']
     else:

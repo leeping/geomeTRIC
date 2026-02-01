@@ -2223,10 +2223,7 @@ class PrimitiveInternalCoordinates(InternalCoordinates):
                     j = molecule.get_closest_atom(i, pbc=False)[0]
                     logger.info("Creating artificial bond to isolated atom: %i-%i\n" % (i+1, j+1))
                     molecule.bonds.append((i, j))
-                old_read_bonds = molecule.top_settings['read_bonds']
-                molecule.top_settings['read_bonds'] = True
-                molecule.build_topology(force_bonds=False)
-                molecule.top_settings['read_bonds'] = old_read_bonds
+                molecule.build_topology()
                 frags = [list(m.nodes()) for m in molecule.molecules]
         # Make frags accessible from outside.
         self.frags = frags

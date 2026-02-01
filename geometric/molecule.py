@@ -178,6 +178,7 @@ AtomVariableNames = {'elem', 'partial_charge', 'atomname', 'atomtype', 'tinkersu
 #| atom axis.                            |#
 #=========================================#
 # bonds      = A list of 2-tuples representing bonds.  Carefully pruned when atom subselection is done.
+# conect     = A list of 2-tuples representing bonds in CONECT records only.
 # fnm        = The file name that the class was built from
 # qcrems     = The Q-Chem 'rem' variables stored as a list of OrderedDicts
 # qctemplate = The Q-Chem template file, not including the coordinates or rem variables
@@ -1220,12 +1221,10 @@ class Molecule(object):
         ## Creates entries like 'gromacs' : 'gromacs' and 'xyz' : 'xyz'
         ## in the Funnel
         self.positive_resid = kwargs.get('positive_resid', 0)
-        self.built_bonds = False
         ## Topology settings
         self.top_settings = {'toppbc' : kwargs.get('toppbc', False),
                              'topframe' : kwargs.get('topframe', 0),
                              'Fac' : kwargs.get('Fac', 1.2),
-                             'read_bonds' : False,
                              'fragment' : kwargs.get('fragment', False),
                              'radii' : kwargs.get('radii', {})}
 
@@ -1258,7 +1257,7 @@ class Molecule(object):
                 self.comms = [i.expandtabs() for i in self.comms]
             ## Build the topology.
             if kwargs.get('build_topology', True) and hasattr(self, 'elem') and self.na > 0:
-                self.build_topology(force_bonds=False)
+                self.build_topology()
         if load_fnm is not None:
             self.load_frames(load_fnm, ftype=load_type, **kwargs)
 
@@ -1337,7 +1336,6 @@ class Molecule(object):
         New = Molecule()
         # Copy over variables that are not contained in self.Data
         New.positive_resid = self.positive_resid
-        New.built_bonds = self.built_bonds
         New.top_settings = copy.deepcopy(self.top_settings)
 
         for key in self.Data:
@@ -1371,7 +1369,7 @@ class Molecule(object):
             elif key in ['fnm', 'ftype', 'charge', 'mult', 'qcerr']:
                 # These are strings, ints, or floats.
                 New.Data[key] = self.Data[key]
-            elif key in ['bonds']:
+            elif key in ['bonds', 'conect']:
                 # List of lists of 2 integers.
                 New.Data[key] = []
                 for i in range(len(self.Data[key])):
@@ -1441,7 +1439,7 @@ class Molecule(object):
         for key in AtomVariableNames | MetaVariableNames:
             # Because a molecule object can only have one 'file name' or 'file type' attribute,
             # we only keep the original one.  This isn't perfect, but that's okay.
-            if key in ['fnm', 'ftype', 'bonds', 'molecules', 'topology'] and key in self.Data:
+            if key in ['fnm', 'ftype', 'bonds', 'conect', 'molecules', 'topology'] and key in self.Data:
                 Sum.Data[key] = self.Data[key]
             elif diff(self, other, key):
                 for i, j in zip(self.Data[key], other.Data[key]):
@@ -1484,7 +1482,7 @@ class Molecule(object):
             raise TypeError
         # Create the sum of the two classes by copying the first class.
         for key in AtomVariableNames | MetaVariableNames:
-            if key in ['fnm', 'ftype', 'bonds', 'molecules', 'topology']: pass
+            if key in ['fnm', 'ftype', 'bonds', 'conect', 'molecules', 'topology']: pass
             elif diff(self, other, key):
                 for i, j in zip(self.Data[key], other.Data[key]):
                     logger.info("%s %s %s" % (i, j, str(i==j)))
@@ -1902,12 +1900,14 @@ class Molecule(object):
                New.Data[key] = [self.Data[key][i][atomslice] for i in range(len(self))]
            elif key in ['qm_hessians', 'qm_bondorder']:
                New.Data[key] = [self.Data[key][i][atomslice,atomslice] for i in range(len(self))]
-        if 'bonds' in self.Data:
-            New.Data['bonds'] = [(list(atomslice).index(b[0]), list(atomslice).index(b[1])) for b in self.bonds if (b[0] in atomslice and b[1] in atomslice)]
+        for key in ['bonds', 'conect']:
+            if key in self.Data:
+                New.Data[key] = [(list(atomslice).index(b[0]), list(atomslice).index(b[1])) for b in self.Data[key] if (b[0] in atomslice and b[1] in atomslice)]
+
         New.top_settings = copy.deepcopy(self.top_settings)
         
         if New.na > 1 and build_topology:
-            New.build_topology(force_bonds=False)
+            New.build_topology()
         return New
 
     def atom_stack(self, other):
@@ -1961,8 +1961,9 @@ class Molecule(object):
                 else:
                     logger.error('Cannot stack %s because it is of type %s\n' % (key, str(type(New.Data[key]))))
                     raise RuntimeError
-        if 'bonds' in self.Data and 'bonds' in other.Data:
-            New.Data['bonds'] = self.bonds + [(b[0]+self.na, b[1]+self.na) for b in other.bonds]
+        for key in ['bonds', 'conect']:
+            if key in self.Data and key in other.Data:
+                New.Data[key] = self.Data[key] + [(b[0]+self.na, b[1]+self.na) for b in other.Data[key]]
         return New
 
     def delete_atoms(self, indices):
@@ -2017,13 +2018,14 @@ class Molecule(object):
                 else:
                     logger.error('Cannot stack %s because it is of type %s\n' % (key, str(type(New.Data[key]))))
                     raise RuntimeError
-        if 'bonds' in self.Data:
-            new_data = []
-            for b in self.bonds:
-                # Only keep bonds in non-deleted atoms
-                if mask[b[0]] and mask[b[1]]:
-                    new_data.append((old_to_new_idx[b[0]], old_to_new_idx[b[1]]))
-            New.Data['bonds'] = new_data
+        for key in ['bonds', 'conect']:
+            if key in self.Data:
+                new_data = []
+                for b in self.Data[key]:
+                    # Only keep bonds in non-deleted atoms
+                    if mask[b[0]] and mask[b[1]]:
+                        new_data.append((old_to_new_idx[b[0]], old_to_new_idx[b[1]]))
+                New.Data[key] = new_data
 
         return New
 
@@ -2094,7 +2096,7 @@ class Molecule(object):
                 self.xyzs[i] -= self.xyzs[i].mean(0)
 
     def build_bonds(self):
-        """ Build the bond connectivity graph. """
+        """ Return a list of bonds obtained using interatomic distances and thresholds derived from atomic radii. """
         sn = self.top_settings['topframe']
         toppbc = self.top_settings['toppbc']
         Fac = self.top_settings['Fac']
@@ -2244,10 +2246,19 @@ class Molecule(object):
                 else:
                     bondlist.append((j, i))
         bondlist = sorted(list(set(bondlist)))
-        self.Data['bonds'] = sorted(list(set(bondlist)))
-        self.built_bonds = True
+        return bondlist
 
-    def build_topology(self, force_bonds=True, bond_order=0.0, metal_bo_factor=0.5, **kwargs):
+    def set_bond_lock(self, lock):
+        self._bond_lock = lock
+
+    def get_bond_lock(self):
+        if hasattr(self, '_bond_lock'):
+            return self._bond_lock
+        else:
+            # Defaults to false if lock is not set.
+            return False
+
+    def build_topology(self, reset_bonds=False, bond_order=0.0, metal_bo_factor=0.5, **kwargs):
         """
 
         Create self.topology and self.molecules; these are graph
@@ -2256,16 +2267,13 @@ class Molecule(object):
 
         Parameters
         ----------
-        force_bonds : bool
-            Build the bonds from interatomic distances.  If the user
-            calls build_topology from outside, assume this is the
-            default behavior.  If creating a Molecule object using
-            __init__, do not force the building of bonds by default
-            (only build bonds if not read from file.)
+        reset_bonds : bool
+            Erase the pre-existing bond list. The default behavior is to
+            append any new bonds to the existing list.
         bond_order : float
-            If set to a nonzero number, do not use distance criteria and 
-            build the bonds from QM bond orders using the provided threshold, 
-            if the qm_bondorder data attribute exists.
+            If set to a nonzero number, do not build the bond list from
+            interatomic distances, instead use QM bond orders and the 
+            provided threshold (error if qm_bondorder does not exist).
         metal_bo_factor : float
             Transition metal complexes tend to have a lower bond order.
             This multiplicative factor adjusts the bond order for metals.
@@ -2280,22 +2288,34 @@ class Molecule(object):
         self.top_settings['topframe'] = sn
         if self.na > 100000:
             logger.warning("Warning: Large number of atoms (%i), topology building may take a long time" % self.na)
-        if bond_order > 0.0:
-            if not hasattr(self, 'qm_bondorder'):
-                raise RuntimeError('Molecule does not contain QM bond order info.')
-            print("Using QM bond order with a threshold of %.2f" % bond_order)
-            bondlist = []
-            for i in range(self.na):
-                for j in range(i+1, self.na):
-                    if self.qm_bondorder[sn][i, j] > bond_order:
-                        bondlist.append((i, j))
-                    elif ((self.elem[i] in TransitionMetals or self.elem[j] in TransitionMetals)
-                          and self.qm_bondorder[sn][i, j] > bond_order*metal_bo_factor):
-                        bondlist.append((i, j))
-            self.Data['bonds'] = sorted(list(set(bondlist)))
-        # Build bonds from connectivity graph.
-        elif (not self.top_settings['read_bonds']) or force_bonds:
-            self.build_bonds()
+        # If the bond list is locked, do not modify it
+        if not self.get_bond_lock():
+            if bond_order > 0.0:
+                if not hasattr(self, 'qm_bondorder'):
+                    raise RuntimeError('Molecule does not contain QM bond order info.')
+                print("Using QM bond order with a threshold of %.2f" % bond_order)
+                bondlist = []
+                for i in range(self.na):
+                    for j in range(i+1, self.na):
+                        if self.qm_bondorder[sn][i, j] > bond_order:
+                            bondlist.append((i, j))
+                        elif ((self.elem[i] in TransitionMetals or self.elem[j] in TransitionMetals)
+                              and self.qm_bondorder[sn][i, j] > bond_order*metal_bo_factor):
+                            bondlist.append((i, j))
+            else:
+                bondlist = self.build_bonds()
+
+            # If reset_bonds == False, add new bonds to existing list.
+            if not reset_bonds and hasattr(self, 'bonds'):
+                old_bondlist = []
+                for i, j in self.Data['bonds']:
+                    if i == j: continue
+                    elif i < j: old_bondlist.append((i, j))
+                    else: old_bondlist.append((j, i))
+                self.Data['bonds'] = sorted(list(set(old_bondlist).union(set(bondlist))))
+            else:
+                self.Data['bonds'] = bondlist
+
         # Create a NetworkX graph object to hold the bonds.
         G = MyG()
         for i, a in enumerate(self.elem):
@@ -2383,8 +2403,8 @@ class Molecule(object):
         if len(M.molecules) != 1:
             raise RuntimeError('Expected a single molecule')
         M.bonds.remove(delBonds[0])
-        M.top_settings['read_bonds']=True
-        M.build_topology(force_bonds=False)
+        M.set_bond_lock(True)
+        M.build_topology()
         if len(M.molecules) != 2:
             raise RuntimeError('Expected two molecules after removing a bond')
 
@@ -2405,7 +2425,9 @@ class Molecule(object):
         else:
             atom1 = aj
             atom2 = ak
+        M.set_bond_lock(False)
         M.bonds.append(delBonds[0])
+        M.build_topology()
         
         # Rotation axis
         axis = M.xyzs[0][atom2] - M.xyzs[0][atom1]
@@ -3268,7 +3290,8 @@ class Molecule(object):
             aL, aH = (a1, a2) if a1 < a2 else (a2, a1)
             bonds.append((aL,aH))
 
-        self.top_settings["read_bonds"] = True
+        M.set_bond_lock(True)
+
         Answer = {'xyzs' : [np.array(xyz)],
                   'partial_charge' : charge,
                   'atomname' : atomname,
@@ -3865,8 +3888,8 @@ class Molecule(object):
                 "elem":elem, "comms":['' for i in range(len(XYZList))], "terminal" : PDBTerms}
 
         if len(bonds) > 0:
-            self.top_settings["read_bonds"] = True
             Answer["bonds"] = bonds
+            Answer["conect"] = bonds
 
         if Box is not None:
             Answer["boxes"] = [Box for i in range(len(XYZList))]
@@ -4578,7 +4601,13 @@ class Molecule(object):
             self.require_resid()
         else:
             self.require('xyzs','resname','resid')
-        write_conect = kwargs.pop('write_conect', 1)
+        # If true, write all bonds in the Molecule object. 
+        # Otherwise write only the bonds that were read in as CONECT records. 
+        # 
+        # For example, if we created this object from reading a PDB file,
+        # we may or may not want to write all bonds (including those 
+        # created from build_bonds) as CONECT records. 
+        write_all_bonds = kwargs.pop('write_all_bonds', 0)
         # Create automatic atom names if not present
         # in data structure: these are just placeholders.
         if 'atomname' not in self.Data:
@@ -4675,8 +4704,10 @@ class Molecule(object):
             if len(self) > 1:
                 out.append("ENDMDL")
         conectBonds = []
-        if 'bonds' in self.Data:
-            for i, j in self.bonds:
+        if write_all_bonds: bondKey = 'bonds'
+        else: bondKey = 'conect'
+        if bondKey in self.Data:
+            for i, j in self.Data[bondKey]:
                 if i > j: continue
                 if self.resname[i] not in standardResidues or self.resname[j] not in standardResidues:
                     conectBonds.append((i, j))

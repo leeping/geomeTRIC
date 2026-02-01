@@ -1859,9 +1859,9 @@ class QCEngineAPI(Engine):
         # Use or build connectivity
         if schema["molecule"].get("connectivity", None) is not None:
             self.M.Data["bonds"] = sorted((x[0], x[1]) for x in schema["molecule"]["connectivity"])
-            self.M.built_bonds = True
-        else:
-            self.M.build_bonds()
+            # Prevent the list of bonds from being modified further.
+            self.M.set_bond_lock(True)
+        self.M.build_topology()
         # one additional attribute to store each schema on the opt trajectory
         self.schema_traj = []
 
