@@ -18,6 +18,8 @@ dependencies:
   # Psi test depends
   - psi4>=1.6.1
   - qcengine>=0.24
+  # 2026-03-19: Testing to see if this resolves Psi4 related test failures
+  - libint==2.7.3dev1
 
   # OpenMM test depends
   # LPW 2023-02-19: Using OpenMM 8 causes GLIBCXX_3.4.30 not found error to be thrown during CI tests
