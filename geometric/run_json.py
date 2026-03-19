@@ -246,7 +246,7 @@ def geometric_run_json(in_json_dict):
     params = geometric.optimize.OptParams(**input_opts)
     dirname = tempfile.mkdtemp()
 
-    if hess is not None:
+    if hess is not None and not isinstance(hess, str):
         n = len(coords)
         params.hess_data = np.array(hess).reshape(n, n)
 
