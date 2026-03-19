@@ -28,7 +28,8 @@ dependencies:
   - gcc>=12.1.0
 
   # geomeTRIC base depends
-  - numpy
+  # 2026-03-19: I think Psi4 1.9 and numpy v2 may be incompatible
+  - numpy<2
   - networkx
 
   # Testing
