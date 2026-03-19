@@ -331,7 +331,12 @@ def test_hcn_neb_service_arrange(localizer):
         for coord in coords
     ]
 
-    new_qcel_mols = geometric.qcf_neb.arrange(qcel_mols, True)
+    chain_list = [[[mol.molecular_charge, mol.molecular_multiplicity], mol.symbols.tolist(), mol.geometry] for mol in qcel_mols]
+
+    chain_respaced = geometric.qcf_neb.arrange(chain_list, True)
+
+    new_qcel_mols = [qcmol(molecular_charge=img[0][0], molecular_multiplicity=img[0][1], symbols=img[1], geometry=img[2]) for img in chain_respaced]
+
     count = sum(
         [
             1 if not np.allclose(i.geometry, j.geometry) else 0

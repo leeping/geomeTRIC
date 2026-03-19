@@ -69,31 +69,29 @@ def chaintocoords(chain, ang=False):
     return newcoords
 
 
-def arrange(qcel_mols, align):
+def arrange(chain_list, align):
     """
     This function will respace a chain if images are too close to each other.
     Parameters
     ----------
-    qcel_mols: [QCElemental Molecule object]
-        QCElemental Molecule objects in a list.
+    chain_list: [[[chg, mult],[sym],[xyz]],[...]...]
+        A nested list containing the molecular information of a chain (i.e., structures, elements, ...)
 
     align: bool
         "True" will align the images.
 
     Returns
     -------
-    respaced_chain: [QCElemental Molecule object]
-        list of molecule objects
+    chain_list: [[[chg, mult],[sym],[xyz]],[...]...]
+        A nested list containing the molecular information of the respaced/aligned chain
     """
-    from qcelemental.models import Molecule as qcmol
 
     # Getting molecular information
-    sym = qcel_mols[0].symbols.tolist()
-    chg = qcel_mols[0].molecular_charge
-    mult = qcel_mols[0].molecular_multiplicity
+    sym = chain_list[0][1]
+    xyzs = [np.array(image[2])*bohr2ang for image in chain_list]
     M = Molecule()
     M.elem = sym
-    M.xyzs = [mol.geometry*bohr2ang for mol in qcel_mols]
+    M.xyzs = xyzs
     M.build_topology()
 
     if align:
@@ -111,10 +109,10 @@ def arrange(qcel_mols, align):
     chain.delete_insert(1.0)
     newcoords = chaintocoords(chain)
 
-    respaced_chain = [qcmol(symbols=sym, geometry=coords, molecular_charge=chg, molecular_multiplicity=mult)
-                      for coords in newcoords]
+    for i, xyz in enumerate(newcoords):
+        chain_list[i][-1] = xyz
 
-    return respaced_chain
+    return chain_list
 
 
 def get_basic_info(info_dict, previous=False):
@@ -212,6 +210,10 @@ def nextchain(info_dict):
 
     # Extracting information from the given dictionary.
     params, M, engine, result, iteration = get_basic_info(info_dict)
+
+    if iteration == 0:
+        return prepare(info_dict)
+
     params_prev, M_prev, engine_prev, result_prev, _ = get_basic_info(
         info_dict, previous=True
     )
