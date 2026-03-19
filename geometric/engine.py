@@ -1527,6 +1527,7 @@ class QChem(Engine):
     def __init__(self, molecule, dirname=None, qcdir=None, threads=None):
         super(QChem, self).__init__(molecule)
         self.threads = threads
+        self.scf_guess_init = self.M.qcrems[0].get('scf_guess')
         self.prep_temp_folder(dirname, qcdir)
 
         self.method = self.M.qcrems[0].get('method')
@@ -1567,7 +1568,7 @@ class QChem(Engine):
         # This is a hack and at some point we may want some more flexibility in which qcdir we use.
         if self.qcdir and not os.path.exists(os.path.join(dirname, 'run.d')):
             self.qcdir = False
-            self.M.edit_qcrems({'scf_guess':None})
+            self.M.edit_qcrems({'scf_guess':self.scf_guess_init})
         # If symmetry is enabled by default in Q-Chem, it will mess up finite difference Hessian computations and possibly other things.
         self.M.edit_qcrems({'symmetry':'off', 'sym_ignore':'true'})
         self.M[0].write(os.path.join(dirname, 'run.in'))
