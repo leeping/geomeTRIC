@@ -455,7 +455,7 @@ class Optimizer(object):
 
         # Need to take a step towards the pivot point
         self.IC.clearCache()
-        MWGMat = self.IC.GMatrix(self.X, invMW=True)
+        MWGMat = self.IC.GMatrix(self.X, MW=True)
 
         # Save the initial Cartesian coordinate
         X0 = self.X.copy()
@@ -511,8 +511,8 @@ class Optimizer(object):
         # Move to the pivot point
         X_pivot = self.IC.newCartesian(X0, dy_to_pivot, self.params.verbose)
         dy_to_pivot = self.IC.calcDiff(X_pivot, X0)
-        # Calculating sqrt(mass) weighted Cartesian coordinate
-        MWGMat_sqrt_inv, MWGMat_sqrt = self.IC.GInverse_SVD(X_pivot, sqrt=True, invMW=True)
+        # Calculating G matrix and its inverse using mass-weighted B matrix.
+        MWGMat_sqrt_inv, MWGMat_sqrt = self.IC.MWGInverse_Sqrt_SVD(X_pivot)
         mwdx_1 = np.dot(MWGMat_sqrt_inv, dy_to_pivot)
 
         if self.params.verbose:
@@ -530,8 +530,9 @@ class Optimizer(object):
             X = self.IC.newCartesian(X_pivot, p_prime, self.params.verbose)
             # Now we are at the guessed point, define mass-weighted G matrix at the guessed point
             self.IC.clearCache()
-            MWGMat_sqrt_inv, MWGMat_sqrt = self.IC.GInverse_SVD(X, sqrt=True, invMW=True)
+            MWGMat_sqrt_inv, MWGMat_sqrt = self.IC.MWGInverse_Sqrt_SVD(X)
             # Mass weighted displacement, gradients, and Hessian
+            # Equations 19 - 21 from Gonzalez & Schlegel (1990)
             g_M = np.dot(MWGMat_sqrt, self.guess_g(self.G, self.H, dy_to_pivot + p_prime))
             H_M = np.dot(np.dot(MWGMat_sqrt, self.H), MWGMat_sqrt.T)
             p_M = np.dot(MWGMat_sqrt_inv, p_prime)
