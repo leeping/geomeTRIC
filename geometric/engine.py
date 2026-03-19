@@ -1754,7 +1754,7 @@ class Molpro(Engine): # pragma: no cover
                         found_molecule = False
             else:
                 molpro_temp.append(line)
-            if "force" in line:
+            if "force" in line.lower():
                 found_gradient = True
         if found_gradient == False:
             raise RuntimeError("Molpro inputfile %s should have force command." % molproin)
@@ -1789,11 +1789,61 @@ class Molpro(Engine): # pragma: no cover
         if not os.path.exists(os.path.join(dirname, 'run.out')):
             raise RuntimeError('run.out does not exist')
         shutil.copy2(os.path.join(dirname,'run.out'), os.path.join(dirname,'run_%03i.out' % calcNum))
+        # Also copy XML output if it exists
+        if os.path.exists(os.path.join(dirname, 'run.xml')):
+            shutil.copy2(os.path.join(dirname,'run.xml'), os.path.join(dirname,'run_%03i.xml' % calcNum))
 
     def read_result(self, dirname, check_coord=None):
-        """ read an output file from Molpro"""
+        """ read an output file from Molpro, preferring XML for higher precision """
         if check_coord is not None:
             raise CheckCoordError("Coordinate check not implemented")
+        # Try to read from XML file first (higher precision)
+        molpro_xml = os.path.join(dirname, 'run.xml')
+        if os.path.exists(molpro_xml):
+            try:
+                return self.read_result_xml(molpro_xml)
+            except Exception as e:
+                logger.warning("Failed to parse Molpro XML output (%s), falling back to text output" % str(e))
+        # Fall back to text output parsing
+        return self.read_result_text(dirname)
+
+    def read_result_xml(self, molpro_xml):
+        """ Read energy and gradient from Molpro XML output file (higher precision) """
+        # Define namespaces used in Molpro XML
+        namespaces = {
+            'molpro': 'http://www.molpro.net/schema/molpro-output',
+            'cml': 'http://www.xml-cml.org/schema',
+            'stm': 'http://www.xml-cml.org/schema',
+            'xhtml': 'http://www.w3.org/1999/xhtml'
+        }
+        tree = ET.parse(molpro_xml)
+        root = tree.getroot()
+        energy = None
+        gradient = None
+        # Find all jobstep elements
+        for jobstep in root.iter('{http://www.molpro.net/schema/molpro-output}jobstep'):
+            # Look for gradient in FORCE jobstep
+            if jobstep.get('command') == 'FORCE':
+                grad_elem = jobstep.find('molpro:gradient', namespaces)
+                if grad_elem is not None:
+                    grad_text = grad_elem.text.strip()
+                    gradient = []
+                    for line in grad_text.split('\n'):
+                        values = line.split()
+                        gradient.extend([float(v) for v in values])
+            # Look for energy with principal="true" attribute (the main result)
+            for prop in jobstep.findall('molpro:property', namespaces):
+                if prop.get('principal') == 'true' and prop.get('name') in ['Energy', 'total energy', 'energy']:
+                    energy = float(prop.get('value'))
+        if energy is None:
+            raise RuntimeError("Molpro energy is not found in %s, please check." % molpro_xml)
+        if gradient is None:
+            raise RuntimeError("Molpro gradient is not found in %s, please check." % molpro_xml)
+        gradient = np.array(gradient, dtype=np.float64).ravel()
+        return {'energy': energy, 'gradient': gradient}
+
+    def read_result_text(self, dirname):
+        """ Read energy and gradient from Molpro text output file """
         energy, gradient = None, None
         molpro_out = os.path.join(dirname, 'run.out')
         with open(molpro_out) as outfile:
