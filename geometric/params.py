@@ -132,6 +132,9 @@ class OptParams(object):
             self.hessian = self.hessian.lower()
         else:
             raise RuntimeError("Hessian command line argument can only be never, first, last, first+last, file+last, each, stop, or file:<path>")
+        # If the initial Hessian is provided in the hess_data list, store it in self.hess_data.
+        if kwargs.get('hess_data', None):
+            self.hess_data = np.array(kwargs.get('hess_data'))
         # Perform a frequency analysis whenever a cartesian Hessian is computed
         self.frequency = kwargs.get('frequency', None)
         if self.frequency is None: self.frequency = True
