@@ -114,7 +114,11 @@ def get_output_json_dict(in_json_dict, schema_traj):
     final_molecule = None
     if schema_traj:
         try:
-            final_molecule = schema_traj[-1]["molecule"]
+            if out_json_dict.get('keywords').get('irc'):
+                # If IRC is requested, two endpoints will be returned as a list with two schema.
+                final_molecule = [schema_traj[0]["molecule"], schema_traj[-1]["molecule"]]
+            else:
+                final_molecule = schema_traj[-1]["molecule"]
         except:
             final_molecule = None
 
@@ -198,7 +202,6 @@ def geometric_run_json(in_json_dict):
     logger.addHandler(log_stream)
 
     input_opts = parse_input_json_dict(in_json_dict)
-    hess = input_opts.pop('hessian', None)
     M, engine = geometric.optimize.get_molecule_engine(**input_opts)
 
     # Get initial coordinates in bohr
@@ -244,13 +247,9 @@ def geometric_run_json(in_json_dict):
     logger.info("\n")
 
     params = geometric.optimize.OptParams(**input_opts)
-    dirname = tempfile.mkdtemp()
-
-    if hess is not None:
-        n = len(coords)
-        params.hess_data = np.array(hess).reshape(n, n)
 
     try:
+        dirname = tempfile.mkdtemp()
         # Run the optimization
         if Cons is None:
             # Run a standard geometry optimization
@@ -270,11 +269,11 @@ def geometric_run_json(in_json_dict):
 
         if params.irc:
             old_traj = engine.schema_traj.copy()
-            if hess is None:
-                old_traj[1:M.na*6] = []
+            # Picking those on the IRC path among all the schemas.
             new_traj = []
             for point in progress:
                 for schema in old_traj:
+                    # Appending those with the same energy, gradients, and geometry as the 'progress.'
                     qcvars = schema['extras']['qcvars']
                     same_E = np.isclose(point.qm_energies, qcvars['SCF TOTAL ENERGY'])
                     same_g = np.allclose(point.qm_grads, qcvars['CURRENT GRADIENT'])

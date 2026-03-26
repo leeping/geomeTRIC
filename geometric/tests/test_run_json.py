@@ -280,7 +280,7 @@ def test_run_json_psi4_hcn_ts(localizer):
         "symbols": ["C","N","H"],
     } # yapf: disable
 
-    hessian = np.loadtxt(os.path.join(datad, "hcn_tsguess_hessian.txt"))
+    hess_data = np.loadtxt(os.path.join(datad, "hcn_tsguess_hessian.txt"))
 
     in_json_dict = _build_input(molecule, program="psi4", method="HF", basis="3-21g")
     kws = in_json_dict.pop('keywords')
@@ -308,7 +308,7 @@ def test_run_json_psi4_hcn_ts(localizer):
     # assert "Valid Hessian data not found" in out_json["stdout"]
 
     # Providing the Hessian
-    kws["hessian"] = hessian.tolist()
+    kws["hess_data"] = hess_data.tolist()
     in_json_dict["keywords"] = kws
     with open('in.json', 'w') as handle:
         json.dump(in_json_dict, handle, indent=2)
@@ -327,7 +327,66 @@ def test_run_json_psi4_hcn_ts(localizer):
     assert out_json["schema_name"] == "qc_schema_optimization_output"
     assert "Converged" in out_json["stdout"]
     assert "Using Hessian data provided" in out_json["stdout"]
-    print(out_json["stdout"])
+
+
+@addons.using_qcengine
+@addons.using_psi4
+def test_run_json_psi4_hcn_irc(localizer):
+    datad = addons.datad
+    molecule = {
+        "geometry": [-0.20585508, -1.20276994,  0.00806245,
+                     -1.20819493,  0.7948082,   0.00989347,
+                     1.4235032,   0.41071214, -0.01694577],
+        "symbols": ["C","N","H"],
+    } # yapf: disable
+
+    hess_data = np.loadtxt(os.path.join(datad, "hcn_irc_hessian.txt"))
+
+    in_json_dict = _build_input(molecule, program="psi4", method="HF", basis="3-21g")
+    kws = in_json_dict.pop('keywords')
+    kws["irc"] = True
+    kws["trust"] = 0.3
+    in_json_dict['keywords']=kws
+
+    with open('in.json', 'w') as handle:
+        json.dump(in_json_dict, handle, indent=2)
+
+    # Providing the Hessian
+    kws["hess_data"] = hess_data.tolist()
+    in_json_dict["keywords"] = kws
+    with open('in.json', 'w') as handle:
+        json.dump(in_json_dict, handle, indent=2)
+
+    out_json = geometric.run_json.geometric_run_json(in_json_dict)
+
+    with open('out.json', 'w') as handle:
+        json.dump(out_json, handle, indent=2)
+
+    energies=[]
+    for schema in out_json['trajectory']:
+        energies.append(float(schema['properties']['scf_total_energy']))
+
+    e_ref1 = -92.35408411
+    e_ref2 = -92.33971205
+    max_e = np.max(energies)
+    reac_e = energies[0] #float(out_json['final_molecule'][0]['properties']['scf_total_energy'])
+    prod_e = energies[-1] #float(out_json['final_molecule'][1]['properties']['scf_total_energy'])
+
+    # Check the max_e is not from the end-points
+    assert reac_e < max_e
+    assert prod_e < max_e
+
+    # Check the end-point energies
+    assert np.isclose(min(reac_e, prod_e), e_ref1)
+    assert np.isclose(max(reac_e, prod_e), e_ref2)
+
+    # Check that the IRC converged in less than 100 iterations
+    assert len(energies) < 100
+    assert out_json["success"], out_json["error"]
+
+    assert out_json["schema_name"] == "qc_schema_optimization_output"
+    assert "Converged" in out_json["stdout"]
+    assert "Using Hessian data provided" in out_json["stdout"]
 
 
 @addons.using_qcengine
