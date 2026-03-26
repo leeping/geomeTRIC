@@ -65,6 +65,7 @@ The "engine" is the software to be used for computing energies and gradients, wh
 - ``quick`` : Use QUICK. Provide a QUICK input file with Cartesian coordinates.
 - ``cfour`` : Use CFOUR. Provide a CFOUR input file with Cartesian coordinates. A Python script is provided to convert Z-matrix input prior to running the optimization.
 - ``gmx`` : Use Gromacs (experimental). Provide a Gromacs ``.gro`` file. A topology file ``topol.top`` and run parameters ``shot.mdp`` are required, with those exact names.
+- ``bagel`` : Use BAGEL. Provide a BAGEL input json file with Cartesian coordinates.
 
 ``--nt [1]``
 

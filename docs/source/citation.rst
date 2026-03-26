@@ -8,9 +8,14 @@ Citation
 
 If this code has benefited your research, please support us by citing our publication:
 
-Wang, L.-P.; Song, C.C. (2016) "Geometry optimization made simple
+Wang, L.-P.; Song, C. (2016) "Geometry optimization made simple
 with translation and rotation coordinates", J. Chem, Phys. 144, 214108.
-`(doi) <http://dx.doi.org/10.1063/1.4952956>`_.
+`(doi) <https://doi.org/10.1063/1.4952956>`_.
+
+Park, H.; Pritchard, B. P.; Wang, L.-P. (2025) "High-Throughput Approach for
+Minimum Energy Pathway Search Using the Nudged Elastic Band Method with Efficient
+Data Handling and Parallel Computing", J. Chem. Theory Comput. 21, 12048.
+`(doi) <https://doi.org/10.1021/acs.jctc.5c01540>`_.
 
 Credits
 -------
@@ -19,7 +24,7 @@ Authors: Lee-Ping Wang, Chenchen Song, Heejune Park
 
 Contributors: Yudong Qiu (Psi4 engine, error handling); Daniel G. A. Smith (Testing framework, QCEngine JSON API);
 Tamas K. Stenczel (GitHub Actions, ASE engine); Sebastian Lee (Molpro engine); Chaya Stern (Travis, Conda); Qiming Sun (Custom engine); 
-Alberto Gobbi (Batch energy/gradient, logging); Josh Horton (Convergence criteria, Gaussian engine); Akhil Shajan (QUICK engine)
+Alberto Gobbi (Batch energy/gradient, logging); Josh Horton (Convergence criteria, Gaussian engine); Akhil Shajan (QUICK engine); Xincheng Miao (BAGEL engine)
 
 Contact Email: leeping [at] ucdavis [dot] edu
 
@@ -43,7 +48,7 @@ License
     Authors: Lee-Ping Wang, Chenchen Song, Heejune Park
 
     Contributors: Yudong Qiu, Daniel G. A. Smith, Sebastian Lee, Chaya Stern, Qiming Sun,
-    Alberto Gobbi, Josh Horton, Tamas K. Stenczel, Akhil Shajan
+    Alberto Gobbi, Josh Horton, Tamas K. Stenczel, Akhil Shajan, Xincheng Miao
 
     Redistribution and use in source and binary forms, with or without modification,
     are permitted provided that the following conditions are met:

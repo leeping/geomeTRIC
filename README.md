@@ -8,7 +8,7 @@
 This is a geometry optimization code for molecular structures.
 The code works by calling external software for the energy and 
 gradient through wrapper functions. Q-Chem, TeraChem, Psi4, 
-Molpro, Gaussian 09/16, CFOUR, and QUICK are supported quantum chemistry
+Molpro, Gaussian 09/16, CFOUR, QUICK, BAGEL are supported quantum chemistry
 codes through the command line interface. The PySCF and
 QCArchive packages also provide interfaces to geomeTRIC for
 optimization. MM optimizations using OpenMM and Gromacs are
@@ -20,19 +20,24 @@ Authors: Lee-Ping Wang, Chenchen Song, Heejune Park
 
 Contributors: Yudong Qiu (Psi4 engine, error handling); Daniel G. A. Smith (Testing framework, QCEngine JSON API);
 Tamas K. Stenczel (GitHub Actions, ASE engine); Sebastian Lee (Molpro engine); Chaya Stern (Travis, Conda); Qiming Sun (Custom engine); 
-Alberto Gobbi (Batch energy/gradient, logging); Josh Horton (Convergence criteria, Gaussian engine); Akhil Shajan (QUICK engine)
+Alberto Gobbi (Batch energy/gradient, logging); Josh Horton (Convergence criteria, Gaussian engine); Akhil Shajan (QUICK engine); Xincheng Miao (BAGEL engine)
 
 Contact Email: leeping@ucdavis.edu
 
 If this code has benefited your research, please support us by citing:
 
-Wang, L.-P.; Song, C.C. (2016) "Geometry optimization made simple with translation and rotation coordinates", J. Chem, Phys. 144, 214108.
-http://dx.doi.org/10.1063/1.4952956
+Wang, L.-P.; Song, C. (2016) "Geometry optimization made simple with translation and rotation coordinates", J. Chem, Phys. 144, 214108.
+https://doi.org/10.1063/1.4952956
+
+Park, H.; Pritchard, B. P.; Wang, L.-P. (2025) "High-Throughput Approach for 
+Minimum Energy Pathway Search Using the Nudged Elastic Band Method with Efficient 
+Data Handling and Parallel Computing", J. Chem. Theory Comput. 21, 12048.
+https://doi.org/10.1021/acs.jctc.5c01540
 
 ## Quick Help
 
 Package dependencies are:
-Python 2.7, 3.5+
+Python 2.7, 3.8+
 NumPy, Scipy, NetworkX
 
 To install the code from source, run "python setup.py install".
@@ -46,7 +51,7 @@ Generally, you will need a .xyz file for the coordinates and
 one of the supported quantum chemistry software packages installed
 on your system.
 
-Supported QM packages are: TeraChem, Q-Chem, Molpro, Psi4, and Gaussian 09/16.
+Supported QM packages are: TeraChem, Q-Chem, Molpro, Psi4, Gaussian 09/16, CFOUR, QUICK, BAGEL.
 Supported MM packages are: OpenMM, Gromacs.
 
 Please refer to the example calculations for how to run the code.  
@@ -58,8 +63,17 @@ We are grateful for funding support from NIH/NIAID Award R01 AI130684 and NSF Aw
 
 ## Citation
 
-If this code has benefited your research, please support us by citing our publication:
+If this code has benefited your research, please support us by citing our publications:
 
-Wang, L.-P.; Song, C.C. (2016) "Geometry optimization made simple
+
+Wang, L.-P.; Song, C. (2016) "Geometry optimization made simple
 with translation and rotation coordinates", J. Chem, Phys. 144, 214108.
-DOI: 10.1063/1.4952956
+DOI: 10.1063/1.4952956\
+*(Cite this when the software is used.)*
+
+Park, H.; Pritchard, B. P.; Wang, L.-P. (2025) "High-Throughput Approach for 
+Minimum Energy Pathway Search Using the Nudged Elastic Band Method with Efficient 
+Data Handling and Parallel Computing", J. Chem. Theory Comput. 21, 12048.
+DOI: 10.1021/acs.jctc.5c01540\
+*(Cite this when the NEB method is used.)*
+

@@ -39,6 +39,8 @@ Different engines have different features available.  Here is a simple summary:
 +-------------+--------------+-----------------+---------+---------------+------------+
 | CFOUR       | No           | Yes             | No      | Untested      | No         |
 +-------------+--------------+-----------------+---------+---------------+------------+
+| BAGEL       | No           | No              | CPU     | Yes           | No         |
++-------------+--------------+-----------------+---------+---------------+------------+
 
 In what follows, all examples can be found in the ``[root]/examples/`` folder of the source distribution.
 
@@ -255,4 +257,14 @@ does not contain any options that conflict with these, and also do not include a
 else in the input file that modifies the program behavior such as ``%grid``.
 
 An example is provided in the ``[root]/examples/1-simple-examples/water1_cfour`` folder.
+
+BAGEL
+-----
+
+This is an interface to the BAGEL electronic structure software.  Selected using ``--engine bagel``.
+
+Make sure `BAGEL <https://nubakery.org/>`_ is installed and
+environment variables are properly set.
+
+An example is provided in the ``[root]/examples/1-simple-examples/benzene_bagel_casscf`` or ``../ethene_bagel_caspt2`` folder.
 
