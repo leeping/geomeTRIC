@@ -1,5 +1,5 @@
 %NProcShared=6
-#p force=nostep hf/6-31g*
+#p hf/6-31g* force=nostep 
 
 Downloaded from PubChem
 
