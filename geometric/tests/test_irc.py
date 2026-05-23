@@ -20,6 +20,7 @@ def test_psi4_hcn_irc(localizer, molecule_engine):
     M, IC, engine, params = molecule_engine('hcn', 'psi4')
     coords = M.xyzs[0].flatten() * geometric.nifty.ang2bohr
     dirname = tempfile.mkdtemp()
+    dirname = os.path.join(dirname, "irc_forward.tmp")
 
     progress = geometric.optimize.Optimize(coords, M, IC, engine, dirname, params)
     e_ref1 = -92.35408411
@@ -47,6 +48,7 @@ def test_qchem_hcn_irc(localizer, molecule_engine):
     M, IC, engine, params = molecule_engine('hcn', 'qchem')
     coords = M.xyzs[0].flatten() * geometric.nifty.ang2bohr
     dirname = tempfile.mkdtemp()
+    dirname = os.path.join(dirname, "irc_forward.tmp")
 
     progress = geometric.optimize.Optimize(coords, M, IC, engine, dirname, params)
     e_ref1 = -92.35408411
@@ -74,6 +76,7 @@ def test_qchem_h2o_irc(localizer, molecule_engine):
     M, IC, engine, params = molecule_engine('h2o','qchem')
     coords = M.xyzs[0].flatten() * geometric.nifty.ang2bohr
     dirname = tempfile.mkdtemp()
+    dirname = os.path.join(dirname, "irc_forward.tmp")
 
     progress = geometric.optimize.Optimize(coords, M, IC, engine, dirname, params)
     e_ref = -75.5859593584
@@ -104,6 +107,7 @@ def test_gaussian_hcn_irc(localizer, molecule_engine):
     M, IC, engine, params = molecule_engine('hcn', 'gaussian')
     coords = M.xyzs[0].flatten() * geometric.nifty.ang2bohr
     dirname = tempfile.mkdtemp()
+    dirname = os.path.join(dirname, "irc_forward.tmp")
 
     progress = geometric.optimize.Optimize(coords, M, IC, engine, dirname, params)
     e_ref1 = -92.35408411
@@ -133,6 +137,7 @@ def test_tera_hcn_irc(localizer, molecule_engine):
     M, IC, engine, params = molecule_engine('hcn', 'tera')
     coords = M.xyzs[0].flatten() * geometric.nifty.ang2bohr
     dirname = tempfile.mkdtemp()
+    dirname = os.path.join(dirname, "irc_forward.tmp")
 
     progress = geometric.optimize.Optimize(coords, M, IC, engine, dirname, params)
     e_ref1 = -92.35408411
