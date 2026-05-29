@@ -459,7 +459,7 @@ def frequency_analysis(coords, Hessian, elem=None, mass=None, energy=0.0, temper
     # Convert IC Hessian eigenvalues to wavenumbers
     freqs_wavenumber = mwHess_wavenumber * np.sqrt(np.abs(ichess_vals)) * np.sign(ichess_vals)
 
-    if verbose:
+    if verbose > 0:
         logger.info("\n-=# Vibrational Frequencies (wavenumber) and Cartesian displacements #=-\n\n")
         i = 0
         while True:

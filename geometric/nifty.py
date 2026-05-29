@@ -465,7 +465,7 @@ def est124(val):
         fac = 10.0
     return fac*10**logint
 
-def monotonic_decreasing(arr, start=None, end=None, verbose=False):
+def monotonic_decreasing(arr, start=None, end=None, verbose=0):
     """
     Return the indices of an array corresponding to strictly monotonic
     decreasing behavior.
@@ -490,16 +490,16 @@ def monotonic_decreasing(arr, start=None, end=None, verbose=False):
         end = len(arr) - 1
     a0 = arr[start]
     idx = [start]
-    if verbose: logger.info("Starting @ %i : %.6f\n" % (start, arr[start]))
+    if verbose > 0: logger.info("Starting @ %i : %.6f\n" % (start, arr[start]))
     if end > start:
         i = start+1
         while i <= end:
             if arr[i] < a0:
                 a0 = arr[i]
                 idx.append(i)
-                if verbose: logger.info("Including  %i : %.6f\n" % (i, arr[i]))
+                if verbose > 0: logger.info("Including  %i : %.6f\n" % (i, arr[i]))
             else:
-                if verbose: logger.info("Excluding  %i : %.6f\n" % (i, arr[i]))
+                if verbose > 0: logger.info("Excluding  %i : %.6f\n" % (i, arr[i]))
             i += 1
     if end < start:
         i = start-1
@@ -507,9 +507,9 @@ def monotonic_decreasing(arr, start=None, end=None, verbose=False):
             if arr[i] < a0:
                 a0 = arr[i]
                 idx.append(i)
-                if verbose: logger.info("Including  %i : %.6f\n" % (i, arr[i]))
+                if verbose > 0: logger.info("Including  %i : %.6f\n" % (i, arr[i]))
             else:
-                if verbose: logger.info("Excluding  %i : %.6f\n" % (i, arr[i]))
+                if verbose > 0: logger.info("Excluding  %i : %.6f\n" % (i, arr[i]))
             i -= 1
     return np.array(idx)
 
@@ -850,7 +850,7 @@ def destroyWorkQueue():
     WORK_QUEUE = None
     WQIDS = defaultdict(list)
 
-def queue_up(wq, command, input_files, output_files, tag=None, tgt=None, verbose=True, print_time=60):
+def queue_up(wq, command, input_files, output_files, tag=None, tgt=None, verbose=1, print_time=60):
     """
     Submit a job to the Work Queue.
 
@@ -872,14 +872,14 @@ def queue_up(wq, command, input_files, output_files, tag=None, tgt=None, verbose
     task.specify_tag(tag)
     task.print_time = print_time
     taskid = wq.submit(task)
-    if verbose:
+    if verbose > 0:
         logger.info("Submitting command '%s' to the Work Queue, %staskid %i\n" % (command, "tag %s, " % tag if tag != command else "", taskid))
     if tgt is not None:
         WQIDS[tgt.name].append(taskid)
     else:
         WQIDS["None"].append(taskid)
 
-def queue_up_src_dest(wq, command, input_files, output_files, tag=None, tgt=None, verbose=True, print_time=60):
+def queue_up_src_dest(wq, command, input_files, output_files, tag=None, tgt=None, verbose=1, print_time=60):
     """
     Submit a job to the Work Queue.  This function is a bit fancier in that we can explicitly
     specify where the input files come from, and where the output files go to.
@@ -903,17 +903,17 @@ def queue_up_src_dest(wq, command, input_files, output_files, tag=None, tgt=None
     task.specify_tag(tag)
     task.print_time = print_time
     taskid = wq.submit(task)
-    if verbose:
+    if verbose > 0:
         logger.info("Submitting command '%s' to the Work Queue, taskid %i\n" % (command, taskid))
     if tgt is not None:
         WQIDS[tgt.name].append(taskid)
     else:
         WQIDS["None"].append(taskid)
 
-def wq_wait1(wq, wait_time=10, wait_intvl=1, print_time=60, verbose=False):
+def wq_wait1(wq, wait_time=10, wait_intvl=1, print_time=60, verbose=0):
     """ This function waits ten seconds to see if a task in the Work Queue has finished. """
     global WQIDS
-    if verbose: logger.info('---\n')
+    if verbose > 0: logger.info('---\n')
     if wait_intvl >= wait_time:
         wait_time = wait_intvl
         numwaits = 1
@@ -923,7 +923,7 @@ def wq_wait1(wq, wait_time=10, wait_intvl=1, print_time=60, verbose=False):
         task = wq.wait(wait_intvl)
         if task:
             exectime = task.cmd_execution_time/1000000
-            if verbose:
+            if verbose > 0:
                 logger.info('A job has finished!\n')
                 logger.info('Job name = ' + task.tag + '\n')
                 logger.info('command = ' + task.command + '\n')
@@ -955,7 +955,7 @@ def wq_wait1(wq, wait_time=10, wait_intvl=1, print_time=60, verbose=False):
 
         # LPW 2018-09-10 Updated to use stats fields from CCTools 6.2.10
         # Please upgrade CCTools version if errors are encountered during runtime.
-        if verbose:
+        if verbose > 0:
             logger.info("Workers: %i init, %i idle, %i busy, %i total joined, %i total removed\n" \
                 % (wq.stats.workers_init, wq.stats.workers_idle, wq.stats.workers_busy, wq.stats.workers_joined, wq.stats.workers_removed))
             logger.info("Tasks: %i running, %i waiting, %i dispatched, %i submitted, %i total complete\n" \
@@ -969,7 +969,7 @@ def wq_wait1(wq, wait_time=10, wait_intvl=1, print_time=60, verbose=False):
                 logger.info('\n')
 wq_wait1.t0 = time.time()
 
-def wq_wait(wq, wait_time=10, wait_intvl=10, print_time=60, verbose=False):
+def wq_wait(wq, wait_time=10, wait_intvl=10, print_time=60, verbose=0):
     """ This function waits until the work queue is completely empty. """
     while not wq.empty():
         wq_wait1(wq, wait_time=wait_time, wait_intvl=wait_intvl, print_time=print_time, verbose=verbose)

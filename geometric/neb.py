@@ -386,7 +386,7 @@ class Chain(object):
         """Return the internal coordinates of images 1 .. N-2."""
         return self.GlobalIC.calculate(np.hstack([self.Structures[i].cartesians for i in range(len(self))]).flatten())
 
-    def getCartesianNorm(self, dy, verbose=False):
+    def getCartesianNorm(self, dy, verbose=0):
         """
         Get the norm of the optimization step in Cartesian coordinates.
 
@@ -394,7 +394,7 @@ class Chain(object):
         ----------
         dy : np.ndarray
             Array of internal coordinate displacements for each image in the chain
-        verbose : bool
+        verbose : int
             Print diagnostic messages
 
         Returns
@@ -402,7 +402,7 @@ class Chain(object):
         float
             The RMSD between the updated and original Cartesian coordinates
         """
-        cplus = self.TakeStep(dy, verbose=False)
+        cplus = self.TakeStep(dy, verbose)
         return ChainRMSD(self, cplus)
 
     def clearCalcs(self, clearEngine=True):
@@ -472,7 +472,7 @@ class Chain(object):
         # params.verbose = True
         cnorm = self.getCartesianNorm(dy, self.params.verbose)
         # Flag that determines whether internal coordinates need to be rebuilt
-        if self.params.verbose:
+        if self.params.verbose > 0:
             logger.info("dy(i): %.4f dy(c) -> target: %.4f -> %.4f \n" % (inorm, cnorm, trust))
         if cnorm > 1.1 * trust:
             # This is the function f(inorm) = cnorm-target that we find a root
@@ -487,7 +487,7 @@ class Chain(object):
             if froot.brentFailed and froot.stored_arg is not None:
                 # 1) Brent optimization failed to converge,
                 # but we stored a solution below the trust radius
-                if self.params.verbose:
+                if self.params.verbose > 0:
                     logger.info("\x1b[93mUsing stored solution at %.3e\x1b[0m \n" % froot.stored_val)
                 iopt = froot.stored_arg
             elif self.anybork():
@@ -496,7 +496,7 @@ class Chain(object):
                 # (up to three times)
                 for i in range(3):
                     froot.target /= 2
-                    if self.params.verbose:
+                    if self.params.verbose > 0:
                         logger.info("\x1b[93mReducing target to %.3e\x1b[0m \n" % froot.target)
                     froot.above_flag = True
                     iopt = brent_wiki(froot.evaluate, 0.0, iopt, froot.target, cvg=0.1, verbose=self.params.verbose)
@@ -507,7 +507,7 @@ class Chain(object):
                 # This variable is added because IC.bork is unset later.
                 ForceRebuild = True
             else:
-                if self.params.verbose:
+                if self.params.verbose > 0:
                     logger.info(
                         "\x1b[93mBrent algorithm requires %i evaluations\x1b[0m \n"
                         % froot.counter
@@ -521,7 +521,7 @@ class Chain(object):
         expectG = flat(np.dot(np.array(H), col(dy))) + G
         return dy, expect, expectG, ForceRebuild
 
-    def TakeStep(self, dy, verbose=False):
+    def TakeStep(self, dy, verbose=0):
         """
         Return a new Chain object that contains the internal coordinate step.
 
@@ -529,7 +529,7 @@ class Chain(object):
         ----------
         dy : np.ndarray
             Array of internal coordinate displacements for each image in the chain
-        verbose : bool
+        verbose : int
             Print diagnostic messages
 
         Returns
@@ -1313,7 +1313,7 @@ class Froot(object):
                 if self.stored_val is None or cnorm > self.stored_val:
                     self.stored_arg = trial
                     self.stored_val = cnorm
-            if self.params.verbose:
+            if self.params.verbose > 0:
                 logger.info(
                     "dy(i): %.4f dy(c) -> target: %.4f -> %.4f%s \n"
                     % (trial, cnorm, self.target, " (done)" if self.from_above else "")
@@ -1368,19 +1368,19 @@ def BFGSUpdate(Y, old_Y, G, old_G, H, params):
         return False
     Mat1 = np.dot(Dg, Dg.T) / np.dot(Dg.T, Dy)[0, 0]
     Mat2 = np.dot(np.dot(H, Dy), np.dot(H, Dy).T) / np.dot(np.dot(Dy.T, H), Dy)[0, 0]
-    if verbose:
+    if verbose > 0:
         Eig = np.linalg.eigh(H)[0]
         Eig.sort()
     ndy = np.array(Dy).flatten() / np.linalg.norm(np.array(Dy))
     ndg = np.array(Dg).flatten() / np.linalg.norm(np.array(Dg))
     nhdy = np.dot(H, Dy).flatten() / np.linalg.norm(np.dot(H, Dy))
-    if verbose:
+    if verbose > 0:
         logger.info("Denoms: %.3e %.3e \n" % ((Dg.T * Dy)[0, 0], (Dy.T * H * Dy)[0, 0]))
         logger.info("Dots: %.3e %.3e \n" % (np.dot(ndg, ndy), np.dot(ndy, nhdy)))
     H += Mat1 - Mat2
     Eig1 = np.linalg.eigh(H)[0]
     Eig1.sort()
-    if verbose:
+    if verbose > 0:
         logger.info(
             "Eig-ratios: %.5e ... %.5e \n"
             % (np.min(Eig1) / np.min(Eig), np.max(Eig1) / np.max(Eig))
@@ -1731,7 +1731,7 @@ def main():
         logIni = args.get('logIni')
 
     inputf = args.get('input')
-    verbose = args.get('verbose', False)
+    verbose = args.get('verbose', 0)
     # Get calculation prefix and temporary directory name
     arg_prefix = args.get('prefix', None) #prefix for output file and temporary directory
     prefix = arg_prefix if arg_prefix is not None else os.path.splitext(inputf)[0]
@@ -1742,7 +1742,8 @@ def main():
     logging.config.fileConfig(logIni,defaults={'logfilename': logfilename},disable_existing_loggers=False)
     logger.info('geometric-neb called with the following command line:\n')
     logger.info(' '.join(sys.argv) + '\n')
-    print_logo(logger)
+    if verbose > -1:
+        print_logo(logger)
     now = datetime.now()
     logger.info('-=# \x1b[1;94m geomeTRIC started. Version: %s \x1b[0m #=-\n' % (geometric.__version__))
     logger.info('Current date and time: %s\n' % now.strftime("%Y-%m-%d %H:%M:%S"))

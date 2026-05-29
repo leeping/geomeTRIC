@@ -132,7 +132,7 @@ class EngineASE(Engine):
         out_files = [('%s/ase_energy.txt' % dirname, 'ase_energy.txt'),
                      ('%s/ase_gradient.txt' % dirname, 'ase_gradient.txt')]
         cmd="run-ase --nt 1 --ase-class=%s --ase-kwargs='%s' start.xyz" % (self.calculator_import_path, json.dumps(self.calculator_kwargs))
-        queue_up_src_dest(wq, cmd, in_files, out_files, verbose=False, print_time=600)
+        queue_up_src_dest(wq, cmd, in_files, out_files, verbose=0, print_time=600)
 
     def read_result(self, dirname, check_coord=None):
         """ Read ASE calculation output. """
