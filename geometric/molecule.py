@@ -2307,6 +2307,9 @@ class Molecule(object):
         for (i, j) in self.bonds:
             G.add_edge(i, j)
         # The Topology is simply the NetworkX graph object.
+        # Normalize node labels to Python int to avoid numpy.int32 type
+        # inconsistencies when bond arrays originate from numpy (issue #221).
+        G = nx.relabel_nodes(G, {n: int(n) for n in G.nodes()})
         self.topology = G
         # LPW: Molecule.molecules is a funny misnomer... it should be fragments or substructures or something
         self.molecules = [G.subgraph(c).copy() for c in nx.connected_components(G)]
