@@ -552,3 +552,75 @@ def test_hcn_neb_service_special(localizer):
     assert 1 == len(out_dict["Ys"])
     assert 1 == len(out_dict["GWs"])
     assert 1 == len(out_dict["GPs"])
+
+
+
+# ---------------------------------------------------------------------------
+# NEB with MACE via ASE engine
+# ---------------------------------------------------------------------------
+
+def _mace_mp_small_path_neb():
+    cached = os.path.expanduser(
+        "~/.cache/mace/20231210mace128L0_energy_epoch249model"
+    )
+    if os.path.isfile(cached):
+        return cached
+    from mace.calculators import mace_mp
+
+    mace_mp(model="small", device="cpu", default_dtype="float64")
+    if os.path.isfile(cached):
+        return cached
+    raise RuntimeError("Could not locate a MACE model checkpoint for tests")
+
+
+@addons.using_mace
+@addons.using_ase
+def test_ase_mace_hcn_neb_few_cycles(localizer):
+    """
+    Run a few NEB cycles on HCN with MACE through the ASE engine.
+
+    Full convergence on MACE-MP is not required (materials model on a molecular
+    isomerization); this checks that energies/gradients flow into the band and
+    the chain updates without error.
+    """
+    shutil.copy2(os.path.join(datad, "hcn_neb_input.xyz"), "hcn_neb_input.xyz")
+    model = _mace_mp_small_path_neb()
+    ase_kwargs = json.dumps({
+        "model_paths": model,
+        "mace_device": "cpu",
+        "default_dtype": "float64",
+    })
+
+    M, engine = geometric.prepare.get_molecule_engine(
+        engine="ase",
+        ase_class="mace.calculators.mace.MACECalculator",
+        ase_kwargs=ase_kwargs,
+        input="hcn_neb_input.xyz",
+        chain_coords="hcn_neb_input.xyz",
+        images=5,
+        neb=True,
+    )
+
+    params = geometric.params.NEBParams(
+        verbose=0,
+        maxg=1e-6,   # effectively do not require full convergence
+        avgg=1e-6,
+        neb_maxcyc=3,
+        align=False,
+        optep=False,
+    )
+    tmpdir = "hcn_mace_neb.tmp"
+    os.makedirs(tmpdir, exist_ok=True)
+    chain = geometric.neb.ElasticBand(M, engine=engine, tmpdir=tmpdir, params=params, plain=0)
+    final_chain, ncycles = geometric.neb.OptimizeChain(chain, engine, params)
+
+    assert ncycles <= 3
+    assert len(final_chain) == 5
+
+    energies = [s.energy for s in final_chain.Structures]
+    assert all(np.isfinite(e) for e in energies)
+    assert max(energies) > min(energies)
+
+    assert np.isfinite(final_chain.maxg)
+    assert np.isfinite(final_chain.avgg)
+    assert final_chain.maxg > 0.0

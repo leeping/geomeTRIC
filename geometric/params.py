@@ -510,6 +510,17 @@ def parse_neb_args(*args):
     grp_nebparam.add_argument('--wqport', type=int, help='Work Queue port used to distribute singlepoint calculations. Workers must be started separately.\n ')
     grp_nebparam.add_argument('--bigchem', type=str2bool, help='Provide "Yes" to use BigChem for performing the NEB calculation in parallel. \n'
                                                                'Please ensure that BigChem is running with workers properly. \n')
+
+    grp_software = parser.add_argument_group('software', 'Options specific for certain software packages')
+    grp_software.add_argument(
+        '--ase-class',
+        type=str,
+        help='ASE calculator import path for --engine ase, e.g. "mace.calculators.mace.MACECalculator"')
+    grp_software.add_argument(
+        '--ase-kwargs',
+        type=str,
+        help='ASE calculator keyword args as JSON dictionary (for --engine ase)')
+
     grp_output = parser.add_argument_group('output', 'Control the format and amount of the output')
     grp_output.add_argument('--prefix', type=str, help='Specify a prefix for log file and temporary directory.\n'
                             'Defaults to the input file path (incl. file name with extension removed).\n ')

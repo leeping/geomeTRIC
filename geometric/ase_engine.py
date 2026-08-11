@@ -29,6 +29,7 @@ from .errors import CheckCoordError
 from .molecule import Molecule
 from .nifty import ang2bohr, bohr2ang, getWorkQueue, queue_up_src_dest
 
+
 class EngineASE(Engine):
     def __init__(self, molecule: Molecule, calculator: Calculator):
         super().__init__(molecule)
@@ -39,19 +40,45 @@ class EngineASE(Engine):
 
     @classmethod
     def from_calculator_constructor(cls, molecule: Molecule, calculator, *args, **kwargs):
-        obj = cls(molecule, calculator(*args, **kwargs))
-        # A workaround to set the charge and spin multiplicity.
-        charge = kwargs.get("charge", 0)
+        # charge/mult are geomeTRIC electronic-state options, not ASE calculator constructor args.
+        # mace_device/mace_head are geomeTRIC aliases mapped onto MACECalculator's device/head.
+        calc_kwargs = dict(kwargs)
+        charge = calc_kwargs.pop("charge", getattr(molecule, "charge", 0) or 0)
+        mult = calc_kwargs.pop("mult", getattr(molecule, "mult", 1) or 1)
+        mace_device = calc_kwargs.pop("mace_device", None)
+        mace_head = calc_kwargs.pop("mace_head", None)
+        if mace_device is not None:
+            calc_kwargs["device"] = mace_device
+        if mace_head is not None:
+            calc_kwargs["head"] = mace_head
+
+        obj = cls(molecule, calculator(*args, **calc_kwargs))
+
+        # Older ASE calculators sometimes read total charge/spin from atom-0 initial values.
         initial_charges = np.zeros(len(obj.ase_atoms))
         initial_charges[0] = charge
         obj.ase_atoms.set_initial_charges(initial_charges)
-        mult = kwargs.get("mult", 1)
         initial_spins = np.zeros(len(obj.ase_atoms))
-        initial_spins[0] = mult-1
+        initial_spins[0] = mult - 1
         obj.ase_atoms.set_initial_magnetic_moments(initial_spins)
+
+        # MACE-OMOL (and similar) read total charge and spin multiplicity from atoms.info.
+        # Without this, --ase-kwargs charge/mult have no effect on those models.
+        obj.ase_atoms.info["charge"] = int(charge)
+        obj.ase_atoms.info["spin"] = int(mult)
+
         # This stores the needed information to re-create the Engine from strings (for example when using Work Queue)
         obj.calculator_import_path = calculator.__module__+'.'+calculator.__name__
-        obj.calculator_kwargs = kwargs
+        # Store user-facing kwargs so Work Queue workers re-apply the same remapping.
+        obj.calculator_kwargs = dict(calc_kwargs)
+        if mace_device is not None:
+            obj.calculator_kwargs.pop("device", None)
+            obj.calculator_kwargs["mace_device"] = mace_device
+        if mace_head is not None:
+            obj.calculator_kwargs.pop("head", None)
+            obj.calculator_kwargs["mace_head"] = mace_head
+        obj.calculator_kwargs["charge"] = charge
+        obj.calculator_kwargs["mult"] = mult
         return obj
 
     @classmethod

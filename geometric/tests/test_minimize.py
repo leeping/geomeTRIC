@@ -55,3 +55,4 @@ def test_water2_minimize_quick_converge_maxiter(localizer):
     # assert progress.qm_energies[-1] < (e_ref + 1e-5)
     # # Check that the optimization converged in less than 25 steps (took 20 steps in LPW's local test.)
     # assert len(progress) < 25
+
