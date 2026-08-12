@@ -1,7 +1,5 @@
 from setuptools import find_packages, setup
 
-import versioneer
-
 with open("README.md", "r") as fh:
     long_description = fh.read()
 
@@ -34,8 +32,6 @@ setup(
     extra_require={
         'bigchem': ['bigchem']        
     },
-    version=versioneer.get_version(),
-    cmdclass=versioneer.get_cmdclass(),
     classifiers=[
         'Development Status :: 5 - Production/Stable',
         'Intended Audience :: Science/Research',
