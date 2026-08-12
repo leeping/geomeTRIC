@@ -1,0 +1,7 @@
+[build-system]
+requires = ["setuptools>=64", "setuptools_scm>=8"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools_scm]
+# Version is determined from git tags (e.g. "1.1.1"); building from a
+# tarball without git metadata requires SETUPTOOLS_SCM_PRETEND_VERSION.
