@@ -9,6 +9,7 @@ import geometric
 import tempfile
 import numpy as np
 import subprocess
+from geometric.step import calc_drms_dmax
 
 localizer = addons.in_folder
 datad = addons.datad
@@ -77,7 +78,7 @@ def test_psi4_hcn_neb_optimize_2(localizer, molecule_engine):
     M, engine = molecule_engine('hcn', 'psi4', 11)
 
     # maxg and avgg are increased here to make them converge faster after the alignment
-    params = geometric.params.NEBParams(**{"verbose": 1, "maxg": 3.0, "avgg": 2.0})
+    params = geometric.params.NEBParams(**{"verbose": 1, "maxg": 1.0, "avgg": 0.5, "nebk": 10})
     chain = geometric.neb.ElasticBand(
         M, engine=engine, tmpdir=tempfile.mkdtemp(), params=params, plain=0
     )
@@ -86,6 +87,49 @@ def test_psi4_hcn_neb_optimize_2(localizer, molecule_engine):
 
     final_chain, optCycle = geometric.neb.OptimizeChain(chain, engine, params)
 
+    # Calculating spacing between the highest-energy image and its adjacent images.
+    #coords = [im.cartesians for im in final_chain.Structures]
+    #ts_idx = np.argmax([im.energy for im in final_chain.Structures])
+
+    #drms_list = [
+    #    calc_drms_dmax(c_i, c_j)[0]
+    #    for c_i, c_j in zip(coords[:-1], coords[1:])
+    #]
+    #print(drms_list[ts_idx-1:ts_idx+1])
+
+    assert optCycle <= 15
+    assert final_chain.maxg < params.maxg
+    assert final_chain.avgg < params.avgg
+
+
+@addons.using_psi4
+def test_psi4_hcn_neb_optimize_ew(localizer, molecule_engine):
+    """
+    Optimize an alinged HCN chain EW-NEB
+    """
+    M, engine = molecule_engine('hcn', 'psi4', 11)
+
+    # maxg and avgg are increased here to make them converge faster after the alignment
+    params = geometric.params.NEBParams(**{"verbose": 1, "maxg": 1.0, "avgg": 0.5, "ewneb": 10, "nebk": 10})
+    chain = geometric.neb.ElasticBand(
+        M, engine=engine, tmpdir=tempfile.mkdtemp(), params=params, plain=0
+    )
+
+    assert chain.coordtype == "cart"
+
+    final_chain, optCycle = geometric.neb.OptimizeChain(chain, engine, params)
+    ts_idx = np.argmax([im.energy for im in final_chain.Structures])
+    coords = [im.cartesians for im in final_chain.Structures]
+
+    drms_list = [
+        calc_drms_dmax(c_i, c_j)[0]
+        for c_i, c_j in zip(coords[:-1], coords[1:])
+    ]
+
+    # These spacing values are from the previous non-ew-neb test.
+    # The new drms values should be smaller, since the ew spring constant should improve image resolution near the TS.
+    assert drms_list[ts_idx-1] < 0.2008
+    assert drms_list[ts_idx] < 0.2959
     assert optCycle <= 15
     assert final_chain.maxg < params.maxg
     assert final_chain.avgg < params.avgg
