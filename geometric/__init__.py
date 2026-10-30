@@ -44,9 +44,11 @@ from . import run_json
 from . import neb
 from . import qcf_neb
 
-from ._version import get_versions as _get_versions
-_versions = _get_versions()
-__version__ = _versions['version']
-__git_revision__ = _versions['full-revisionid']
-del _get_versions, _versions
+try:
+    from importlib.metadata import version as _get_pkg_version
+    __version__ = _get_pkg_version("geometric")
+    del _get_pkg_version
+except Exception:
+    # Package is not installed (e.g. running from a source checkout).
+    __version__ = "0.0.0+unknown"
 
