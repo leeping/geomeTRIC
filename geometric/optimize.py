@@ -818,6 +818,8 @@ class Optimizer(object):
             else:
                 self.SortedEigenvalues(self.H)
                 logger.info("Converged! =D\n")
+                if self.trust < min(1.2e-3, params.Convergence_drms):
+                    logger.info("*_* Warning - trust radius is lower than RMS displacement convergence criterion; please check gradient accuracy. *_*\n")
                 self.state = OPT_STATE.CONVERGED
             return True, step_state
 
@@ -891,6 +893,8 @@ class Optimizer(object):
             colors['energy'] = "\x1b[92m" if Converged_energy else "\x1b[91m"
             colors['quality'] = "\x1b[91m"
             step_state = StepState.Reject if (Quality < -1.0 or params.transition or params.irc) else StepState.Poor
+        # 2023-05-10: In the case of a minimization step that increases energy by more than erisemax, reject the step.
+        if not params.transition and not self.farConstraints and self.E-self.Eprev > params.erisemax: step_state = StepState.Reject
         if 'energy' not in colors: colors['energy'] = "\x1b[92m" if Converged_energy else "\x1b[0m"
         if 'quality' not in colors: colors['quality'] = "\x1b[0m"
         colors['grms'] = "\x1b[92m" if Converged_grms else "\x1b[0m"
@@ -1010,7 +1014,10 @@ class Optimizer(object):
             elif self.farConstraints:
                 logger.info("\x1b[93mNot rejecting step - far from constraint satisfaction\x1b[0m\n")
             else:
-                logger.info("\x1b[93mRejecting step - quality is lower than %.1f\x1b[0m\n" % (0.0 if params.transition or params.irc else -1.0))
+                if not params.transition and not self.farConstraints and self.E-self.Eprev > params.erisemax:
+                    logger.info("\x1b[93mRejecting step - energy increases > %.2f during minimization\x1b[0m\n" % params.erisemax)
+                else:
+                    logger.info("\x1b[93mRejecting step - quality is lower than %.1f\x1b[0m\n" % (0.0 if params.transition or params.irc else -1.0))
                 self.trustprint = "\x1b[1;91mx\x1b[0m"
                 # Store the rejected step.  In case the next step is identical to the rejected one, the next step should be accepted to avoid infinite loops.
                 self.X_rj = self.X.copy()
