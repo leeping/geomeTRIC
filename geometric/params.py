@@ -258,6 +258,18 @@ class NEBParams(object):
         self.tmin = kwargs.get('tmin', 1.2e-3)
         self.skip = kwargs.get('skip', False)
         self.bigchem = kwargs.get('bigchem', False)
+        # Energy-weighted NEB: False/None = off; integer >= 2 sets k range nebk/ewneb .. nebk
+        ewneb = kwargs.get('ewneb', False)
+        if ewneb is False or ewneb is None:
+            self.ewneb = False
+        else:
+            try:
+                ewneb = int(ewneb)
+            except (TypeError, ValueError):
+                raise ParamError("--ewneb must be an integer >= 2 (got %r)" % (kwargs.get('ewneb'),))
+            if ewneb < 2:
+                raise ParamError("--ewneb must be an integer >= 2 (got %s)" % ewneb)
+            self.ewneb = ewneb
 
         # Sanity checks on trust radius
         if self.tmax < self.tmin:
@@ -501,6 +513,7 @@ def parse_neb_args(*args):
     grp_nebparam.add_argument('--images', type=int, help='Number of NEB images to use (default 11).\n ')
     grp_nebparam.add_argument('--plain', type=int, help='1: Use plain elastic band for spring force. 2: Use plain elastic band for spring AND potential (default 0).\n ')
     grp_nebparam.add_argument('--optep', type=str2bool, help='Provide "yes" to optimize two end points of the initial input chain.\n ')
+    grp_nebparam.add_argument('--ewneb', type=int, help='Provide an integer ≥ 2 to enable energy-weighted NEB. The spring constant then varies with image energy between nebk/ewneb (low-energy images) and nebk (high-energy images).\n ')
     grp_nebparam.add_argument('--align', type=str2bool, help='Align images before starting the NEB method (default yes). If "--optep" is set to "yes", the images will be aligned after optimizing the end points.\n ')
     grp_nebparam.add_argument('--trust', type=float, help='Starting trust radius (default 0.1). \n ')
     grp_nebparam.add_argument('--tmax', type=float, help='Maximum trust radius (default 0.3).\n ')

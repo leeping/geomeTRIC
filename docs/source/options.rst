@@ -400,6 +400,16 @@ Provide ``yes`` to optimize the two end points of the input chain prior to the N
 
 ....
 
+``--ewneb [off]``
+
+Provide an integer ``≥ 2`` to enable **energy-weighted NEB**. The spring constant then
+varies with image energy between ``nebk/ewneb`` (low-energy images) and ``nebk``
+(high-energy images). Image respacing (``delete_insert``) is disabled so that the
+energy-weighted spacing is preserved. Omit the option (or leave unset) for standard NEB
+with a uniform ``--nebk``.
+
+....
+
 ``--align [yes/no]``
 
 Provide ``yes`` to align all the images with the first image. It will align them by default.

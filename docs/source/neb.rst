@@ -39,6 +39,10 @@ The chain coordinates from the input xyz file will override the molecular geomet
 By default, geomeTRIC will align all the images with the first image. This could be turned off by passing ``--align no``.
 If ``--optep yes`` is passed, the two endpoints of the input chain will be optimized before alignment.
 
+Energy-weighted NEB can be enabled with ``--ewneb N`` (integer ``N ≥ 2``). Spring constants
+then span ``nebk/N``–``nebk`` from low- to high-energy images, and automatic image respacing
+is turned off. See :ref:`neb_options`.
+
 During optimization, geomeTRIC writes an xyz file of an image that climbs up towards the first-order saddle point(``qc.tsClimb.xyz``) in the working directory.
 Once the NEB calculation converges, the climbing image can be used as a high-quality initial guess for the :ref:`transition state optimization <transition>`.
 
