@@ -43,6 +43,7 @@ from . import engine
 from . import run_json
 from . import neb
 from . import qcf_neb
+from . import interpolate
 
 try:
     from importlib.metadata import version as _get_pkg_version

@@ -47,7 +47,8 @@ def test_dlc_openmm_water3(localizer):
     xdiff = (progress.xyzs[-1] - ref).flatten()
     rmsd, maxd = geometric.optimize.calc_drms_dmax(progress.xyzs[-1], ref, align=True)
     rmsd2, maxd2 = geometric.optimize.calc_drms_dmax(progress.xyzs[-1], ref2, align=True)    
-    print("RMS / Max displacement from reference:", rmsd, maxd)
+    print("RMS / Max displacement from reference 1:", rmsd, maxd)
+    print("RMS / Max displacement from reference 2:", rmsd2, maxd2)
     # This test is a bit stochastic and doesn't converge to the same minimized geometry every time.
     # Check that the energy is 0.01 a.u. above reference. Not really the qm_energy, this is a misnomer
     assert progress.qm_energies[-1] < (e_ref + 0.01)
@@ -66,12 +67,12 @@ def test_dlc_openmm_water12(localizer):
     pytest.skip("Skipping")
     progress = geometric.optimize.run_optimizer(engine='openmm', pdb=os.path.join(datad,'water12.pdb'),
                                                 coordsys='dlc', input='tip3p.xml', maxiter=20, converge=['maxiter'])
-
-    have_skip_step = False
-    for line in open('tip3p.log').readlines():
-        if 'Skipping optimization step' in line:
-            have_skip_step = True
-    assert have_skip_step
+    # LPW 2023-09-21: The coordinate system no longer breaks down after the improvement to newCartesian().
+    # have_skip_step = False
+    # for line in open('tip3p.log').readlines():
+    #     if 'Skipping optimization step' in line:
+    #         have_skip_step = True
+    # assert have_skip_step
 
 
 @addons.using_openmm

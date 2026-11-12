@@ -34,6 +34,11 @@ Minimum Energy Pathway Search Using the Nudged Elastic Band Method with Efficien
 Data Handling and Parallel Computing", J. Chem. Theory Comput. 21, 12048.
 https://doi.org/10.1021/acs.jctc.5c01540
 
+Park, H.; Song, C.; Wang, L.-P. (2026) "Translation–Rotation Internal Coordinates 
+with Splicing (TRICS): A new approach to molecular geometry interpolation", 
+J. Chem. Phys. 165, 164107.
+https://doi.org/10.1063/5.0353998
+
 ## Quick Help
 
 Package dependencies are:
@@ -75,4 +80,10 @@ Minimum Energy Pathway Search Using the Nudged Elastic Band Method with Efficien
 Data Handling and Parallel Computing", J. Chem. Theory Comput. 21, 12048.
 DOI: 10.1021/acs.jctc.5c01540\
 *(Cite this when the NEB method is used.)*
+
+Park, H.; Song, C.; Wang, L.-P. (2026) "Translation–Rotation Internal Coordinates 
+with Splicing (TRICS): A new approach to molecular geometry interpolation", 
+J. Chem. Phys. 165, 164107.
+DOI: 10.1063/5.0353998\
+*(Cite this when TRICS is used.)*
 
