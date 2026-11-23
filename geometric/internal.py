@@ -2040,7 +2040,7 @@ class InternalCoordinates(object):
         Analytical = self.second_derivatives(xyz)
         FiniteDifference = np.zeros_like(Analytical)
         h = 1e-4
-        verbose = False
+        verbose = 0
         logger.info("-=# Now checking second derivatives of internal coordinates w/r.t. Cartesians #=-\n")
         for j in range(xyz.shape[0]):
             for m in range(3):
@@ -2066,7 +2066,7 @@ class InternalCoordinates(object):
         for i in range(Analytical.shape[0]):
             title = "%20s : %20s" % ("IC %i/%i" % (i+1, Analytical.shape[0]), self.Internals[i])
             lines = [title]
-            if verbose: logger.info(title+'\n')
+            if verbose > 0: logger.info(title+'\n')
             maxerr = 0.0
             numerr = 0
             for j in range(Analytical.shape[1]):
@@ -2080,12 +2080,12 @@ class InternalCoordinates(object):
                                                                                                 error, 'X' if np.abs(error)>1e-5 else '')
                             if np.abs(error)>1e-5:
                                 numerr += 1
-                            if (ana != 0.0 or fin != 0.0) and verbose:
+                            if (ana != 0.0 or fin != 0.0) and verbose > 0:
                                 logger.info(message+'\n')
                             lines.append(message)
                             if maxerr < np.abs(error):
                                 maxerr = np.abs(error)
-            if maxerr > 1e-5 and not verbose:
+            if maxerr > 1e-5 and verbose < 1:
                 logger.info('\n'.join(lines)+'\n')
             logger.info("%s : Max Error = % 12.5e (%i above threshold)\n" % (title, maxerr, numerr))
         logger.info("Finite-difference Finished\n")
@@ -2148,7 +2148,7 @@ class InternalCoordinates(object):
         self.stored_dQ = dQ.copy()
         self.stored_newxyz = newxyz.copy()
 
-    def newCartesian(self, xyz, dQ, verbose=True):
+    def newCartesian(self, xyz, dQ, verbose=0):
         cached = self.readCache(xyz, dQ)
         if cached is not None:
             # print "Returning cached result"
@@ -2166,14 +2166,14 @@ class InternalCoordinates(object):
         if verbose >= 2: logger.info("    InternalCoordinates.newCartesian converting internal to Cartesian step\n")
         def finish(microiter, rmsdt, ndqt, xyzsave, xyz_iter1):
             if ndqt > 1e-1:
-                if verbose: logger.info("      newCartesian Iter: %i Failed to obtain coordinates (rmsd = %.3e |dQ| = %.3e)\n" % (microiter, rmsdt, ndqt))
+                if verbose > 0: logger.info("      newCartesian Iter: %i Failed to obtain coordinates (rmsd = %.3e |dQ| = %.3e)\n" % (microiter, rmsdt, ndqt))
                 self.bork = True
                 self.writeCache(xyz, dQ, xyz_iter1)
                 return xyz_iter1.flatten()
             elif ndqt > 1e-3:
-                if verbose: logger.info("      newCartesian Iter: %i Approximate coordinates obtained (rmsd = %.3e |dQ| = %.3e)\n" % (microiter, rmsdt, ndqt))
+                if verbose > 0: logger.info("      newCartesian Iter: %i Approximate coordinates obtained (rmsd = %.3e |dQ| = %.3e)\n" % (microiter, rmsdt, ndqt))
             else:
-                if verbose: logger.info("      newCartesian Iter: %i Cartesian coordinates obtained (rmsd = %.3e |dQ| = %.3e)\n" % (microiter, rmsdt, ndqt))
+                if verbose > 0: logger.info("      newCartesian Iter: %i Cartesian coordinates obtained (rmsd = %.3e |dQ| = %.3e)\n" % (microiter, rmsdt, ndqt))
             self.writeCache(xyz, dQ, xyzsave)
             return xyzsave.flatten()
         fail_counter = 0

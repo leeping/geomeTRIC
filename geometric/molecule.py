@@ -776,7 +776,7 @@ def cartesian_product2(arrays):
         arr[...,i] = a
     return arr.reshape(-1, la)
 
-def extract_int(arr, avgthre, limthre, label="value", verbose=True):
+def extract_int(arr, avgthre, limthre, label="value", verbose=1):
     """
     Get the representative integer value from an array.
     The integer value is the rounded mean.  Perform sanity
@@ -795,7 +795,7 @@ def extract_int(arr, avgthre, limthre, label="value", verbose=True):
         more than this amount, do not pass.
     label : str
         Descriptive name of this variable, used only in printout.
-    verbose : bool
+    verbose : int
         Print information in case array makes excursions larger than the threshold
 
     Returns
@@ -811,16 +811,16 @@ def extract_int(arr, avgthre, limthre, label="value", verbose=True):
     rounded = round(average)
     passed = True
     if abs(average - rounded) > avgthre:
-        if verbose:
+        if verbose > 0:
             logger.info("Average %s (%f) deviates from integer %s (%i) by more than threshold of %f" % (label, average, label, rounded, avgthre))
         passed = False
     if abs(maximum - minimum) > limthre:
-        if verbose:
+        if verbose > 0:
             logger.info("Maximum %s fluctuation (%f) is larger than threshold of %f" % (label, abs(maximum-minimum), limthre))
         passed = False
     return int(rounded), passed
 
-def extract_pop(M, verbose=True):
+def extract_pop(M, verbose=1):
     """
     Extract our best estimate of charge and spin-z from the comments
     section of a Molecule object created with Nanoreactor.  Note that
@@ -864,7 +864,7 @@ def extract_pop(M, verbose=True):
     nproton = sum([Elements.index(i) for i in M.elem])
     nelectron = nproton + chg
     if not spnpass:
-        if verbose: logger.info("Going with the minimum spin consistent with charge.")
+        if verbose > 0: logger.info("Going with the minimum spin consistent with charge.")
         if nelectron%2 == 0:
             spn = 0
         else:
@@ -872,10 +872,10 @@ def extract_pop(M, verbose=True):
 
     # The number of electrons should be odd iff the spin is odd.
     if (int((nelectron-spn)/2))*2 != (nelectron-spn):
-        if verbose: logger.info("\x1b[91mThe number of electrons (%i) is inconsistent with the spin-z (%i)\x1b[0m" % (nelectron, spn))
+        if verbose > 0: logger.info("\x1b[91mThe number of electrons (%i) is inconsistent with the spin-z (%i)\x1b[0m" % (nelectron, spn))
         return -999, -999
 
-    if verbose: logger.info("%i electrons; charge %i, spin %i" % (nelectron, chg, spn))
+    if verbose > 0: logger.info("%i electrons; charge %i, spin %i" % (nelectron, chg, spn))
     return chg, spn
 
 def arc(Mol, begin=None, end=None, RMSD=True, align=True):
@@ -2994,7 +2994,7 @@ class Molecule(object):
                 New.Data[key] = copy.deepcopy(self.Data[key])
         return New
 
-    def read_comm_charge_mult(self, verbose=False):
+    def read_comm_charge_mult(self, verbose=0):
         """ Set charge and multiplicity from reading the comment line, formatted in a specific way. """
         q, sz = extract_pop(self, verbose=verbose)
         self.charge = q

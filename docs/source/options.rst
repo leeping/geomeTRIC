@@ -499,10 +499,11 @@ The default value is the input file path with the extension removed.
 
 ....
 
-``--verbose [0-3]``
+``--verbose [0]``
 
 This specifies the amount of information printed to the terminal and log files.
 
+- ``-1`` : Default level without logo and citation information.
 - ``0`` : Default, concise print level.
 - ``1`` : Include basic information about the optimization step.
 - ``2`` : Include detailed information including micro-iterations to determine the optimization step.

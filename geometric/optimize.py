@@ -181,11 +181,11 @@ class Optimizer(object):
 
         logger.info("> === End Optimization Info ===\n")
         
-    def get_cartesian_norm(self, dy, verbose=None):
+    def get_cartesian_norm(self, dy, verbose=0):
         if not verbose: verbose = self.params.verbose
         return get_cartesian_norm(self.X, dy, self.IC, self.params.enforce, self.params.verbose, self.params.usedmax)
 
-    def get_delta_prime(self, v0, verbose=None):
+    def get_delta_prime(self, v0, verbose=0):
         # This method can be called at a different verbose level than the master
         # because it can occur inside a nested loop
         if not verbose: verbose = self.params.verbose
@@ -241,7 +241,7 @@ class Optimizer(object):
             return True
         else: return False
 
-    def trust_step(self, iopt, v0, verbose=None):
+    def trust_step(self, iopt, v0, verbose=0):
         # This method can be called at a different verbose level than the master
         # because it can occur inside a nested loop
         if not verbose: verbose = self.params.verbose
@@ -450,7 +450,7 @@ class Optimizer(object):
     def IRC_step(self):
         self.farConstraints = self.IC.haveConstraints() and self.IC.maxConstraintViolation(self.X) > 1e-1
 
-        if self.params.verbose:
+        if self.params.verbose > 0:
             logger.info("IRC sub-step 1: Finding the pivot point (q*_{k+1})\n")
 
         # Need to take a step towards the pivot point
@@ -515,7 +515,7 @@ class Optimizer(object):
         MWGMat_sqrt_inv, MWGMat_sqrt = self.IC.MWGInverse_Sqrt_SVD(X_pivot)
         mwdx_1 = np.dot(MWGMat_sqrt_inv, dy_to_pivot)
 
-        if self.params.verbose:
+        if self.params.verbose > 0:
             logger.info("Half step dy     = %.5f\n" %np.linalg.norm(dy_to_pivot))
             logger.info("Half step mw-dx  = %.5f Bohr*sqrt(amu)\n" %np.linalg.norm(mwdx_1))
 
@@ -584,7 +584,7 @@ class Optimizer(object):
             irc_sub_iteration += 1
             p_prime += dq_new
 
-        if self.params.verbose:
+        if self.params.verbose > 0:
             logger.info('Angle between v1 and v2: %2.f \n' % deg)
             logger.info('Half step dy     = %.5f \n' % np.linalg.norm(p_prime))
             logger.info('Half step mw-dx  = %.5f Bohr*sqrt(amu)\n\n' % half_mwdx)
@@ -607,7 +607,7 @@ class Optimizer(object):
 
         # At the start of the loop, the optimization variables, function value, gradient and Hessian are known.
         # (i.e. self.Y, self.E, self.G, self.H)
-        if params.verbose: self.IC.printRotations(self.X)
+        if params.verbose > 0: self.IC.printRotations(self.X)
         Eig = self.SortedEigenvalues(self.H)
         Emin = Eig[0].real
         if params.transition:
@@ -621,7 +621,7 @@ class Optimizer(object):
         ### OBTAIN AN OPTIMIZATION STEP ###
         # The trust radius is to be computed in Cartesian coordinates.
         # First take a full-size optimization step
-        if params.verbose: logger.info("  Optimizer.step : Attempting full-size optimization step\n")
+        if params.verbose > 0: logger.info("  Optimizer.step : Attempting full-size optimization step\n")
         dy, _, __ = self.get_delta_prime(v0, verbose=self.params.verbose)
         # Internal coordinate step size
         inorm = np.linalg.norm(dy)
@@ -630,7 +630,7 @@ class Optimizer(object):
         # If the full-size step is within the trust radius, then call get_delta_prime again with diagnostic messages if needed
         if (self.params.verbose >= 2 and self.params.verbose < 4 and self.cnorm <= 1.1*self.trust):
             self.get_delta_prime(v0, verbose=self.params.verbose+2)
-        if params.verbose: logger.info("  Optimizer.step : Internal-step: %.4f Cartesian-step: %.4f Trust-radius: %.4f\n" % (inorm, self.cnorm, self.trust))
+        if params.verbose > 0: logger.info("  Optimizer.step : Internal-step: %.4f Cartesian-step: %.4f Trust-radius: %.4f\n" % (inorm, self.cnorm, self.trust))
         # If the step is above the trust radius in Cartesian coordinates, then
         # do the following to reduce the step length:
         if self.cnorm > 1.1 * self.trust:
@@ -639,17 +639,17 @@ class Optimizer(object):
             froot = self.createFroot(v0)
             froot.stores[inorm] = self.cnorm
             ### Find the internal coordinate norm that matches the desired Cartesian coordinate norm
-            if params.verbose: logger.info("  Optimizer.step : Using Brent algorithm to target Cartesian trust radius\n")
+            if params.verbose > 0: logger.info("  Optimizer.step : Using Brent algorithm to target Cartesian trust radius\n")
             iopt = brent_wiki(froot.evaluate, 0.0, inorm, self.trust, cvg=0.1, obj=froot, verbose=params.verbose)
             if froot.brentFailed and froot.stored_arg is not None:
                 # If Brent fails but we obtained an IC step that is smaller than the Cartesian trust radius, use it
-                if params.verbose: logger.info("  Optimizer.step : \x1b[93mUsing stored solution at %.3e\x1b[0m\n" % froot.stored_val)
+                if params.verbose > 0: logger.info("  Optimizer.step : \x1b[93mUsing stored solution at %.3e\x1b[0m\n" % froot.stored_val)
                 iopt = froot.stored_arg
             elif self.IC.bork:
                 # Decrease the target Cartesian step size and try again
                 for i in range(3):
                     froot.target /= 2
-                    if params.verbose: logger.info("  Optimizer.step : \x1b[93mReducing target to %.3e\x1b[0m\n" % froot.target)
+                    if params.verbose > 0: logger.info("  Optimizer.step : \x1b[93mReducing target to %.3e\x1b[0m\n" % froot.target)
                     froot.above_flag = True # Stop at any valid step between current target step size and trust radius
                     iopt = brent_wiki(froot.evaluate, 0.0, iopt, froot.target, cvg=0.1, verbose=params.verbose)
                     if not self.IC.bork: break
@@ -660,7 +660,7 @@ class Optimizer(object):
                 # This variable is added because IC.bork is unset later.
                 self.ForceRebuild = True
             else:
-                if params.verbose: logger.info("  Optimizer.step : \x1b[93mBrent algorithm requires %i evaluations\x1b[0m\n" % froot.counter)
+                if params.verbose > 0: logger.info("  Optimizer.step : \x1b[93mBrent algorithm requires %i evaluations\x1b[0m\n" % froot.counter)
             ##### If IC failed to produce valid Cartesian step, it is "borked" and we need to rebuild it.
             if self.ForceRebuild:
                 # Force a rebuild of the coordinate system and skip the energy / gradient and evaluation steps.
@@ -1172,7 +1172,7 @@ def run_optimizer(**kwargs):
     logfilename = kwargs.get('prefix')
     # Input file for optimization; QC input file or OpenMM .xml file
     inputf = kwargs.get('input')
-    verbose = kwargs.get('verbose', False)
+    verbose = kwargs.get('verbose', 0)
     # Get calculation prefix and temporary directory name
     arg_prefix = kwargs.get('prefix', None) #prefix for output file and temporary directory
     prefix = arg_prefix if arg_prefix is not None else os.path.splitext(inputf)[0]
@@ -1199,7 +1199,8 @@ def run_optimizer(**kwargs):
         arg = arg.replace('}\'','}').replace('}','}\'')
         argv_print.append(arg)
     logger.info(' '.join(argv_print)+'\n')
-    print_logo(logger)
+    if verbose > -1 :
+        print_logo(logger)
     now = datetime.now()
     logger.info('-=# \x1b[1;94m geomeTRIC started. Version: %s \x1b[0m #=-\n' % (geometric.__version__))
     logger.info('Current date and time: %s\n' % now.strftime("%Y-%m-%d %H:%M:%S"))

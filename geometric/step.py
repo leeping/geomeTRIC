@@ -117,7 +117,7 @@ def brent_wiki(f, a, b, rel, cvg=0.1, obj=None, verbose=0):
         # Convergence failure - interval becomes
         # smaller than threshold
         if np.abs(b-a) < epsilon:
-            if verbose: logger.info("returning because interval is too small\n")
+            if verbose > 0: logger.info("returning because interval is too small\n")
             if obj is not None: obj.brentFailed = True
             return s
         # Exit before converging when
@@ -197,7 +197,7 @@ class Froot(object):
                 if self.stored_val is None or cnorm > self.stored_val:
                     self.stored_arg = trial
                     self.stored_val = cnorm
-            if self.params.verbose: logger.info("  Brent Iter: %i Internal-step: %.4f Cartesian-step: %.4f ---> Trust-Radius: %.4f%s\n" % (self.counter, trial, cnorm, self.target, " (done)" if self.from_above else ""))
+            if self.params.verbose > 0: logger.info("  Brent Iter: %i Internal-step: %.4f Cartesian-step: %.4f ---> Trust-Radius: %.4f%s\n" % (self.counter, trial, cnorm, self.target, " (done)" if self.from_above else ""))
             return cnorm-self.target
 
 def calc_drms_dmax(Xnew, Xold, align=True):
@@ -288,7 +288,7 @@ def get_hessian_update_tsbfgs(Dy, Dg, H): # pragma: no cover
     Hup = np.dot(jk, uk.T) + np.dot(uk, jk.T) + np.dot(jk.T, dk) * np.dot(uk, uk.T)
     return Hup
 
-def get_hessian_update_msp(Dy, Dg, H, verbose=False):
+def get_hessian_update_msp(Dy, Dg, H, verbose=0):
     # Murtagh-Sargent-Powell update
     Xi = Dg - np.dot(H,Dy)
     dH_MS = np.dot(Xi, Xi.T)/np.dot(Dy.T, Xi)
@@ -297,7 +297,7 @@ def get_hessian_update_msp(Dy, Dg, H, verbose=False):
     phi = 1.0 - np.dot(Dy.T,Xi)**2/(np.dot(Dy.T,Dy)*np.dot(Xi.T,Xi))
     # phi = 1.0
     Hup = (1.0-phi)*dH_MS + phi*dH_P
-    if verbose:
+    if verbose > 0:
         logger.info("dot(Dy.T, Xi) = %.4e dot(Dy.T, Dy) = %.4e\n" % (np.dot(Dy.T, Xi), np.dot(Dy.T, Dy)))
         logger.info("Hessian update: %.5f Powell + %.5f Murtagh-Sargent\n" % (phi, 1.0-phi))
     return Hup
@@ -357,7 +357,7 @@ def update_hessian(IC, H0, xyz_seq, gradx_seq, params, trust_limit=False, max_up
         else:
             Hup = get_hessian_update_bfgs(Dy, Dg, H)
         # Compute some diagnostics.
-        if params.verbose:
+        if params.verbose > 0:
             Eig = sorted_eigh(H, asc=True)[0]
             ndy = np.array(Dy).flatten()/np.linalg.norm(np.array(Dy))
             ndg = np.array(Dg).flatten()/np.linalg.norm(np.array(Dg))
@@ -367,7 +367,7 @@ def update_hessian(IC, H0, xyz_seq, gradx_seq, params, trust_limit=False, max_up
         # Add the Hessian update to the Hessian.
         H += Hup
         # Compute and print diagonistics.
-        if params.verbose:
+        if params.verbose > 0:
             Eig1 = sorted_eigh(H, asc=True)[0]
             msg += " Eig-ratios: %.5e ... %.5e" % (np.min(Eig1)/np.min(Eig), np.max(Eig1)/np.max(Eig))
             logger.info(msg+'\n')
@@ -816,12 +816,12 @@ def trust_step(target, v0, X, G, H, IC, rfo, verbose=0):
         ndy = np.linalg.norm(dy)
         if np.abs((ndy-target)/target) < 0.001:
             if verbose >= 3: get_delta_prime(v, X, G, H, IC, rfo, verbose+1)
-            if verbose: logger.info("    trust_step Iter:  %4i, v = %.5f, dy on target:   %.5f ---> %.5f\n" % (niter, v, ndy, target))
+            if verbose > 0: logger.info("    trust_step Iter:  %4i, v = %.5f, dy on target:   %.5f ---> %.5f\n" % (niter, v, ndy, target))
             return dy, sol
         # With Lagrange multipliers it may be impossible to go under a target step size
         elif niter > 10 and np.abs(ndy_last-ndy)/ndy < 0.001:
             if verbose >= 3: get_delta_prime(v, X, G, H, IC, rfo, verbose+1)
-            if verbose: logger.info("    trust_step Iter:  %4i, v = %.5f, dy over target: %.5f -x-> %.5f\n" % (niter, v, ndy, target))
+            if verbose > 0: logger.info("    trust_step Iter:  %4i, v = %.5f, dy over target: %.5f -x-> %.5f\n" % (niter, v, ndy, target))
             return dy, sol
         elif verbose >= 2: logger.info("    trust_step Iter:  %4i, v = %.5f, dy -> target:   %.5f ---> %.5f\n" % (niter, v, ndy, target))
         niter += 1
@@ -836,5 +836,5 @@ def trust_step(target, v0, X, G, H, IC, rfo, verbose=0):
             v += np.random.random() * niter / 100
         if niter%1000 == 999:
             if verbose >= 3: get_delta_prime(v, X, G, H, IC, rfo, verbose+1)
-            if verbose: logger.info("    trust_step Iter:  %4i, v = %.5f, dy at max-iter: %.5f -x-> %.5f\n" % (niter, v, ndy, target))
+            if verbose > 0 : logger.info("    trust_step Iter:  %4i, v = %.5f, dy at max-iter: %.5f -x-> %.5f\n" % (niter, v, ndy, target))
             return m_dy, m_sol

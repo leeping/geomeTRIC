@@ -61,7 +61,7 @@ class OptParams(object):
         # Interval for checking the coordinate system for changes
         self.check = kwargs.get('check', 0)
         # More verbose printout
-        self.verbose = kwargs.get('verbose', False)
+        self.verbose = kwargs.get('verbose', 0)
         # Starting value of the trust radius
         # Because TS optimization is experimental, use conservative trust radii
         self.trust = kwargs.get('trust', 0.01 if self.transition else 0.1)
@@ -252,7 +252,7 @@ class NEBParams(object):
         self.optep = kwargs.get('optep', False)
         self.align = kwargs.get('align', True)
         self.epsilon = kwargs.get('epsilon', 1e-5)
-        self.verbose = kwargs.get('verbose', False)
+        self.verbose = kwargs.get('verbose', 0)
         self.trust = kwargs.get('trust', 0.1)
         self.tmax = kwargs.get('tmax', 0.3)
         self.tmin = kwargs.get('tmin', 1.2e-3)
@@ -405,6 +405,7 @@ def parse_optimizer_args(*args):
     grp_output.add_argument('--prefix', type=str, help='Specify a prefix for log file and temporary directory.\n'
                             'Defaults to the input file path (incl. file name with extension removed).\n ')
     grp_output.add_argument('--verbose', type=int, help='Set to positive for more verbose printout.\n'
+                            '-1 = Default print level without logo and citation information.\n'
                             '0 = Default print level.     1 = Basic info about optimization step.\n'
                             '2 = Include microiterations. 3 = Lots of printout from low-level functions.\n ')
     grp_output.add_argument('--qdata', type=str2bool, help='Provide "yes" to write qdata.txt containing coordinates, energies, gradients for each structure.\n ')
@@ -514,6 +515,7 @@ def parse_neb_args(*args):
     grp_output.add_argument('--prefix', type=str, help='Specify a prefix for log file and temporary directory.\n'
                             'Defaults to the input file path (incl. file name with extension removed).\n ')
     grp_output.add_argument('--verbose', type=int, help='Set to positive for more verbose printout.\n'
+                            '-1 = Default print level without logo and citation information.\n'
                             '0 = Default print level.     1 = Basic info about optimization step.\n'
                             '2 = Include microiterations. 3 = Lots of printout from low-level functions.\n ')
     grp_help = parser.add_argument_group('help', 'Get help')
