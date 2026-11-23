@@ -474,7 +474,9 @@ def get_delta_prime_trm(v, X, G, H, IC, verbose=0):
     dyc = flat(-1 * np.dot(Hi,col(GC)))
     dy = dyc[:len(G)]
 
-    d_prime = flat(-1 * np.dot(Hi, col(dyc)))[:len(G)]
+    rhs_prime = dyc.copy()
+    rhs_prime[len(G):] = 0.0
+    d_prime = flat(-1 * np.dot(Hi, col(rhs_prime)))[:len(G)]
     dy_prime = np.dot(dy,d_prime)/np.linalg.norm(dy)
     # sol = flat(0.5*row(dy)*np.matrix(H)*col(dy))[0] + np.dot(dy,G)
     sol = flat(0.5*multi_dot([row(dy),H,col(dy)]))[0] + np.dot(dy,G)
