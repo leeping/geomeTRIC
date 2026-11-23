@@ -336,28 +336,42 @@ class Chain(object):
                 self.Structures[i].GetEnergyGradient()
         elif self.params.bigchem:
             # If BigChem is available, it will be used to carry the single-point calculations.
-            from qcio import Molecule as qcio_Molecule, ProgramInput
+            # BigChem >= 0.11 uses qcdata (formerly qcio): Structure + ProgramInput(structure=...),
+            # and ProgramOutput.data (formerly .results).
+            from qcdata import Structure as QCStructure, ProgramInput
             from bigchem import compute, group
             elems = self.Structures[0].M.elem
             molecules = []
-            
-            # Creating a list with qcio Molecule objects and submitting calculations.
-            for Structure in self.Structures:
-                molecules.append(qcio_Molecule(symbols=elems, geometry=Structure.cartesians.reshape(-1,3)))
 
-            outputs = group(compute.s(self.engine.__class__.__name__.lower(),
-                            ProgramInput(molecule=qcio_M, calctype="gradient",
-                                         model={"method":self.engine.method, "basis": self.engine.basis},
-                                         extras={"order":i}),
-                            ) for i, qcio_M in enumerate(molecules)).apply_async()
+            # Creating a list with qcdata Structure objects and submitting calculations.
+            for structure in self.Structures:
+                molecules.append(
+                    QCStructure(symbols=elems, geometry=structure.cartesians.reshape(-1, 3))
+                )
+
+            outputs = group(
+                compute.s(
+                    self.engine.__class__.__name__.lower(),
+                    ProgramInput(
+                        structure=qc_M,
+                        calctype="gradient",
+                        model={"method": self.engine.method, "basis": self.engine.basis},
+                        extras={"order": i},
+                    ),
+                )
+                for i, qc_M in enumerate(molecules)
+            ).apply_async()
 
             # Getting the records
             records = outputs.get()
-            
+
             # Passing the results to chain.ComputeEnergyGradient()
             for i in range(len(self)):
                 assert records[i].input_data.extras["order"] == i
-                result = {"energy": records[i].results.energy, "gradient": np.array(records[i].results.gradient).ravel()}
+                result = {
+                    "energy": records[i].data.energy,
+                    "gradient": np.array(records[i].data.gradient).ravel(),
+                }
                 self.Structures[i].ComputeEnergyGradient(result=result)
 
             # Deleting the records

@@ -134,41 +134,50 @@ def calc_cartesian_hessian(coords, molecule, engine, dirname, read_data=True, bi
 
     elif bigchem:
         # If BigChem is ready, it will be used to parallelize the Hessian calculation.
+        # BigChem >= 0.11 uses qcdata (formerly qcio): Structure + ProgramInput(structure=...),
+        # and ProgramOutput.data (formerly .results).
         logger.info("BigChem will be used to calculate the Hessian. \n")
-        from qcio import Molecule as qcio_Molecule, ProgramInput
+        from qcdata import Structure as QCStructure, ProgramInput
         from bigchem import compute, group
 
         elems = molecule[0].elem
 
         # Uncommenting the following 6 lines and commenting out the rest of the lines will use BigChem's parallel_hessian function.
         #from bigchem.algos import parallel_hessian
-        #qcio_M = qcio_Molecule(symbols=elems, geometry=coords.reshape(-1,3))
-        #input = ProgramInput(molecule=qcio_M, model={"method":engine.method, "basis": engine.basis}, calctype='hessian')
+        #qc_M = QCStructure(symbols=elems, geometry=coords.reshape(-1,3))
+        #input = ProgramInput(structure=qc_M, model={"method":engine.method, "basis": engine.basis}, calctype='hessian')
         #output = parallel_hessian("psi4", input).delay()
         #rec = output.get()
-        #Hx = rec.results.hessian
+        #Hx = rec.data.hessian
 
-        # Creating a list containing qcio Molecule obejcts with different geometries.
+        # Creating a list containing qcdata Structure objects with different geometries.
         molecules = []
         for i in range(nc):
             coords[i] += h
-            molecules.append(qcio_Molecule(symbols=elems, geometry=coords.reshape(-1,3)))
+            molecules.append(QCStructure(symbols=elems, geometry=coords.reshape(-1, 3)))
             coords[i] -= 2*h
-            molecules.append(qcio_Molecule(symbols=elems, geometry=coords.reshape(-1,3)))
+            molecules.append(QCStructure(symbols=elems, geometry=coords.reshape(-1, 3)))
             coords[i] += h
 
         # Submitting calculations
-        outputs = group(compute.s(engine.__class__.__name__.lower(),
-                        ProgramInput(molecule=qcio_M, calctype='gradient',
-                                     model={"method":engine.method, "basis": engine.basis},
-                                     extras={"order":i}),
-                        ) for i, qcio_M in enumerate(molecules)).apply_async()
+        outputs = group(
+            compute.s(
+                engine.__class__.__name__.lower(),
+                ProgramInput(
+                    structure=qc_M,
+                    calctype="gradient",
+                    model={"method": engine.method, "basis": engine.basis},
+                    extras={"order": i},
+                ),
+            )
+            for i, qc_M in enumerate(molecules)
+        ).apply_async()
 
         # Getting the records
         records = outputs.get(disable_sync_subtasks=False)
         assert len(records) == nc*2
 
-        # Grouping the recrods
+        # Grouping the records
         grouped_records = list(zip(records[::2], records[1::2]))
 
         # Iterating through the grouped records to calculate the Hessian
@@ -176,8 +185,8 @@ def calc_cartesian_hessian(coords, molecule, engine, dirname, read_data=True, bi
             # Double checking the order
             assert fwd_rec.input_data.extras["order"] == i*2
             assert bak_rec.input_data.extras["order"] == fwd_rec.input_data.extras["order"] + 1
-            gfwd = fwd_rec.results.gradient.ravel()
-            gbak = bak_rec.results.gradient.ravel()
+            gfwd = fwd_rec.data.gradient.ravel()
+            gbak = bak_rec.data.gradient.ravel()
             Hx[i] = (gfwd-gbak)/(2*h)
 
         # Deleting the records in the backend
