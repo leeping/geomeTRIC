@@ -61,7 +61,7 @@ The "engine" is the software to be used for computing energies and gradients, wh
 - ``psi4`` : Use Psi4. Provide a Psi4 input file with Cartesian coordinates.
 - ``gaussian`` : Use Gaussian (version 09 or 16). Provide a Gaussian job file with Cartesian coordinates.
 - ``openmm`` : Use OpenMM. Provide an OpenMM force field or system ``.xml`` file and a PDB file using ``--pdb`` for the initial structure and topology.
-- ``ase`` : Use ASE. Also requires the ``--ase-class`` and ``--ase-kwargs`` options to be specified.
+- ``ase`` : Use ASE. Also requires the ``--ase-class`` and ``--ase-kwargs`` options to be specified. Machine-learning potentials such as MACE are used this way; see :ref:`mace`.
 - ``quick`` : Use QUICK. Provide a QUICK input file with Cartesian coordinates.
 - ``cfour`` : Use CFOUR. Provide a CFOUR input file with Cartesian coordinates. A Python script is provided to convert Z-matrix input prior to running the optimization.
 - ``gmx`` : Use Gromacs (experimental). Provide a Gromacs ``.gro`` file. A topology file ``topol.top`` and run parameters ``shot.mdp`` are required, with those exact names.
@@ -350,10 +350,12 @@ These options control the NEB method.
 
 ....
 
-``chain_coords``
+``input`` / ``chain_coords`` (NEB positionals)
 
-Name of the coordinate file containing multiple frames for NEB. This is a **required** positional argument along with the ``input`` file.
-It will override the molecular structure in the ``input`` file, which should contain the structure of the first image.
+Both are **required** for all engines, including ASE/MACE —
+``geometric-neb --engine psi4 molecule.psi4in chain.xyz``.
+``chain_coords`` is the multi-frame path and overrides geometries from ``input``.
+For ASE/MACE both arguments may be XYZ files; see :ref:`mace`.
 
 ....
 
@@ -566,6 +568,8 @@ Specify the calculator class to import and use for ASE engine. This needs to be 
 importable. Under the hood, ``importlib`` is used to import it by name if it exists. eg. ``ase.calculators.lj.LennardJones``
 This can be pointing to any class that is a subclass of ``ase.calculators.calculator.Calculator``.
 
+For MACE, set ``--ase-class=mace.calculators.mace.MACECalculator`` with ``--ase-kwargs`` (see :ref:`mace`).
+
 ....
 
 ``--ase-kwargs [JSON string]``
@@ -575,6 +579,28 @@ becoming a dictionary that is passed in at construction of the calculator.
 
 Be mindful of quoting, since JSON uses ``"`` for strings, so it it convenient to pack the command line option into
 single quotes ``'``. For example: ``--ase-kwargs='{"param_filename":"path/to/file.xml"}'``.
+
+**Charge and spin multiplicity (ASE engine)**
+
+There is no separate ``--charge`` / ``--mult`` flag for ASE. Pass them as JSON keys
+``charge`` and ``mult`` inside ``--ase-kwargs``.
+
+Precedence when building the engine:
+
+1. ``charge`` / ``mult`` in ``--ase-kwargs`` (always preferred if present)
+2. Else ``Molecule.charge`` / ``Molecule.mult`` if those attributes exist
+3. Else defaults ``0`` and ``1``
+
+If kwargs and ``Molecule`` disagree, **kwargs win**; ``Molecule`` is not overwritten
+and no warning is issued. These keys are **not** passed to the calculator constructor.
+geomeTRIC applies them to ASE atom initial charges/moments and, for MACE-OMOL-style
+models, to ``atoms.info["charge"]`` and ``atoms.info["spin"]`` (``spin`` holds the
+multiplicity). A plain XYZ input does not set ``Molecule`` charge/mult, so set them
+in ``ase-kwargs`` when needed. See :ref:`mace_charge_mult`.
+
+MACE example::
+
+    --ase-kwargs='{"model_paths":"/path/to.model","mace_device":"cpu","default_dtype":"float64","charge":0,"mult":1}'
 
 
 Debugging options

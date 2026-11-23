@@ -99,6 +99,10 @@ using_xtb = pytest.mark.skipif(
     _plugin_import("xtb") is False,
     reason="could not find ase. please install the package to enable tests",
 )
+using_mace = pytest.mark.skipif(
+    _plugin_import("mace") is False,
+    reason="could not find mace. please install mace-torch to enable tests",
+)
 
 
 # Points to the folder where the data files are installed.

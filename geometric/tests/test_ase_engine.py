@@ -98,6 +98,31 @@ def test_from_string_errors(molecule_h2o):
         )
 
 
+@using_ase
+def test_mace_kwargs_aliases(molecule_h2o):
+    """mace_device/mace_head are remapped; charge/mult go to atoms.info and stored kwargs."""
+    from ase.calculators.lj import LennardJones
+
+    engine = EngineASE.from_calculator_constructor(
+        molecule_h2o,
+        LennardJones,
+        mace_device="cpu",
+        mace_head="omol",
+        charge=1,
+        mult=3,
+        sigma=1.0,
+    )
+    # Aliases should not be passed as bare device/head into stored user kwargs
+    assert engine.calculator_kwargs["mace_device"] == "cpu"
+    assert engine.calculator_kwargs["mace_head"] == "omol"
+    assert "device" not in engine.calculator_kwargs
+    assert "head" not in engine.calculator_kwargs
+    assert engine.calculator_kwargs["charge"] == 1
+    assert engine.calculator_kwargs["mult"] == 3
+    assert engine.ase_atoms.info["charge"] == 1
+    assert engine.ase_atoms.info["spin"] == 3
+
+
 def test_importability_no_ase():
     # this should be able to import the ase_engine
     # without ase being installed

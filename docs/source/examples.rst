@@ -131,3 +131,16 @@ Energy minimization of azithromycin using Gaussian
 
 The above image shows the initial structure (in green) and final optimized structure, with the 2D structure on the right for reference.
 
+HCN ↔ HNC NEB with MACE (via ASE)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+- Location: ``examples/1-simple-examples/hcn_hnc_neb_MACE``
+- Command line: see ``command.sh`` in that folder (``--engine ase`` with
+  ``mace.calculators.mace.MACECalculator``)
+- Number of atoms: 3
+- Theoretical model: MACE-OMOL
+- NEB cycles (approx.): 32
+- Run time (approx.): ~1 minute
+- Description: NEB example for the HCN ↔ HNC isomerization using MACE through
+  the ASE engine (multi-frame chain XYZ). See :ref:`mace`.
+

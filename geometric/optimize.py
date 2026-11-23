@@ -744,7 +744,6 @@ class Optimizer(object):
         self.IRC_info["total_disp"] = 0.0
         self.prepareFirstStep()
 
-
     def evaluate_IRC_step(self, params, step_state, criteria_met, IRC_converged):
 
         if self.Iteration > params.maxiter:
@@ -1154,6 +1153,7 @@ def Optimize(coords, molecule, IC, engine, dirname, params, print_info=True):
     optimizer = Optimizer(coords, molecule, IC, engine, dirname, params, print_info)
     return optimizer.optimizeGeometry()
 
+
 def run_optimizer(**kwargs):
     """
     Run geometry optimization, constrained optimization, or
@@ -1348,7 +1348,7 @@ def run_optimizer(**kwargs):
         params.xyzout = prefix+add
         progress = Optimize(coords, M, IC, engine, dirname, params)
     else:
-        # Run a single constrained geometry optimization or scan over a grid of values
+        # Run a constrained geometry optimization
         if isinstance(IC, (CartesianCoordinates, PrimitiveInternalCoordinates)):
             raise RuntimeError("Constraints only work with delocalized internal coordinates")
         Mfinal = None

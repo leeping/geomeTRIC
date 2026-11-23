@@ -206,14 +206,23 @@ This is a wrapper engine for any `ASE <https://gitlab.com/ase/ase/>`_-compatible
 optimisation. The calculator needs to be importable in your Python environment, as well as ASE installed.
 Nb. this means that not only the calculators in the main ASE repo, but any calculator from other projects
 that is subclassed from ASE can be used, eg. `XTB <https://github.com/grimme-lab/xtb-python>`_,
-`GAP (with quippy) <https://github.com/libatoms/quip>`_.
+`GAP (with quippy) <https://github.com/libatoms/quip>`_, and `MACE <https://github.com/ACEsuit/mace>`_.
 
 Usage:
 
 * Selected using ``--engine ase``
-* Set the class of your calculator with ``--ase-class``, eg. ``--ase-class=xtb.ase.calculator.XTB``, ``--ase-class=quippy.potential.Potential``
+* Set the class of your calculator with ``--ase-class``, eg. ``--ase-class=xtb.ase.calculator.XTB``, ``--ase-class=quippy.potential.Potential``, ``--ase-class=mace.calculators.mace.MACECalculator``
 * Set any initialisation keyword arguments for the calculator class with ``--ase-kwargs``, where the given argument is parsed as a JSON string. Note, this requires correct quoting, eg. ``--ase-kwargs='{"method":"GFN2-xTB"}'``.
-* The charge and spin multiplicity for the XTB calculator can be set by passing ``charge`` and ``mult`` key-value pairs into ``ase-kwargs`` as: ``--ase-kwargs='{"method":"GFN2-xTB", "charge":0, "mult":1}'``.  
+* Charge and spin multiplicity: pass ``charge`` and ``mult`` inside ``--ase-kwargs``
+  (there is no separate ``--charge`` / ``--mult`` flag for ASE). Precedence is
+  (1) values in ``ase-kwargs``, else (2) ``Molecule.charge`` / ``Molecule.mult`` if
+  present, else (3) defaults ``0`` / ``1``. Kwargs win if both sources disagree; the
+  ``Molecule`` object is not updated. Values are **not** calculator constructor
+  arguments: they are applied to ASE initial charges/moments and, for MACE-OMOL-style
+  models, to ``atoms.info["charge"]`` and ``atoms.info["spin"]`` (multiplicity).
+  Example: ``--ase-kwargs='{"method":"GFN2-xTB", "charge":0, "mult":1}'``.
+  Full detail for MACE: :ref:`mace_charge_mult`.
+* For MACE usage details (minimization, constraints, NEB), see :ref:`mace`.
 * (New in upcoming v1.1 release): Work Queue support for ASE engine.
 
 QUICK

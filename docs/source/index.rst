@@ -29,6 +29,7 @@ Main features of geomeTRIC include:
    neb
    irc
    meci
+   MACE
    engines
    help
    options
